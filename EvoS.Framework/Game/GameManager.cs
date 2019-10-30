@@ -19,7 +19,7 @@ namespace EvoS.Framework.Game
     public class GameManager
     {
         public readonly NetworkServer NetworkServer = new NetworkServer();
-        private readonly Dictionary<uint, GameObject> _netObjects = new Dictionary<uint, GameObject>();
+        public readonly Dictionary<uint, GameObject> NetObjects = new Dictionary<uint, GameObject>();
         private readonly List<GameObject> _gameObjects = new List<GameObject>();
         public AbilityModManager AbilityModManager;
         public BarrierManager BarrierManager;
@@ -296,11 +296,14 @@ namespace EvoS.Framework.Game
             player.Connection.Send(54, new SpawningObjectsNotification
             {
                 PlayerId = player.LoginRequest.PlayerId,
-                SpawnableObjectCount = _netObjects.Count
+                SpawnableObjectCount = NetObjects.Count
             });
+            
+            // ObjectSpawnFinishedMessage 0 instructs the client to hold off on calling OnStartClient
+            // until we send ObjectSpawnFinishedMessage 1
             player.Connection.Send(12, new ObjectSpawnFinishedMessage {state = 0});
 
-            foreach (var netObj in _netObjects.Values)
+            foreach (var netObj in NetObjects.Values)
             {
                 var netIdent = netObj.GetComponent<NetworkIdentity>();
                 netIdent.AddObserver(player.Connection);
@@ -312,7 +315,7 @@ namespace EvoS.Framework.Game
             // Should wait for all players to have reached this point
 
             GameFlowData.gameState = GameState.SpawningPlayers;
-            foreach (var netObj in _netObjects.Values)
+            foreach (var netObj in NetObjects.Values)
             {
                 var netIdent = netObj.GetComponent<NetworkIdentity>();
                 netIdent.UNetUpdate();
@@ -334,7 +337,7 @@ namespace EvoS.Framework.Game
             }
 
             // The following should be sent after all players have loaded
-            foreach (var netObj in _netObjects.Values)
+            foreach (var netObj in NetObjects.Values)
             {
                 var atsd = netObj.GetComponent<ActorTeamSensitiveData>();
                 if (atsd == null) continue;
@@ -370,7 +373,7 @@ namespace EvoS.Framework.Game
 
         public void UpdateAllNetObjs()
         {
-            foreach (var netObj in _netObjects.Values)
+            foreach (var netObj in NetObjects.Values)
             {
                 var netIdent = netObj.GetComponent<NetworkIdentity>();
                 netIdent.UNetUpdate();
@@ -444,7 +447,7 @@ namespace EvoS.Framework.Game
 
         public void DumpNetObjects()
         {
-            foreach (var (k, v) in _netObjects)
+            foreach (var (k, v) in NetObjects)
             {
                 Console.WriteLine($"{k}: {v}");
             }
@@ -510,7 +513,7 @@ namespace EvoS.Framework.Game
             if (netIdent != null)
             {
                 netIdent.OnStartServer();
-                _netObjects.Add(netIdent.netId.Value, gameObj);
+                NetObjects.Add(netIdent.netId.Value, gameObj);
             }
         }
 
@@ -545,7 +548,7 @@ namespace EvoS.Framework.Game
 
         public void SpawnScene(AssetLoader loader, uint sceneId, out GameObject scene, bool register = true)
         {
-            foreach (var o in _netObjects.Where(o => o.Value.GetComponent<NetworkIdentity>().sceneId.Value == sceneId))
+            foreach (var o in NetObjects.Where(o => o.Value.GetComponent<NetworkIdentity>().sceneId.Value == sceneId))
             {
                 scene = o.Value;
                 return;
@@ -558,7 +561,7 @@ namespace EvoS.Framework.Game
 
         public void SpawnScene<T>(AssetLoader loader, uint sceneId, out T component) where T : Component
         {
-            foreach (var o in _netObjects.Where(o => o.Value.GetComponent<NetworkIdentity>().sceneId.Value == sceneId))
+            foreach (var o in NetObjects.Where(o => o.Value.GetComponent<NetworkIdentity>().sceneId.Value == sceneId))
             {
                 component = o.Value.GetComponent<T>();
                 return;
