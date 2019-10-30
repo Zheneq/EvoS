@@ -519,20 +519,12 @@ namespace EvoS.Framework.Network.Unity
 
         public virtual bool OnSerialize(NetworkWriter writer, bool initialState)
         {
-            if (!initialState)
-            {
-                writer.WritePackedUInt32(0u);
-            }
-
-            return false;
+            throw new NotImplementedException();
         }
 
         public virtual void OnDeserialize(NetworkReader reader, bool initialState)
         {
-            if (!initialState)
-            {
-                reader.ReadPackedUInt32();
-            }
+            throw new NotImplementedException();
         }
 
         public virtual void PreStartClient()

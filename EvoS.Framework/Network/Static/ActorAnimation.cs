@@ -88,9 +88,11 @@ namespace EvoS.Framework.Network.Static
             sbyte num2 = (sbyte) _actionType;
             float x = u0012.X;
             float z = u0012.Z;
-            sbyte num3 = ActorData != null
-                ? (sbyte) ActorData.ActorIndex
-                : (sbyte) ActorData.s_invalidActorIndex;
+            sbyte num3 = (sbyte) ActorIndex;
+            // TODO
+//            sbyte num3 = ActorData != null
+//                ? (sbyte) ActorData.ActorIndex
+//                : (sbyte) ActorData.s_invalidActorIndex;
             bool flag1 = u0008;
             sbyte num4 = (sbyte) u0016;
             bool flag2 = u0013;

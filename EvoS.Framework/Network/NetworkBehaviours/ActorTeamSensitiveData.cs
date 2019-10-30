@@ -428,30 +428,24 @@ namespace EvoS.Framework.Network.NetworkBehaviours
 
             if (IsBitDirty(setBits, DirtyBit.MoveFromBoardSquare))
             {
-                // TODO
-                var x = reader.ReadInt16();
-                var y = reader.ReadInt16();
-//                BoardSquare boardSquare = Board.\u000E().\u0016((int) reader.ReadInt16(), (int) reader.ReadInt16());
-//                if (boardSquare != MoveFromBoardSquare)
-//                {
-//                    MoveFromBoardSquare = boardSquare;
+                BoardSquare boardSquare = Board.GetBoardSquare((int) reader.ReadInt16(), (int) reader.ReadInt16());
+                if (boardSquare != MoveFromBoardSquare)
+                {
+                    MoveFromBoardSquare = boardSquare;
 //                    if (this.Actor != null && this.Actor.\u000E() != null)
 //                        this.Actor.\u000E().UpdateSquaresCanMoveTo();
-//                }
+                }
             }
 
             if (IsBitDirty(setBits, DirtyBit.InitialMoveStartSquare))
             {
-                // TODO
-                var x = reader.ReadInt16();
-                var y = reader.ReadInt16();
-//                BoardSquare boardSquare = Board.\u000E().\u0016((int) reader.ReadInt16(), (int) reader.ReadInt16());
-//                if (InitialMoveStartSquare != boardSquare)
-//                {
-//                    InitialMoveStartSquare = boardSquare;
+                BoardSquare boardSquare = Board.GetBoardSquare((int) reader.ReadInt16(), (int) reader.ReadInt16());
+                if (InitialMoveStartSquare != boardSquare)
+                {
+                    InitialMoveStartSquare = boardSquare;
 //                    if (this.Actor != null && this.Actor.\u000E() != null)
 //                        this.Actor.\u000E().UpdateSquaresCanMoveTo();
-//                }
+                }
             }
 
             if (IsBitDirty(setBits, DirtyBit.LineData))
@@ -485,21 +479,19 @@ namespace EvoS.Framework.Network.NetworkBehaviours
             if (IsBitDirty(setBits, DirtyBit.Respawn))
             {
                 // TODO
-                var x = reader.ReadInt16();
-                var y = reader.ReadInt16();
-//                RespawnPickedSquare = Board.\u000E().\u0016((int) reader.ReadInt16(), (int) reader.ReadInt16());
+                RespawnPickedSquare = Board.GetBoardSquare((int) reader.ReadInt16(), (int) reader.ReadInt16());
                 bool respawningThisTurn = reader.ReadBoolean();
                 short num1 = reader.ReadInt16();
                 _respawnAvailableSquares.Clear();
                 for (int index = 0; index < (int) num1; ++index)
                 {
-                    short num2 = reader.ReadInt16();
-                    short num3 = reader.ReadInt16();
-//                    BoardSquare boardSquare = Board.\u000E().\u0016((int) num2, (int) num3);
-//                    if (boardSquare != null)
-//                        _respawnAvailableSquares.Add(boardSquare);
-//                    else
-//                        Log.Error("Invalid square received for respawn choices {0}, {1}", num2, num3);
+                    var num2 = reader.ReadInt16();
+                    var num3 = reader.ReadInt16();
+                    var boardSquare = Board.GetBoardSquare((int) num2, (int) num3);
+                    if (boardSquare != null)
+                        _respawnAvailableSquares.Add(boardSquare);
+                    else
+                        Log.Print(LogType.Error, $"Invalid square received for respawn choices {num2}, {num3}");
                 }
             }
 

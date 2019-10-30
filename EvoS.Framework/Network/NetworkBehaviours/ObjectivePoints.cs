@@ -81,8 +81,8 @@ namespace EvoS.Framework.Network.NetworkBehaviours
 
             for (int index = 0; index <= 1; ++index)
                 m_clientNumDeathInTurn.Add(0);
-            m_displayedPoints[0] = m_points[0];
-            m_displayedPoints[1] = m_points[1];
+//            m_displayedPoints[0] = m_points[0];
+//            m_displayedPoints[1] = m_points[1];
             m_respawningPlayers = new HashSet<ActorData>();
             m_inSuddenDeath = false;
             if (EvoSGameConfig.NetworkIsServer)
