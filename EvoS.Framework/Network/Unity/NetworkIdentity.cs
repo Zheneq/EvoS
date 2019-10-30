@@ -337,7 +337,7 @@ namespace EvoS.Framework.Network.Unity
             {
                 m_NetworkBehaviours = GetComponents<NetworkBehaviour>().ToArray();
             }
-
+            
             foreach (var networkBehaviour in m_NetworkBehaviours)
             {
                 if (EvoSGameConfig.DebugNetSerialize)

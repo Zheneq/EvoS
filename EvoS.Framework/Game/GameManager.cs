@@ -395,7 +395,7 @@ namespace EvoS.Framework.Game
 //            }
 //        }
 
-        public void LaunchGame()
+        public void LaunchGame(bool spawnObjects = true)
         {
             MapLoader = new AssetLoader();
             MapLoader.LoadAssetBundle("Bundles/scenes/maps.bundle");
@@ -411,6 +411,11 @@ namespace EvoS.Framework.Game
             MiscLoader.LoadAssetBundle("Bundles/scenes/frontend.bundle");
             MiscLoader.LoadAsset("archive:/buildplayer-options_ui/buildplayer-clientenvironmentsingletons");
             MiscLoader.ConstructCaches();
+
+            if (!spawnObjects)
+            {
+                return;
+            }
 
             SpawnObject(MiscLoader, "ApplicationSingletonsNetId", out _);
             SpawnObject(MiscLoader, "GameSceneSingletons", out var gameSceneSingletons);

@@ -111,7 +111,7 @@ namespace EvoS.Framework.Network.NetworkBehaviours
             var flag = reader.ReadBoolean();
             lineInstance.isChasing = flag;
             lineInstance.m_positions.Clear();
-            for (var index = 0; index <= (int) num1; ++index)
+            for (var index = 0; index < (int) num1; ++index)
             {
                 var num2 = reader.ReadByte();
                 var num3 = reader.ReadByte();

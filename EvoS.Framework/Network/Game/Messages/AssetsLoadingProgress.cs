@@ -34,5 +34,18 @@ namespace EvoS.Framework.Network.Game.Messages
             VfxLoadingProgress = (byte) reader.ReadPackedUInt32();
             SpawningProgress = (byte) reader.ReadPackedUInt32();
         }
+
+        public override string ToString()
+        {
+            return $"{nameof(AssetsLoadingProgress)}(" +
+                   $"{nameof(AccountId)}: {AccountId}, " +
+                   $"{nameof(PlayerId)}: {PlayerId}, " +
+                   $"Total: {TotalLoadingProgress}, " +
+                   $"Level: {LevelLoadingProgress}, " +
+                   $"Character: {CharacterLoadingProgress}, " +
+                   $"Vfx: {VfxLoadingProgress}, " +
+                   $"Spawning: {SpawningProgress}" +
+                   ")";
+        }
     }
 }

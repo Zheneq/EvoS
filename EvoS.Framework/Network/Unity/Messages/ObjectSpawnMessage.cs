@@ -3,6 +3,7 @@ using System.Numerics;
 
 namespace EvoS.Framework.Network.Unity.Messages
 {
+    [UNetMessage(serverMsgIds: new short[] {3})]
     public class ObjectSpawnMessage : MessageBase
     {
         public override void Deserialize(NetworkReader reader)

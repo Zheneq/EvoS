@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Numerics;
+using EvoS.Framework.Game;
 using EvoS.Framework.Misc;
 using EvoS.Framework.Network.NetworkBehaviours;
 
@@ -20,7 +21,7 @@ namespace EvoS.Framework.Network.Unity
                 _appendWriter = new NetworkWriter();
                 stream = new NetworkWriterAdapter(_appendWriter);
             }
-            else if (stream.isReading)
+            else if (stream.isReading && EvoSGameConfig.NetworkIsServer)
             {
                 if (_lastDataLength > 0U)
                     stream.ReadBytes((int) _lastDataLength);
