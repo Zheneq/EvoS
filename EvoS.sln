@@ -13,6 +13,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EvoS.GameServer", "EvoS.Gam
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EvoS.Sandbox", "EvoS.Sandbox\EvoS.Sandbox.csproj", "{92FC5EAF-05A5-4E64-8207-DEDEF85DCA15}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EvoS.PacketAnalysis", "EvoS.PacketAnalysis\EvoS.PacketAnalysis.csproj", "{132F8A18-876C-40CD-8434-260C00F18A57}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EvoS.PacketInspector", "EvoS.PacketInspector\EvoS.PacketInspector.csproj", "{478BD8C7-C4A6-4A92-BA97-71594E9D3D36}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -39,6 +43,14 @@ Global
 		{92FC5EAF-05A5-4E64-8207-DEDEF85DCA15}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{92FC5EAF-05A5-4E64-8207-DEDEF85DCA15}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{92FC5EAF-05A5-4E64-8207-DEDEF85DCA15}.Release|Any CPU.Build.0 = Release|Any CPU
+		{132F8A18-876C-40CD-8434-260C00F18A57}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{132F8A18-876C-40CD-8434-260C00F18A57}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{132F8A18-876C-40CD-8434-260C00F18A57}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{132F8A18-876C-40CD-8434-260C00F18A57}.Release|Any CPU.Build.0 = Release|Any CPU
+		{478BD8C7-C4A6-4A92-BA97-71594E9D3D36}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{478BD8C7-C4A6-4A92-BA97-71594E9D3D36}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{478BD8C7-C4A6-4A92-BA97-71594E9D3D36}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{478BD8C7-C4A6-4A92-BA97-71594E9D3D36}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -7,6 +7,7 @@ using System.Reflection;
 using System.Text;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
+using Newtonsoft.Json.Linq;
 using Newtonsoft.Json.Serialization;
 
 namespace EvoS.Framework.Misc
@@ -39,23 +40,7 @@ namespace EvoS.Framework.Misc
             bool includePrivate = true,
             SerializeDebugLevel debugTrace = SerializeDebugLevel.None)
         {
-            var settings = new JsonSerializerSettings
-            {
-                ReferenceLoopHandling = ReferenceLoopHandling.Ignore
-            };
-            if (includePrivate)
-            {
-                settings.ContractResolver = new PrivateMemberContractResolver();
-            }
-
-            if (debugTrace != SerializeDebugLevel.None)
-            {
-                settings.TraceWriter = new MemoryTraceWriter();
-            }
-
-            var serializer = JsonSerializer.CreateDefault(settings);
-            serializer.Converters.Add(new StringEnumConverter());
-            serializer.Converters.Add(new BoardSquareConverter());
+            var settings = GetJsonSerializerSettings(includePrivate, debugTrace, out var serializer);
 
             var stringWriter = new StringWriter(new StringBuilder(256), CultureInfo.InvariantCulture);
             using var jsonTextWriter = new JsonTextWriter(stringWriter)
@@ -79,6 +64,57 @@ namespace EvoS.Framework.Misc
             }
 
             return stringWriter.ToString();
+        }
+
+        public static JObject SerializeObjectAsJObject(
+            object obj,
+            bool includePrivate = true,
+            SerializeDebugLevel debugTrace = SerializeDebugLevel.None)
+        {
+            var settings = GetJsonSerializerSettings(includePrivate, debugTrace, out var serializer);
+
+            JObject jObject;
+            try
+            {
+                jObject = JObject.FromObject(obj, serializer);
+            }
+            catch (Exception)
+            {
+                if (settings.TraceWriter != null)
+                    Console.WriteLine(settings.TraceWriter);
+                throw;
+            }
+
+            if (debugTrace == SerializeDebugLevel.Always)
+            {
+                Console.WriteLine(settings.TraceWriter);
+            }
+
+            return jObject;
+        }
+
+        private static JsonSerializerSettings GetJsonSerializerSettings(bool includePrivate,
+            SerializeDebugLevel debugTrace,
+            out JsonSerializer serializer)
+        {
+            var settings = new JsonSerializerSettings
+            {
+                ReferenceLoopHandling = ReferenceLoopHandling.Ignore
+            };
+            if (includePrivate)
+            {
+                settings.ContractResolver = new PrivateMemberContractResolver();
+            }
+
+            if (debugTrace != SerializeDebugLevel.None)
+            {
+                settings.TraceWriter = new MemoryTraceWriter();
+            }
+
+            serializer = JsonSerializer.CreateDefault(settings);
+            serializer.Converters.Add(new StringEnumConverter());
+            serializer.Converters.Add(new BoardSquareConverter());
+            return settings;
         }
 
         public enum SerializeDebugLevel

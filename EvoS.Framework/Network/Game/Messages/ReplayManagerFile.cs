@@ -22,5 +22,14 @@ namespace EvoS.Framework.Network.Game.Messages
             Restart = reader.ReadBoolean();
             Save = reader.ReadBoolean();
         }
+
+        public override string ToString()
+        {
+            return $"{nameof(ReplayManagerFile)}(" +
+                   $"{nameof(Fragment)}: {Fragment.Length} characters, " +
+                   $"{nameof(Restart)}: {Restart}, " +
+                   $"{nameof(Save)}: {Save}" +
+                   ")";
+        }
     }
 }
