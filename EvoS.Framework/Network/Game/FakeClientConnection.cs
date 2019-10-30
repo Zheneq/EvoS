@@ -48,7 +48,7 @@ namespace EvoS.Framework.Network.Game
             writer.StartMessage(msgType);
             writer.WriteBytesFull(Utils.ToByteArray(hex));
             writer.FinishMessage();
-            Serializer.ProcessUNetMessage(UNetMessage.Serialize(writer.ToArray()));
+            Serializer.ProcessUNetMessages(UNetMessage.Serialize(writer.ToArray()));
         }
     }
 }

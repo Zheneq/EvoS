@@ -10,7 +10,7 @@ namespace EvoS.Framework.Network
 {
     public delegate void UNetMessageDelegate(MessageBase msg);
 
-    public sealed class UNetSerializer
+    public class UNetSerializer
     {
         private static readonly Dictionary<short, Type> ServerTypesById = new Dictionary<short, Type>();
         private static readonly Dictionary<short, Type> ClientTypesById = new Dictionary<short, Type>();
@@ -57,7 +57,7 @@ namespace EvoS.Framework.Network
                 $"Loaded {ClientIdsByType.Count} client {(ClientIdsByType.Count == 1 ? "type" : "types")} and {ServerIdsByType.Count} server {(ServerIdsByType.Count == 1 ? "type" : "types")}");
         }
 
-        public void ProcessUNetMessage(byte[] rawPacket)
+        public void ProcessUNetMessages(byte[] rawPacket)
         {
             var unetBytes = UNetMessage.Deserialize(rawPacket);
 
@@ -71,50 +71,63 @@ namespace EvoS.Framework.Network
                 var buffer = reader.ReadBytes(msgSize);
                 msg.reader = new NetworkReader(buffer);
 
-                var deserialized = Deserialize(msg, buffer);
+                ProcessUnetMessage(msg);
+            }
+        }
 
-                if (deserialized != null)
+        public virtual void ProcessUnetMessage(NetworkMessage msg)
+        {
+            var deserialized = Deserialize(msg);
+
+            if (deserialized != null)
+            {
+                if (_handlers.ContainsKey(deserialized.msgType))
                 {
-                    if (_handlers.ContainsKey(deserialized.msgType))
-                    {
-                        Log.Print(LogType.Game,
-                            $"{deserialized.GetType().Name} - {JsonConvert.SerializeObject(deserialized)}");
-                        _handlers[deserialized.msgType].Invoke(deserialized);
-                    }
-                    else
-                    {
-                        Log.Print(LogType.Warning,
-                            $"Unhandled {msg.msgType}:{deserialized.GetType().Name} - {JsonConvert.SerializeObject(deserialized)}");
-                    }
+                    Log.Print(LogType.Game,
+                        $"{deserialized.GetType().Name} - {JsonConvert.SerializeObject(deserialized)}");
+                    _handlers[deserialized.msgType].Invoke(deserialized);
+                }
+                else
+                {
+                    Log.Print(LogType.Warning,
+                        $"Unhandled {msg.msgType}:{deserialized.GetType().Name} - {JsonConvert.SerializeObject(deserialized)}");
                 }
             }
         }
 
-        public MessageBase Deserialize(NetworkMessage msg, byte[] buffer)
+        public MessageBase Deserialize(NetworkMessage msg, bool fromClient = true)
         {
-            if (ClientTypesById.ContainsKey(msg.msgType))
+            var buffer = msg.reader.ReadBytes(msg.reader.Length);
+            msg.reader.SeekZero();
+
+            Type type;
+            if (fromClient)
+                ClientTypesById.TryGetValue(msg.msgType, out type);
+            else
+                ServerTypesById.TryGetValue(msg.msgType, out type);
+
+            if (type == null)
             {
-                try
-                {
-                    var type = ClientTypesById[msg.msgType];
-                    var readMessage = (MessageBase) Activator.CreateInstance(type);
-                    readMessage.msgType = msg.msgType;
-                    readMessage.msgSeqNum = msg.msgSeqNum;
-                    readMessage.Deserialize(msg.reader);
-                    return readMessage;
-                }
-                catch (Exception e)
-                {
-                    Log.Print(LogType.Error, e);
-                    Log.Print(LogType.Error,
-                        $"Failed parsing message seq={msg.msgSeqNum}, size={msg.reader.Length}, type={msg.msgType}\n\t{Convert.ToBase64String(buffer)}");
-                    return null;
-                }
+                Log.Print(LogType.Warning,
+                    $"Received unknown message seq={msg.msgSeqNum}, size={msg.reader.Length}, type={msg.msgType}\n\t{Convert.ToBase64String(buffer)}");
+                return null;
             }
 
-            Log.Print(LogType.Warning,
-                $"Received unknown message seq={msg.msgSeqNum}, size={msg.reader.Length}, type={msg.msgType}\n\t{Convert.ToBase64String(buffer)}");
-            return null;
+            try
+            {
+                var readMessage = (MessageBase) Activator.CreateInstance(type);
+                readMessage.msgType = msg.msgType;
+                readMessage.msgSeqNum = msg.msgSeqNum;
+                readMessage.Deserialize(msg.reader);
+                return readMessage;
+            }
+            catch (Exception e)
+            {
+                Log.Print(LogType.Error, e);
+                Log.Print(LogType.Error,
+                    $"Failed parsing message seq={msg.msgSeqNum}, size={msg.reader.Length}, type={msg.msgType}\n\t{Convert.ToBase64String(buffer)}");
+                return null;
+            }
         }
 
         private static void AddType(Type messageType, short typeId, string mappingType,

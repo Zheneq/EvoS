@@ -1,8 +1,12 @@
+using Newtonsoft.Json;
+
 namespace EvoS.Framework.Network.Unity
 {
     public abstract class MessageBase
     {
+        [JsonIgnore]
         public uint msgSeqNum;
+        [JsonIgnore]
         public short msgType;
         
         public virtual void Deserialize(NetworkReader reader)

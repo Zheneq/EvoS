@@ -223,7 +223,7 @@ namespace EvoS.Framework.Network.Game
 
                     var messageBytes = ms.ToArray();
 
-                    Serializer.ProcessUNetMessage(messageBytes);
+                    Serializer.ProcessUNetMessages(messageBytes);
                 }
 
                 message.Dispose();
