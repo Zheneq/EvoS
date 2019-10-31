@@ -110,7 +110,11 @@ namespace EvoS.PacketAnalysis
                     Log.Print(LogType.Error, $"Unknown asset in {objSpawn}");
                     return;
                 }
-
+                
+                Game.AssetsLoader.ClearCache();
+                Game.MiscLoader.ClearCache();
+                Game.MapLoader.ClearCache();
+                
                 var gameObject = serializedGameObject.Instantiate();
                 var netIdent = gameObject.GetComponent<NetworkIdentity>();
                 netIdent.SetNetworkInstanceId(objSpawn.netId);
@@ -134,6 +138,10 @@ namespace EvoS.PacketAnalysis
                     Log.Print(LogType.Error, $"Unknown scene in {spawnScene}");
                     return;
                 }
+                
+                Game.AssetsLoader.ClearCache();
+                Game.MiscLoader.ClearCache();
+                Game.MapLoader.ClearCache();
 
                 var gameObject = serializedGameObject.Instantiate();
                 var netIdent = gameObject.GetComponent<NetworkIdentity>();
