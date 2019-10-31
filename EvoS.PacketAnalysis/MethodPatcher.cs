@@ -4,6 +4,7 @@ using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
 using EvoS.Framework.Logging;
+using EvoS.Framework.Network.Unity;
 using HarmonyLib;
 
 namespace EvoS.PacketAnalysis
@@ -105,12 +106,19 @@ namespace EvoS.PacketAnalysis
 
             var objRef = IlGen.DeclareLocal(typeof(object));
 
+//            EmitLog($"> {OriginalMethod.DeclaringType.FullName}.{OriginalMethod.Name}");
+
             Emit(OpCodes.Ldsfld, fldCallbacks);
+            
+            var origParams = OriginalMethod.GetParameters();
+            if (origParams.Length > 0 && origParams[0].ParameterType == typeof(NetworkReader))
+                Emit(OriginalMethod.IsStatic ? OpCodes.Ldarg_0 : OpCodes.Ldarg_1);
+            else
+                Emit(OpCodes.Ldnull);
+
             Emit(OpCodes.Ldstr, OriginalMethod.DeclaringType.Name);
             Emit(OpCodes.Ldstr, OriginalMethod.Name);
             Emit(OpCodes.Callvirt, CbOnEnterMethod);
-
-//            EmitLog($"> {OriginalMethod.DeclaringType.FullName}.{OriginalMethod.Name}");
 
             foreach (var instruction in Instructions)
             {

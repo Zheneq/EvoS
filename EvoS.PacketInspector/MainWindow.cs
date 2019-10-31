@@ -102,7 +102,7 @@ namespace EvoS.PacketInspector
                 case PacketInteractionCall call:
                     var callIter = _treeStorePacketInfo.SmartAppend(parent,
                         $"{call.ClassName}::{call.MethodName}",
-                        "call method",
+                        $"call method, {call.BytesRead} bytes read",
                         $"({call.Events.Count} events)"
                     );
 

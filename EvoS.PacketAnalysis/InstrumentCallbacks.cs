@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using EvoS.Framework.Logging;
+using EvoS.Framework.Network.Unity;
 
 namespace EvoS.PacketAnalysis
 {
@@ -20,7 +21,7 @@ namespace EvoS.PacketAnalysis
             Log.Print(LogType.Debug, $"{DepthIndent}Method called: {instance?.GetType().Name}.{method}({args})");
         }
 
-        public virtual void OnEnter(string className, string methodName)
+        public virtual void OnEnter(NetworkReader reader, string className, string methodName)
         {
             Log.Print(LogType.Debug, $"{DepthIndent}> {className}.{methodName}");
             MethodStack.Push($"{DepthIndent}> {className}.{methodName}");

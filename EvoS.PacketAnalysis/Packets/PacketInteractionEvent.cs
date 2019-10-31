@@ -28,6 +28,9 @@ namespace EvoS.PacketAnalysis.Packets
         public readonly string ClassName;
         public readonly string MethodName;
         public readonly List<PacketInteractionEvent> Events = new List<PacketInteractionEvent>();
+        public int PositionOnEnter;
+        public int PositionOnLeave;
+        public int BytesRead => PositionOnLeave - PositionOnEnter;
 
         public PacketInteractionCall(PacketInteractionCall context, string className, string methodName)
             : base(PacketInteractionEventType.CallMethod, context)
