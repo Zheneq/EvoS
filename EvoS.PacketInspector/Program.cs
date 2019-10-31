@@ -44,6 +44,7 @@ namespace EvoS.PacketInspector
 
             var win = new MainWindow();
             win.AddPackets(pdp);
+            win.AddNetObjects(pdp);
 
             app.AddWindow(win);
             win.Show();

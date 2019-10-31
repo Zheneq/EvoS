@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using EvoS.Framework.Misc;
+using EvoS.Framework.Network.Unity;
 using GLib;
 using Gtk;
 using Newtonsoft.Json.Linq;
@@ -15,12 +16,16 @@ namespace EvoS.PacketInspector
     {
         [UI] private TreeView _treePackets = null;
         [UI] private TreeView _treePacketInfo = null;
+        [UI] private TreeView _treeNetObjects = null;
 
         private TreeStore _treeStorePackets =
             new TreeStore(typeof(PacketInfo), typeof(string), typeof(int), typeof(int), typeof(int), typeof(string),
                 typeof(string));
 
         private TreeStore _treeStorePacketInfo = new TreeStore(typeof(string), typeof(string), typeof(string));
+
+        private TreeStore _treeStoreNetObjects =
+            new TreeStore(typeof(GameObject), typeof(uint), typeof(string), typeof(string));
 
         public MainWindow() : this(new Builder("MainWindow.glade"))
         {
@@ -32,6 +37,7 @@ namespace EvoS.PacketInspector
 
             _treePackets.Model = _treeStorePackets;
             _treePacketInfo.Model = _treeStorePacketInfo;
+            _treeNetObjects.Model = _treeStoreNetObjects;
 
 //            AddColumn(_treePackets, 0, "internal", false);
             AddColumn(_treePackets, 1, "Dir");
@@ -44,6 +50,10 @@ namespace EvoS.PacketInspector
             AddColumn(_treePacketInfo, 0, "Key");
             AddColumn(_treePacketInfo, 1, "Type");
             AddColumn(_treePacketInfo, 2, "Value");
+
+            AddColumn(_treeNetObjects, 1, "Id");
+            AddColumn(_treeNetObjects, 2, "Type");
+            AddColumn(_treeNetObjects, 3, "Info");
 
             DeleteEvent += Window_DeleteEvent;
             _treePackets.Selection.Changed += TreePackets_SelectionChanged;
@@ -204,6 +214,19 @@ namespace EvoS.PacketInspector
                     packet.reader.Length,
                     packet.msgType.ToString(),
                     packet.Message?.ToString() ?? "[no message]"
+                );
+            }
+        }
+
+        public void AddNetObjects(PacketDumpProcessor pdp)
+        {
+            foreach (var (netId, obj) in pdp.Game.NetObjects)
+            {
+                _treeStoreNetObjects.AppendValues(
+                    obj,
+                    netId,
+                    obj.Name,
+                    ""
                 );
             }
         }
