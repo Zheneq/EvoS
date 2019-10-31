@@ -1,3 +1,5 @@
+using System;
+
 namespace EvoS.Framework.Network.Unity.Messages
 {
     [UNetMessage(serverMsgIds: new short[] {8}, clientMsgIds:new short[]{8})]
@@ -16,6 +18,14 @@ namespace EvoS.Framework.Network.Unity.Messages
         {
             writer.Write(NetId);
             writer.WriteBytesFull(Payload);
+        }
+
+        public override string ToString()
+        {
+            return $"{nameof(ObjectUpdateMessage)}(" +
+                   $"{nameof(NetId)}: {NetId}, " +
+                   $"{nameof(Payload)}: {Convert.ToBase64String(Payload)}" +
+                   ")";
         }
     }
 }

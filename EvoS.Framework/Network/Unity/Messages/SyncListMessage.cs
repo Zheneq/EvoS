@@ -1,3 +1,5 @@
+using System;
+
 namespace EvoS.Framework.Network.Unity.Messages
 {
     [UNetMessage(serverMsgIds: new short[] {9}, clientMsgIds:new short[]{9})]
@@ -19,6 +21,15 @@ namespace EvoS.Framework.Network.Unity.Messages
             writer.Write(NetId);
             writer.WritePackedUInt32((uint) Hash);
             writer.WriteBytesFull(Payload);
+        }
+
+        public override string ToString()
+        {
+            return $"{nameof(SyncListMessage)}(" +
+                   $"{nameof(NetId)}: {NetId}, " +
+                   $"{nameof(Hash)}: {Hash}, " +
+                   $"{nameof(Payload)}: {Convert.ToBase64String(Payload)}" +
+                   ")";
         }
     }
 }
