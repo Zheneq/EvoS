@@ -25,6 +25,8 @@ namespace EvoS.PacketAnalysis
                 return;
             }
 
+            HashResolver.Init(AssetLoader.BasePath);
+
             var dpp = new DirectoryPacketProvider(PacketsDir);
             var pdp = new PacketDumpProcessor(dpp);
 

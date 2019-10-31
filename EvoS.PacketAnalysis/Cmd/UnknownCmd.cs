@@ -19,7 +19,7 @@ namespace EvoS.PacketAnalysis.Cmd
             return $"{nameof(UnknownCmd)}(" +
                    (Name != null
                        ? $"{nameof(Name)}: {Name}, "
-                       : $"{nameof(Hash)}: {Hash}, ") +
+                       : $"{nameof(Hash)}: {HashResolver.LookupCmd(Hash)}, ") +
                    $"{nameof(Payload)}: {Convert.ToBase64String(Payload)}" +
                    ")";
         }

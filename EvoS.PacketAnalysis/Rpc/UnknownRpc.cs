@@ -19,7 +19,7 @@ namespace EvoS.PacketAnalysis.Rpc
             return $"{nameof(UnknownRpc)}(" +
                    (Name != null
                        ? $"{nameof(Name)}: {Name}, "
-                       : $"{nameof(Hash)}: {Hash}, ") +
+                       : $"{nameof(Hash)}: {HashResolver.LookupRpc(Hash)}, ") +
                    $"{nameof(Payload)}: {Convert.ToBase64String(Payload)}" +
                    ")";
         }

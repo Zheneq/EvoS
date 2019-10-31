@@ -29,6 +29,7 @@ namespace EvoS.PacketInspector
                 return;
             }
 
+            HashResolver.Init(AssetLoader.BasePath);
             Patcher.PatchAll();
 
             var dpp = new DirectoryPacketProvider(PacketsDir);
