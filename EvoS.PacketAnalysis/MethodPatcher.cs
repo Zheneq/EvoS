@@ -135,7 +135,7 @@ namespace EvoS.PacketAnalysis
 
                     Emit(OpCodes.Ldsfld, fldCallbacks);
                     Emit(OpCodes.Ldloc, objRef);
-                    if (Stack.Count >= 2 && Stack[1] != null)
+                    if (Stack.Count >= 2 && Stack[1] != null && Stack[1].ElementOrType.IsValueType)
                     {
                         Emit(OpCodes.Ldobj, Stack[1].ElementOrType);
                         Emit(OpCodes.Box, Stack[1].ElementOrType);
