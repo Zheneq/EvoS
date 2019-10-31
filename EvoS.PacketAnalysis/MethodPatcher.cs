@@ -249,7 +249,7 @@ namespace EvoS.PacketAnalysis
                              !callee.Name.StartsWith("get_") &&
                              !callee.Name.Contains("Bitf"))
                     {
-//                        Patcher.PatchMethod(callee);
+                        Patcher.PatchMethod(callee);
                     }
                 }
                 else if (instruction.opcode == OpCodes.Ret)
