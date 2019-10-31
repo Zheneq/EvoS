@@ -23,7 +23,7 @@ namespace EvoS.PacketAnalysis
     {
         private PacketProvider _packetProvider;
         private UNetSerializer _serializer = new UNetSerializer();
-        private GameManager _game = new GameManager();
+        public GameManager Game = new GameManager();
         public ReadOnlyCollection<PacketInfo> Packets => _packetProvider.Packets;
         private static Dictionary<int, Type> _rpcTypes = new Dictionary<int, Type>();
         private static Dictionary<int, Type> _cmdTypes = new Dictionary<int, Type>();
@@ -52,7 +52,7 @@ namespace EvoS.PacketAnalysis
 
         public void InitFakeGame()
         {
-            _game.SetGameInfo(new LobbyGameInfo
+            Game.SetGameInfo(new LobbyGameInfo
             {
                 GameConfig = new LobbyGameConfig
                 {
@@ -60,13 +60,13 @@ namespace EvoS.PacketAnalysis
                     Map = "Skyway_Deathmatch"
                 }
             });
-            _game.SetTeamPlayerInfo(new List<LobbyPlayerInfo>
+            Game.SetTeamPlayerInfo(new List<LobbyPlayerInfo>
             {
                 new LobbyPlayerInfo()
             });
-            _game.LaunchGame(false);
+            Game.LaunchGame(false);
 
-            _game.SpawnObject<Board, Board>(_game.MapLoader, out _game.Board);
+            Game.SpawnObject<Board, Board>(Game.MapLoader, out Game.Board);
         }
 
         public void Process()
@@ -103,9 +103,9 @@ namespace EvoS.PacketAnalysis
             if (packet.Message is ObjectSpawnMessage objSpawn)
             {
                 SerializedGameObject serializedGameObject;
-                if (!_game.AssetsLoader.NetObjsByAssetId.TryGetValue(objSpawn.assetId, out serializedGameObject) &&
-                    !_game.MapLoader.NetObjsByAssetId.TryGetValue(objSpawn.assetId, out serializedGameObject) &&
-                    !_game.MiscLoader.NetObjsByAssetId.TryGetValue(objSpawn.assetId, out serializedGameObject))
+                if (!Game.AssetsLoader.NetObjsByAssetId.TryGetValue(objSpawn.assetId, out serializedGameObject) &&
+                    !Game.MapLoader.NetObjsByAssetId.TryGetValue(objSpawn.assetId, out serializedGameObject) &&
+                    !Game.MiscLoader.NetObjsByAssetId.TryGetValue(objSpawn.assetId, out serializedGameObject))
                 {
                     Log.Print(LogType.Error, $"Unknown asset in {objSpawn}");
                     return;
@@ -114,8 +114,7 @@ namespace EvoS.PacketAnalysis
                 var gameObject = serializedGameObject.Instantiate();
                 var netIdent = gameObject.GetComponent<NetworkIdentity>();
                 netIdent.SetNetworkInstanceId(objSpawn.netId);
-//                if (_game.Board != null)
-                _game.RegisterObject(gameObject); // must register after setting network inst id
+                Game.RegisterObject(gameObject); // must register after setting network inst id
 
                 if (objSpawn.payload != null)
                 {
@@ -128,9 +127,9 @@ namespace EvoS.PacketAnalysis
             else if (packet.Message is ObjectSpawnSceneMessage spawnScene)
             {
                 SerializedGameObject serializedGameObject;
-                if (!_game.AssetsLoader.NetworkScenes.TryGetValue(spawnScene.sceneId.Value, out serializedGameObject) &&
-                    !_game.MapLoader.NetworkScenes.TryGetValue(spawnScene.sceneId.Value, out serializedGameObject) &&
-                    !_game.MiscLoader.NetworkScenes.TryGetValue(spawnScene.sceneId.Value, out serializedGameObject))
+                if (!Game.AssetsLoader.NetworkScenes.TryGetValue(spawnScene.sceneId.Value, out serializedGameObject) &&
+                    !Game.MapLoader.NetworkScenes.TryGetValue(spawnScene.sceneId.Value, out serializedGameObject) &&
+                    !Game.MiscLoader.NetworkScenes.TryGetValue(spawnScene.sceneId.Value, out serializedGameObject))
                 {
                     Log.Print(LogType.Error, $"Unknown scene in {spawnScene}");
                     return;
@@ -139,8 +138,7 @@ namespace EvoS.PacketAnalysis
                 var gameObject = serializedGameObject.Instantiate();
                 var netIdent = gameObject.GetComponent<NetworkIdentity>();
                 netIdent.SetNetworkInstanceId(spawnScene.netId);
-//                if (_game.Board != null)
-                _game.RegisterObject(gameObject); // must register after setting network inst id
+                Game.RegisterObject(gameObject); // must register after setting network inst id
 
                 if (spawnScene.payload != null)
                 {
@@ -154,36 +152,30 @@ namespace EvoS.PacketAnalysis
             {
                 if (spawnFinishedMessage.state == 1)
                 {
-                    var gameSceneSingletons = _game.NetObjects[2];
-                    _game.TheatricsManager = gameSceneSingletons.GetComponent<TheatricsManager>();
-                    _game.AbilityModManager = gameSceneSingletons.GetComponent<AbilityModManager>();
-                    _game.SharedEffectBarrierManager = _game.NetObjects[3].GetComponent<SharedEffectBarrierManager>();
-                    _game.SharedActionBuffer = _game.NetObjects[4].GetComponent<SharedActionBuffer>();
+                    var gameSceneSingletons = Game.NetObjects[2];
+                    Game.TheatricsManager = gameSceneSingletons.GetComponent<TheatricsManager>();
+                    Game.AbilityModManager = gameSceneSingletons.GetComponent<AbilityModManager>();
+                    Game.SharedEffectBarrierManager = Game.NetObjects[3].GetComponent<SharedEffectBarrierManager>();
+                    Game.SharedActionBuffer = Game.NetObjects[4].GetComponent<SharedActionBuffer>();
 
-                    var commonGameLogic = _game.NetObjects[5];
-                    _game.InterfaceManager = commonGameLogic.GetComponent<InterfaceManager>();
-                    _game.GameFlow = commonGameLogic.GetComponent<GameFlow>();
-                    _game.ServerCombatManager = commonGameLogic.GetComponent<ServerCombatManager>();
-                    _game.ServerEffectManager = commonGameLogic.GetComponent<ServerEffectManager>();
-                    _game.TeamStatusDisplay = commonGameLogic.GetComponent<TeamStatusDisplay>();
-                    _game.ServerActionBuffer = commonGameLogic.GetComponent<ServerActionBuffer>();
-                    _game.TeamSelectData = commonGameLogic.GetComponent<TeamSelectData>();
-                    _game.BarrierManager = commonGameLogic.GetComponent<BarrierManager>();
+                    var commonGameLogic = Game.NetObjects[5];
+                    Game.InterfaceManager = commonGameLogic.GetComponent<InterfaceManager>();
+                    Game.GameFlow = commonGameLogic.GetComponent<GameFlow>();
+                    Game.ServerCombatManager = commonGameLogic.GetComponent<ServerCombatManager>();
+                    Game.ServerEffectManager = commonGameLogic.GetComponent<ServerEffectManager>();
+                    Game.TeamStatusDisplay = commonGameLogic.GetComponent<TeamStatusDisplay>();
+                    Game.ServerActionBuffer = commonGameLogic.GetComponent<ServerActionBuffer>();
+                    Game.TeamSelectData = commonGameLogic.GetComponent<TeamSelectData>();
+                    Game.BarrierManager = commonGameLogic.GetComponent<BarrierManager>();
 
-                    _game.BrushCoordinator = _game.NetObjects[6].GetComponent<BrushCoordinator>();
-                    var sceneGameLogic = _game.NetObjects[7];
-                    _game.GameFlowData = sceneGameLogic.GetComponent<GameFlowData>();
-                    _game.GameplayData = sceneGameLogic.GetComponent<GameplayData>();
-                    _game.SpoilsManager = sceneGameLogic.GetComponent<SpoilsManager>();
-                    _game.ObjectivePoints = sceneGameLogic.GetComponent<ObjectivePoints>();
-                    _game.SpawnPointManager = sceneGameLogic.GetComponent<SpawnPointManager>();
-                    _game.MatchObjectiveKill = sceneGameLogic.GetComponent<MatchObjectiveKill>();
-
-                    // wake up all objects
-//                    foreach (var gameObj in _game.NetObjects.Values)
-//                    {
-//                        _game.RegisterObject(gameObj);
-//                    }
+                    Game.BrushCoordinator = Game.NetObjects[6].GetComponent<BrushCoordinator>();
+                    var sceneGameLogic = Game.NetObjects[7];
+                    Game.GameFlowData = sceneGameLogic.GetComponent<GameFlowData>();
+                    Game.GameplayData = sceneGameLogic.GetComponent<GameplayData>();
+                    Game.SpoilsManager = sceneGameLogic.GetComponent<SpoilsManager>();
+                    Game.ObjectivePoints = sceneGameLogic.GetComponent<ObjectivePoints>();
+                    Game.SpawnPointManager = sceneGameLogic.GetComponent<SpawnPointManager>();
+                    Game.MatchObjectiveKill = sceneGameLogic.GetComponent<MatchObjectiveKill>();
                 }
             }
             else if (packet.Message is ObjectCmdMessage cmdMessage)
@@ -206,16 +198,10 @@ namespace EvoS.PacketAnalysis
             }
             else if (packet.Message is ObjectUpdateMessage update)
             {
-                if (!_game.NetObjects.TryGetValue(update.NetId.Value, out var gameObject))
+                if (!Game.NetObjects.TryGetValue(update.NetId.Value, out var gameObject))
                 {
                     Log.Print(LogType.Error, $"Unknown net ident {update.NetId} referenced in update {update}!");
                     return;
-                }
-
-                if (packet.PacketNum == 777)
-                {
-                    Console.WriteLine(Utils.ToHex(update.Payload));
-                    Console.WriteLine();
                 }
 
                 Patcher.Callbacks = packet.PacketInteraction = new PacketInteraction();
