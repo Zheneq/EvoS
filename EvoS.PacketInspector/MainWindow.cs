@@ -49,7 +49,7 @@ namespace EvoS.PacketInspector
             AddColumn(_treePackets, 3, "Seq");
             AddColumn(_treePackets, 4, "Size");
             AddColumn(_treePackets, 5, "Type");
-            AddColumn(_treePackets, 6, "Info");
+            AddColumn(_treePackets, 6, "Info", cellData: PacketsCellDataFunc);
 
             AddColumn(_treePacketInfo, 0, "Key");
             AddColumn(_treePacketInfo, 1, "Type");
@@ -91,7 +91,22 @@ namespace EvoS.PacketInspector
             return _filterTargetNetId == 0 || packet.NetId == _filterTargetNetId;
         }
 
-        private void AddColumn(TreeView treeView, int index, string title, bool display = true)
+        private void PacketsCellDataFunc(TreeViewColumn treeColumn, CellRenderer cell, ITreeModel treeModel,
+            TreeIter iter)
+        {
+            var pkt = new Value();
+            treeModel.GetValue(iter, 0, ref pkt);
+            var packet = (PacketInfo) pkt.Val;
+            var val = new Value(GType.String)
+            {
+                Val = packet.Error != null ? "#8B0000" : "#000000"
+            };
+
+            cell.SetProperty("foreground", val);
+        }
+
+        private void AddColumn(TreeView treeView, int index, string title, bool display = true,
+            TreeCellDataFunc cellData = null)
         {
             var column = new TreeViewColumn();
             column.Title = title;
@@ -101,6 +116,8 @@ namespace EvoS.PacketInspector
                 var renderer = new CellRendererText();
                 column.PackStart(renderer, true);
                 column.AddAttribute(renderer, "text", index);
+                if (cellData != null)
+                    column.SetCellDataFunc(renderer, cellData);
             }
 
             treeView.AppendColumn(column);
