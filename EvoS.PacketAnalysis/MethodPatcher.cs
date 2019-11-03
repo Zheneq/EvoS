@@ -127,9 +127,6 @@ namespace EvoS.PacketAnalysis
                     var destField = (FieldInfo) instruction.operand;
                     var valLocal = GetLocal(destField.FieldType);
 
-                    if (destField.Name == "m_accountId")
-                        Console.WriteLine();
-
                     Console.WriteLine($"Patch set of {destField} | {destField.FieldType}");
 
                     var nop = new CodeInstruction(OpCodes.Nop);
