@@ -145,6 +145,11 @@ namespace EvoS.Framework.Misc
                    ")";
         }
 
+        public string ToPositionString()
+        {
+            return $"(X={X}, Y={Y})";
+        }
+
         public enum CornerType : byte
         {
             LowerLeft,

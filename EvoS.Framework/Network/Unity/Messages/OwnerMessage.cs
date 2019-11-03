@@ -17,5 +17,13 @@ namespace EvoS.Framework.Network.Unity.Messages
             writer.Write(netId);
             writer.WritePackedUInt32((uint) playerControllerId);
         }
+
+        public override string ToString()
+        {
+            return $"{nameof(OwnerMessage)}(" +
+                   $"{nameof(netId)}: {netId.Value}, " +
+                   $"{nameof(playerControllerId)}: {playerControllerId}" +
+                   ")";
+        }
     }
 }
