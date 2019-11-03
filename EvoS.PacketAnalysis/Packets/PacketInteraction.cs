@@ -30,12 +30,12 @@ namespace EvoS.PacketAnalysis.Packets
         {
             base.OnEnter(reader, className, methodName);
             _eventStack.TryPeek(out var parent);
-            
+
             if (reader != null)
                 _reader.SetTarget(reader);
             else
                 _reader.TryGetTarget(out reader);
-            
+
             _eventStack.Push(new PacketInteractionCall(parent, className, methodName));
             if (parent == null)
                 Interactions.Add(_eventStack.Peek());

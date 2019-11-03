@@ -9,7 +9,7 @@ namespace EvoS.PacketAnalysis.Cmd
         public string Name;
         public byte[] Payload { get; set; }
 
-        public override void Deserialize(NetworkReader reader)
+        public override void Deserialize(NetworkReader reader, GameObject context)
         {
             Payload = reader.ReadBytes((int) (reader.Length - reader.Position));
         }
@@ -17,6 +17,7 @@ namespace EvoS.PacketAnalysis.Cmd
         public override string ToString()
         {
             return $"{nameof(UnknownCmd)}(" +
+                   $"{nameof(NetId)}: {NetId.Value}, " +
                    (Name != null
                        ? $"{nameof(Name)}: {Name}, "
                        : $"{nameof(Hash)}: {HashResolver.LookupCmd(Hash)}, ") +

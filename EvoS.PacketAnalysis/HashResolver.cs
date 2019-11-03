@@ -38,7 +38,7 @@ namespace EvoS.PacketAnalysis
         {
             var assemblyPath = Path.Join(basePath, "Managed", "Assembly-CSharp.dll");
             if (!File.Exists(assemblyPath)) return;
-            
+
             var module = ModuleDefinition.ReadModule(assemblyPath);
 
             foreach (var instruction in from type in module.Types

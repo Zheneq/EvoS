@@ -22,10 +22,13 @@ namespace EvoS.PacketInspector
             new TreeStore(typeof(PacketInfo), typeof(string), typeof(int), typeof(int), typeof(int), typeof(string),
                 typeof(string));
 
+        private TreeModelFilter _treeFilterPackets;
         private TreeStore _treeStorePacketInfo = new TreeStore(typeof(string), typeof(string), typeof(string));
 
         private TreeStore _treeStoreNetObjects =
             new TreeStore(typeof(GameObject), typeof(uint), typeof(string), typeof(string));
+
+        private uint _filterTargetNetId;
 
         public MainWindow() : this(new Builder("MainWindow.glade"))
         {
@@ -35,7 +38,8 @@ namespace EvoS.PacketInspector
         {
             builder.Autoconnect(this);
 
-            _treePackets.Model = _treeStorePackets;
+            _treeFilterPackets = new TreeModelFilter(_treeStorePackets, null) {VisibleFunc = FilterPackets};
+
             _treePacketInfo.Model = _treeStorePacketInfo;
             _treeNetObjects.Model = _treeStoreNetObjects;
 
@@ -57,6 +61,34 @@ namespace EvoS.PacketInspector
 
             DeleteEvent += Window_DeleteEvent;
             _treePackets.Selection.Changed += TreePackets_SelectionChanged;
+            _treeNetObjects.RowActivated += TreeNetObjects_RowActivated;
+        }
+
+        private void TreeNetObjects_RowActivated(object o, RowActivatedArgs args)
+        {
+            _treeStoreNetObjects.GetIter(out var iter, args.Path);
+            var pkt = new Value();
+            _treeStoreNetObjects.GetValue(iter, 0, ref pkt);
+            var gameObj = (GameObject) pkt.Val;
+
+            if (gameObj != null)
+            {
+                var netIdent = gameObj.GetComponent<NetworkIdentity>();
+                _filterTargetNetId = _filterTargetNetId != netIdent.netId.Value ? netIdent.netId.Value : 0;
+            }
+            else
+                _filterTargetNetId = 0;
+
+            _treeFilterPackets.Refilter();
+        }
+
+        private bool FilterPackets(ITreeModel model, TreeIter iter)
+        {
+            var pkt = new Value();
+            model.GetValue(iter, 0, ref pkt);
+            var packet = (PacketInfo) pkt.Val;
+
+            return _filterTargetNetId == 0 || packet.NetId == _filterTargetNetId;
         }
 
         private void AddColumn(TreeView treeView, int index, string title, bool display = true)
@@ -86,7 +118,7 @@ namespace EvoS.PacketInspector
             if (!_treePackets.Selection.GetSelected(out var selected)) return;
 
             var pkt = new Value();
-            _treeStorePackets.GetValue(selected, 0, ref pkt);
+            _treeFilterPackets.GetValue(selected, 0, ref pkt);
             var packet = (PacketInfo) pkt.Val;
 
             if (packet.Message == null) return;
@@ -216,6 +248,8 @@ namespace EvoS.PacketInspector
                     packet.Message?.ToString() ?? "[no message]"
                 );
             }
+
+            _treePackets.Model = _treeFilterPackets;
         }
 
         public void AddNetObjects(PacketDumpProcessor pdp)

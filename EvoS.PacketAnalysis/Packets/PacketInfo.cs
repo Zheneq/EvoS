@@ -11,6 +11,7 @@ namespace EvoS.PacketAnalysis.Packets
         public object Message;
         public Exception Error;
         public PacketInteraction PacketInteraction;
+        public uint NetId;
 
         public void Deserialize(UNetSerializer serializer)
         {

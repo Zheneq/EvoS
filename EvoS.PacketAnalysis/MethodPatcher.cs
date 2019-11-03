@@ -109,7 +109,7 @@ namespace EvoS.PacketAnalysis
 //            EmitLog($"> {OriginalMethod.DeclaringType.FullName}.{OriginalMethod.Name}");
 
             Emit(OpCodes.Ldsfld, fldCallbacks);
-            
+
             var origParams = OriginalMethod.GetParameters();
             if (origParams.Length > 0 && origParams[0].ParameterType == typeof(NetworkReader))
                 Emit(OriginalMethod.IsStatic ? OpCodes.Ldarg_0 : OpCodes.Ldarg_1);

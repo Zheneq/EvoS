@@ -39,7 +39,7 @@ namespace EvoS.PacketAnalysis
 
                 var cmd = type.GetCustomAttribute<CmdAttribute>();
                 if (cmd != null)
-                    _rpcTypes.Add(cmd.Hash, type);
+                    _cmdTypes.Add(cmd.Hash, type);
             }
         }
 
@@ -71,7 +71,6 @@ namespace EvoS.PacketAnalysis
 
         public void Process()
         {
-            var i = 0;
             foreach (var packet in _packetProvider.Packets)
             {
                 packet.Deserialize(_serializer);
@@ -110,14 +109,15 @@ namespace EvoS.PacketAnalysis
                     Log.Print(LogType.Error, $"Unknown asset in {objSpawn}");
                     return;
                 }
-                
+
                 Game.AssetsLoader.ClearCache();
                 Game.MiscLoader.ClearCache();
                 Game.MapLoader.ClearCache();
-                
+
                 var gameObject = serializedGameObject.Instantiate();
                 var netIdent = gameObject.GetComponent<NetworkIdentity>();
                 netIdent.SetNetworkInstanceId(objSpawn.netId);
+                packet.NetId = netIdent.netId.Value;
                 Game.RegisterObject(gameObject); // must register after setting network inst id
 
                 if (objSpawn.payload != null)
@@ -138,7 +138,7 @@ namespace EvoS.PacketAnalysis
                     Log.Print(LogType.Error, $"Unknown scene in {spawnScene}");
                     return;
                 }
-                
+
                 Game.AssetsLoader.ClearCache();
                 Game.MiscLoader.ClearCache();
                 Game.MapLoader.ClearCache();
@@ -146,6 +146,7 @@ namespace EvoS.PacketAnalysis
                 var gameObject = serializedGameObject.Instantiate();
                 var netIdent = gameObject.GetComponent<NetworkIdentity>();
                 netIdent.SetNetworkInstanceId(spawnScene.netId);
+                packet.NetId = netIdent.netId.Value;
                 Game.RegisterObject(gameObject); // must register after setting network inst id
 
                 if (spawnScene.payload != null)
@@ -192,7 +193,9 @@ namespace EvoS.PacketAnalysis
                 var cmd = (BaseCmd) Activator.CreateInstance(cmdType ?? typeof(UnknownCmd));
                 if (cmd is UnknownCmd unknownCmd) unknownCmd.Hash = cmdMessage.Hash;
                 cmd.NetId = cmdMessage.NetId;
-                cmd.Deserialize(new NetworkReader(cmdMessage.Payload));
+                packet.NetId = cmdMessage.NetId.Value;
+                Game.NetObjects.TryGetValue(cmdMessage.NetId.Value, out var gameObject);
+                cmd.Deserialize(new NetworkReader(cmdMessage.Payload), gameObject);
                 packet.Message = cmd;
             }
             else if (packet.Message is ObjectRpcMessage rpcMessage)
@@ -201,7 +204,9 @@ namespace EvoS.PacketAnalysis
                 var rpc = (BaseRpc) Activator.CreateInstance(rpcType ?? typeof(UnknownRpc));
                 if (rpc is UnknownRpc unknownRpc) unknownRpc.Hash = rpcMessage.Hash;
                 rpc.NetId = rpcMessage.NetId;
-                rpc.Deserialize(new NetworkReader(rpcMessage.Payload));
+                packet.NetId = rpcMessage.NetId.Value;
+                Game.NetObjects.TryGetValue(rpcMessage.NetId.Value, out var gameObject);
+                rpc.Deserialize(new NetworkReader(rpcMessage.Payload), gameObject);
                 packet.Message = rpc;
             }
             else if (packet.Message is ObjectUpdateMessage update)
@@ -214,8 +219,21 @@ namespace EvoS.PacketAnalysis
 
                 Patcher.Callbacks = packet.PacketInteraction = new PacketInteraction();
                 var netIdent = gameObject.GetComponent<NetworkIdentity>();
+                packet.NetId = netIdent.netId.Value;
                 netIdent.OnUpdateVars(new NetworkReader(update.Payload), false);
                 Patcher.Callbacks = new PacketInteraction();
+            }
+            else if (packet.Message is SyncListMessage syncList)
+            {
+                if (!Game.NetObjects.TryGetValue(syncList.NetId.Value, out var gameObject))
+                {
+                    Log.Print(LogType.Error, $"Unknown net ident {syncList.NetId} referenced in syncList {syncList}!");
+                    return;
+                }
+
+                packet.NetId = syncList.NetId.Value;
+
+                // TODO
             }
         }
     }
