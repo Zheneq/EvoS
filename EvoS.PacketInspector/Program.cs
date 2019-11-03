@@ -39,7 +39,7 @@ namespace EvoS.PacketInspector
 
             Application.Init();
 
-            var app = new Application("org.GtkApplication.GtkApplication", GLib.ApplicationFlags.None);
+            var app = new Application("EvoS.PacketInspector", GLib.ApplicationFlags.NonUnique);
             app.Register(GLib.Cancellable.Current);
 
             var win = new MainWindow();
