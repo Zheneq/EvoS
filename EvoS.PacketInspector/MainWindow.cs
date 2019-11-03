@@ -152,6 +152,20 @@ namespace EvoS.PacketInspector
             {
                 AddInteractionInfoToPanel(TreeIter.Zero, call);
             }
+
+            // check if there are two rows at the top level
+            if (!_treeStorePacketInfo.GetIterFirst(out var iter)) return;
+            var sibling = iter;
+            if (_treeStorePacketInfo.IterNext(ref sibling)) return;
+
+            // expand rows until there are at least two children visible at the same level
+            for (;; _treeStorePacketInfo.IterChildren(out iter, iter))
+            {
+                var path = _treeStorePacketInfo.GetPath(iter);
+                _treePacketInfo.ExpandRow(path, false);
+
+                if (_treeStorePacketInfo.IterNChildren(iter) != 1) break;
+            }
         }
 
         private void AddInteractionInfoToPanel(TreeIter parent, PacketInteractionEvent e)
