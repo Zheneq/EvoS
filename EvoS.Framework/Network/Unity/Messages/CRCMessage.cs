@@ -1,6 +1,10 @@
+using System;
+using Newtonsoft.Json;
+
 namespace EvoS.Framework.Network.Unity.Messages
 {
     [UNetMessage(serverMsgIds: new short[] {14})]
+    [JsonConverter(typeof(JsonConverter))]
     public class CRCMessage : MessageBase
     {
         public CRCMessageEntry[] scripts;
@@ -32,8 +36,31 @@ namespace EvoS.Framework.Network.Unity.Messages
                    $"{nameof(scripts)}: {scripts.Length} entries" +
                    ")";
         }
+
+        private class JsonConverter : Newtonsoft.Json.JsonConverter
+        {
+            public override bool CanConvert(Type objectType) => objectType == typeof(CRCMessage);
+
+            public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
+            {
+                var msg = (CRCMessage) value;
+
+                writer.WriteStartObject();
+                foreach (var script in msg.scripts)
+                {
+                    serializer.Serialize(writer, script);
+                }
+
+                writer.WriteEndObject();
+            }
+
+            public override object ReadJson(
+                JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer
+            ) => throw new NotImplementedException();
+        }
     }
 
+    [JsonConverter(typeof(JsonConverter))]
     public struct CRCMessageEntry
     {
         public string name;
@@ -43,6 +70,23 @@ namespace EvoS.Framework.Network.Unity.Messages
         {
             this.name = name;
             this.channel = channel;
+        }
+
+        private class JsonConverter : Newtonsoft.Json.JsonConverter
+        {
+            public override bool CanConvert(Type objectType) => objectType == typeof(CRCMessageEntry);
+
+            public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
+            {
+                var msg = (CRCMessageEntry) value;
+
+                writer.WritePropertyName(msg.name);
+                writer.WriteValue(msg.channel);
+            }
+
+            public override object ReadJson(
+                JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer
+            ) => throw new NotImplementedException();
         }
     }
 }
