@@ -189,28 +189,32 @@ namespace EvoS.PacketAnalysis
             }
             else if (packet.Message is ObjectCmdMessage cmdMessage)
             {
+                packet.NetId = cmdMessage.NetId.Value;
+
                 _cmdTypes.TryGetValue(cmdMessage.Hash, out var cmdType);
                 var cmd = (BaseCmd) Activator.CreateInstance(cmdType ?? typeof(UnknownCmd));
                 if (cmd is UnknownCmd unknownCmd) unknownCmd.Hash = cmdMessage.Hash;
                 cmd.NetId = cmdMessage.NetId;
-                packet.NetId = cmdMessage.NetId.Value;
                 Game.NetObjects.TryGetValue(cmdMessage.NetId.Value, out var gameObject);
                 cmd.Deserialize(new NetworkReader(cmdMessage.Payload), gameObject);
                 packet.Message = cmd;
             }
             else if (packet.Message is ObjectRpcMessage rpcMessage)
             {
+                packet.NetId = rpcMessage.NetId.Value;
+
                 _rpcTypes.TryGetValue(rpcMessage.Hash, out var rpcType);
                 var rpc = (BaseRpc) Activator.CreateInstance(rpcType ?? typeof(UnknownRpc));
                 if (rpc is UnknownRpc unknownRpc) unknownRpc.Hash = rpcMessage.Hash;
                 rpc.NetId = rpcMessage.NetId;
-                packet.NetId = rpcMessage.NetId.Value;
                 Game.NetObjects.TryGetValue(rpcMessage.NetId.Value, out var gameObject);
                 rpc.Deserialize(new NetworkReader(rpcMessage.Payload), gameObject);
                 packet.Message = rpc;
             }
             else if (packet.Message is ObjectUpdateMessage update)
             {
+                packet.NetId = update.NetId.Value;
+
                 if (!Game.NetObjects.TryGetValue(update.NetId.Value, out var gameObject))
                 {
                     Log.Print(LogType.Error, $"Unknown net ident {update.NetId} referenced in update {update}!");
@@ -219,7 +223,6 @@ namespace EvoS.PacketAnalysis
 
                 Patcher.Callbacks = packet.PacketInteraction = new PacketInteraction();
                 var netIdent = gameObject.GetComponent<NetworkIdentity>();
-                packet.NetId = netIdent.netId.Value;
                 netIdent.OnUpdateVars(new NetworkReader(update.Payload), false);
                 Patcher.Callbacks = new PacketInteraction();
             }
