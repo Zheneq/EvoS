@@ -225,15 +225,27 @@ namespace EvoS.PacketAnalysis
             }
             else if (packet.Message is SyncListMessage syncList)
             {
-                if (!Game.NetObjects.TryGetValue(syncList.NetId.Value, out var gameObject))
-                {
-                    Log.Print(LogType.Error, $"Unknown net ident {syncList.NetId} referenced in syncList {syncList}!");
-                    return;
-                }
-
                 packet.NetId = syncList.NetId.Value;
 
-                // TODO
+                var reader = new NetworkReader(syncList.Payload);
+
+                var opMessage = new SyncListOperation();
+                opMessage.Hash = syncList.Hash;
+                opMessage.NetId = syncList.NetId.Value;
+                opMessage.Operation = (SyncList<int>.Operation) reader.ReadByte();
+                opMessage.Index = (int) reader.ReadPackedUInt32();
+
+                if (!Patcher.SyncListLookup.TryGetValue(syncList.Hash, out var syncListField)) return;
+                opMessage.SyncListField = syncListField;
+
+                // if there are any SyncList implementations with DeserializeItem methods that make use
+                // of meaningful instance state, this won't work
+                var syncListInstance = Activator.CreateInstance(syncListField.FieldType);
+                var deserializeMethod = syncListField.FieldType.GetMethod("DeserializeItem");
+
+                var obj = deserializeMethod.Invoke(syncListInstance, new object[] {reader});
+                opMessage.Value = obj;
+                packet.Message = opMessage;
             }
         }
     }

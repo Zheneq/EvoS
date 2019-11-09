@@ -577,6 +577,19 @@ namespace EvoS.Framework.Network.Unity
             throw new System.NotImplementedException();
         }
 
+        public static int GetHashByDelegate(CmdDelegate func)
+        {
+            foreach (var handler in s_CmdHandlerDelegates)
+            {
+                if (handler.Value.invokeFunction == func)
+                {
+                    return handler.Key;
+                }
+            }
+
+            return 0;
+        }
+
         private uint m_SyncVarDirtyBits;
         private float m_LastSendTime;
         private bool m_SyncVarGuard;

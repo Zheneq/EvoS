@@ -30,6 +30,7 @@ namespace EvoS.PacketInspector
             }
 
             HashResolver.Init(AssetLoader.BasePath);
+            Patcher.ResolveSyncListFields();
             Patcher.PatchAll();
 
             var dpp = new DirectoryPacketProvider(PacketsDir);

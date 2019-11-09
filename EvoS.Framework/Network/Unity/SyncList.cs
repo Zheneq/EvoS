@@ -63,38 +63,38 @@ namespace EvoS.Framework.Network.Unity
         {
             SendMsg(op, itemIndex, default);
         }
-
+        
         public void HandleMsg(NetworkReader reader)
         {
-            var num = reader.ReadByte();
+            var num = (Operation) reader.ReadByte();
             var index = (int) reader.ReadPackedUInt32();
             var obj = DeserializeItem(reader);
             switch (num)
             {
-                case 0:
+                case Operation.OP_ADD:
                     m_Objects.Add(obj);
                     break;
-                case 1:
+                case Operation.OP_CLEAR:
                     m_Objects.Clear();
                     break;
-                case 2:
+                case Operation.OP_INSERT:
                     m_Objects.Insert(index, obj);
                     break;
-                case 3:
+                case Operation.OP_REMOVE:
                     m_Objects.Remove(obj);
                     break;
-                case 4:
+                case Operation.OP_REMOVEAT:
                     m_Objects.RemoveAt(index);
                     break;
-                case 5:
-                case 6:
+                case Operation.OP_SET:
+                case Operation.OP_DIRTY:
                     m_Objects[index] = obj;
                     break;
             }
 
             if (m_Callback == null)
                 return;
-            m_Callback((Operation) num, index);
+            m_Callback(num, index);
         }
 
         internal void AddInternal(T item)

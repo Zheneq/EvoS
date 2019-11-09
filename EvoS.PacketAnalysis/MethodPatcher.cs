@@ -102,7 +102,7 @@ namespace EvoS.PacketAnalysis
         private void Patch()
         {
             var fldCallbacks = AccessTools.Field(typeof(Patcher), nameof(Patcher.Callbacks));
-            Console.WriteLine($"Patching {OriginalMethod.DeclaringType.FullName}.{OriginalMethod.Name}");
+//            Console.WriteLine($"Patching {OriginalMethod.DeclaringType.FullName}.{OriginalMethod.Name}");
 
             var objRef = IlGen.DeclareLocal(typeof(object));
 
@@ -127,7 +127,7 @@ namespace EvoS.PacketAnalysis
                     var destField = (FieldInfo) instruction.operand;
                     var valLocal = GetLocal(destField.FieldType);
 
-                    Console.WriteLine($"Patch set of {destField} | {destField.FieldType}");
+//                    Console.WriteLine($"Patch set of {destField} | {destField.FieldType}");
 
                     var nop = new CodeInstruction(OpCodes.Nop);
                     SwapLabels(instruction, nop);
@@ -165,7 +165,7 @@ namespace EvoS.PacketAnalysis
                     if (callee.Name.StartsWith("Hook") || callee.Name.StartsWith("Set") ||
                         callee.Name.StartsWith("set_") || callee.Name == "AddInternal" || callee.Name == "Clear")
                     {
-                        Console.WriteLine($"Patch call to {callee}");
+//                        Console.WriteLine($"Patch call to {callee}");
 
                         var paramLocs = callee.GetParameters().Select(param => GetLocal(param.ParameterType)).ToList();
                         var paramTypes = callee.GetParameters().Select(param => param.ParameterType).ToList();
@@ -218,7 +218,7 @@ namespace EvoS.PacketAnalysis
                         var arg = Stack[0];
                         if (arg != null && arg.Instruction.operand is FieldInfo destField)
                         {
-                            Console.WriteLine($"Patch ref set of {destField} | {destField.FieldType}");
+//                            Console.WriteLine($"Patch ref set of {destField} | {destField.FieldType}");
 //                            EmitLog($"  > About to ref set {destField}");
 
                             // store the reference to the object holding the field
