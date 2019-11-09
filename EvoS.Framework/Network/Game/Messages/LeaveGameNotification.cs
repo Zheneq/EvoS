@@ -23,5 +23,14 @@ namespace EvoS.Framework.Network.Game.Messages
             IsPermanent = reader.ReadBoolean();
             GameResult = (GameResult) reader.ReadInt32();
         }
+
+        public override string ToString()
+        {
+            return $"{nameof(LeaveGameNotification)}(" +
+                   $"{nameof(PlayerId)}: {PlayerId}, " +
+                   $"{nameof(IsPermanent)}: {IsPermanent}, " +
+                   $"{nameof(GameResult)}: {GameResult}" +
+                   ")";
+        }
     }
 }

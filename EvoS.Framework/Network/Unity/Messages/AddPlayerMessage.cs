@@ -19,5 +19,14 @@ namespace EvoS.Framework.Network.Unity.Messages
             writer.Write((ushort) playerControllerId);
             writer.WriteBytesAndSize(msgData, msgSize);
         }
+
+        public override string ToString()
+        {
+            return $"{nameof(AddPlayerMessage)}(" +
+                   $"{nameof(playerControllerId)}: {playerControllerId}, " +
+                   $"{nameof(msgSize)}: {msgSize}, " +
+                   $"{nameof(msgData)}: {msgData}" +
+                   ")";
+        }
     }
 }

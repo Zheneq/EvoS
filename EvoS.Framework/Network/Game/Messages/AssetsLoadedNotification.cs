@@ -19,5 +19,13 @@ namespace EvoS.Framework.Network.Game.Messages
             AccountId = (long) reader.ReadPackedUInt64();
             PlayerId = (int) reader.ReadPackedUInt32();
         }
+
+        public override string ToString()
+        {
+            return $"{nameof(AssetsLoadedNotification)}(" +
+                   $"{nameof(AccountId)}: {AccountId}, " +
+                   $"{nameof(PlayerId)}: {PlayerId}" +
+                   ")";
+        }
     }
 }

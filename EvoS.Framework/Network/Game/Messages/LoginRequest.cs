@@ -25,5 +25,15 @@ namespace EvoS.Framework.Network.Game.Messages
             PlayerId = (int) reader.ReadPackedUInt32();
             LastReceivedMsgSeqNum = reader.ReadPackedUInt32();
         }
+
+        public override string ToString()
+        {
+            return $"{nameof(LoginRequest)}(" +
+                   $"{nameof(AccountId)}: {AccountId}, " +
+                   $"{nameof(SessionToken)}: {SessionToken}, " +
+                   $"{nameof(PlayerId)}: {PlayerId}, " +
+                   $"{nameof(LastReceivedMsgSeqNum)}: {LastReceivedMsgSeqNum}" +
+                   ")";
+        }
     }
 }

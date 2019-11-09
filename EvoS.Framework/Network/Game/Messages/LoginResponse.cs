@@ -25,5 +25,15 @@ namespace EvoS.Framework.Network.Game.Messages
             ErrorMessage = reader.ReadString();
             LastReceivedMsgSeqNum = reader.ReadPackedUInt32();
         }
+
+        public override string ToString()
+        {
+            return $"{nameof(LoginResponse)}(" +
+                   $"{nameof(Success)}: {Success}, " +
+                   $"{nameof(Reconnecting)}: {Reconnecting}, " +
+                   $"{nameof(ErrorMessage)}: {ErrorMessage}, " +
+                   $"{nameof(LastReceivedMsgSeqNum)}: {LastReceivedMsgSeqNum}" +
+                   ")";
+        }
     }
 }

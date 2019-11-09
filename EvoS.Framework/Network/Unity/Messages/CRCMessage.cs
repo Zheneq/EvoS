@@ -25,6 +25,13 @@ namespace EvoS.Framework.Network.Unity.Messages
                 writer.Write(scripts[index].channel);
             }
         }
+
+        public override string ToString()
+        {
+            return $"{nameof(CRCMessage)}(" +
+                   $"{nameof(scripts)}: {scripts.Length} entries" +
+                   ")";
+        }
     }
 
     public struct CRCMessageEntry

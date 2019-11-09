@@ -14,5 +14,12 @@ namespace EvoS.Framework.Network.Unity.Messages
         }
 
         public NetworkInstanceId netId;
+
+        public override string ToString()
+        {
+            return $"{nameof(ObjectDestroyMessage)}(" +
+                   $"{nameof(netId)}: {netId}" +
+                   ")";
+        }
     }
 }
