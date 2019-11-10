@@ -89,5 +89,35 @@ namespace EvoS.Framework.Network.Static
             writer.WritePackedUInt32((uint) value.m_y);
             writer.WritePackedUInt32((uint) value.m_height);
         }
+
+        public static LocalizationArg_AbilityPing _ReadLocalizationArg_AbilityPing_None(
+            NetworkReader reader)
+        {
+            return new LocalizationArg_AbilityPing()
+            {
+                m_characterType = (CharacterType) reader.ReadInt32(),
+                m_abilityType = reader.ReadString(),
+                m_abilityName = reader.ReadString(),
+                m_isSelectable = reader.ReadBoolean(),
+                m_remainingCooldown = (int) reader.ReadPackedUInt32(),
+                m_isUlt = reader.ReadBoolean(),
+                m_currentTechPoints = (int) reader.ReadPackedUInt32(),
+                m_maxTechPoints = (int) reader.ReadPackedUInt32()
+            };
+        }
+
+        public static void _WriteLocalizationArg_AbilityPing_None(
+            NetworkWriter writer,
+            LocalizationArg_AbilityPing value)
+        {
+            writer.Write((int) value.m_characterType);
+            writer.Write(value.m_abilityType);
+            writer.Write(value.m_abilityName);
+            writer.Write(value.m_isSelectable);
+            writer.WritePackedUInt32((uint) value.m_remainingCooldown);
+            writer.Write(value.m_isUlt);
+            writer.WritePackedUInt32((uint) value.m_currentTechPoints);
+            writer.WritePackedUInt32((uint) value.m_maxTechPoints);
+        }
     }
 }

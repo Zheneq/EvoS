@@ -109,5 +109,109 @@ namespace EvoS.Framework.Network.Static
                 return null;
             return DeSerializePath(context, new NetworkReader(data));
         }
+
+        public static bool ArePathSegmentsEquivalent_FromBeginning(
+            BoardSquarePathInfo pathA,
+            BoardSquarePathInfo pathB)
+        {
+            if (pathA == null || pathB == null || (pathA.square == null || pathB.square == null) ||
+                pathA.square != pathB.square)
+                return false;
+            var flag = true;
+            var boardSquarePathInfo1 = pathA;
+            var boardSquarePathInfo2 = pathB;
+            int num;
+            for (num = 0; flag && num < 100; ++num)
+            {
+                boardSquarePathInfo1 = boardSquarePathInfo1.prev;
+                boardSquarePathInfo2 = boardSquarePathInfo2.prev;
+                if (boardSquarePathInfo1 != null || boardSquarePathInfo2 != null)
+                {
+                    if (boardSquarePathInfo1 == null && boardSquarePathInfo2 != null)
+                        flag = false;
+                    else if (boardSquarePathInfo1 != null && boardSquarePathInfo2 == null)
+                        flag = false;
+                    else if (boardSquarePathInfo1.square != boardSquarePathInfo2.square)
+                        flag = false;
+                }
+                else
+                    break;
+            }
+
+            if (num >= 100)
+                Log.Print(LogType.Error,
+                    "Infinite/circular (or maybe just massive) loop detected in ArePathSegmentsEquivalent_FromBeginning.");
+            return flag;
+        }
+
+
+        internal static BoardSquarePathInfo DeSerializeLightweightPath(Component context, IBitStream stream)
+        {
+            if (stream == null)
+            {
+                Log.Print(LogType.Error, "Calling DeSerializeLightweightPath with a null stream");
+                return null;
+            }
+
+            BoardSquarePathInfo boardSquarePathInfo1;
+            if (stream.isWriting)
+            {
+                Log.Print(LogType.Error, "Trying to deserialize a (lightweight) path while writing.");
+                boardSquarePathInfo1 = null;
+            }
+            else
+            {
+                sbyte num1 = 0;
+                stream.Serialize(ref num1);
+                if (num1 <= 0)
+                {
+                    boardSquarePathInfo1 = null;
+                }
+                else
+                {
+                    sbyte num2 = 0;
+                    stream.Serialize(ref num2);
+                    boardSquarePathInfo1 = null;
+                    BoardSquarePathInfo boardSquarePathInfo2 = null;
+                    for (int index = 0; index < (int) num1; ++index)
+                    {
+                        short num3 = -1;
+                        short num4 = -1;
+                        stream.Serialize(ref num3);
+                        stream.Serialize(ref num4);
+                        var boardSquare = num3 != (short) -1 || num4 != (short) -1
+                            ? context.Board.method_10(num3, num4)
+                            : null;
+                        var boardSquarePathInfo3 = new BoardSquarePathInfo();
+                        boardSquarePathInfo3.square = boardSquare;
+                        boardSquarePathInfo3.prev = boardSquarePathInfo2;
+                        if (boardSquarePathInfo2 != null)
+                            boardSquarePathInfo2.next = boardSquarePathInfo3;
+                        boardSquarePathInfo2 = boardSquarePathInfo3;
+                        if (index == 0)
+                            boardSquarePathInfo1 = boardSquarePathInfo3;
+                    }
+
+                    BoardSquarePathInfo boardSquarePathInfo4 = boardSquarePathInfo1;
+                    for (int index = 0; index < (int) num2; ++index)
+                    {
+                        short num3 = -1;
+                        short num4 = -1;
+                        stream.Serialize(ref num3);
+                        stream.Serialize(ref num4);
+                        var boardSquare = num3 != (short) -1 || num4 != (short) -1
+                            ? context.Board.method_10(num3, num4)
+                            : null;
+                        var boardSquarePathInfo3 = new BoardSquarePathInfo();
+                        boardSquarePathInfo3.square = boardSquare;
+                        boardSquarePathInfo3.next = boardSquarePathInfo4;
+                        boardSquarePathInfo4.prev = boardSquarePathInfo3;
+                        boardSquarePathInfo4 = boardSquarePathInfo3;
+                    }
+                }
+            }
+
+            return boardSquarePathInfo1;
+        }
     }
 }

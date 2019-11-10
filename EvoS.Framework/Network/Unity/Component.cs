@@ -36,6 +36,7 @@ namespace EvoS.Framework.Network.Unity
         }
 
         [JsonIgnore] public GameManager GameManager => gameObject.GameManager;
+        [JsonIgnore] public BarrierManager BarrierManager => gameObject.GameManager.BarrierManager;
         [JsonIgnore] public Board Board => gameObject.GameManager.Board;
         [JsonIgnore] public BrushCoordinator BrushCoordinator => gameObject.GameManager.BrushCoordinator;
         [JsonIgnore] public NetworkServer NetworkServer => gameObject.GameManager.NetworkServer;
@@ -44,6 +45,7 @@ namespace EvoS.Framework.Network.Unity
         [JsonIgnore] public GameEventManager GameEventManager => gameObject.GameManager.GameEventManager;
         [JsonIgnore] public MatchLogger MatchLogger => gameObject.GameManager.MatchLogger;
         [JsonIgnore] public CollectTheCoins CollectTheCoins => gameObject.GameManager.CollectTheCoins;
+        [JsonIgnore] public CaptureTheFlag CaptureTheFlag => gameObject.GameManager.CaptureTheFlag;
         [JsonIgnore] public GameplayData GameplayData => gameObject.GameManager.GameplayData;
         [JsonIgnore] public GameplayMutators GameplayMutators => gameObject.GameManager.GameplayMutators;
 

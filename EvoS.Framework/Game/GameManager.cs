@@ -25,6 +25,7 @@ namespace EvoS.Framework.Game
         public BarrierManager BarrierManager;
         public Board Board;
         public BrushCoordinator BrushCoordinator;
+        public CaptureTheFlag CaptureTheFlag;
         public CollectTheCoins CollectTheCoins;
         public GameEventManager GameEventManager = new GameEventManager();
         public GameFlowData GameFlowData;
@@ -428,7 +429,7 @@ namespace EvoS.Framework.Game
             SpawnScene(MapLoader, 1, out var commonGameLogic);
             InterfaceManager = commonGameLogic.GetComponent<InterfaceManager>();
             GameFlow = commonGameLogic.GetComponent<GameFlow>();
-            MatchLogger = commonGameLogic.GetComponent<MatchLogger>();
+//            MatchLogger = commonGameLogic.GetComponent<MatchLogger>();
             ServerCombatManager = commonGameLogic.GetComponent<ServerCombatManager>();
             ServerEffectManager = commonGameLogic.GetComponent<ServerEffectManager>();
             TeamStatusDisplay = commonGameLogic.GetComponent<TeamStatusDisplay>();
