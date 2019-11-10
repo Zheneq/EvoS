@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using EvoS.Framework.Misc;
 using EvoS.Framework.Network.Unity;
@@ -40,6 +42,7 @@ namespace EvoS.PacketInspector
 
             _treeFilterPackets = new TreeModelFilter(_treeStorePackets, null) {VisibleFunc = FilterPackets};
 
+            _treePackets.Model = _treeFilterPackets;
             _treePacketInfo.Model = _treeStorePacketInfo;
             _treeNetObjects.Model = _treeStoreNetObjects;
 
@@ -205,13 +208,13 @@ namespace EvoS.PacketInspector
             }
         }
 
-        private void SetInfoPanelJsonDump(object obj)
+        private void SetInfoPanelJsonDump(object obj, TreeIter parent = default)
         {
             var node = Utils.SerializeObjectAsJObject(obj);
 
             foreach (var child in node.Children())
             {
-                AddJsonInfoToPanel(TreeIter.Zero, child);
+                AddJsonInfoToPanel(parent, child);
             }
         }
 
@@ -264,6 +267,26 @@ namespace EvoS.PacketInspector
 
         public void AddPackets(PacketDumpProcessor pdp)
         {
+            var sw = Stopwatch.StartNew();
+
+            var x = AddPacketsInternal(pdp).GetEnumerator();
+            Idle.Add(() =>
+            {
+                if (!x.MoveNext() || !x.Current)
+                {
+                    x.Dispose();
+
+                    sw.Stop();
+                    Console.WriteLine($"AddPackets: {sw.ElapsedMilliseconds}ms");
+                }
+
+                return x.Current;
+            });
+        }
+
+        private IEnumerable<bool> AddPacketsInternal(PacketDumpProcessor pdp)
+        {
+            var i = 0;
             foreach (var packet in pdp.Packets)
             {
                 if (packet.msgType == 62 || packet.msgType == 61)
@@ -278,9 +301,14 @@ namespace EvoS.PacketInspector
                     packet.msgType.ToString(),
                     packet.Message?.ToString() ?? "[no message]"
                 );
+
+                if (++i % 100 == 0)
+                {
+                    yield return true;
+                }
             }
 
-            _treePackets.Model = _treeFilterPackets;
+            yield return false;
         }
 
         public void AddNetObjects(PacketDumpProcessor pdp)
