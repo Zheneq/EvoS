@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Numerics;
+using EvoS.Framework.Network.Unity;
 
 namespace EvoS.Framework.Assets.Serialized
 {
@@ -52,7 +54,7 @@ namespace EvoS.Framework.Assets.Serialized
                     Add((T) (object) stream.ReadInt32());
                 }
             }
-            else if (typeof(T).IsValueType || 
+            else if (typeof(T).IsValueType ||
                      InlineRead && typeof(ISerializedItem).IsAssignableFrom(typeof(T)) ||
                      typeof(T) == typeof(SerializedComponent))
             {
@@ -83,6 +85,21 @@ namespace EvoS.Framework.Assets.Serialized
             return $"Vector<{typeof(T).Name}>(" +
                    $"{Count} entries" +
                    ")";
+        }
+    }
+
+    public static class SerializedVectorExtensions
+    {
+        public static T[] ToChildArray<T>(this SerializedVector<SerializedMonoBehaviour> vector)
+            where T : MonoBehaviour
+        {
+            return ToChildList<T>(vector).ToArray();
+        }
+
+        public static IList<T> ToChildList<T>(this SerializedVector<SerializedMonoBehaviour> vector)
+            where T : MonoBehaviour
+        {
+            return vector.Select(child => (T) child.Child).ToList();
         }
     }
 }

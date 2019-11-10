@@ -1,8 +1,10 @@
+using System.Collections.Generic;
 using EvoS.Framework.Assets;
 using EvoS.Framework.Assets.Serialized;
 using EvoS.Framework.Assets.Serialized.Behaviours;
 using EvoS.Framework.Game;
 using EvoS.Framework.Logging;
+using EvoS.Framework.Misc;
 using EvoS.Framework.Network.Unity;
 
 namespace EvoS.Framework.Network.NetworkBehaviours
@@ -18,19 +20,19 @@ namespace EvoS.Framework.Network.NetworkBehaviours
         private const int kCmdCmdRefillStocks = 1108895015;
 
         public bool IgnoreForLocalization { get; set; }
-        public SerializedComponent Ability0 { get; set; }
+        public Ability Ability0 { get; set; }
         public string SpritePath0 { get; set; }
-        public SerializedComponent Ability1 { get; set; }
+        public Ability Ability1 { get; set; }
         public string SpritePath1 { get; set; }
-        public SerializedComponent Ability2 { get; set; }
+        public Ability Ability2 { get; set; }
         public string SpritePath2 { get; set; }
-        public SerializedComponent Ability3 { get; set; }
+        public Ability Ability3 { get; set; }
         public string SpritePath3 { get; set; }
-        public SerializedComponent Ability4 { get; set; }
+        public Ability Ability4 { get; set; }
         public string SpritePath4 { get; set; }
-        public SerializedComponent Ability5 { get; set; }
+        public Ability Ability5 { get; set; }
         public string SpritePath5 { get; set; }
-        public SerializedComponent Ability6 { get; set; }
+        public Ability Ability6 { get; set; }
         public string SpritePath6 { get; set; }
         public SerializedVector<SerializedComponent> BotDifficultyAbilityModSets { get; set; }
         public SerializedVector<SerializedComponent> CompsToInspectInAbilityKitInspector { get; set; }
@@ -41,6 +43,12 @@ namespace EvoS.Framework.Network.NetworkBehaviours
         private SyncListInt _consumedStockCount = new SyncListInt();
         private SyncListInt _stockRefreshCountdowns = new SyncListInt();
         private SyncListInt _currentCardIds = new SyncListInt();
+        private AbilityEntry[] m_abilities;
+        private List<Ability> m_allChainAbilities;
+        private List<Ability> m_cachedCardAbilities = new List<Ability>();
+        private List<ActionType> m_allChainAbilityParentActionTypes;
+        private Dictionary<string, int> m_cooldowns;
+        private ActorData m_actor;
         private ActionType _selectedActionForTargeting = ActionType.INVALID_ACTION;
 
         public SyncListInt CooldownsSync => _cooldownsSync;
@@ -61,6 +69,34 @@ namespace EvoS.Framework.Network.NetworkBehaviours
 
         public override void Awake()
         {
+            m_abilities = new AbilityEntry[14];
+            for (int index = 0; index < 14; ++index)
+                m_abilities[index] = new AbilityEntry();
+            m_abilities[0].Setup(Ability0);
+            m_abilities[1].Setup(Ability1);
+            m_abilities[2].Setup(Ability2);
+            m_abilities[3].Setup(Ability3);
+            m_abilities[4].Setup(Ability4);
+            m_allChainAbilities = new List<Ability>();
+            m_allChainAbilityParentActionTypes = new List<ActionType>();
+            for (int index = 0; index < m_abilities.Length; ++index)
+            {
+                var ability = m_abilities[index];
+                if (ability.ability != null)
+                {
+                    foreach (var chainAbility in ability.ability.GetChainAbilities())
+                    {
+                        if (chainAbility != null)
+                            AddToAllChainAbilitiesList(chainAbility, (ActionType) index);
+                    }
+                }
+            }
+
+            m_cooldowns = new Dictionary<string, int>();
+            m_actor = GetComponent<ActorData>();
+            for (int index = 0; index < 3; ++index)
+                m_cachedCardAbilities.Add(null);
+
             _cooldownsSync.InitializeBehaviour(this, kListm_cooldownsSync);
             _consumedStockCount.InitializeBehaviour(this, kListm_consumedStockCount);
             _stockRefreshCountdowns.InitializeBehaviour(this, kListm_stockRefreshCountdowns);
@@ -74,26 +110,19 @@ namespace EvoS.Framework.Network.NetworkBehaviours
             IgnoreForLocalization = stream.ReadBoolean();
             stream.AlignTo();
 
-            Ability0 = new SerializedComponent();
-            Ability0.DeserializeAsset(assetFile, stream);
+            Ability0 = (Ability) new SerializedComponent(assetFile, stream).LoadMonoBehaviourChild();
             SpritePath0 = stream.ReadString32();
-            Ability1 = new SerializedComponent();
-            Ability1.DeserializeAsset(assetFile, stream);
+            Ability1 = (Ability) new SerializedComponent(assetFile, stream).LoadMonoBehaviourChild();
             SpritePath1 = stream.ReadString32();
-            Ability2 = new SerializedComponent();
-            Ability2.DeserializeAsset(assetFile, stream);
+            Ability2 = (Ability) new SerializedComponent(assetFile, stream).LoadMonoBehaviourChild();
             SpritePath2 = stream.ReadString32();
-            Ability3 = new SerializedComponent();
-            Ability3.DeserializeAsset(assetFile, stream);
+            Ability3 = (Ability) new SerializedComponent(assetFile, stream).LoadMonoBehaviourChild();
             SpritePath3 = stream.ReadString32();
-            Ability4 = new SerializedComponent();
-            Ability4.DeserializeAsset(assetFile, stream);
+            Ability4 = (Ability) new SerializedComponent(assetFile, stream).LoadMonoBehaviourChild();
             SpritePath4 = stream.ReadString32();
-            Ability5 = new SerializedComponent();
-            Ability5.DeserializeAsset(assetFile, stream);
+            Ability5 = (Ability) new SerializedComponent(assetFile, stream).LoadMonoBehaviourChild();
             SpritePath5 = stream.ReadString32();
-            Ability6 = new SerializedComponent();
-            Ability6.DeserializeAsset(assetFile, stream);
+            Ability6 = (Ability) new SerializedComponent(assetFile, stream).LoadMonoBehaviourChild();
             SpritePath6 = stream.ReadString32();
             BotDifficultyAbilityModSets = new SerializedVector<SerializedComponent>();
             BotDifficultyAbilityModSets.DeserializeAsset(assetFile, stream);
@@ -235,6 +264,33 @@ namespace EvoS.Framework.Network.NetworkBehaviours
                 ((AbilityData) obj)._currentCardIds.HandleMsg(reader);
         }
 
+        public Ability GetAbilityOfActionType(ActionType type)
+        {
+            Ability ability;
+            if (IsChain(type))
+            {
+                int index = (int) (type - 10);
+                ability = index < 0 || index >= m_allChainAbilities.Count
+                    ? null
+                    : m_allChainAbilities[index];
+            }
+            else
+            {
+                int index = (int) type;
+                ability = index < 0 || index >= m_abilities.Length
+                    ? null
+                    : m_abilities[index].ability;
+            }
+
+            return ability;
+        }
+
+        private void AddToAllChainAbilitiesList(Ability aChainAbility, ActionType parentActionType)
+        {
+            m_allChainAbilities.Add(aChainAbility);
+            m_allChainAbilityParentActionTypes.Add(parentActionType);
+        }
+
         public override string ToString()
         {
             return $"{nameof(AbilityData)}(" +
@@ -260,6 +316,13 @@ namespace EvoS.Framework.Network.NetworkBehaviours
                    ")";
         }
 
+        public static bool IsChain(ActionType actionType)
+        {
+            if (actionType >= ActionType.CHAIN_0)
+                return actionType <= ActionType.CHAIN_2;
+            return false;
+        }
+
         public enum ActionType
         {
             INVALID_ACTION = -1, // 0xFFFFFFFF
@@ -278,6 +341,32 @@ namespace EvoS.Framework.Network.NetworkBehaviours
             CHAIN_2 = 12, // 0x0000000C
             CHAIN_3 = 13, // 0x0000000D
             NUM_ACTIONS = 14 // 0x0000000E
+        }
+
+        public class AbilityEntry
+        {
+            public Ability ability;
+            public string hotkey;
+            private int m_cooldownRemaining;
+
+            public int GetCooldownRemaining()
+            {
+                if (DebugParameters.Get() != null && DebugParameters.Get().GetParameterAsBool("NoCooldowns"))
+                    return 0;
+                return m_cooldownRemaining;
+            }
+
+            public void SetCooldownRemaining(int remaining)
+            {
+                if (m_cooldownRemaining == remaining)
+                    return;
+                m_cooldownRemaining = remaining;
+            }
+
+            public void Setup(Ability ability)
+            {
+                this.ability = ability;
+            }
         }
     }
 }

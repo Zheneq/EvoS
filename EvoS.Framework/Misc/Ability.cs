@@ -67,8 +67,7 @@ namespace EvoS.Framework.Misc
 //        public TargetData[] m_targetData;
         public SerializedVector<TargetData> m_targetData;
 
-//        public Ability[] m_chainAbilities;
-        public SerializedVector<SerializedMonoBehaviour> m_chainAbilities;
+        public Ability[] m_chainAbilities;
 
 //        public List<TargeterTemplateSwapData> m_targeterTemplateSwaps;
         public SerializedVector<TargeterTemplateSwapData> m_targeterTemplateSwaps;
@@ -110,6 +109,14 @@ namespace EvoS.Framework.Misc
             NoMovement
         }
 
+        public Ability[] GetChainAbilities()
+        {
+            Ability[] abilityArray = m_chainAbilities;
+            if (m_currentAbilityMod != null && m_currentAbilityMod.m_useChainAbilityOverrides)
+                abilityArray = m_currentAbilityMod.m_chainAbilityOverrides;
+            return abilityArray;
+        }
+
         public override void DeserializeAsset(AssetFile assetFile, StreamReader stream)
         {
             m_toolTip = stream.ReadString32();
@@ -147,7 +154,7 @@ namespace EvoS.Framework.Misc
             m_targetData = new SerializedArray<TargetData>(assetFile, stream);
             m_tags = new SerializedVector<AbilityTags>(assetFile, stream);
             m_statusWhenRequested = new SerializedVector<StatusType>(assetFile, stream);
-            m_chainAbilities = new SerializedVector<SerializedMonoBehaviour>(assetFile, stream);
+            m_chainAbilities = new SerializedVector<SerializedMonoBehaviour>(assetFile, stream).ToChildArray<Ability>();
             m_targeterTemplateSwaps = new SerializedVector<TargeterTemplateSwapData>(assetFile, stream);
         }
     }

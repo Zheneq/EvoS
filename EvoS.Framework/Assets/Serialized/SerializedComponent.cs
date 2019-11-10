@@ -37,6 +37,13 @@ namespace EvoS.Framework.Assets.Serialized
             return assetFile.ReadObject(PathId, FileId);
         }
 
+        public ISerializedItem LoadMonoBehaviourChild()
+        {
+            var smb = (SerializedMonoBehaviour) LoadValue();
+            
+            return smb?.Child;
+        }
+
         public override string ToString()
         {
             return "Component(" +
