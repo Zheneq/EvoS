@@ -15,10 +15,10 @@ namespace EvoS.Framework.Network
         private static readonly Dictionary<short, Type> ServerTypesById = new Dictionary<short, Type>();
         private static readonly Dictionary<short, Type> ClientTypesById = new Dictionary<short, Type>();
 
-        private static readonly Dictionary<Type, HashSet<short>> ServerIdsByType =
+        public static readonly Dictionary<Type, HashSet<short>> ServerIdsByType =
             new Dictionary<Type, HashSet<short>>();
 
-        private static readonly Dictionary<Type, HashSet<short>> ClientIdsByType =
+        public static readonly Dictionary<Type, HashSet<short>> ClientIdsByType =
             new Dictionary<Type, HashSet<short>>();
 
         private readonly Dictionary<short, UNetMessageDelegate>

@@ -14,7 +14,7 @@ using UI = Gtk.Builder.ObjectAttribute;
 
 namespace EvoS.PacketInspector
 {
-    class MainWindow : Window
+    partial class MainWindow : Window
     {
         [UI] private TreeView _treePackets = null;
         [UI] private TreeView _treePacketInfo = null;
@@ -65,33 +65,8 @@ namespace EvoS.PacketInspector
             DeleteEvent += Window_DeleteEvent;
             _treePackets.Selection.Changed += TreePackets_SelectionChanged;
             _treeNetObjects.RowActivated += TreeNetObjects_RowActivated;
-        }
 
-        private void TreeNetObjects_RowActivated(object o, RowActivatedArgs args)
-        {
-            _treeStoreNetObjects.GetIter(out var iter, args.Path);
-            var pkt = new Value();
-            _treeStoreNetObjects.GetValue(iter, 0, ref pkt);
-            var gameObj = (GameObject) pkt.Val;
-
-            if (gameObj != null)
-            {
-                var netIdent = gameObj.GetComponent<NetworkIdentity>();
-                _filterTargetNetId = _filterTargetNetId != netIdent.netId.Value ? netIdent.netId.Value : 0;
-            }
-            else
-                _filterTargetNetId = 0;
-
-            _treeFilterPackets.Refilter();
-        }
-
-        private bool FilterPackets(ITreeModel model, TreeIter iter)
-        {
-            var pkt = new Value();
-            model.GetValue(iter, 0, ref pkt);
-            var packet = (PacketInfo) pkt.Val;
-
-            return _filterTargetNetId == 0 || packet.NetId == _filterTargetNetId;
+            InitPacketTypeFiltering();
         }
 
         private void PacketsCellDataFunc(TreeViewColumn treeColumn, CellRenderer cell, ITreeModel treeModel,
@@ -289,9 +264,6 @@ namespace EvoS.PacketInspector
             var i = 0;
             foreach (var packet in pdp.Packets)
             {
-                if (packet.msgType == 62 || packet.msgType == 61)
-                    continue;
-
                 _treeStorePackets.AppendValues(
                     packet,
                     packet.Direction == PacketDirection.FromClient ? ">" : "<",
