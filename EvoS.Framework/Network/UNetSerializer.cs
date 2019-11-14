@@ -12,8 +12,8 @@ namespace EvoS.Framework.Network
 
     public class UNetSerializer
     {
-        private static readonly Dictionary<short, Type> ServerTypesById = new Dictionary<short, Type>();
-        private static readonly Dictionary<short, Type> ClientTypesById = new Dictionary<short, Type>();
+        public static readonly Dictionary<short, Type> ServerTypesById = new Dictionary<short, Type>();
+        public static readonly Dictionary<short, Type> ClientTypesById = new Dictionary<short, Type>();
 
         public static readonly Dictionary<Type, HashSet<short>> ServerIdsByType =
             new Dictionary<Type, HashSet<short>>();

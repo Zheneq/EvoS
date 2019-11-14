@@ -13,19 +13,27 @@ namespace EvoS.PacketInspector
     public partial class MainWindow
     {
         [UI] private Button _buttonPacketFilter;
+        [UI] private Button _buttonFilterShowAll;
+        [UI] private Button _buttonFilterHideAll;
+        [UI] private Button _buttonFilterShowUnknown;
+        [UI] private Button _buttonFilterHideUnknown;
         [UI] private Popover _popoverPacketFilter;
         [UI] private TreeView _treeFilterPacketType;
         [UI] private EntryCompletion _entrycompletionPacketTypeFilter;
         [UI] private SearchEntry _searchEntryPacketType;
 
         private TreeModelFilter _treeStoreFilterFilterPacketType;
-        private readonly TreeStore _treeStoreFilterPacketType = new TreeStore(typeof(string), typeof(int), typeof(string));
+
+        private readonly TreeStore _treeStoreFilterPacketType =
+            new TreeStore(typeof(string), typeof(int), typeof(string));
+
         private bool _packetFilterIsDirty;
         private readonly bool[] _packetTypeFilter = new bool[256];
+        private readonly TreeIter[] _packetTypeFilterIters = new TreeIter[256];
         private string _typeFilterSearch = string.Empty;
 
         private void InitPacketTypeFiltering()
-        {   
+        {
             _treeStoreFilterFilterPacketType = new TreeModelFilter(_treeStoreFilterPacketType, null)
             {
                 VisibleFunc = (model, iter) =>
@@ -43,6 +51,7 @@ namespace EvoS.PacketInspector
             {
                 _packetTypeFilter[i] = true;
             }
+
             _packetTypeFilter[48] = false; // ReplayManagerFile
             _packetTypeFilter[61] = false; // AssetsLoadingProgress
             _packetTypeFilter[62] = false; // AssetsLoadingProgress
@@ -54,7 +63,7 @@ namespace EvoS.PacketInspector
                     tuple => tuple.Item1))
                 .OrderBy(i => i.Item1))
             {
-                _treeStoreFilterPacketType.AppendValues(
+                _packetTypeFilterIters[pktId] = _treeStoreFilterPacketType.AppendValues(
                     _packetTypeFilter[pktId] ? "Shown" : "Hidden",
                     (int) pktId,
                     type.Name
@@ -73,6 +82,33 @@ namespace EvoS.PacketInspector
             _popoverPacketFilter.Closed += PacketFilter_Closed;
             _searchEntryPacketType.Changed += PacketFilterSearch_Changed;
             _treeFilterPacketType.RowActivated += PacketFilter_RowActivated;
+
+            _buttonFilterShowAll.Activated += (_, __) => PacketFilterToggleAll(false, true);
+            _buttonFilterShowAll.Clicked += (_, __) => PacketFilterToggleAll(false, true);
+            _buttonFilterHideAll.Activated += (_, __) => PacketFilterToggleAll(false, false);
+            _buttonFilterHideAll.Clicked += (_, __) => PacketFilterToggleAll(false, false);
+            _buttonFilterShowUnknown.Activated += (_, __) => PacketFilterToggleAll(true, true);
+            _buttonFilterShowUnknown.Clicked += (_, __) => PacketFilterToggleAll(true, true);
+            _buttonFilterHideUnknown.Activated += (_, __) => PacketFilterToggleAll(true, false);
+            _buttonFilterHideUnknown.Clicked += (_, __) => PacketFilterToggleAll(true, false);
+        }
+
+        private void PacketFilterToggleAll(bool unknownOnly, bool newState)
+        {
+            for (short i = 0; i < _packetTypeFilter.Length; i++)
+            {
+                var iter = _packetTypeFilterIters[i];
+                if (!unknownOnly || iter.Stamp == 0)
+                {
+                    _packetTypeFilter[i] = newState;
+                    if (iter.Stamp != 0)
+                    {
+                        _treeStoreFilterPacketType.SetValue(iter, 0, newState ? "Shown" : "Hidden");
+                    }
+                }
+            }
+
+            _packetFilterIsDirty = true;
         }
 
         private void PacketFilter_RowActivated(object o, RowActivatedArgs args)
@@ -83,7 +119,7 @@ namespace EvoS.PacketInspector
             var state = _packetTypeFilter[pktId];
             _treeStoreFilterPacketType.SetValue(iter, 0, !state ? "Shown" : "Hidden");
             _packetTypeFilter[pktId] = !state;
-            
+
             _packetFilterIsDirty = true;
         }
 

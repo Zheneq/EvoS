@@ -204,6 +204,7 @@
         <property name="margin_top">4</property>
         <property name="margin_bottom">4</property>
         <property name="orientation">vertical</property>
+        <property name="spacing">2</property>
         <child>
           <object class="GtkSearchEntry" id="_searchEntryPacketType">
             <property name="visible">True</property>
@@ -245,6 +246,66 @@
             <property name="expand">True</property>
             <property name="fill">True</property>
             <property name="position">1</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkGrid">
+            <property name="visible">True</property>
+            <property name="can_focus">False</property>
+            <property name="column_spacing">4</property>
+            <child>
+              <object class="GtkButton" id="_buttonFilterShowAll">
+                <property name="label" translatable="yes">Show All</property>
+                <property name="visible">True</property>
+                <property name="can_focus">True</property>
+                <property name="receives_default">True</property>
+              </object>
+              <packing>
+                <property name="left_attach">0</property>
+                <property name="top_attach">0</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkButton" id="_buttonFilterHideAll">
+                <property name="label" translatable="yes">Hide All</property>
+                <property name="visible">True</property>
+                <property name="can_focus">True</property>
+                <property name="receives_default">True</property>
+              </object>
+              <packing>
+                <property name="left_attach">1</property>
+                <property name="top_attach">0</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkButton" id="_buttonFilterShowUnknown">
+                <property name="label" translatable="yes">Show Unknown</property>
+                <property name="visible">True</property>
+                <property name="can_focus">True</property>
+                <property name="receives_default">True</property>
+              </object>
+              <packing>
+                <property name="left_attach">2</property>
+                <property name="top_attach">0</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkButton" id="_buttonFilterHideUnknown">
+                <property name="label" translatable="yes">Hide Unknown</property>
+                <property name="visible">True</property>
+                <property name="can_focus">True</property>
+                <property name="receives_default">True</property>
+              </object>
+              <packing>
+                <property name="left_attach">3</property>
+                <property name="top_attach">0</property>
+              </packing>
+            </child>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">True</property>
+            <property name="position">2</property>
           </packing>
         </child>
       </object>
