@@ -113,7 +113,7 @@ namespace EvoS.PacketInspector
 
         private void PacketFilter_RowActivated(object o, RowActivatedArgs args)
         {
-            _treeStoreFilterPacketType.GetIter(out var iter, args.Path);
+            _treeStoreFilterPacketType.GetIter(out var iter, _treeStoreFilterFilterPacketType.ConvertPathToChildPath(args.Path ));
             var pktId = (int) _treeStoreFilterPacketType.GetValue(iter, 1);
 
             var state = _packetTypeFilter[pktId];
