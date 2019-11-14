@@ -1,6 +1,6 @@
 namespace EvoS.Framework.Network.Unity.Messages
 {
-    [UNetMessage(serverMsgIds: new short[] {13})]
+    [UNetMessage(serverMsgIds: new short[] {1, 13})]
     public class ObjectDestroyMessage : MessageBase
     {
         public override void Deserialize(NetworkReader reader)

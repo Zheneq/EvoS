@@ -271,7 +271,7 @@ namespace EvoS.PacketInspector
                     packet.msgSeqNum,
                     packet.reader.Length,
                     packet.msgType.ToString(),
-                    packet.Message?.ToString() ?? "[no message]"
+                    packet.Message?.ToString() ?? $"[msgType={packet.msgType} no message]"
                 );
 
                 if (++i % 100 == 0)

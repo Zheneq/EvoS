@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Numerics;
 using System.Reflection;
 using System.Text;
 using Newtonsoft.Json;
@@ -114,6 +115,8 @@ namespace EvoS.Framework.Misc
             serializer = JsonSerializer.CreateDefault(settings);
             serializer.Converters.Add(new StringEnumConverter());
             serializer.Converters.Add(new BoardSquareConverter());
+            serializer.Converters.Add(new Vector3Converter());
+            serializer.Converters.Add(new GridPosConverter());
             return settings;
         }
 
@@ -122,6 +125,34 @@ namespace EvoS.Framework.Misc
             None,
             OnException,
             Always
+        }
+
+        public class GridPosConverter : JsonConverter<GridPos>
+        {
+            public override void WriteJson(JsonWriter writer, GridPos value, JsonSerializer serializer)
+            {
+                writer.WriteValue($"(x={value.X}, y={value.Y}, h={value.Height})");
+            }
+
+            public override GridPos ReadJson(JsonReader reader, Type objectType, GridPos existingValue,
+                bool hasExistingValue, JsonSerializer serializer)
+            {
+                throw new NotImplementedException();
+            }
+        }
+
+        public class Vector3Converter : JsonConverter<Vector3>
+        {
+            public override void WriteJson(JsonWriter writer, Vector3 value, JsonSerializer serializer)
+            {
+                writer.WriteValue($"(x={value.X}, y={value.Y}, z={value.Z})");
+            }
+
+            public override Vector3 ReadJson(JsonReader reader, Type objectType, Vector3 existingValue,
+                bool hasExistingValue, JsonSerializer serializer)
+            {
+                throw new NotImplementedException();
+            }
         }
 
         public class BoardSquareConverter : JsonConverter<BoardSquare>

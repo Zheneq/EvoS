@@ -2,14 +2,17 @@ using System.Collections.Generic;
 using System.Numerics;
 using EvoS.Framework.Misc;
 using EvoS.Framework.Network.Unity;
+using Newtonsoft.Json;
 
 namespace EvoS.Framework.Network.Static
 {
     public class AbilityTarget
     {
-        private static AbilityTarget s_abilityTargetForTargeterUpdate = new AbilityTarget();
+        [JsonIgnore]
         private GridPos m_gridPos;
+        [JsonIgnore]
         private Vector3 m_dir;
+        [JsonIgnore]
         private Vector3 m_freePos;
 
         private AbilityTarget()
@@ -61,11 +64,6 @@ namespace EvoS.Framework.Network.Static
         public AbilityTarget GetCopy()
         {
             return new AbilityTarget(GridPos, FreePos, AimDirection);
-        }
-
-        public static AbilityTarget GetAbilityTargetForTargeterUpdate()
-        {
-            return s_abilityTargetForTargeterUpdate;
         }
 
         public static AbilityTarget CreateAbilityTarget(IBitStream stream)
