@@ -1,9 +1,7 @@
 using System;
-using Newtonsoft.Json;
 
 namespace EvoS.Framework.Network.Static
 {
-    [JsonConverter(typeof(JsonConverter))]
     [Serializable]
     [EvosMessage(157)]
     public struct Rate
@@ -49,24 +47,5 @@ namespace EvoS.Framework.Network.Static
         public double Amount;
 
         public TimeSpan Period;
-
-        private class JsonConverter : Newtonsoft.Json.JsonConverter
-        {
-            public override bool CanConvert(Type objectType)
-            {
-                return objectType == typeof(Rate);
-            }
-
-            public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
-            {
-                writer.WriteValue(((Rate) value).ToString());
-            }
-
-            public override object ReadJson(JsonReader reader, Type objectType, object existingValue,
-                JsonSerializer serializer)
-            {
-                return reader.Value.ToString();
-            }
-        }
     }
 }
