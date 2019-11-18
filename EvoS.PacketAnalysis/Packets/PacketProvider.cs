@@ -8,8 +8,14 @@ namespace EvoS.PacketAnalysis.Packets
     {
         protected List<PacketInfo> _packetInfos = new List<PacketInfo>();
         public ReadOnlyCollection<PacketInfo> Packets => _packetInfos.AsReadOnly();
+        public readonly string Path;
 
-        protected void ProcessRawUnet(in uint pktNum, PacketDirection direction, byte[] data)
+        protected PacketProvider(string path)
+        {
+            Path = path;
+        }
+
+        protected void ProcessRawUnet(in uint pktNum, double timestamp, PacketDirection direction, byte[] data)
         {
             var unetMsg = UNetMessage.Deserialize(data);
             var reader = new NetworkReader(unetMsg);
@@ -19,6 +25,7 @@ namespace EvoS.PacketAnalysis.Packets
                 {
                     PacketNum = pktNum,
                     Direction = direction,
+                    Timestamp = timestamp,
                     msgSeqNum = reader.ReadUInt32()
                 };
                 var msgSize = reader.ReadUInt16();

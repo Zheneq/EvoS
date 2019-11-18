@@ -8,6 +8,7 @@ namespace EvoS.PacketAnalysis.Packets
     {
         public PacketDirection Direction { get; internal set; }
         public uint PacketNum { get; internal set; }
+        public double Timestamp;
         public object Message;
         public Exception Error;
         public PacketInteraction PacketInteraction;

@@ -1,16 +1,11 @@
 using System.IO;
-using EvoS.Framework.Network.Unity;
 
 namespace EvoS.PacketAnalysis.Packets
 {
     public class DirectoryPacketProvider : PacketProvider
     {
-        public readonly string Path;
-
-        public DirectoryPacketProvider(string path)
+        public DirectoryPacketProvider(string path) : base(path)
         {
-            Path = path;
-
             var skipped = 0;
             for (uint i = 0;; i++)
             {
@@ -43,7 +38,7 @@ namespace EvoS.PacketAnalysis.Packets
                     continue;
                 }
 
-                ProcessRawUnet(i, direction, data);
+                ProcessRawUnet(i, -1, direction, data);
             }
         }
     }
