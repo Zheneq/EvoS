@@ -1,5 +1,7 @@
-﻿using EvoS.Framework.Assets;
+﻿using System;
+using EvoS.Framework.Assets;
 using EvoS.Framework.Logging;
+using EvoS.Framework.Misc;
 using EvoS.PacketAnalysis.Packets;
 using McMaster.Extensions.CommandLineUtils;
 
@@ -16,6 +18,9 @@ namespace EvoS.PacketAnalysis
         [Option(Description = "Path to packet dump", ShortName = "P")]
         public string PacketsDir { get; }
 
+        [Option(Description = "Path to replay file", ShortName = "R")]
+        public string ReplayFile { get; }
+
         private void OnExecute()
         {
             if (!AssetLoader.FindAssetRoot(Assets))
@@ -27,8 +32,14 @@ namespace EvoS.PacketAnalysis
 
             HashResolver.Init(AssetLoader.BasePath);
 
-            var dpp = new DirectoryPacketProvider(PacketsDir);
-            var pdp = new PacketDumpProcessor(dpp);
+            PacketProvider provider;
+            if (!PacketsDir.IsNullOrEmpty())
+                provider = new DirectoryPacketProvider(PacketsDir);
+            else if (!ReplayFile.IsNullOrEmpty())
+                provider = new ReplayPacketProvider(ReplayFile);
+            else throw new ArgumentOutOfRangeException(nameof(provider), "Neither PacketsDir or ReplayFile provided!");
+
+            var pdp = new PacketDumpProcessor(provider);
 
             pdp.Process();
         }

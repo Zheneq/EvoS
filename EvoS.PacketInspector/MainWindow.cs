@@ -19,6 +19,8 @@ namespace EvoS.PacketInspector
         [UI] private TreeView _treePackets = null;
         [UI] private TreeView _treePacketInfo = null;
         [UI] private TreeView _treeNetObjects = null;
+        [UI] private Button _buttonOpenFolder = null;
+        [UI] private Button _buttonOpenReplay = null;
 
         private TreeStore _treeStorePackets =
             new TreeStore(typeof(PacketInfo), typeof(string), typeof(int), typeof(int), typeof(int), typeof(string),
@@ -65,8 +67,61 @@ namespace EvoS.PacketInspector
             DeleteEvent += Window_DeleteEvent;
             _treePackets.Selection.Changed += TreePackets_SelectionChanged;
             _treeNetObjects.RowActivated += TreeNetObjects_RowActivated;
+            _buttonOpenReplay.Activated += OpenReplay_Activated;
+            _buttonOpenReplay.Clicked += OpenReplay_Activated;
+            _buttonOpenFolder.Activated += OpenFolder_Activated;
+            _buttonOpenFolder.Clicked += OpenFolder_Activated;
 
             InitPacketTypeFiltering();
+        }
+
+        private void OpenFolder_Activated(object sender, EventArgs e)
+        {
+            using var chooser = new PacketDumpSelector(this, "Open Dump Folder", FileChooserAction.SelectFolder);
+            chooser.Callback += s => LoadPacketDump(PacketDumpType.PacketDirectory, s);
+            chooser.Run();
+        }
+
+        private void OpenReplay_Activated(object sender, EventArgs e)
+        {
+            using var chooser = new PacketDumpSelector(this, "Open Replay", FileChooserAction.Open);
+            chooser.SetFilter( "AtlasReactor Replay", "*.arr");
+            chooser.Callback += s => LoadPacketDump(PacketDumpType.ReplayFile, s);
+            chooser.Run();
+        }
+
+        public void Reset()
+        {
+            _treeStorePackets.Clear();
+            _treeStoreNetObjects.Clear();
+            _treeStorePacketInfo.Clear();
+        }
+
+        public void LoadPacketDump(PacketDumpType type, string path)
+        {
+            _buttonOpenFolder.Sensitive = false;
+            _buttonOpenReplay.Sensitive = false;
+            
+            Reset();
+            
+            PacketProvider provider;
+            switch (type)
+            {
+                case PacketDumpType.ReplayFile:
+                    provider = new ReplayPacketProvider(path);
+                    break;
+                case PacketDumpType.PacketDirectory:
+                    provider = new DirectoryPacketProvider(path);
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(type), type, null);
+            }
+
+            var pdp = new PacketDumpProcessor(provider);
+            pdp.Process();
+
+            AddNetObjects(pdp);
+            AddPackets(pdp);
         }
 
         private void PacketsCellDataFunc(TreeViewColumn treeColumn, CellRenderer cell, ITreeModel treeModel,

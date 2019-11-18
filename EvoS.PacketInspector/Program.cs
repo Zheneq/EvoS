@@ -1,6 +1,7 @@
 using System;
 using EvoS.Framework.Assets;
 using EvoS.Framework.Logging;
+using EvoS.Framework.Misc;
 using Gtk;
 using EvoS.PacketAnalysis;
 using EvoS.PacketAnalysis.Packets;
@@ -20,6 +21,9 @@ namespace EvoS.PacketInspector
         [Option(Description = "Path to packet dump", ShortName = "P")]
         public string PacketsDir { get; }
 
+        [Option(Description = "Path to replay file", ShortName = "R")]
+        public string ReplayFile { get; }
+
         private void OnExecute()
         {
             if (!AssetLoader.FindAssetRoot(Assets))
@@ -33,19 +37,16 @@ namespace EvoS.PacketInspector
             Patcher.ResolveSyncListFields();
             Patcher.PatchAll();
 
-            var dpp = new DirectoryPacketProvider(PacketsDir);
-            var pdp = new PacketDumpProcessor(dpp);
-
-            pdp.Process();
-
             Application.Init();
 
             var app = new Application("EvoS.PacketInspector", GLib.ApplicationFlags.NonUnique);
             app.Register(GLib.Cancellable.Current);
 
             var win = new MainWindow();
-            win.AddPackets(pdp);
-            win.AddNetObjects(pdp);
+            if (!PacketsDir.IsNullOrEmpty())
+                win.LoadPacketDump(PacketDumpType.PacketDirectory, PacketsDir);
+            else if (!ReplayFile.IsNullOrEmpty())
+                win.LoadPacketDump(PacketDumpType.ReplayFile, ReplayFile);
 
             app.AddWindow(win);
             win.Show();
