@@ -21,6 +21,8 @@ namespace EvoS.PacketInspector
         [UI] private TreeView _treeNetObjects = null;
         [UI] private Button _buttonOpenFolder = null;
         [UI] private Button _buttonOpenReplay = null;
+        [UI] private Label _statusLabel = null;
+        [UI] private ProgressBar _statusProgressBar = null;
 
         private TreeStore _treeStorePackets =
             new TreeStore(typeof(PacketInfo), typeof(string), typeof(int), typeof(int), typeof(int), typeof(string),
@@ -299,7 +301,10 @@ namespace EvoS.PacketInspector
         {
             var sw = Stopwatch.StartNew();
 
-            var x = AddPacketsInternal(pdp).GetEnumerator();
+            const int batchSize = 100;
+            var processedCount = 0;
+
+            var x = AddPacketsInternal(pdp, batchSize).GetEnumerator();
             Idle.Add(() =>
             {
                 if (!x.MoveNext() || !x.Current)
@@ -308,13 +313,27 @@ namespace EvoS.PacketInspector
 
                     sw.Stop();
                     Console.WriteLine($"AddPackets: {sw.ElapsedMilliseconds}ms");
+
+                    _buttonOpenFolder.Sensitive = true;
+                    _buttonOpenReplay.Sensitive = true;
+                }
+                else
+                {
+                    processedCount += batchSize;
+                    SetStatus($"Added {processedCount}/{pdp.Packets.Count} packets", processedCount, pdp.Packets.Count);
                 }
 
                 return x.Current;
             });
         }
 
-        private IEnumerable<bool> AddPacketsInternal(PacketDumpProcessor pdp)
+        private void SetStatus(string statusText, in int current, in int total)
+        {
+            _statusProgressBar.Fraction = current / (double) total;
+            _statusLabel.Text = statusText;
+        }
+
+        private IEnumerable<bool> AddPacketsInternal(PacketDumpProcessor pdp, int batchSize)
         {
             var i = 0;
             foreach (var packet in pdp.Packets)
@@ -329,7 +348,7 @@ namespace EvoS.PacketInspector
                     packet.Message?.ToString() ?? $"[msgType={packet.msgType} no message]"
                 );
 
-                if (++i % 100 == 0)
+                if (++i % batchSize == 0)
                 {
                     yield return true;
                 }
