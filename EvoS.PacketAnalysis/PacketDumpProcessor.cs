@@ -35,11 +35,21 @@ namespace EvoS.PacketAnalysis
             {
                 var rpc = type.GetCustomAttribute<RpcAttribute>();
                 if (rpc != null)
-                    _rpcTypes.Add(rpc.Hash, type);
+                {
+                    if (!_rpcTypes.TryAdd(rpc.Hash, type) && type != _rpcTypes[rpc.Hash])
+                    {
+                        Log.Print(LogType.Error, $"Duplicate rpc hash {rpc.Hash} on {type.FullName} and {_rpcTypes[rpc.Hash].FullName}");
+                    }
+                }
 
                 var cmd = type.GetCustomAttribute<CmdAttribute>();
                 if (cmd != null)
-                    _cmdTypes.Add(cmd.Hash, type);
+                {
+                    if (!_cmdTypes.TryAdd(cmd.Hash, type) && type != _cmdTypes[cmd.Hash])
+                    {
+                        Log.Print(LogType.Error, $"Duplicate cmd hash {cmd.Hash} on {type.FullName} and {_cmdTypes[cmd.Hash].FullName}");
+                    }
+                }
             }
         }
 
