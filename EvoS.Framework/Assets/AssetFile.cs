@@ -269,8 +269,8 @@ namespace EvoS.Framework.Assets
                 {
                     if (obj is SerializedMonoBehaviour smb)
                     {
-                        Log.Print(LogType.Warning,
-                            $"Didn't fully read MB {smb.Script.ClassName}, {currentPos}/{endPos}");
+//                        Log.Print(LogType.Warning,
+//                            $"Didn't fully read MB {smb.Script.ClassName}, {currentPos}/{endPos}");
                     }
                     else
                     {

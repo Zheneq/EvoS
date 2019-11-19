@@ -97,7 +97,7 @@ namespace EvoS.PacketInspector
         private void OpenReplay_Activated(object sender, EventArgs e)
         {
             using var chooser = new PacketDumpSelector(this, "Open Replay", FileChooserAction.Open);
-            chooser.SetFilter( "AtlasReactor Replay", "*.arr");
+            chooser.SetFilter("AtlasReactor Replay", "*.arr");
             chooser.Callback += s => LoadPacketDump(PacketDumpType.ReplayFile, s);
             chooser.Run();
         }
@@ -113,9 +113,9 @@ namespace EvoS.PacketInspector
         {
             _buttonOpenFolder.Sensitive = false;
             _buttonOpenReplay.Sensitive = false;
-            
+
             Reset();
-            
+
             PacketProvider provider;
             switch (type)
             {

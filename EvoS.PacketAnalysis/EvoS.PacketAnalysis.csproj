@@ -22,7 +22,6 @@
 
     <ItemGroup>
         <ProjectReference Include="..\EvoS.Framework\EvoS.Framework.csproj" />
-        <ProjectReference Include="..\TestGameServer\TestGameServer.csproj" />
     </ItemGroup>
 
     <ItemGroup>

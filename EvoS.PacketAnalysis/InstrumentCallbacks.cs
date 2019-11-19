@@ -12,18 +12,18 @@ namespace EvoS.PacketAnalysis
 
         public virtual void OnSetFld(object instance, string field, object value)
         {
-            Log.Print(LogType.Debug, $"{DepthIndent}Field set: {instance?.GetType().Name}.{field} = {value}");
+//            Log.Print(LogType.Debug, $"{DepthIndent}Field set: {instance?.GetType().Name}.{field} = {value}");
         }
 
         public virtual void OnCallMethod(object instance, string method, object[] value)
         {
             var args = string.Join(", ", value.Select(v => v?.ToString() ?? "null").ToList());
-            Log.Print(LogType.Debug, $"{DepthIndent}Method called: {instance?.GetType().Name}.{method}({args})");
+//            Log.Print(LogType.Debug, $"{DepthIndent}Method called: {instance?.GetType().Name}.{method}({args})");
         }
 
         public virtual void OnEnter(NetworkReader reader, string className, string methodName)
         {
-            Log.Print(LogType.Debug, $"{DepthIndent}> {className}.{methodName}");
+//            Log.Print(LogType.Debug, $"{DepthIndent}> {className}.{methodName}");
             MethodStack.Push($"{DepthIndent}> {className}.{methodName}");
         }
 
