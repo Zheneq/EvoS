@@ -1,11 +1,10 @@
 using System;
 using EvoS.Framework.Assets;
-using EvoS.Framework.Logging;
 using EvoS.Framework.Misc;
 using Gtk;
 using EvoS.PacketAnalysis;
-using EvoS.PacketAnalysis.Packets;
 using McMaster.Extensions.CommandLineUtils;
+using nucs.JsonSettings;
 
 namespace EvoS.PacketInspector
 {
@@ -15,32 +14,38 @@ namespace EvoS.PacketInspector
         public static int Main(string[] args)
             => CommandLineApplication.Execute<Program>(args);
 
-        [Option(Description = "Path to AtlasReactor_Data", ShortName = "D")]
-        public string Assets { get; }
-
         [Option(Description = "Path to packet dump", ShortName = "P")]
         public string PacketsDir { get; }
 
         [Option(Description = "Path to replay file", ShortName = "R")]
         public string ReplayFile { get; }
 
+        public static Settings Settings { get; } = JsonSettings.Load<Settings>();
+
         private void OnExecute()
         {
-            if (!AssetLoader.FindAssetRoot(Assets))
+            Application.Init();
+
+            var app = new Application("EvoS.PacketInspector", GLib.ApplicationFlags.NonUnique);
+            app.Register(GLib.Cancellable.Current);
+
+            // We require data from the game assets, so ensure we have a valid data path
+            if (!AssetLoader.FindAssetRoot(Settings.AtlasReactorData))
             {
-                Log.Print(LogType.Error, "AtlasReactor_Data folder not found, please specify with --assets!");
-                Log.Print(LogType.Misc, "Alternatively, place Win64 or AtlasReactor_Data in this folder.");
-                return;
+                using var settingsUi = new SettingsUi();
+                settingsUi.Show();
+                app.AddWindow(settingsUi);
+                var x = (ResponseType) settingsUi.Run();
+
+                if (x != ResponseType.Ok)
+                {
+                    return;
+                }
             }
 
             HashResolver.Init(AssetLoader.BasePath);
             Patcher.ResolveSyncListFields();
             Patcher.PatchAll();
-
-            Application.Init();
-
-            var app = new Application("EvoS.PacketInspector", GLib.ApplicationFlags.NonUnique);
-            app.Register(GLib.Cancellable.Current);
 
             var win = new MainWindow();
             if (!PacketsDir.IsNullOrEmpty())

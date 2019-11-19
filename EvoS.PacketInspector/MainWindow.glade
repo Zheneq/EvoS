@@ -64,7 +64,7 @@
                 <accelerator key="o" signal="activate" modifiers="GDK_CONTROL_MASK"/>
               </object>
               <packing>
-                <property name="position">0</property>
+                <property name="position">1</property>
               </packing>
             </child>
             <child>
@@ -79,6 +79,19 @@
               </object>
               <packing>
                 <property name="position">2</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkButton" id="_buttonSettings">
+                <property name="label">gtk-preferences</property>
+                <property name="visible">True</property>
+                <property name="can_focus">True</property>
+                <property name="receives_default">True</property>
+                <property name="use_stock">True</property>
+                <property name="always_show_image">True</property>
+              </object>
+              <packing>
+                <property name="position">3</property>
               </packing>
             </child>
           </object>

@@ -21,6 +21,7 @@ namespace EvoS.PacketInspector
         [UI] private TreeView _treeNetObjects = null;
         [UI] private Button _buttonOpenFolder = null;
         [UI] private Button _buttonOpenReplay = null;
+        [UI] private Button _buttonSettings = null;
         [UI] private Label _statusLabel = null;
         [UI] private ProgressBar _statusProgressBar = null;
 
@@ -73,8 +74,17 @@ namespace EvoS.PacketInspector
             _buttonOpenReplay.Clicked += OpenReplay_Activated;
             _buttonOpenFolder.Activated += OpenFolder_Activated;
             _buttonOpenFolder.Clicked += OpenFolder_Activated;
+            _buttonSettings.Activated += ButtonSettings_Activated;
+            _buttonSettings.Clicked += ButtonSettings_Activated;
 
             InitPacketTypeFiltering();
+        }
+
+        private void ButtonSettings_Activated(object sender, EventArgs e)
+        {
+            using var settingsUi = new SettingsUi();
+            settingsUi.Show();
+            settingsUi.Run();
         }
 
         private void OpenFolder_Activated(object sender, EventArgs e)
