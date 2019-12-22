@@ -13,10 +13,10 @@ namespace EvoS.Framework.Game
         public static GameManager? FindGameManager(LoginRequest loginRequest)
         {
             // TODO this is only suitable for solo
-            if (!_gameManagers.ContainsKey(loginRequest.SessionToken))
+            if (!_gameManagers.ContainsKey(loginRequest.AccountId))
             {
-                _gameManagers.Add(loginRequest.SessionToken, new GameManager());
-                var x = _gameManagers[loginRequest.SessionToken];
+                _gameManagers.Add(loginRequest.AccountId, new GameManager());
+                var x = _gameManagers[loginRequest.AccountId];
                 x.SetTeamInfo(new LobbyServerTeamInfo());
                     x.TeamInfo.TeamPlayerInfo.Add(new LobbyServerPlayerInfo
                     {
@@ -39,7 +39,7 @@ namespace EvoS.Framework.Game
                 x.LaunchGame();
             }
 
-            return _gameManagers[loginRequest.SessionToken];
+            return _gameManagers[loginRequest.AccountId];
         }
     }
 }
