@@ -70,10 +70,7 @@ namespace EvoS.PacketAnalysis
                     Map = "Skyway_Deathmatch"
                 }
             });
-            Game.SetTeamPlayerInfo(new List<LobbyPlayerInfo>
-            {
-                new LobbyPlayerInfo()
-            });
+            Game.SetTeamInfo(new LobbyServerTeamInfo());
             Game.LaunchGame(false);
 
             Game.SpawnObject<Board, Board>(Game.MapLoader, out Game.Board);

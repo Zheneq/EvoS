@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using EvoS.Framework.Constants.Enums;
+using EvoS.Framework.Misc;
 using EvoS.Framework.Network.Game.Messages;
 using EvoS.Framework.Network.Static;
 
@@ -15,10 +17,11 @@ namespace EvoS.Framework.Game
             {
                 _gameManagers.Add(loginRequest.SessionToken, new GameManager());
                 var x = _gameManagers[loginRequest.SessionToken];
-                x.SetTeamPlayerInfo(new List<LobbyPlayerInfo>
-                {
-                    new LobbyPlayerInfo()
-                });
+                x.SetTeamInfo(new LobbyServerTeamInfo());
+                    x.TeamInfo.TeamPlayerInfo.Add(new LobbyServerPlayerInfo
+                    {
+                        TeamId = Team.TeamA
+                    });
                 x.SetGameInfo(new LobbyGameInfo
                 {
                     GameConfig = new LobbyGameConfig

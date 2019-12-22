@@ -72,7 +72,7 @@ namespace EvoS.Framework.Game
 
         public LobbyGameInfo GameInfo { get; private set; }
 
-        public LobbyTeamInfo TeamInfo { get; private set; }
+        public LobbyServerTeamInfo TeamInfo { get; private set; }
 
         [JsonIgnore] public LobbyGameConfig GameConfig => GameInfo.GameConfig;
 
@@ -87,8 +87,6 @@ namespace EvoS.Framework.Game
         }
 
         public LobbyMatchmakingQueueInfo QueueInfo { get; private set; }
-
-        public List<LobbyPlayerInfo> TeamPlayerInfo { get; private set; }
 
         public LobbyGameSummary GameSummary { get; private set; }
 
@@ -116,7 +114,7 @@ namespace EvoS.Framework.Game
         public void Reset()
         {
             GameInfo = new LobbyGameInfo();
-            TeamInfo = new LobbyTeamInfo();
+            TeamInfo = new LobbyServerTeamInfo();
             m_gameplayOverrides = new LobbyGameplayOverrides();
             m_gameStatus = GameStatus.Stopped;
             QueueInfo = null;
@@ -181,14 +179,9 @@ namespace EvoS.Framework.Game
             QueueInfo = queueInfo;
         }
 
-        public void SetTeamInfo(LobbyTeamInfo teamInfo)
+        public void SetTeamInfo(LobbyServerTeamInfo teamInfo)
         {
             TeamInfo = teamInfo;
-        }
-
-        public void SetTeamPlayerInfo(List<LobbyPlayerInfo> teamPlayerInfo)
-        {
-            TeamPlayerInfo = teamPlayerInfo;
         }
 
         public void SetGameSummary(LobbyGameSummary gameSummary)
@@ -321,7 +314,7 @@ namespace EvoS.Framework.Game
                 var netIdent = netObj.GetComponent<NetworkIdentity>();
                 netIdent.UNetUpdate();
             }
-            foreach (var playerInfo in TeamPlayerInfo)
+            foreach (var playerInfo in TeamInfo.TeamPlayerInfo)
             {
                 SpawnPlayerCharacter(playerInfo);
                 // actors get synclist updates for currentCardIds and modifiedStats
@@ -459,7 +452,7 @@ namespace EvoS.Framework.Game
             }
         }
 
-        private void SpawnPlayerCharacter(LobbyPlayerInfo playerInfo)
+        private void SpawnPlayerCharacter(LobbyServerPlayerInfo playerInfo)
         {
             // TODO would normally check playerInfo.CharacterInfo.CharacterType
 
