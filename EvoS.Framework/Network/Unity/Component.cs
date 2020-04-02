@@ -48,6 +48,8 @@ namespace EvoS.Framework.Network.Unity
         [JsonIgnore] public CaptureTheFlag CaptureTheFlag => gameObject.GameManager.CaptureTheFlag;
         [JsonIgnore] public GameplayData GameplayData => gameObject.GameManager.GameplayData;
         [JsonIgnore] public GameplayMutators GameplayMutators => gameObject.GameManager.GameplayMutators;
+        [JsonIgnore] public FirstTurnMovement FirstTurnMovement => gameObject.GameManager.FirstTurnMovement;
+        [JsonIgnore] public SinglePlayerManager SinglePlayerManager => gameObject.GameManager.SinglePlayerManager;
 
         public string name
         {

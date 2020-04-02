@@ -80,6 +80,34 @@ namespace EvoS.Framework.Misc
 
 //        public Sprite sprite { get; set; }
 
+        public virtual Ability.MovementAdjustment GetMovementAdjustment()
+        {
+            if (this.m_currentAbilityMod != null && this.m_currentAbilityMod.m_useMovementAdjustmentOverride)
+            {
+                return this.m_currentAbilityMod.m_movementAdjustmentOverride;
+            }
+            return this.m_movementAdjustment;
+        }
+
+        public bool GetPreventsMovement()
+        {
+            return this.GetMovementAdjustment() == Ability.MovementAdjustment.NoMovement;
+        }
+
+        public bool GetAffectsMovement()
+        {
+            return this.GetMovementAdjustment() != Ability.MovementAdjustment.FullMovement;
+        }
+
+        public virtual List<StatusType> GetStatusToApplyWhenRequested()
+        {
+            if (this.m_currentAbilityMod != null && this.m_currentAbilityMod.m_useStatusWhenRequestedOverride)
+            {
+                return this.m_currentAbilityMod.m_statusWhenRequestedOverride;
+            }
+            return this.m_statusWhenRequested;
+        }
+
         public enum TargetingParadigm
         {
             Position = 1,

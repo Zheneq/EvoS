@@ -19,6 +19,14 @@ namespace EvoS.Framework.Misc
         [JsonIgnore]
         public IEnumerable<LobbyServerPlayerInfo> SpectatorInfo => TeamInfo(Team.Spectator);
 
+        public LobbyServerTeamInfo()
+        {
+            TeamPlayerInfo = new List<LobbyServerPlayerInfo>();
+            TierChangeMins = new Dictionary<long, TierPlacement>();
+            TierChangeMaxs = new Dictionary<long, TierPlacement>();
+            TierCurrents = new Dictionary<long, TierPlacement>();
+        }
+
         public IEnumerable<LobbyServerPlayerInfo> TeamInfo(Team team)
         {
             if (TeamPlayerInfo == null)

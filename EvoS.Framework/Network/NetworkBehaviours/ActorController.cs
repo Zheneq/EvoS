@@ -14,14 +14,14 @@ namespace EvoS.Framework.Network.NetworkBehaviours
     [SerializedMonoBehaviour("ActorController")]
     public class ActorController : NetworkBehaviour
     {
-        private static int kCmdCmdDebugTeleportRequest = -1583259838;
-        private static int kCmdCmdPickedRespawnRequest;
-        private static int kCmdCmdSendMinimapPing;
-        private static int kCmdCmdSendAbilityPing;
-        private static int kCmdCmdSelectAbilityRequest;
-        private static int kCmdCmdQueueSimpleActionRequest;
-        private static int kCmdCmdCustomGamePause;
-        private static int kRpcRpcUpdateRemainingMovement;
+        public static int kCmdCmdDebugTeleportRequest = -1583259838;
+        public static int kCmdCmdPickedRespawnRequest = 1763304984;
+        public static int kCmdCmdSendMinimapPing = -810618818;
+        public static int kCmdCmdSendAbilityPing = -963392189;
+        public static int kCmdCmdSelectAbilityRequest = -1183646894;
+        public static int kCmdCmdQueueSimpleActionRequest = -797856057;
+        public static int kCmdCmdCustomGamePause = 983951586;
+        public static int kRpcRpcUpdateRemainingMovement = 64425877;
 
         private ActorData m_actor;
 
@@ -29,22 +29,15 @@ namespace EvoS.Framework.Network.NetworkBehaviours
         {
             RegisterCommandDelegate(typeof(ActorController), kCmdCmdDebugTeleportRequest,
                 InvokeCmdCmdDebugTeleportRequest);
-            kCmdCmdPickedRespawnRequest = 1763304984;
             RegisterCommandDelegate(typeof(ActorController), kCmdCmdPickedRespawnRequest,
                 InvokeCmdCmdPickedRespawnRequest);
-            kCmdCmdSendMinimapPing = -810618818;
             RegisterCommandDelegate(typeof(ActorController), kCmdCmdSendMinimapPing, InvokeCmdCmdSendMinimapPing);
-            kCmdCmdSendAbilityPing = -963392189;
             RegisterCommandDelegate(typeof(ActorController), kCmdCmdSendAbilityPing, InvokeCmdCmdSendAbilityPing);
-            kCmdCmdSelectAbilityRequest = -1183646894;
             RegisterCommandDelegate(typeof(ActorController), kCmdCmdSelectAbilityRequest,
                 InvokeCmdCmdSelectAbilityRequest);
-            kCmdCmdQueueSimpleActionRequest = -797856057;
             RegisterCommandDelegate(typeof(ActorController), kCmdCmdQueueSimpleActionRequest,
                 InvokeCmdCmdQueueSimpleActionRequest);
-            kCmdCmdCustomGamePause = 983951586;
             RegisterCommandDelegate(typeof(ActorController), kCmdCmdCustomGamePause, InvokeCmdCmdCustomGamePause);
-            kRpcRpcUpdateRemainingMovement = 64425877;
             RegisterRpcDelegate(typeof(ActorController), kRpcRpcUpdateRemainingMovement,
                 InvokeRpcRpcUpdateRemainingMovement);
         }

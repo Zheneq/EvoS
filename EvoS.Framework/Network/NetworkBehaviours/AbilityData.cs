@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using EvoS.Framework.Assets;
 using EvoS.Framework.Assets.Serialized;
 using EvoS.Framework.Assets.Serialized.Behaviours;
+using EvoS.Framework.Constants.Enums;
 using EvoS.Framework.Game;
 using EvoS.Framework.Logging;
 using EvoS.Framework.Misc;
@@ -55,7 +56,19 @@ namespace EvoS.Framework.Network.NetworkBehaviours
         public SyncListInt ConsumedStockCount => _consumedStockCount;
         public SyncListInt StockRefreshCountdowns => _stockRefreshCountdowns;
         public SyncListInt CurrentCardIds => _currentCardIds;
-        public ActionType SelectedActionForTargeting => _selectedActionForTargeting;
+        public ActionType SelectedActionForTargeting
+        {
+            get => _selectedActionForTargeting;
+            set
+            {
+                if (_selectedActionForTargeting.Equals(value))
+                {
+                    return;
+                }
+                _selectedActionForTargeting = value;
+                MarkAsDirty(DirtyBit.SelectedActionForTargetting);
+            }
+        }
 
         static AbilityData()
         {
@@ -134,6 +147,7 @@ namespace EvoS.Framework.Network.NetworkBehaviours
 
         public override bool OnSerialize(NetworkWriter writer, bool forceAll)
         {
+            Log.Print(LogType.Game, $"AbilityData::OnSerialize: Dirty:{syncVarDirtyBits}, Force all: {forceAll}");
             if (forceAll)
             {
                 SyncListInt.WriteInstance(writer, _cooldownsSync);
@@ -291,6 +305,112 @@ namespace EvoS.Framework.Network.NetworkBehaviours
             m_allChainAbilityParentActionTypes.Add(parentActionType);
         }
 
+        public bool GetQueuedAbilitiesAllowMovement()
+        {
+            bool result = true;
+            ActorTeamSensitiveData teamSensitiveData_authority = this.m_actor.TeamSensitiveData_authority;
+            if (teamSensitiveData_authority != null)
+            {
+                for (int i = 0; i < 14; i++)
+                {
+                    AbilityData.ActionType actionType = (AbilityData.ActionType)i;
+                    if (teamSensitiveData_authority.HasQueuedAction(actionType))
+                    {
+                        Ability abilityOfActionType = this.GetAbilityOfActionType(actionType);
+                        if (abilityOfActionType != null && abilityOfActionType.GetPreventsMovement())
+                        {
+                            result = false;
+                            break;
+                        }
+                    }
+                }
+            }
+            return result;
+        }
+
+        public Ability.MovementAdjustment GetQueuedAbilitiesMovementAdjustType()
+        {
+            Ability.MovementAdjustment movementAdjustment = Ability.MovementAdjustment.FullMovement;
+            ActorTeamSensitiveData teamSensitiveData_authority = this.m_actor.TeamSensitiveData_authority;
+            if (teamSensitiveData_authority != null)
+            {
+                for (int i = 0; i < 14; i++)
+                {
+                    AbilityData.ActionType actionType = (AbilityData.ActionType)i;
+                    if (teamSensitiveData_authority.HasQueuedAction(actionType))
+                    {
+                        Ability abilityOfActionType = this.GetAbilityOfActionType(actionType);
+                        if (abilityOfActionType != null && abilityOfActionType.GetMovementAdjustment() > movementAdjustment)
+                        {
+                            movementAdjustment = abilityOfActionType.GetMovementAdjustment();
+                        }
+                    }
+                }
+            }
+            // TODO ZHENEQ
+            //SpawnPointManager spawnPointManager = SpawnPointManager.Get();
+            //if (spawnPointManager != null && spawnPointManager.m_spawnInDuringMovement && this.m_actor.NextRespawnTurn == GameFlowData.CurrentTurn && GameplayData.m_movementAllowedOnRespawn < movementAdjustment)
+            //{
+            //    movementAdjustment = GameplayData.m_movementAllowedOnRespawn;
+            //}
+            return movementAdjustment;
+        }
+
+        public float GetQueuedAbilitiesMovementAdjust()
+        {
+            float result = 0f;
+            Ability.MovementAdjustment queuedAbilitiesMovementAdjustType = this.GetQueuedAbilitiesMovementAdjustType();
+            if (queuedAbilitiesMovementAdjustType == Ability.MovementAdjustment.ReducedMovement)
+            {
+                result = -1f * this.m_actor.method_29();
+            }
+            return result;
+        }
+
+        public List<StatusType> GetQueuedAbilitiesOnRequestStatuses()
+        {
+            List<StatusType> list = new List<StatusType>();
+            ActorTeamSensitiveData teamSensitiveData_authority = this.m_actor.TeamSensitiveData_authority;
+            if (teamSensitiveData_authority != null)
+            {
+                for (int i = 0; i < 14; i++)
+                {
+                    AbilityData.ActionType actionType = (AbilityData.ActionType)i;
+                    if (teamSensitiveData_authority.HasQueuedAction(actionType))
+                    {
+                        Ability abilityOfActionType = this.GetAbilityOfActionType(actionType);
+                        if (abilityOfActionType != null)
+                        {
+                            list.AddRange(abilityOfActionType.GetStatusToApplyWhenRequested());
+                        }
+                    }
+                }
+            }
+            return list;
+        }
+
+        public bool HasPendingStatusFromQueuedAbilities(StatusType status)
+        {
+            ActorTeamSensitiveData teamSensitiveData_authority = this.m_actor.TeamSensitiveData_authority;
+            if (teamSensitiveData_authority != null)
+            {
+                for (int i = 0; i < 14; i++)
+                {
+                    AbilityData.ActionType actionType = (AbilityData.ActionType)i;
+                    if (teamSensitiveData_authority.HasQueuedAction(actionType))
+                    {
+                        Ability abilityOfActionType = this.GetAbilityOfActionType(actionType);
+                        if (abilityOfActionType != null && abilityOfActionType.GetStatusToApplyWhenRequested().Contains(status))
+                        {
+                            return true;
+                        }
+                    }
+                }
+                return false;
+            }
+            return false;
+        }
+
         public override string ToString()
         {
             return $"{nameof(AbilityData)}(" +
@@ -321,6 +441,26 @@ namespace EvoS.Framework.Network.NetworkBehaviours
             if (actionType >= ActionType.CHAIN_0)
                 return actionType <= ActionType.CHAIN_2;
             return false;
+        }
+
+        public void MarkAsDirty(DirtyBit bit)
+        {
+            SetDirtyBit((uint)bit);
+        }
+
+        private bool IsBitDirty(uint setBits, DirtyBit bitToTest)
+        {
+            return ((DirtyBit)setBits & bitToTest) != ~DirtyBit.All;
+        }
+
+        public enum DirtyBit : uint
+        {
+            CooldownsSync = 1,
+            ConsumedStockCount = 2,
+            StockRefreshCooldowns = 4,
+            CurrentCardIds = 8,
+            SelectedActionForTargetting = 16,
+            All = 4294967295
         }
 
         public enum ActionType

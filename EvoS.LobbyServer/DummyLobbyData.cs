@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using EvoS.Framework.Constants.Enums;
+using EvoS.Framework.Game;
+using EvoS.Framework.Misc;
 using EvoS.Framework.Network.NetworkMessages;
 using EvoS.Framework.Network.Static;
 using EvoS.LobbyServer.Utils;
@@ -321,7 +323,22 @@ namespace EvoS.LobbyServer
             return new LobbyPlayerInfo
             {
                 PlayerId = 0, // TODO
-                CharacterInfo = CreateLobbyCharacterInfo(CharacterType.Scoundrel),
+                CharacterInfo = CreateLobbyCharacterInfo(connection.SelectedCharacter),
+                Handle = connection.UserName,
+                AccountId = connection.AccountId,
+                IsGameOwner = true,
+                EffectiveClientAccessLevel = ClientAccessLevel.Admin
+            };
+        }
+
+        public static LobbyServerPlayerInfo CreateLobbyServerPlayerInfo(ClientConnection connection)
+        {
+            // TODO
+            return new LobbyServerPlayerInfo
+            {
+                TeamId = Team.TeamA,
+                PlayerId = 0, // TODO
+                CharacterInfo = CreateLobbyCharacterInfo(connection.SelectedCharacter),
                 Handle = connection.UserName,
                 AccountId = connection.AccountId,
                 IsGameOwner = true,
@@ -331,17 +348,32 @@ namespace EvoS.LobbyServer
 
         public static GameInfoNotification CreatePracticeGameInfoNotification(ClientConnection connection)
         {
+            LobbyPlayerInfo PlayerInfo = CreateLobbyPlayerInfo(connection);
+            LobbyServerPlayerInfo ServerPlayerInfo = CreateLobbyServerPlayerInfo(connection);
+            LobbyGameInfo GameInfo = CreatePracticeGameLobbyInfo();
+            LobbyTeamInfo TeamInfo = new LobbyTeamInfo
+            {
+                TeamPlayerInfo = new List<LobbyPlayerInfo>
+                    {
+                       PlayerInfo
+                    }
+            };
+            LobbyServerTeamInfo ServerTeamInfo = new LobbyServerTeamInfo()
+            {
+                TeamPlayerInfo = new List<LobbyServerPlayerInfo>
+                    {
+                        ServerPlayerInfo
+                    }
+            };
+
+            // TODO we are not always supposed to be in the same process
+            GameManagerHolder.CreateMatch(GameInfo, ServerTeamInfo);
+
             var response = new GameInfoNotification
             {
-                GameInfo = CreatePracticeGameLobbyInfo(),
-                PlayerInfo = CreateLobbyPlayerInfo(connection),
-                TeamInfo = new LobbyTeamInfo
-                {
-                    TeamPlayerInfo = new List<LobbyPlayerInfo>
-                    {
-                        CreateLobbyPlayerInfo(connection)
-                    }
-                }
+                GameInfo = GameInfo,
+                PlayerInfo = PlayerInfo,
+                TeamInfo = TeamInfo
             };
             response.GameInfo.GameServerAddress = "ws://127.0.0.1:6061";
             response.GameInfo.GameStatus = GameStatus.Launched;

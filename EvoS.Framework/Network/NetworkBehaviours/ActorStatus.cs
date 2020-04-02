@@ -98,6 +98,17 @@ namespace EvoS.Framework.Network.NetworkBehaviours
                 ((ActorStatus) obj)._statusDurations.HandleMsg(reader);
         }
 
+        public bool IsMovementDebuffImmune(bool checkPending = true)
+        {
+            bool result;
+            if (!(result = (this.HasStatus(StatusType.MovementDebuffImmunity, true) || this.HasStatus(StatusType.Unstoppable, true))) && this._actorData.GetAbilityData() != null && checkPending)
+            {
+                result = (this._actorData.GetAbilityData().HasPendingStatusFromQueuedAbilities(StatusType.Unstoppable) ||
+                    this._actorData.GetAbilityData().HasPendingStatusFromQueuedAbilities(StatusType.MovementDebuffImmunity));
+            }
+            return result;
+        }
+
         public override bool OnSerialize(NetworkWriter writer, bool forceAll)
         {
             if (forceAll)

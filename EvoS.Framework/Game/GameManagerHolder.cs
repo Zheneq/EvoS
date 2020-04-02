@@ -19,7 +19,8 @@ namespace EvoS.Framework.Game
                 _gameManagers.Add(loginRequest.AccountId, new GameManager());
                 var x = _gameManagers[loginRequest.AccountId];
                 x.SetTeamInfo(new LobbyServerTeamInfo());
-                    x.TeamInfo.TeamPlayerInfo.Add(new LobbyServerPlayerInfo
+                // TODO crashed with x.TeamInfo.TeamPlayerInfo == null
+                x.TeamInfo.TeamPlayerInfo.Add(new LobbyServerPlayerInfo
                     {
                         TeamId = Team.TeamA
                     });

@@ -11,6 +11,10 @@ namespace EvoS.Framework.Misc
         public const float NegativeInfinity = float.NegativeInfinity;
         public const float Deg2Rad = 0.01745329f;
         public const float Rad2Deg = 57.29578f;
+        public static volatile float FloatMinNormal = 1.17549435E-38f;
+        public static volatile float FloatMinDenormal = float.Epsilon;
+        public static bool IsFlushToZeroEnabled = FloatMinDenormal == 0f;
+        public static readonly float Epsilon = (!IsFlushToZeroEnabled) ? FloatMinDenormal : FloatMinNormal;
 
         public static float Sin(float f)
         {
@@ -282,11 +286,11 @@ namespace EvoS.Framework.Misc
             return !flag ? num2 : -num2;
         }
 
-//        public static bool Approximately(float a, float b)
-//        {
-//            return Abs(b - a) <
-//                   (double) Max(1E-06f * Max(Abs(a), Abs(b)), Mathf.Epsilon * 8f);
-//        }
+        public static bool Approximately(float a, float b)
+        {
+            return Abs(b - a) <
+                   (double)Max(1E-06f * Max(Abs(a), Abs(b)), Mathf.Epsilon * 8f);
+        }
 
         public static float SmoothDamp(
             float current,

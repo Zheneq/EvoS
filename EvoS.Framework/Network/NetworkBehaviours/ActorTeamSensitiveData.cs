@@ -37,7 +37,7 @@ namespace EvoS.Framework.Network.NetworkBehaviours
         private ActorData.MovementType _lastMovementType;
         private BoardSquare _moveFromBoardSquare;
         private BoardSquare _initialMoveStartSquare;
-        private LineData.LineInstance _movementLine;
+        private LineData.LineInstance _movementLine = new LineData.LineInstance();
         private sbyte _numNodesInSnaredLine;
         private Bounds _movementCameraBounds;
         private BoardSquare _respawnPickedSquare;
@@ -48,6 +48,29 @@ namespace EvoS.Framework.Network.NetworkBehaviours
         static ActorTeamSensitiveData()
         {
             RegisterRpcDelegate(typeof(ActorTeamSensitiveData), kRpcRpcMovement, InvokeRpcRpcMovement);
+        }
+
+        public List<ActorTargeting.AbilityRequestData> AbilityRequestData
+        {
+            get => _abilityRequestData;
+            set
+            {
+                if (_abilityRequestData.Equals(value))
+                {
+                    return;
+                }
+                _abilityRequestData = value;
+                MarkAsDirty(DirtyBit.AbilityRequestDataForTargeter);
+            }
+        }
+
+        public LineData.LineInstance MovementLine
+        {
+            get
+            {
+                MarkAsDirty(DirtyBit.LineData);
+                return _movementLine;
+            }
         }
 
         public Vector3 FacingDirAfterMovement
@@ -123,6 +146,15 @@ namespace EvoS.Framework.Network.NetworkBehaviours
                 if (!EvoSGameConfig.NetworkIsServer)
                     return;
                 MarkAsDirty(DirtyBit.Respawn);
+            }
+        }
+
+        public BoardSquarePathInfo LastMovementPath
+        {
+            get => _lastMovementPath;
+            set
+            {
+                _lastMovementPath = value;
             }
         }
 
@@ -569,6 +601,16 @@ namespace EvoS.Framework.Network.NetworkBehaviours
                     GeneratedNetworkCode._ReadGridPosProp_None(reader),
                     GeneratedNetworkCode._ReadGridPosProp_None(reader), reader.ReadBytesAndSize(),
                     (ActorData.MovementType) reader.ReadInt32(), reader.ReadBoolean(), reader.ReadBoolean());
+        }
+
+        public bool HasQueuedAction(AbilityData.ActionType actionType)
+        {
+            bool result = false;
+            if (actionType != AbilityData.ActionType.INVALID_ACTION)
+            {
+                result = (actionType >= AbilityData.ActionType.ABILITY_0 && actionType < (AbilityData.ActionType)this._queuedAbilities.Count && this._queuedAbilities[(int)actionType]);
+            }
+            return result;
         }
 
         public override void DeserializeAsset(AssetFile assetFile, StreamReader stream)

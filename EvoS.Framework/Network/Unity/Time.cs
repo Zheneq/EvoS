@@ -4,16 +4,16 @@ namespace EvoS.Framework.Network.Unity
 {
     public class Time
     {
-        private static float _startTime = time;
+        private static double _startTime = timeSinceEpoch;
         
-        public static float realtimeSinceStartup => time - _startTime;
-
-        public static float time
+        public static float realtimeSinceStartup => (float) (timeSinceEpoch - _startTime);
+        public static float time => realtimeSinceStartup;
+        public static double timeSinceEpoch
         {
             get
             {
                 TimeSpan t = (DateTime.UtcNow - DateTime.UnixEpoch);
-                return (float) t.TotalSeconds;
+                return (double) t.TotalSeconds;
             }
         }
     }

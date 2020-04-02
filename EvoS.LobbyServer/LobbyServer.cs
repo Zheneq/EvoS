@@ -30,7 +30,7 @@ namespace EvoS.LobbyServer
         private static async Task StartServer()
         {
             Log.Print(LogType.Lobby, "Starting LobbyServer");
-            WebSocketListener server = new WebSocketListener(new IPEndPoint(IPAddress.Parse("127.0.0.1"), 6060));
+            WebSocketListener server = new WebSocketListener(new IPEndPoint(IPAddress.Parse("127.0.0.1"), 6060), new WebSocketListenerOptions { PingTimeout = Timeout.InfiniteTimeSpan });
             server.Standards.RegisterStandard(new WebSocketFactoryRfc6455());
 
             // Server doesnt start if i await StartAsync...

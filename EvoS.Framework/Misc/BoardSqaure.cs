@@ -50,6 +50,11 @@ namespace EvoS.Framework.Misc
         {
         }
 
+        public ThinCover.CoverType GetCoverType(ActorCover.CoverDirections direction)
+        {
+            return method_0(direction);
+        }
+
         public ThinCover.CoverType method_0(ActorCover.CoverDirections coverDirections_0)
         {
             return m_thinCoverTypes[(int) coverDirections_0];
@@ -90,6 +95,16 @@ namespace EvoS.Framework.Misc
         public bool method_4()
         {
             return BrushRegion != -1;
+        }
+
+        public bool isBaselineHeight()
+        {
+            return method_6();
+        }
+
+        public bool method_6()
+        {
+            return Height == Board.BaselineHeight;
         }
 
         public BoardSquare(AssetFile assetFile, StreamReader stream)

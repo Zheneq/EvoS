@@ -1,10 +1,12 @@
 using System;
+using System.Collections.Generic;
 using EvoS.Framework.Assets;
 using EvoS.Framework.Assets.Serialized.Behaviours;
 using EvoS.Framework.Constants.Enums;
 using EvoS.Framework.Game;
 using EvoS.Framework.Logging;
 using EvoS.Framework.Misc;
+using EvoS.Framework.Network.Static;
 using EvoS.Framework.Network.Unity;
 
 namespace EvoS.Framework.Network.NetworkBehaviours
@@ -15,8 +17,12 @@ namespace EvoS.Framework.Network.NetworkBehaviours
     {
         private static int kRpcRpcTurnMessage = -107921272;
         private static int kRpcRpcStoreAutoQueuedAbilityRequest = 675585254;
+        public static int kCmdCmdSetSquare = -1156253069;
+        public static int kCmdCmdGUITurnMessage = -122150213;
         public TurnStateEnum CurrentState { get; private set; }
         public TurnStateEnum PreviousState { get; private set; }
+
+        private List<AbilityTarget> m_targets;
 
         static ActorTurnSM()
         {
@@ -34,6 +40,11 @@ namespace EvoS.Framework.Network.NetworkBehaviours
             DeserializeAsset(assetFile, stream);
         }
 
+        public override void Awake()
+        {
+            base.Awake();
+            this.m_targets = new List<AbilityTarget>();
+        }
 
         protected static void InvokeRpcRpcTurnMessage(NetworkBehaviour obj, NetworkReader reader)
         {
@@ -98,6 +109,7 @@ namespace EvoS.Framework.Network.NetworkBehaviours
 //        [ClientRpc]
         private void RpcTurnMessage(int msgEnum, int extraData)
         {
+            Log.Print(LogType.Game, $"ActorTurnSM.RpcTurnMessage: {(TurnMessage)msgEnum}, {extraData}");
 //            TurnMessage msg = (TurnMessage) msgEnum;
 //            if (!this.m_actorData.HasBotController && this.m_actorData == GameFlowData.Get().activeOwnedActorData &&
 //                !this.m_actorData.method_38())
@@ -148,6 +160,20 @@ namespace EvoS.Framework.Network.NetworkBehaviours
 //            this.StoreAutoQueuedAbilityRequest((AbilityData.ActionType) actionTypeInt);
         }
 
+        public void ClearAbilityTargets()
+        {
+            this.m_targets.Clear();
+        }
+
+        public void AddAbilityTarget(AbilityTarget newTarget)
+        {
+            this.m_targets.Add(newTarget);
+        }
+
+        public List<AbilityTarget> GetAbilityTargets()
+        {
+            return this.m_targets;
+        }
         public override bool OnSerialize(NetworkWriter writer, bool forceAll)
         {
             return false;

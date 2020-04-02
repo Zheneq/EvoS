@@ -63,6 +63,13 @@ namespace EvoS.Framework.Network.NetworkBehaviours
             MarkForSerializationUpdate();
         }
 
+        public void OnCanMoveToSquaresUpdated()
+        {
+            // TODO
+            //this.m_waitingForNextMoveSquaresUpdate = false;
+            //this.m_lastMoveSquareUpdatedTime = Time.time;
+        }
+
         private void MarkForSerializationUpdate()
         {
             // TODO

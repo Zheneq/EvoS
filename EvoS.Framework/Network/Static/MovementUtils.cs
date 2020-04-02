@@ -6,6 +6,168 @@ namespace EvoS.Framework.Network.Static
 {
     public static class MovementUtils
     {
+        internal static void SerializePath(BoardSquarePathInfo path, NetworkWriter writer)
+        {
+            bool flag = path != null;
+            float b = 8f;
+            float b2 = 0f;
+            writer.Write(flag);
+            if (flag)
+            {
+                b = path.segmentMovementSpeed;
+                b2 = path.segmentMovementDuration;
+                writer.Write(path.segmentMovementSpeed);
+                writer.Write(path.segmentMovementDuration);
+                writer.Write(path.moveCost);
+            }
+            for (BoardSquarePathInfo boardSquarePathInfo = path; boardSquarePathInfo != null; boardSquarePathInfo = boardSquarePathInfo.next)
+            {
+                byte value = 0;
+                if (boardSquarePathInfo.square.X <= 255)
+                {
+                    value = (byte)boardSquarePathInfo.square.X;
+                }
+                else // if (Application.isEditor)
+                {
+                    Log.Print(LogType.Error, "MovementUtils.SerializePath, x coordinate value too large for byte");
+                }
+                byte value2 = 0;
+                if (boardSquarePathInfo.square.Y <= 255)
+                {
+                    value2 = (byte)boardSquarePathInfo.square.Y;
+                }
+                else // if (Application.isEditor)
+                {
+                    Log.Print(LogType.Error, "MovementUtils.SerializePath, y coordinate value too large for byte");
+                }
+                sbyte value3 = (sbyte)boardSquarePathInfo.connectionType;
+                sbyte value4 = (sbyte)boardSquarePathInfo.chargeCycleType;
+                sbyte value5 = (sbyte)boardSquarePathInfo.chargeEndType;
+                bool reverse = boardSquarePathInfo.m_reverse;
+                bool unskippable = boardSquarePathInfo.m_unskippable;
+                bool b3 = boardSquarePathInfo.next == null;
+                bool visibleToEnemies = boardSquarePathInfo.m_visibleToEnemies;
+                bool updateLastKnownPos = boardSquarePathInfo.m_updateLastKnownPos;
+                bool moverDiesHere = boardSquarePathInfo.m_moverDiesHere;
+                bool flag2 = !Mathf.Approximately(boardSquarePathInfo.segmentMovementSpeed, b);
+                bool flag3 = !Mathf.Approximately(boardSquarePathInfo.segmentMovementDuration, b2);
+                bool moverClashesHere = boardSquarePathInfo.m_moverClashesHere;
+                bool moverBumpedFromClash = boardSquarePathInfo.m_moverBumpedFromClash;
+                byte value6 = ServerClientUtils.CreateBitfieldFromBools(reverse, unskippable, b3, visibleToEnemies, updateLastKnownPos, moverDiesHere, flag2, flag3);
+                byte value7 = ServerClientUtils.CreateBitfieldFromBools(moverClashesHere, moverBumpedFromClash, false, false, false, false, false, false);
+                writer.Write(value);
+                writer.Write(value2);
+                writer.Write(value3);
+                if (boardSquarePathInfo.connectionType != BoardSquarePathInfo.ConnectionType.Run && boardSquarePathInfo.connectionType != BoardSquarePathInfo.ConnectionType.Vault && boardSquarePathInfo.connectionType != BoardSquarePathInfo.ConnectionType.Knockback)
+                {
+                    writer.Write(value4);
+                    writer.Write(value5);
+                }
+                writer.Write(value6);
+                writer.Write(value7);
+                if (flag2)
+                {
+                    float segmentMovementSpeed = boardSquarePathInfo.segmentMovementSpeed;
+                    writer.Write(segmentMovementSpeed);
+                }
+                if (flag3)
+                {
+                    float segmentMovementDuration = boardSquarePathInfo.segmentMovementDuration;
+                    writer.Write(segmentMovementDuration);
+                }
+            }
+        }
+
+        internal static void SerializePath(BoardSquarePathInfo path, IBitStream stream)
+        {
+            if (stream.isReading)
+            {
+                Log.Print(LogType.Error, "Trying to serialize a path while reading");
+            }
+            else
+            {
+                bool flag = path != null;
+                float b = 8f;
+                float b2 = 0f;
+                stream.Serialize(ref flag);
+                if (flag)
+                {
+                    b = path.segmentMovementSpeed;
+                    b2 = path.segmentMovementDuration;
+                    stream.Serialize(ref path.segmentMovementSpeed);
+                    stream.Serialize(ref path.segmentMovementDuration);
+                    stream.Serialize(ref path.moveCost);
+                }
+                for (BoardSquarePathInfo boardSquarePathInfo = path; boardSquarePathInfo != null; boardSquarePathInfo = boardSquarePathInfo.next)
+                {
+                    byte b3 = 0;
+                    if (boardSquarePathInfo.square.X <= 255)
+                    {
+                        b3 = (byte)boardSquarePathInfo.square.X;
+                    }
+                    else // if (Application.isEditor)
+                    {
+                        Log.Print(LogType.Error, "MovementUtils.SerializePath, x coordinate value too large for byte");
+                    }
+                    byte b4 = 0;
+                    if (boardSquarePathInfo.square.Y <= 255)
+                    {
+                        b4 = (byte)boardSquarePathInfo.square.Y;
+                    }
+                    else // if (Application.isEditor)
+                    {
+                        Log.Print(LogType.Error, "MovementUtils.SerializePath, y coordinate value too large for byte");
+                    }
+                    sbyte b5 = (sbyte)boardSquarePathInfo.connectionType;
+                    sbyte b6 = (sbyte)boardSquarePathInfo.chargeCycleType;
+                    sbyte b7 = (sbyte)boardSquarePathInfo.chargeEndType;
+                    bool reverse = boardSquarePathInfo.m_reverse;
+                    bool unskippable = boardSquarePathInfo.m_unskippable;
+                    bool b8 = boardSquarePathInfo.next == null;
+                    bool visibleToEnemies = boardSquarePathInfo.m_visibleToEnemies;
+                    bool updateLastKnownPos = boardSquarePathInfo.m_updateLastKnownPos;
+                    bool moverDiesHere = boardSquarePathInfo.m_moverDiesHere;
+                    bool flag2 = !Mathf.Approximately(boardSquarePathInfo.segmentMovementSpeed, b);
+                    bool flag3 = !Mathf.Approximately(boardSquarePathInfo.segmentMovementDuration, b2);
+                    bool moverClashesHere = boardSquarePathInfo.m_moverClashesHere;
+                    bool moverBumpedFromClash = boardSquarePathInfo.m_moverBumpedFromClash;
+                    byte b9 = ServerClientUtils.CreateBitfieldFromBools(reverse, unskippable, b8, visibleToEnemies, updateLastKnownPos, moverDiesHere, flag2, flag3);
+                    byte b10 = ServerClientUtils.CreateBitfieldFromBools(moverClashesHere, moverBumpedFromClash, false, false, false, false, false, false);
+                    stream.Serialize(ref b3);
+                    stream.Serialize(ref b4);
+                    stream.Serialize(ref b5);
+                    if (boardSquarePathInfo.connectionType != BoardSquarePathInfo.ConnectionType.Run && boardSquarePathInfo.connectionType != BoardSquarePathInfo.ConnectionType.Vault && boardSquarePathInfo.connectionType != BoardSquarePathInfo.ConnectionType.Knockback)
+                    {
+                        stream.Serialize(ref b6);
+                        stream.Serialize(ref b7);
+                    }
+                    stream.Serialize(ref b9);
+                    stream.Serialize(ref b10);
+                    if (flag2)
+                    {
+                        float segmentMovementSpeed = boardSquarePathInfo.segmentMovementSpeed;
+                        stream.Serialize(ref segmentMovementSpeed);
+                    }
+                    if (flag3)
+                    {
+                        float segmentMovementDuration = boardSquarePathInfo.segmentMovementDuration;
+                        stream.Serialize(ref segmentMovementDuration);
+                    }
+                }
+            }
+        }
+
+        internal static byte[] SerializePath(BoardSquarePathInfo path)
+        {
+            if (path == null)
+            {
+                return null;
+            }
+            NetworkWriter networkWriter = new NetworkWriter();
+            MovementUtils.SerializePath(path, networkWriter);
+            return networkWriter.ToArray();
+        }
+
         public static BoardSquarePathInfo DeSerializePath(Component context, NetworkReader reader)
         {
             var boardSquarePathInfo1 = new BoardSquarePathInfo();
@@ -212,6 +374,18 @@ namespace EvoS.Framework.Network.Static
             }
 
             return boardSquarePathInfo1;
+        }
+
+        public static float RoundToNearestHalf(float val)
+        {
+            float f = val * 2f;
+            float num = Mathf.Round(f);
+            return num / 2f;
+        }
+
+        public static bool CanStopOnSquare(BoardSquare square)
+        {
+            return square != null && square.Height >= 0;
         }
     }
 }

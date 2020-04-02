@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
+using System.Threading;
 using EvoS.Framework.Assets;
 using EvoS.Framework.Constants.Enums;
 using EvoS.Framework.Logging;
@@ -27,6 +28,7 @@ namespace EvoS.Framework.Game
         public BrushCoordinator BrushCoordinator;
         public CaptureTheFlag CaptureTheFlag;
         public CollectTheCoins CollectTheCoins;
+        public FirstTurnMovement FirstTurnMovement;
         public GameEventManager GameEventManager = new GameEventManager();
         public GameFlowData GameFlowData;
         public GameFlow GameFlow;
@@ -41,6 +43,7 @@ namespace EvoS.Framework.Game
         public ServerEffectManager ServerEffectManager;
         public SharedActionBuffer SharedActionBuffer;
         public SharedEffectBarrierManager SharedEffectBarrierManager;
+        public SinglePlayerManager SinglePlayerManager;
         public SpawnPointManager SpawnPointManager;
         public SpoilsManager SpoilsManager;
         public TeamSelectData TeamSelectData;
@@ -227,6 +230,12 @@ namespace EvoS.Framework.Game
 
         public void AddPlayer(ClientConnection connection, LoginRequest loginReq, AddPlayerMessage msg)
         {
+            // fix for vanilla
+            if (_players.ContainsKey(loginReq.PlayerId))
+            {
+                _players.Remove(loginReq.PlayerId);
+            }
+
             _players.Add(loginReq.PlayerId, new GamePlayer(connection, loginReq, msg));
             connection.ActiveGame = this;
             
@@ -276,6 +285,9 @@ namespace EvoS.Framework.Game
             connection.RegisterHandler<AssetsLoadingProgress>(61, _players[loginReq.PlayerId], OnAssetLoadingProgress);
             connection.RegisterHandler<AssetsLoadedNotification>(53, _players[loginReq.PlayerId],
                 OnAssetsLoadedNotification);
+            connection.RegisterHandler<CastAbility>(50, _players[loginReq.PlayerId],
+                OnCastAbility);
+            connection.RegisterHandler<ObjectCmdMessage>(5, _players[loginReq.PlayerId], OnObjectCmdMessage);
         }
 
         private void OnAssetLoadingProgress(GamePlayer player, AssetsLoadingProgress msg)
@@ -340,8 +352,12 @@ namespace EvoS.Framework.Game
                 atsd.CallRpcMovement(GameEventManager.EventType.Invalid,
                     new GridPosProp(5, 5, 6), new GridPosProp(5, 5, 5),
                     null, ActorData.MovementType.Teleport, false, false);
+                atsd.MoveFromBoardSquare = Board.GetBoardSquare(5, 5);
             }
 
+            GameEventManager.FireEvent(GameEventManager.EventType.GameFlowDataStarted, null);
+
+            GameFlowData.Networkm_currentTurn = 0;
             GameFlowData.gameState = GameState.StartingGame;
             UpdateAllNetObjs();
             
@@ -349,20 +365,306 @@ namespace EvoS.Framework.Game
             UpdateAllNetObjs();
             
             GameFlowData.gameState = GameState.BothTeams_Decision;
-            GameFlowData.Networkm_currentTurn = 1;
-            GameFlowData.Networkm_willEnterTimebankMode = true;
-            GameFlowData.Networkm_timeRemainingInDecisionOverflow = 5;
+            GameFlowData.Networkm_willEnterTimebankMode = false;
+            GameFlowData.Networkm_timeRemainingInDecisionOverflow = 10;
             UpdateAllNetObjs();
-
-            GameFlow.CallRpcSetMatchTime(0);
+            GameFlow.StartGame();  // TODO StopGame someday
             // kRpcRpcApplyAbilityModById
             foreach (var actor in GameFlowData.GetActors())
             {
                 var turnSm = actor.gameObject.GetComponent<ActorTurnSM>();
                 turnSm.CallRpcTurnMessage(TurnMessage.TURN_START, 0);
+                actor.MoveFromBoardSquare = actor.TeamSensitiveData_authority.MoveFromBoardSquare;
+                UpdatePlayerMovement(player);
             }
             BarrierManager.CallRpcUpdateBarriers();
-            GameFlowData.CallRpcUpdateTimeRemaining(21);
+        }
+
+        private void OnCastAbility(GamePlayer player, CastAbility msg)
+        {
+            ActorData actor = GameFlowData.GetAllActorsForPlayer(player.LoginRequest.PlayerId)[0];
+            ActorTurnSM turnSm = actor.gameObject.GetComponent<ActorTurnSM>();
+
+            if (!actor.QueuedMovementAllowsAbility)
+            {
+                Log.Print(LogType.Game, $"OnCastAbility: Rejected");
+                turnSm.CallRpcTurnMessage(TurnMessage.ABILITY_REQUEST_REJECTED, 0);
+                return;
+            }
+
+            // TODO AbilityData.ValidateAbilityOnTarget
+            turnSm.ClearAbilityTargets();
+            foreach (AbilityTarget target in msg.Targets)
+            {
+                turnSm.AddAbilityTarget(target);
+            }
+            Log.Print(LogType.Game, $"OnCastAbility: {turnSm.GetAbilityTargets().Count} ability targets");
+            turnSm.CallRpcTurnMessage(TurnMessage.ABILITY_REQUEST_ACCEPTED, 0);
+
+            actor.TeamSensitiveData_authority.AbilityRequestData = new List<ActorTargeting.AbilityRequestData>
+            {
+                new ActorTargeting.AbilityRequestData(msg.ActionType, msg.Targets)
+            };
+
+            UpdatePlayerMovement(player);
+            UpdateAllNetObjs();
+        }
+
+        private void UpdatePlayerMovement(GamePlayer player, bool sendUpdate = true)
+        {
+            ActorData actor = GameFlowData.GetAllActorsForPlayer(player.LoginRequest.PlayerId)[0];
+            ActorTurnSM turnSm = actor.gameObject.GetComponent<ActorTurnSM>();
+            ActorController actorController = actor.gameObject.GetComponent<ActorController>();
+            ActorMovement actorMovement = actor.method_9();
+
+            float movementCost = 0;
+            float cost = 0;
+            GridPos prevPos = actor.InitialMoveStartSquare.GridPos;
+            foreach (var curPos in actor.TeamSensitiveData_authority.MovementLine.m_positions)
+            {
+                cost = actorMovement.BuildPathTo(Board.GetBoardSquare(prevPos), Board.GetBoardSquare(curPos)).next?.moveCost ?? 0f;  // TODO optimize this atrocity
+                Log.Print(LogType.Game, $"PATH: {prevPos}->{curPos} = {cost}");
+                movementCost += cost;
+                prevPos = curPos;
+            }
+
+            bool cannotExceedMaxMovement = GameplayData != null && GameplayData.m_movementMaximumType == GameplayData.MovementMaximumType.CannotExceedMax;
+
+            bool abilitySet = !actor.TeamSensitiveData_authority.AbilityRequestData.IsNullOrEmpty() && actor.TeamSensitiveData_authority.AbilityRequestData[0]._actionType != AbilityData.ActionType.INVALID_ACTION;
+
+            foreach (var a in actor.TeamSensitiveData_authority.AbilityRequestData)
+            {
+                Log.Print(LogType.Game, $"Ability target: {a._actionType} {a._targets}");
+            }
+
+            actor.m_postAbilityHorizontalMovement = actorMovement.GetAdjustedMovementFromBuffAndDebuff(4, true);  // TODO Get default movement ranges
+            actor.m_maxHorizontalMovement = actorMovement.GetAdjustedMovementFromBuffAndDebuff(8, false);
+
+            actor.RemainingHorizontalMovement = (abilitySet ? actor.m_postAbilityHorizontalMovement : actor.m_maxHorizontalMovement) - movementCost;
+            actor.RemainingMovementWithQueuedAbility = actor.m_postAbilityHorizontalMovement - movementCost;
+            actor.QueuedMovementAllowsAbility = abilitySet || (cannotExceedMaxMovement ? movementCost <= actor.m_postAbilityHorizontalMovement : movementCost - cost < actor.m_postAbilityHorizontalMovement);
+
+            Log.Print(LogType.Game, $"UpdatePlayerMovement: Basic: {actor.m_postAbilityHorizontalMovement}/{actor.m_maxHorizontalMovement}, " +
+                $"Remaining: {actor.RemainingMovementWithQueuedAbility}/{actor.RemainingHorizontalMovement}, " +
+                $"Movement cost: {movementCost}, Ability set: {abilitySet}, Ability allowed: {actor.QueuedMovementAllowsAbility}");
+
+            actorController.CallRpcUpdateRemainingMovement(actor.RemainingHorizontalMovement, actor.RemainingMovementWithQueuedAbility);
+        }
+
+        private void OnObjectCmdMessage(GamePlayer player, ObjectCmdMessage msg)
+        {
+            ActorData actor = GameFlowData.GetAllActorsForPlayer(player.LoginRequest.PlayerId)[0];
+            ActorTurnSM turnSm = actor.gameObject.GetComponent<ActorTurnSM>();
+            ActorController actorController = actor.gameObject.GetComponent<ActorController>();
+            AbilityData abilityData = actor.gameObject.GetComponent<AbilityData>();
+            NetworkReader reader = new NetworkReader(msg.Payload);
+
+            if (msg.Hash == ActorTurnSM.kCmdCmdSetSquare)
+            {
+                int X = (int)reader.ReadPackedUInt32();
+                int Y = (int)reader.ReadPackedUInt32();
+                bool SetWaypoint = reader.ReadBoolean();
+
+                Log.Print(LogType.Game, $"CmdSetSquare: [WP={SetWaypoint}] {X}, {Y}");
+
+                BoardSquare boardSquare = Board.GetBoardSquare(X, Y);
+                ActorMovement actorMovement = actor.method_9();
+
+                if (!SetWaypoint)
+                {
+                    actor.TeamSensitiveData_authority.MovementLine.m_positions.Clear();
+                    actor.MoveFromBoardSquare = actor.InitialMoveStartSquare;
+                    actor.TeamSensitiveData_authority.LastMovementPath = null;
+                    UpdatePlayerMovement(player, false);
+                }
+
+                actorMovement.UpdateSquaresCanMoveTo();
+
+                if (!actor.CanMoveToBoardSquare(boardSquare))
+                {
+                    boardSquare = actorMovement.GetClosestMoveableSquareTo(boardSquare, false);
+                }
+                if (actor.TeamSensitiveData_authority.MovementLine.m_positions.Count == 0)
+                {
+                    actor.TeamSensitiveData_authority.MovementLine.m_positions.Add(actor.InitialMoveStartSquare.GridPos);
+                }
+
+                BoardSquarePathInfo path = actorMovement.BuildPathTo(actor.TeamSensitiveData_authority.MoveFromBoardSquare, boardSquare);
+
+                if (path == null)
+                {
+                    Log.Print(LogType.Game, $"CmdSetSquare: Movement rejected");
+                    UpdatePlayerMovement(player); // TODO updating because we cancelled movement - perhaps we should not cancel in this case
+                    turnSm.CallRpcTurnMessage(TurnMessage.MOVEMENT_REJECTED, 0);
+                    return;
+                }
+
+                List<GridPos> posList = new List<GridPos>();
+                BoardSquarePathInfo pathNode = path;
+                while (pathNode.next != null)
+                {
+                    Log.Print(LogType.Game, $"PATH: {pathNode.next.square.GridPos}");
+                    posList.Add(pathNode.next.square.GridPos);
+                    pathNode.m_unskippable = true;  // so that aestetic path is not optimized (see CreateRunAndVaultAesteticPath)
+                    pathNode = pathNode.next;
+                }
+                Log.Print(LogType.Game, $"PATH COST {pathNode.moveCost}");
+
+                if (actor.TeamSensitiveData_authority.LastMovementPath == null)
+                {
+                    actor.TeamSensitiveData_authority.LastMovementPath = path;
+                }
+                else
+                {
+                    BoardSquarePathInfo tail = actor.TeamSensitiveData_authority.LastMovementPath;
+                    while (tail.next.next != null) { tail = tail.next; }  // TODO insecure
+                    tail.next = path;  // TODO cost and stuff is wrong
+                }
+
+                actor.TeamSensitiveData_authority.MovementLine.m_positions.AddRange(posList);
+                actor.TeamSensitiveData_authority.MoveFromBoardSquare = boardSquare;
+                actor.MoveFromBoardSquare = boardSquare;
+
+                UpdatePlayerMovement(player);
+                turnSm.CallRpcTurnMessage(TurnMessage.MOVEMENT_ACCEPTED, 0);
+
+                //NetworkWriter writer = new NetworkWriter();
+                //LineData.SerializeLine(actor.TeamSensitiveData_authority.MovementLine, writer);
+
+                //actor.TeamSensitiveData_authority.CallRpcMovement(
+                //        GameEventManager.EventType.UIPhaseStartedMovement,
+                //        new GridPosProp(5, 5, 5),
+                //        new GridPosProp(path.square.GridPos.X, path.square.GridPos.Y, 5),
+                //        writer.AsArray(),
+                //        ActorData.MovementType.Normal, 
+                //        false,
+                //        false);
+                //GameFlowData.gameState = GameState.BothTeams_Resolve;
+                //turnSm.CallRpcTurnMessage(TurnMessage.BEGIN_RESOLVE, 0);
+
+            }
+            else if (msg.Hash == ActorTurnSM.kCmdCmdGUITurnMessage)
+            {
+                TurnMessage msgEnum = (TurnMessage)reader.ReadPackedUInt32();
+                int extraData = (int)reader.ReadPackedUInt32();
+
+                Log.Print(LogType.Game, $"CmdGUITurnMessage: {msgEnum} {extraData}");
+                if (msgEnum == TurnMessage.CANCEL_BUTTON_CLICKED)
+                {
+                    CancelAbility(player);
+                }
+                else if (msgEnum == TurnMessage.DONE_BUTTON_CLICKED)
+                {
+                    turnSm.CallRpcTurnMessage(TurnMessage.DONE_BUTTON_CLICKED, 0);
+                    Log.Print(LogType.Game, $"CmdGUITurnMessage: Turn finalized");
+                    UpdateAllNetObjs();
+                }
+
+            }
+            else if (msg.Hash == ActorController.kCmdCmdSelectAbilityRequest)
+            {
+                AbilityData.ActionType actionType = (AbilityData.ActionType)reader.ReadPackedUInt32();
+                Log.Print(LogType.Game, $"CmdSelectAbilityRequest: {actionType}");
+                abilityData.SelectedActionForTargeting = actionType;
+                turnSm.ClearAbilityTargets();
+                actor.TeamSensitiveData_authority.AbilityRequestData = new List<ActorTargeting.AbilityRequestData>();
+                // turnSm.CallRpcTurnMessage(TurnMessage.SELECTED_ABILITY, 0);
+            }
+            else
+            {
+                Log.Print(LogType.Game, $"OnObjectCmdMessage [UNKNOWN]: {msg.ToString()}");
+            }
+
+            UpdateAllNetObjs();
+        }
+
+        public void CancelAbility(GamePlayer player, bool sendMessage = true)
+        {
+            ActorData actor = GameFlowData.GetAllActorsForPlayer(player.LoginRequest.PlayerId)[0];
+            ActorTurnSM turnSm = actor.gameObject.GetComponent<ActorTurnSM>();
+
+            turnSm.ClearAbilityTargets();
+            actor.TeamSensitiveData_authority.AbilityRequestData = new List<ActorTargeting.AbilityRequestData>();
+            UpdatePlayerMovement(player);
+            if (sendMessage)
+            {
+                turnSm.CallRpcTurnMessage(TurnMessage.CANCEL_BUTTON_CLICKED, 0);
+            }
+            Log.Print(LogType.Game, $"CmdGUITurnMessage: Ability cancelled");
+        }
+
+        public void ResolveMovement()
+        {
+            foreach (GamePlayer player in _players.Values)
+            {
+                ResolveMovement(player);
+            }
+        }
+
+        public void ResolveMovement(GamePlayer player)
+        {
+            ActorData actor = GameFlowData.GetAllActorsForPlayer(player.LoginRequest.PlayerId)[0];
+            ActorTurnSM turnSm = actor.gameObject.GetComponent<ActorTurnSM>();
+            ActorController actorController = actor.gameObject.GetComponent<ActorController>();
+            AbilityData abilityData = actor.gameObject.GetComponent<AbilityData>();
+            ActorTeamSensitiveData atsd = actor.TeamSensitiveData_authority;
+            ActorMovement actorMovement = actor.method_9();
+
+            // TheatricsManager.m_phaseToUpdate = 
+
+            CancelAbility(player, false);  // for now, cannot resolve it anyway
+            turnSm.CallRpcTurnMessage(TurnMessage.CLIENTS_RESOLVED_ABILITIES, 0);
+            UpdateAllNetObjs();
+
+            GridPosProp start = new GridPosProp(actor.InitialMoveStartSquare.GridPos.X, actor.InitialMoveStartSquare.GridPos.Y, Board.BaselineHeight);
+            GridPosProp end = new GridPosProp(actor.MoveFromBoardSquare.GridPos.X, actor.MoveFromBoardSquare.GridPos.Y, Board.BaselineHeight);
+
+            BoardSquarePathInfo path = atsd.LastMovementPath;
+            if (path == null)
+            {
+                path = actorMovement.BuildPathTo(Board.GetBoardSquare(start.m_x, start.m_y), Board.GetBoardSquare(end.m_x, end.m_y));
+            }
+            while (path.next != null)
+            {
+                Log.Print(LogType.Game, $"FINAL PATH {path.square.GridPos}");
+                path = path.next;
+            }
+            Log.Print(LogType.Game, $"FINAL PATH {path.square.GridPos}");
+
+            // TODO GetPathEndpoint everywhere
+
+            atsd.MoveFromBoardSquare = path.square;
+            // TODO movement camera bounds
+            actor.MoveFromBoardSquare = path.square;  // TODO force data sync between actor & atsd?
+            actor.InitialMoveStartSquare = path.square; // TODO does not work? something overwrites it on the client?
+            UpdateAllNetObjs();
+
+            atsd.CallRpcMovement(
+                 GameEventManager.EventType.Invalid,
+                 start,
+                 end,
+                 MovementUtils.SerializePath(atsd.LastMovementPath),
+                 ActorData.MovementType.Normal,
+                 false,
+                 false);
+            atsd.LastMovementPath = null;
+
+            Log.Print(LogType.Game, "Movement resolved");
+            UpdateAllNetObjs();
+            actor.TeamSensitiveData_authority.MovementLine.m_positions.Clear();
+
+
+            Thread.Sleep(4000);
+            UpdatePlayerMovement(player, false);
+            turnSm.CallRpcTurnMessage(TurnMessage.MOVEMENT_RESOLVED, 0);
+            actorMovement.UpdateSquaresCanMoveTo();
+
+            GameFlowData.gameState = GameState.BothTeams_Decision;
+            turnSm.CallRpcTurnMessage(TurnMessage.TURN_START, 0);
+            GameFlowData.Networkm_willEnterTimebankMode = false;
+            GameFlowData.Networkm_timeRemainingInDecisionOverflow = 10;
+            BarrierManager.CallRpcUpdateBarriers();
+            UpdateAllNetObjs();
         }
 
         public void UpdateAllNetObjs()
@@ -429,6 +731,7 @@ namespace EvoS.Framework.Game
             ServerActionBuffer = commonGameLogic.GetComponent<ServerActionBuffer>();
             TeamSelectData = commonGameLogic.GetComponent<TeamSelectData>();
             BarrierManager = commonGameLogic.GetComponent<BarrierManager>();
+            FirstTurnMovement = commonGameLogic.GetComponent<FirstTurnMovement>();
 
             SpawnObject<Board, Board>(MapLoader, out Board);
 
@@ -457,26 +760,27 @@ namespace EvoS.Framework.Game
             // TODO would normally check playerInfo.CharacterInfo.CharacterType
 
             SpawnObject<ActorTeamSensitiveData>(MiscLoader, "ActorTeamSensitiveData_Friendly",
-                out var scoundrelFriendly);
-            SpawnObject(AssetsLoader, "Scoundrel", out var scoundrel);
-            var scoundrelActor = scoundrel.GetComponent<ActorData>();
-            var scoundrelPlayerData = scoundrel.GetComponent<PlayerData>();
-            scoundrelActor.SetClientFriendlyTeamSensitiveData(scoundrelFriendly);
-            scoundrelPlayerData.m_player = GameFlow.GetPlayerFromConnectionId(1); // TODO hardcoded connection id
-            scoundrelPlayerData.PlayerIndex = 0;
+                out var atsd);
+            
+            SpawnObject(AssetsLoader, playerInfo.CharacterInfo.CharacterType.ToString(), out var character);
+            var actorData = character.GetComponent<ActorData>();
+            var playerData = character.GetComponent<PlayerData>();
+            actorData.SetClientFriendlyTeamSensitiveData(atsd);
+            playerData.m_player = GameFlow.GetPlayerFromConnectionId(1); // TODO hardcoded connection id
+            playerData.PlayerIndex = 0;
 
-            scoundrelActor.ServerLastKnownPosSquare = Board.GetBoardSquare(5, 5);
-            scoundrelActor.InitialMoveStartSquare = Board.GetBoardSquare(5, 5);
-            scoundrelActor.UpdateDisplayName("Foo bar player");
-            scoundrelActor.ActorIndex = 0;
-            scoundrelActor.PlayerIndex = 0;
-            scoundrelFriendly.SetActorIndex(scoundrelActor.ActorIndex);
-            scoundrelActor.SetTeam(Team.TeamA);
+            actorData.ServerLastKnownPosSquare = Board.GetBoardSquare(5, 5);
+            actorData.InitialMoveStartSquare = Board.GetBoardSquare(5, 5);
+            actorData.UpdateDisplayName("Foo bar player");
+            actorData.ActorIndex = 0;
+            actorData.PlayerIndex = 0;
+            atsd.SetActorIndex(actorData.ActorIndex);
+            actorData.SetTeam(Team.TeamA);
 
-            GameFlowData.AddPlayer(scoundrel);
+            GameFlowData.AddPlayer(character);
 
-            var netChar = scoundrel.GetComponent<NetworkIdentity>();
-            var netAtsd = scoundrelFriendly.GetComponent<NetworkIdentity>();
+            var netChar = character.GetComponent<NetworkIdentity>();
+            var netAtsd = atsd.GetComponent<NetworkIdentity>();
             foreach (var player in _players.Values)
             {
                 netChar.AddObserver(player.Connection);
@@ -500,12 +804,15 @@ namespace EvoS.Framework.Game
             }
 
             // recursively register children and parent
-            foreach (var child in gameObj.transform.children)
+            if (gameObj.transform?.children != null)
             {
-                RegisterObject(child.gameObject);
+                foreach (var child in gameObj.transform?.children)
+                {
+                    RegisterObject(child.gameObject);
+                }
             }
 
-            if (gameObj.transform.father?.gameObject != null)
+            if (gameObj.transform?.father?.gameObject != null)
                 RegisterObject(gameObj.transform.father.gameObject);
 
             var netIdent = gameObj.GetComponent<NetworkIdentity>();

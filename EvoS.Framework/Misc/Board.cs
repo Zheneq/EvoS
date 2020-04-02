@@ -28,8 +28,8 @@ namespace EvoS.Framework.Misc
         private int m_maxHeight;
 
 //        private MeshCollider m_cameraGuideMeshCollider;
-//        internal BuildNormalPathNodePool m_normalPathBuildScratchPool;
-//        internal BuildNormalPathHeap m_normalPathNodeHeap;
+        internal BuildNormalPathNodePool m_normalPathBuildScratchPool;
+        internal BuildNormalPathHeap m_normalPathNodeHeap;
         public float squareSize => m_squareSize;
 
         public int BaselineHeight
@@ -64,8 +64,8 @@ namespace EvoS.Framework.Misc
             m_showLOS = true;
 //            Board.s_squareSizeStatic = m_squareSize;
 //            Board.BaselineHeightStatic = BaselineHeight;
-//            this.m_normalPathBuildScratchPool = new BuildNormalPathNodePool();
-//            this.m_normalPathNodeHeap = new BuildNormalPathHeap(60);
+            this.m_normalPathBuildScratchPool = new BuildNormalPathNodePool();
+            this.m_normalPathNodeHeap = new BuildNormalPathHeap(60);
         }
 
         public void SetThinCover(
@@ -113,6 +113,89 @@ namespace EvoS.Framework.Misc
             return boardSquare;
         }
 
+        private BoardSquare GetSquare(int x, int y)
+        {
+            return GetBoardSquare(x, y);
+        }
+
+        public void getStraightAdjacentSquares(int x, int y, ref List<BoardSquare> outList)
+        {
+            method_12(x, y, ref outList);
+        }
+
+        public void method_12(int int_0, int int_1, ref List<BoardSquare> list_0)
+        {
+            if (list_0 == null)
+            {
+                list_0 = new List<BoardSquare>(4);
+            }
+            if (this.GetSquare(int_0 + 1, int_1) != null)
+            {
+                list_0.Add(this.GetSquare(int_0 + 1, int_1));
+            }
+            if (this.GetSquare(int_0 - 1, int_1) != null)
+            {
+                list_0.Add(this.GetSquare(int_0 - 1, int_1));
+            }
+            if (this.GetSquare(int_0, int_1 + 1) != null)
+            {
+                list_0.Add(this.GetSquare(int_0, int_1 + 1));
+            }
+            if (this.GetSquare(int_0, int_1 - 1) != null)
+            {
+                list_0.Add(this.GetSquare(int_0, int_1 - 1));
+            }
+        }
+
+        public void getDiagonalAdjacentSquares(int x, int y, ref List<BoardSquare> outList)
+        {
+            method_13(x, y, ref outList);
+        }
+
+        public void method_13(int int_0, int int_1, ref List<BoardSquare> list_0)
+        {
+            if (list_0 == null)
+            {
+                list_0 = new List<BoardSquare>(4);
+            }
+            if (this.GetSquare(int_0 + 1, int_1 + 1) != null)
+            {
+                list_0.Add(this.GetSquare(int_0 + 1, int_1 + 1));
+            }
+            if (this.GetSquare(int_0 + 1, int_1 - 1) != null)
+            {
+                list_0.Add(this.GetSquare(int_0 + 1, int_1 - 1));
+            }
+            if (this.GetSquare(int_0 - 1, int_1 + 1) != null)
+            {
+                list_0.Add(this.GetSquare(int_0 - 1, int_1 + 1));
+            }
+            if (this.GetSquare(int_0 - 1, int_1 - 1) != null)
+            {
+                list_0.Add(this.GetSquare(int_0 - 1, int_1 - 1));
+            }
+        }
+
+        public void getAllAdjacentSquares(int x, int y, ref List<BoardSquare> outList)
+        {
+            method_14(x, y, ref outList);
+        }
+
+        public void method_14(int int_0, int int_1, ref List<BoardSquare> list_0)
+        {
+            if (list_0 == null)
+            {
+                list_0 = new List<BoardSquare>(8);
+            }
+            this.method_12(int_0, int_1, ref list_0);
+            this.method_13(int_0, int_1, ref list_0);
+        }
+
+        public bool areAdjacent(BoardSquare a, BoardSquare b)
+        {
+            return method_17(a, b);
+        }
+
         public bool method_17(BoardSquare boardSquare_0, BoardSquare boardSquare_1)
         {
             var flag1 = boardSquare_0.X != boardSquare_1.X || boardSquare_0.Y != boardSquare_1.Y;
@@ -130,6 +213,11 @@ namespace EvoS.Framework.Misc
                    (boardSquare_0.Y == boardSquare_1.Y + 1 || boardSquare_0.Y == boardSquare_1.Y - 1) ||
                    boardSquare_0.Y == boardSquare_1.Y &&
                    (boardSquare_0.X == boardSquare_1.X + 1 || boardSquare_0.X == boardSquare_1.X - 1);
+        }
+
+        public bool AreDiagonallyAdjacent(BoardSquare a, BoardSquare b)
+        {
+            return method_19(a, b);
         }
 
         public bool method_19(BoardSquare boardSquare_0, BoardSquare boardSquare_1)

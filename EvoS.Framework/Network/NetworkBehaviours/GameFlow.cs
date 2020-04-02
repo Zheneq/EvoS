@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using System.Threading;
 using EvoS.Framework.Assets;
 using EvoS.Framework.Assets.Serialized.Behaviours;
 using EvoS.Framework.Constants.Enums;
@@ -22,6 +23,9 @@ namespace EvoS.Framework.Network.NetworkBehaviours
         private Dictionary<Player, PlayerDetails> m_playerDetails =
             new Dictionary<Player, PlayerDetails>(new PlayerComparer());
 
+        private Timer gameTickTimer;
+        private AutoResetEvent gameTickTimerEvent;
+
         internal Dictionary<Player, PlayerDetails> playerDetails => m_playerDetails;
 
         static GameFlow()
@@ -37,6 +41,25 @@ namespace EvoS.Framework.Network.NetworkBehaviours
         public GameFlow(AssetFile assetFile, StreamReader stream)
         {
             DeserializeAsset(assetFile, stream);
+        }
+
+        public void StartGame()
+        {
+            gameTickTimerEvent = new AutoResetEvent(false);
+            gameTickTimer = new Timer(this.TickGame, gameTickTimerEvent, 0, 1000);
+            CallRpcSetMatchTime(0);
+        }
+
+        private void TickGame(Object autoEvent)
+        {
+            GameFlowData.UpdateTimeRemaining();
+        }
+
+        public void StopGame()
+        {
+            gameTickTimer.Dispose();
+            gameTickTimer = null;
+            gameTickTimerEvent = null;
         }
 
         public Player GetPlayerFromConnectionId(int connectionId)

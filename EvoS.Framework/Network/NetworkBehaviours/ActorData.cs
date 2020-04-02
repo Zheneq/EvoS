@@ -334,6 +334,11 @@ namespace EvoS.Framework.Network.NetworkBehaviours
             return m_itemData;
         }
 
+        public AbilityData GetAbilityData()
+        {
+            return method_8();
+        }
+
         public AbilityData method_8()
         {
             return m_abilityData;
@@ -344,9 +349,19 @@ namespace EvoS.Framework.Network.NetworkBehaviours
             return m_actorMovement;
         }
 
+        public ActorStats getActorStats()
+        {
+            return method_10();
+        }
+
         public ActorStats method_10()
         {
             return m_actorStats;
+        }
+
+        public ActorStatus GetActorStatus()
+        {
+            return method_11();
         }
 
         public ActorStatus method_11()
@@ -470,6 +485,11 @@ namespace EvoS.Framework.Network.NetworkBehaviours
         {
             get => m_showInGameHud;
             set => m_showInGameHud = value;
+        }
+
+        public float GetAbilityMovementCost()
+        {
+            return method_29();
         }
 
         public float method_29()
@@ -1840,12 +1860,12 @@ namespace EvoS.Framework.Network.NetworkBehaviours
 
         public bool CanMoveToBoardSquare(int x, int y)
         {
-            return true; // m_actorMovement.CanMoveToBoardSquare(x, y);
+            return m_actorMovement.CanMoveToBoardSquare(x, y);
         }
 
         public bool CanMoveToBoardSquare(BoardSquare dest)
         {
-            return true; // m_actorMovement.CanMoveToBoardSquare(dest);
+            return m_actorMovement.CanMoveToBoardSquare(dest);
         }
 
         public void ClearFacingDirectionAfterMovement()
@@ -2050,6 +2070,11 @@ namespace EvoS.Framework.Network.NetworkBehaviours
         public BoardSquare method_73()
         {
             return m_actorMovement.GetTravelBoardSquare();
+        }
+
+        public BoardSquare GetCurrentBoardSquare()
+        {
+            return method_74();
         }
 
         public BoardSquare method_74()
@@ -3277,9 +3302,9 @@ namespace EvoS.Framework.Network.NetworkBehaviours
             PlayerData = GetComponent<PlayerData>();
             if (PlayerData == null)
                 throw new Exception($"Character {gameObject.Name} needs a PlayerData component");
-//            _actorMovement = gameObject.GetComponent<ActorMovement>();
-//            if (_actorMovement == null)
-//                _actorMovement = gameObject.AddComponent<ActorMovement>();
+            m_actorMovement = gameObject.GetComponent<ActorMovement>();
+            if (m_actorMovement == null)
+                m_actorMovement = gameObject.AddComponent<ActorMovement>();
             m_actorTurnSM = gameObject.GetComponent<ActorTurnSM>();
             if (m_actorTurnSM == null)
                 m_actorTurnSM = gameObject.AddComponent<ActorTurnSM>();

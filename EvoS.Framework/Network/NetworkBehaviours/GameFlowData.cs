@@ -34,10 +34,10 @@ namespace EvoS.Framework.Network.NetworkBehaviours
         public float m_deploymentTime = 7f;
 
 //        [SyncVar(hook = "HookSetTurnTime")]
-        public float m_turnTime = 10f;
+        public float m_turnTime = 21f;
 
 //        [SyncVar(hook = "HookSetMaxTurnTime")]
-        public float m_maxTurnTime = 20f;
+        public float m_maxTurnTime = 21f;
         public float m_resolveTimeoutLimit = 112f;
         private List<ActorData> m_teamAPlayerAndBots = new List<ActorData>();
         private List<ActorData> m_teamBPlayerAndBots = new List<ActorData>();
@@ -93,6 +93,16 @@ namespace EvoS.Framework.Network.NetworkBehaviours
 
 //        [SyncVar(hook = "HookSetGameState")]
         private GameState m_gameState;
+
+        private float turnStartTime = 0;
+
+        private float TimeInDecision
+        {
+            get
+            {
+                return Math.Max(0, Time.realtimeSinceStartup - turnStartTime);
+            }
+        }
 
         [JsonIgnore]
         public bool Networkm_pause
@@ -443,6 +453,7 @@ namespace EvoS.Framework.Network.NetworkBehaviours
         private void IncrementTurn()
         {
             m_timeInDecision = 0.0f;
+            turnStartTime = Time.realtimeSinceStartup;
             Networkm_currentTurn = m_currentTurn + 1;
             NotifyOnTurnTick();
             Log.Print(LogType.Game, $"Turn: {CurrentTurn}");
@@ -455,11 +466,12 @@ namespace EvoS.Framework.Network.NetworkBehaviours
         private void NotifyOnTurnTick()
         {
             // TODO
-
+            
+            UpdateTimeRemaining();
 //            if (TeamSensitiveDataMatchmaker.Get() != null)
 //                TeamSensitiveDataMatchmaker.Get().SetTeamSensitiveDataForUnhandledActors();
-//            GameEventManager.Get()
-//                .FireEvent(GameEventManager.EventType.TurnTick, (GameEventManager.GameEventArgs) null);
+            GameEventManager
+                .FireEvent(GameEventManager.EventType.TurnTick, (GameEventManager.GameEventArgs)null);
 //            this.ShowIntervanStatusNotifications();
 //            if (ClientResolutionManager.Get() != null)
 //                ClientResolutionManager.Get().OnTurnStart();
@@ -485,9 +497,9 @@ namespace EvoS.Framework.Network.NetworkBehaviours
 //                FirstTurnMovement.Get().OnTurnTick();
 //            if (CollectTheCoins.Get() != null)
 //                CollectTheCoins.Get().OnTurnTick();
-//            this.m_timeRemainingInDecision = GameFlowData.Get().m_turnTime;
-//            foreach (ActorData actor in this.GetActors())
-//                actor.OnTurnTick();
+            this.m_timeRemainingInDecision = GameFlowData.m_turnTime;
+            foreach (ActorData actor in this.GetActors())
+                actor.OnTurnTick();
 //            if (ObjectivePoints.Get() != null)
 //                ObjectivePoints.Get().OnTurnTick();
 //            if (ClientAbilityResults.\u001D)
@@ -763,6 +775,21 @@ namespace EvoS.Framework.Network.NetworkBehaviours
                 Log.Print(LogType.Error, "RPC RpcUpdateTimeRemaining called on server.");
             else
                 ((GameFlowData) obj).RpcUpdateTimeRemaining(reader.ReadSingle());
+        }
+
+        public void UpdateTimeRemaining()
+        {
+            m_timeRemainingInDecision = Math.Max(0, m_maxTurnTime - TimeInDecision);
+            if (IsInDecisionState())
+            {
+                //Log.Print(LogType.Warning, $"UpdateTimeRemaining {m_timeRemainingInDecision}");
+                CallRpcUpdateTimeRemaining(m_timeRemainingInDecision);
+                if (!this.m_pause && m_timeRemainingInDecision <= 0 && CurrentTurn > 0)
+                {
+                    SetGameState(GameState.BothTeams_Resolve);  // TODO timebanks
+                    GameManager.ResolveMovement();
+                }
+            }
         }
 
         public void CallRpcUpdateTimeRemaining(float timeRemaining)

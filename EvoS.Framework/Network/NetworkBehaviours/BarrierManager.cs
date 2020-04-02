@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Threading;
 using EvoS.Framework.Assets;
 using EvoS.Framework.Assets.Serialized.Behaviours;
 using EvoS.Framework.Constants.Enums;
@@ -9,6 +8,7 @@ using EvoS.Framework.Game;
 using EvoS.Framework.Logging;
 using EvoS.Framework.Network.Static;
 using EvoS.Framework.Network.Unity;
+using EvoS.Framework.Misc;
 
 namespace EvoS.Framework.Network.NetworkBehaviours
 {
@@ -71,6 +71,11 @@ namespace EvoS.Framework.Network.NetworkBehaviours
             DeserializeAsset(assetFile, stream);
         }
 
+        public bool IsTeamSupported(Team team)
+        {
+            return team == Team.TeamA || team == Team.TeamB || team == Team.Objects;
+        }
+
         protected static void InvokeSyncListm_barrierIdSync(NetworkBehaviour obj, NetworkReader reader)
         {
             if (!EvoSGameConfig.NetworkIsClient)
@@ -95,6 +100,37 @@ namespace EvoS.Framework.Network.NetworkBehaviours
                 Log.Print(LogType.Error, "SyncList m_visionStatesSync called on server.");
             else
                 ((BarrierManager) obj).m_visionStatesSync.HandleMsg(reader);
+        }
+
+        private Team GetTeamFromSyncIndex(int index)
+        {
+            switch (index)
+            {
+                case 0:
+                    return Team.TeamA;
+                case 1:
+                    return Team.TeamB;
+                case 2:
+                    return Team.Objects;
+                default:
+                    return Team.Invalid;
+            }
+        }
+
+        private int GetSyncIndexFromTeam(Team team)
+        {
+            switch (team)
+            {
+                case Team.TeamA:
+                    return 0;
+                case Team.TeamB:
+                    return 1;
+                case Team.Objects:
+                    return 2;
+                default:
+                    Log.Print(LogType.Error, "Invalid team passed to GetSyncIndexFromTeam()");
+                    return 0;
+            }
         }
 
 //        [ClientRpc]
@@ -161,6 +197,50 @@ namespace EvoS.Framework.Network.NetworkBehaviours
                 writer.Write(GetComponent<NetworkIdentity>().netId);
                 SendRPCInternal(writer, 0, "RpcUpdateBarriers");
             }
+        }
+
+        // [Server] Unused!
+        public void UpdateMovementStateForTeam(Team team)
+        {
+            //if (!NetworkServer.active)
+            //{
+            //    Debug.LogWarning("[Server] function 'System.Void BarrierManager::UpdateMovementStateForTeam(Team)' called on client");
+            //    return;
+            //}
+            if (!this.IsTeamSupported(team))
+            {
+                throw new Exception("BarrierManager does not support this team");
+            }
+            int syncIndexFromTeam = this.GetSyncIndexFromTeam(team);
+            int num = this.m_movementStatesSync[syncIndexFromTeam];
+            int value = num + 1;
+            this.m_movementStates[team] = value;
+            this.m_movementStatesSync[syncIndexFromTeam] = value;
+        }
+
+        public bool IsMovementBlocked(ActorData mover, BoardSquare source, BoardSquare dest)
+        {
+            bool result = false;
+            for (int i = 0; i < this.m_barriers.Count; i++)
+            {
+                Barrier barrier = this.m_barriers[i];
+                if (!barrier.CanBeMovedThroughBy(mover) && barrier.CrossingBarrier(source.ToVector3(), dest.ToVector3()))
+                {
+                    result = true;
+                    return result;
+                }
+            }
+            return result;
+        }
+
+        public int GetMovementStateChangesFor(ActorData mover)
+        {
+            Team team = mover.method_76();
+            if (!this.IsTeamSupported(team))
+            {
+                return -1;
+            }
+            return this.m_movementStates[team];
         }
 
         public override bool OnSerialize(NetworkWriter writer, bool forceAll)
