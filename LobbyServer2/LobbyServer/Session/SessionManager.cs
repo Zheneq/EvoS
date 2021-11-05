@@ -21,6 +21,7 @@ namespace CentralServer.LobbyServer.Session
         {
             long sessionToken = GeneratedSessionToken++;
             Database.Account user = Database.Account.GetByUserName(clientRequest.AuthInfo.Handle);
+            user.AccountId = clientRequest.AuthInfo.AccountId;
 
             client.AccountId = user.AccountId;
             client.SessionToken = sessionToken;
