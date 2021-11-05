@@ -5,13 +5,23 @@
     <TargetFramework>netcoreapp3.0</TargetFramework>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+    <OutputPath>bin\Debug\</OutputPath>
+  </PropertyGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\EvoS.Framework\EvoS.Framework.csproj" />
+    <ProjectReference Include="..\EvoS.LobbyServer\EvoS.LobbyServer.csproj" />
   </ItemGroup>
 
   <ItemGroup>
+    <Reference Include="NetSerializer">
+      <HintPath>..\..\..\..\Artemis\Win64\AtlasReactor_Data\Managed\NetSerializer.dll</HintPath>
+    </Reference>
     <Reference Include="websocket-sharp">
-      <HintPath>..\..\..\..\..\Artemis\Win64\AtlasReactor_Data\Managed\websocket-sharp.dll</HintPath>
+      <HintPath>..\..\..\..\Artemis\Win64\AtlasReactor_Data\Managed\websocket-sharp.dll</HintPath>
+      <SpecificVersion>false</SpecificVersion>
+      <Private>true</Private>
     </Reference>
   </ItemGroup>
 

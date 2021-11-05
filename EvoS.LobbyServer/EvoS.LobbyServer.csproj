@@ -15,4 +15,10 @@
     <ProjectReference Include="..\EvoS.Framework\EvoS.Framework.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Reference Include="NetSerializer">
+      <HintPath>..\..\..\..\Artemis\Win64\AtlasReactor_Data\Managed\NetSerializer.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
 </Project>

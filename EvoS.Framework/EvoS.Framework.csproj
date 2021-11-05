@@ -11,9 +11,44 @@
   <ItemGroup>
     <PackageReference Include="K4os.Compression.LZ4" Version="1.1.11" />
     <PackageReference Include="MySql.Data" Version="8.0.17" />
-    <PackageReference Include="NetSerializer" Version="4.1.0" />
     <PackageReference Include="Newtonsoft.Json" Version="12.0.2" />
     <PackageReference Include="vtortola.WebSocketListener" Version="3.0.0" />
+  </ItemGroup>
+  
+  <ItemGroup>
+    <Reference Include="ArabicSupport">
+      <HintPath>..\..\..\..\Artemis\Win64\AtlasReactor_Data\Managed\ArabicSupport.dll</HintPath>
+    </Reference>
+    <Reference Include="C5">
+      <HintPath>..\..\..\..\Artemis\Win64\AtlasReactor_Data\Managed\C5.dll</HintPath>
+    </Reference>
+    <Reference Include="Corale.Colore">
+      <HintPath>..\..\..\..\Artemis\Win64\AtlasReactor_Data\Managed\Corale.Colore.dll</HintPath>
+    </Reference>
+    <Reference Include="Fabric.Core">
+      <HintPath>..\..\..\..\Artemis\Win64\AtlasReactor_Data\Managed\Fabric.Core.dll</HintPath>
+    </Reference>
+    <Reference Include="ICSharpCode.SharpZipLib">
+      <HintPath>..\..\..\..\Artemis\Win64\AtlasReactor_Data\Managed\ICSharpCode.SharpZipLib.dll</HintPath>
+    </Reference>
+    <Reference Include="NetSerializer">
+      <HintPath>..\..\..\..\Artemis\Win64\AtlasReactor_Data\Managed\NetSerializer.dll</HintPath>
+    </Reference>
+    <Reference Include="Newtonsoft.Json">
+      <HintPath>..\..\..\..\Artemis\Win64\AtlasReactor_Data\Managed\Newtonsoft.Json.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine">
+      <HintPath>..\..\..\..\Artemis\Win64\AtlasReactor_Data\Managed\UnityEngine.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.Networking">
+      <HintPath>..\..\..\..\Artemis\Win64\AtlasReactor_Data\Managed\UnityEngine.Networking.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.UI">
+      <HintPath>..\..\..\..\Artemis\Win64\AtlasReactor_Data\Managed\UnityEngine.UI.dll</HintPath>
+    </Reference>
+    <Reference Include="websocket-sharp">
+      <HintPath>..\..\..\..\Artemis\Win64\AtlasReactor_Data\Managed\websocket-sharp.dll</HintPath>
+    </Reference>
   </ItemGroup>
 
 </Project>
