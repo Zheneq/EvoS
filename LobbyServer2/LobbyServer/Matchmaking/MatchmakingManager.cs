@@ -41,7 +41,7 @@ namespace CentralServer.LobbyServer.Matchmaking
                 {
                     GameOptionFlags = GameOptionFlag.NoInputIdleDisconnect & GameOptionFlag.NoInputIdleDisconnect,
                     GameServerShutdownTime = -1,
-                    GameType = GameType.Practice,
+                    GameType = GameType.PvP,
                     InstanceSubTypeBit = 1,
                     IsActive = true,
                     Map = Maps.Skyway_Deathmatch,
@@ -51,8 +51,8 @@ namespace CentralServer.LobbyServer.Matchmaking
                     SubTypes = GameModeManager.GetGameTypeAvailabilities()[GameType.Practice].SubTypes,
                     TeamABots = 0,
                     TeamAPlayers = 1,
-                    TeamBBots = 2,
-                    TeamBPlayers = 0
+                    TeamBBots = 0,
+                    TeamBPlayers = 0,
                 }
             };
 
@@ -60,13 +60,15 @@ namespace CentralServer.LobbyServer.Matchmaking
             teamInfo.TeamPlayerInfo = new List<LobbyPlayerInfo>
             {
                 SessionManager.GetPlayerInfo(client.AccountId),
-                CharacterManager.GetPunchingDummyPlayerInfo(),
-                CharacterManager.GetPunchingDummyPlayerInfo()
+                //CharacterManager.GetPunchingDummyPlayerInfo(),
+                //CharacterManager.GetPunchingDummyPlayerInfo()
             };
             teamInfo.TeamPlayerInfo[0].TeamId = Team.TeamA;
             teamInfo.TeamPlayerInfo[0].PlayerId = 1;
-            teamInfo.TeamPlayerInfo[1].PlayerId = 2;
-            teamInfo.TeamPlayerInfo[2].PlayerId = 3;
+            //teamInfo.TeamPlayerInfo[1].TeamId = Team.TeamB;
+            //teamInfo.TeamPlayerInfo[1].PlayerId = 2;
+            //teamInfo.TeamPlayerInfo[2].TeamId = Team.TeamB;
+            //teamInfo.TeamPlayerInfo[2].PlayerId = 3;
 
             string serverAddress = ServerManager.GetServer(practiceGameInfo, teamInfo);
             if (serverAddress == null)

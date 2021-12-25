@@ -22,7 +22,7 @@ namespace EvoS.DirectoryServer
         {
             var host = WebHost.CreateDefaultBuilder()
                 .SuppressStatusMessages(true)
-                .UseKestrel(koptions => koptions.Listen(IPAddress.Parse("127.0.0.1"), 6050))
+                .UseKestrel(koptions => koptions.Listen(IPAddress.Parse("0.0.0.0"), 6050))
                 .UseStartup<DirectoryServer>()
                 .Build();
 
@@ -95,7 +95,7 @@ namespace EvoS.DirectoryServer
                 response.SessionInfo.FakeEntitlements = "";
                 response.SessionInfo.LanguageCode = "EN"; // Needs to be uppercase
 
-                response.LobbyServerAddress = "127.0.0.1";
+                response.LobbyServerAddress = "192.168.1.34";
 
                 LobbyGameClientProxyInfo proxyInfo = new LobbyGameClientProxyInfo();
                 proxyInfo.AccountId = response.SessionInfo.AccountId;
