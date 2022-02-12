@@ -23,6 +23,7 @@ namespace CentralServer.BridgeServer
 
         public enum BridgeMessageType
         {
+            Ack,
             InitialConfig,
             SetLobbyGameInfo,
             SetTeamInfo,
@@ -75,14 +76,32 @@ namespace CentralServer.BridgeServer
             TeamInfo = teamInfo;
             GameStatus = GameStatus.Assembling;
 
-            SendGameInfo();
-            SendTeamInfo();
-            SendStartNotification();
+            WriteGame(gameInfo, teamInfo);
         }
+
+        public void WriteGame(LobbyGameInfo gameInfo, LobbyTeamInfo teamInfo)
+		{
+            var _data = new ServerGame()
+            {
+                gameInfo = gameInfo,
+                teamInfo = teamInfo
+            };
+			using StreamWriter file = File.CreateText(@"E:\Atlas Reactor\game.json");
+			JsonSerializer serializer = new JsonSerializer();
+			serializer.Serialize(file, _data);
+		}
 
         private ReadOnlySpan<byte> GetBytesSpan(string str)
         {
             return new ReadOnlySpan<byte>(Encoding.GetEncoding("UTF-8").GetBytes(str));
+        }
+
+        public void SendAck()
+        {
+            MemoryStream stream = new MemoryStream();
+            stream.WriteByte((byte)BridgeMessageType.Ack);
+            Send(stream.ToArray());
+            Log.Print(LogType.Game, "Sending ack");
         }
 
         public void SendGameInfo()
@@ -134,6 +153,11 @@ namespace CentralServer.BridgeServer
             public long AccountId;
             public bool IsPermanent;
             public GameResult GameResult;
+        }
+
+        class ServerGame {
+            public LobbyGameInfo gameInfo;
+            public LobbyTeamInfo teamInfo;
         }
     }
 }

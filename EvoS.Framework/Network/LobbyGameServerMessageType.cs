@@ -6,7 +6,7 @@ namespace EvoS.Framework.Network
 {
     public enum LobbyGameServerMessageType
     {
-
+        Ack,
         SetTeamInfo,
         SetLobbyGameInfo,
         ResetServer

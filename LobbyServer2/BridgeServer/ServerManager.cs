@@ -16,6 +16,7 @@ namespace CentralServer.BridgeServer
             ServerPool.Add(gameServer.ID, gameServer);
 
             Log.Print(LogType.Lobby, $"New game server connected with address {gameServer.Address}:{gameServer.Port}");
+            //gameServer.SendAck();
         }
 
         public static void RemoveServer(string connectionID)
