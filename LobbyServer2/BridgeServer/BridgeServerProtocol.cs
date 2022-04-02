@@ -23,7 +23,6 @@ namespace CentralServer.BridgeServer
 
         public enum BridgeMessageType
         {
-            Ack,
             InitialConfig,
             SetLobbyGameInfo,
             SetTeamInfo,
@@ -94,14 +93,6 @@ namespace CentralServer.BridgeServer
         private ReadOnlySpan<byte> GetBytesSpan(string str)
         {
             return new ReadOnlySpan<byte>(Encoding.GetEncoding("UTF-8").GetBytes(str));
-        }
-
-        public void SendAck()
-        {
-            MemoryStream stream = new MemoryStream();
-            stream.WriteByte((byte)BridgeMessageType.Ack);
-            Send(stream.ToArray());
-            Log.Print(LogType.Game, "Sending ack");
         }
 
         public void SendGameInfo()
