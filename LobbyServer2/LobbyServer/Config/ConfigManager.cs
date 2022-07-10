@@ -28,8 +28,8 @@ namespace CentralServer.LobbyServer.Config
 
         public static bool DailyQuestsAvailable = true;
 
-        public static CharacterType DefaultCharacterType = CharacterType.Scoundrel;
-        public static GameType DefaultGameType = GameType.Practice;
+        public static CharacterType DefaultCharacterType = CharacterType.Tracker;
+        public static GameType DefaultGameType = GameType.PvP;
 
         public static int DefaultISOAmount = 100000;
         public static int DefaultFluxAmount = 50000;

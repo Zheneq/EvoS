@@ -1,5 +1,6 @@
 ﻿using CentralServer.LobbyServer.Account;
 using CentralServer.LobbyServer.Friend;
+using CentralServer.LobbyServer.Matchmaking;
 using CentralServer.LobbyServer.Session;
 using CentralServer.LobbyServer.Store;
 using EvoS.Framework.Constants.Enums;
@@ -32,6 +33,8 @@ namespace CentralServer.LobbyServer
             RegisterHandler(new EvosMessageDelegate<PreviousGameInfoRequest>(HandlePreviousGameInfoRequest));
             RegisterHandler(new EvosMessageDelegate<PurchaseTintRequest>(HandlePurchaseTintRequest));
             RegisterHandler(new EvosMessageDelegate<LeaveGameRequest>(HandleLeaveGameRequest));
+            RegisterHandler(new EvosMessageDelegate<JoinMatchmakingQueueRequest>(HandleJoinMatchmakingQueueRequest));
+            
 
             /*
             RegisterHandler(new EvosMessageDelegate<PurchaseModResponse>(HandlePurchaseModRequest));
@@ -246,6 +249,29 @@ namespace CentralServer.LobbyServer
                 ResponseId = request.RequestId
             };
             Send(response);
+        }
+
+
+
+        public void HandleJoinMatchmakingQueueRequest(JoinMatchmakingQueueRequest request)
+        {
+            Console.WriteLine("LeaveGameRequest " + JsonConvert.SerializeObject(request));
+
+
+            LeaveGameResponse response = new LeaveGameResponse()
+            {
+                Success = true,
+                ResponseId = request.RequestId
+            };
+            Send(response);
+
+            LobbyMatchmakingQueueInfo queueInfo = MatchmakingManager.AddToQueue(request.GameType, this);
+            MatchmakingQueueAssignmentNotification assignmentNotification = new MatchmakingQueueAssignmentNotification()
+            {
+                Reason = "",
+                MatchmakingQueueInfo = queueInfo
+            };
+            Send(assignmentNotification);
         }
 
 

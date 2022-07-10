@@ -4,22 +4,24 @@ using EvoS.Framework.Logging;
 using EvoS.Framework.Network.NetworkMessages;
 using EvoS.Framework.Network.Static;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Text;
+using System.Threading;
 
 namespace CentralServer.LobbyServer.Session
 {
     public static class SessionManager
     {
-        private static Dictionary<long, LobbyPlayerInfo> ActivePlayers = new Dictionary<long, LobbyPlayerInfo>();// key: AccountID
-        private static Dictionary<long, long> SessionTokenAccountIDCache = new Dictionary<long, long>(); // key: SessionToken, value: AccountID
-        private static Dictionary<long, LobbyServerProtocol> ActiveConnections = new Dictionary<long, LobbyServerProtocol>();
+        private static ConcurrentDictionary<long, LobbyPlayerInfo> ActivePlayers = new ConcurrentDictionary<long, LobbyPlayerInfo>();// key: AccountID
+        private static ConcurrentDictionary<long, long> SessionTokenAccountIDCache = new ConcurrentDictionary<long, long>(); // key: SessionToken, value: AccountID
+        private static ConcurrentDictionary<long, LobbyServerProtocol> ActiveConnections = new ConcurrentDictionary<long, LobbyServerProtocol>();
         private static long GeneratedSessionToken = 0;
 
 
         public static LobbyPlayerInfo OnPlayerConnect(LobbyServerProtocol client, RegisterGameClientRequest clientRequest)
         {
-            long sessionToken = GeneratedSessionToken++;
+            long sessionToken = Interlocked.Increment(ref GeneratedSessionToken);
             Database.Account user = Database.Account.GetByUserName(clientRequest.AuthInfo.Handle);
             user.AccountId = clientRequest.AuthInfo.AccountId;
 
@@ -51,18 +53,18 @@ namespace CentralServer.LobbyServer.Session
                 TitleLevel = 1
             };
 
-            ActivePlayers.Add(user.AccountId, playerInfo);
-            SessionTokenAccountIDCache.Add(sessionToken, playerInfo.AccountId);
-            ActiveConnections.Add(user.AccountId, client);
+            ActivePlayers.TryAdd(user.AccountId, playerInfo);
+            SessionTokenAccountIDCache.TryAdd(sessionToken, playerInfo.AccountId);
+            ActiveConnections.TryAdd(user.AccountId, client);
 
             return playerInfo;
         }
 
         public static void OnPlayerDisconnect(LobbyServerProtocol client)
         {
-            ActivePlayers.Remove(client.AccountId);
-            SessionTokenAccountIDCache.Remove(client.SessionToken);
-            ActiveConnections.Remove(client.AccountId);
+            ActivePlayers.TryRemove(client.AccountId, out _);
+            SessionTokenAccountIDCache.TryRemove(client.SessionToken, out _);
+            ActiveConnections.TryRemove(client.AccountId, out _);
         }
 
         public static LobbyPlayerInfo GetPlayerInfo(long accountId)
