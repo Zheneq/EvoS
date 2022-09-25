@@ -10,6 +10,7 @@ namespace EvoS.Framework
     {
         private static EvosConfiguration Instance = null;
         public int DirectoryServerPort = 6050;
+        public string LobbyServerAddress = "127.0.0.1";
         public int LobbyServerPort = 6060;
         public string GameServerExecutable = "";
 
@@ -29,6 +30,11 @@ namespace EvoS.Framework
         public static int GetDirectoryServerPort()
         {
             return GetInstance().DirectoryServerPort;
+        }
+
+        public static string GetLobbyServerAddress()
+        {
+            return GetInstance().LobbyServerAddress;
         }
 
         public static int GetLobbyServerPort()

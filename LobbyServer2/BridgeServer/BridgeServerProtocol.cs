@@ -20,6 +20,7 @@ namespace CentralServer.BridgeServer
         private LobbyGameInfo GameInfo;
         private LobbyTeamInfo TeamInfo;
         private GameStatus GameStatus = GameStatus.Stopped;
+        public string URI => "ws://" + Address + ":" + Port;
 
         public enum BridgeMessageType
         {

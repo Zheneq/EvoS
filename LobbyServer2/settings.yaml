@@ -1,3 +1,4 @@
 ﻿DirectoryServerPort: 6050
+LobbyServerAddress: 127.0.0.1
 LobbyServerPort: 6060
 GameServerExecutable: ""
