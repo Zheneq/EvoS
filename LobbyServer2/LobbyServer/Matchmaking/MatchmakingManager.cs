@@ -103,14 +103,14 @@ namespace CentralServer.LobbyServer.Matchmaking
 			teamInfo.TeamPlayerInfo[2].TeamId = Team.TeamB;
 			teamInfo.TeamPlayerInfo[2].PlayerId = 3;
 
-			string serverAddress = ServerManager.GetServer(practiceGameInfo, teamInfo);
-            if (serverAddress == null)
+            BridgeServerProtocol server = ServerManager.GetServer(practiceGameInfo, teamInfo);
+            if (server == null)
             {
                 Log.Print(LogType.Error, "No available server for practice gamemode");
             }
             else
             {
-                practiceGameInfo.GameServerAddress = "ws://" + serverAddress;
+                practiceGameInfo.GameServerAddress = server.URI;
                 practiceGameInfo.GameStatus = GameStatus.Launching;
                 
                 GameAssignmentNotification notification1 = new GameAssignmentNotification
@@ -195,8 +195,8 @@ namespace CentralServer.LobbyServer.Matchmaking
                 }
             };
 
-            string serverAddress = ServerManager.GetServer(gameInfo, teamInfo);
-            if (serverAddress == null)
+            BridgeServerProtocol server = ServerManager.GetServer(gameInfo, teamInfo);
+            if (server == null)
             {
                 Log.Print(LogType.Error, $"No available server for {gameType} gamemode");
                 return;
@@ -204,7 +204,8 @@ namespace CentralServer.LobbyServer.Matchmaking
             else
             {
                 lobbyQueue.RemovePlayers(clients);
-                gameInfo.GameServerAddress = "ws://" + serverAddress;
+                server.clients = clients;
+                gameInfo.GameServerAddress = server.URI;
                 gameInfo.GameStatus = GameStatus.Launching;
 
 				for (int i = 0; i < clients.Count; i++)
@@ -288,14 +289,14 @@ namespace CentralServer.LobbyServer.Matchmaking
                 teamInfo.TeamPlayerInfo.Add(playerInfo);
             }
 
-            string serverAddress = ServerManager.GetServer(gameInfo, teamInfo);
-            if (serverAddress == null)
+            BridgeServerProtocol server = ServerManager.GetServer(gameInfo, teamInfo);
+            if (server == null)
             {
                 Log.Print(LogType.Error, "No available server for practice gamemode");
             }
             else
             {
-                gameInfo.GameServerAddress = "ws://" + serverAddress;
+                gameInfo.GameServerAddress = server.URI;
                 gameInfo.GameStatus = GameStatus.Launching;
 
 				for (int i = 0; i < clients.Count; i++)

@@ -1,6 +1,8 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using CentralServer.LobbyServer;
 using EvoS.Framework.Constants.Enums;
 using EvoS.Framework.Logging;
 using EvoS.Framework.Network.Static;
@@ -20,6 +22,8 @@ namespace CentralServer.BridgeServer
         private LobbyGameInfo GameInfo;
         private LobbyTeamInfo TeamInfo;
         private GameStatus GameStatus = GameStatus.Stopped;
+
+        public List<LobbyServerProtocolBase> clients = new List<LobbyServerProtocolBase>();
         public string URI => "ws://" + Address + ":" + Port;
 
         public enum BridgeMessageType
