@@ -17,6 +17,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Text;
+using CentralServer.BridgeServer;
 using WebSocketSharp;
 using WebSocketSharp.Server;
 
@@ -32,6 +33,7 @@ namespace CentralServer.LobbyServer
         public GameType SelectedGameType;
         public ushort SelectedSubTypeMask;
 
+        public BridgeServerProtocol CurrentServer { get; set; }
 
         protected override void OnMessage(MessageEventArgs e)
         {

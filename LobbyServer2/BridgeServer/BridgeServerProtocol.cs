@@ -1,13 +1,17 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
 using System.Text;
+using CentralServer.LobbyServer;
 using EvoS.Framework.Constants.Enums;
 using EvoS.Framework.Logging;
+using EvoS.Framework.Network.NetworkMessages;
 using EvoS.Framework.Network.Static;
+using EvoS.Framework.Network.Unity;
 using Newtonsoft.Json;
 using WebSocketSharp;
 using WebSocketSharp.Server;
-using StreamReader = System.IO.StreamReader;
 
 namespace CentralServer.BridgeServer
 {
@@ -19,44 +23,99 @@ namespace CentralServer.BridgeServer
         public int Port;
         private LobbyGameInfo GameInfo;
         private LobbyTeamInfo TeamInfo;
-        private GameStatus GameStatus = GameStatus.Stopped;
+        public List<LobbyServerProtocolBase> clients = new List<LobbyServerProtocolBase>();
         public string URI => "ws://" + Address + ":" + Port;
+        public GameStatus GameStatus { get; private set; } = GameStatus.Stopped;
+        public string ProcessCode { get; } = "Artemis" + DateTime.Now.Ticks;
 
-        public enum BridgeMessageType
+        public static readonly List<Type> BridgeMessageTypes = new List<Type>
         {
-            InitialConfig,
-            SetLobbyGameInfo,
-            SetTeamInfo,
-            Start,
-            Stop,
-            GameStatusChange,
-            PlayerLeaving
+            typeof(RegisterGameServerRequest),
+            typeof(RegisterGameServerResponse),
+            null, // typeof(LaunchGameRequest),
+            null, // typeof(JoinGameServerRequest),
+            null, // typeof(JoinGameAsObserverRequest),
+            null, // typeof(ShutdownGameRequest),
+            null, // typeof(DisconnectPlayerRequest),
+            null, // typeof(ReconnectPlayerRequest),
+            null, // typeof(MonitorHeartbeatResponse),
+            typeof(ServerGameSummaryNotification),
+            null, // typeof(PlayerDisconnectedNotification),
+            null, // typeof(ServerGameMetricsNotification),
+            typeof(ServerGameStatusNotification),
+            null, // typeof(MonitorHeartbeatNotification),
+            null, // typeof(LaunchGameResponse),
+            null, // typeof(JoinGameServerResponse),
+            null, // typeof(JoinGameAsObserverResponse)
+        };
+
+        protected List<Type> GetMessageTypes()
+        {
+            return BridgeMessageTypes;
         }
 
         protected override void OnMessage(MessageEventArgs e)
         {
-            MemoryStream stream = new MemoryStream(e.RawData);
-            string data = "";
-
-            BridgeMessageType messageType;
-            
-            using (StreamReader reader = new StreamReader(stream))
+            NetworkReader networkReader = new NetworkReader(e.RawData);
+            short messageType = networkReader.ReadInt16();
+            int callbackId = networkReader.ReadInt32();
+            List<Type> messageTypes = GetMessageTypes();
+            if (messageType >= messageTypes.Count)
             {
-                messageType = (BridgeMessageType)reader.Read();
-                data = reader.ReadToEnd();
+                Log.Print(LogType.Error, $"Unknown bridge message type {messageType}");
+                return;
             }
 
-            switch (messageType)
+            Type type = messageTypes[messageType];
+
+            if (type == typeof(RegisterGameServerRequest))
             {
-                case BridgeMessageType.InitialConfig:
-                    Address = data.Split(":")[0];
-                    Port = Convert.ToInt32(data.Split(":")[1]);
-                    ServerManager.AddServer(this);
-                    break;
-                default:
-                    Log.Print(LogType.Game, "Received unhandled message type");
-                    break;
+                RegisterGameServerRequest request = Deserialize<RegisterGameServerRequest>(networkReader);
+                string data = request.SessionInfo.ConnectionAddress;
+                Address = data.Split(":")[0];
+                Port = Convert.ToInt32(data.Split(":")[1]);
+                ServerManager.AddServer(this);
+
+                Send(new RegisterGameServerResponse
+                    {
+                        Success = true
+                    },
+                    callbackId);
             }
+            else if (type == typeof(ServerGameSummaryNotification))
+            {
+                ServerGameSummaryNotification request = Deserialize<ServerGameSummaryNotification>(networkReader);
+                Log.Print(LogType.Game, $"Game {GameInfo.Name} at {request.GameSummary.GameServerAddress} finished " +
+                                        $"({request.GameSummary.NumOfTurns} turns), " +
+                                        $"{request.GameSummary.GameResult} {request.GameSummary.TeamAPoints}-{request.GameSummary.TeamBPoints}");
+                foreach (LobbyServerProtocolBase client in clients)
+                {
+                    MatchResultsNotification response = new MatchResultsNotification
+                    {
+                        // TODO
+                        BadgeAndParticipantsInfo = request.GameSummary.BadgeAndParticipantsInfo
+                    };
+                    client.Send(response);
+                }
+            }
+            else if (type == typeof(ServerGameStatusNotification))
+            {
+                ServerGameStatusNotification request = Deserialize<ServerGameStatusNotification>(networkReader);
+                Log.Print(LogType.Game, $"Game {GameInfo.Name} {request.GameStatus}");
+                GameStatus = request.GameStatus;
+            }
+            else
+            {
+                Log.Print(LogType.Game, $"Received unhandled bridge message type {(type != null ? type.Name : "id_" + messageType)}");
+            }
+        }
+
+        private T Deserialize<T>(NetworkReader reader) where T : AllianceMessageBase
+        {
+            ConstructorInfo constructor = typeof(T).GetConstructor(Type.EmptyTypes);
+            T o = (T)(AllianceMessageBase)constructor.Invoke(Array.Empty<object>());
+            o.Deserialize(reader);
+            return o;
         }
 
         protected override void OnClose(CloseEventArgs e)
@@ -97,58 +156,41 @@ namespace CentralServer.BridgeServer
             return new ReadOnlySpan<byte>(Encoding.GetEncoding("UTF-8").GetBytes(str));
         }
 
-        public void SendGameInfo()
+        public bool Send(AllianceMessageBase msg, int originalCallbackId = 0)
         {
-            MemoryStream stream = new MemoryStream();
-            stream.WriteByte((byte) BridgeMessageType.SetLobbyGameInfo);
-            string jsonData = JsonConvert.SerializeObject(GameInfo);
-            stream.Write(GetBytesSpan(jsonData));
-            Send(stream.ToArray());
-            Log.Print(LogType.Game, "Setting Game Info");
-        }
-
-        public void SendTeamInfo()
-        {
-            MemoryStream stream = new MemoryStream();
-            stream.WriteByte((byte)BridgeMessageType.SetTeamInfo);
-            string jsonData = JsonConvert.SerializeObject(TeamInfo);
-            stream.Write(GetBytesSpan(jsonData));
-            Send(stream.ToArray());
-            Log.Print(LogType.Game, "Setting Team Info");
-        }
-
-        public void SendStartNotification()
-        {
-            MemoryStream stream = new MemoryStream();
-            stream.WriteByte((byte)BridgeMessageType.Start);
-            Send(stream.ToArray());
-            Log.Print(LogType.Game, "Starting Game Server");
-        }
-
-        public void SendPlayerLeavingNotification(long accountId, bool isPermanent, GameResult gameResult)
-        {
-            MemoryStream stream = new MemoryStream();
-            stream.WriteByte((byte)BridgeMessageType.PlayerLeaving);
-            string jsonData = JsonConvert.SerializeObject(new PlayerLeavingNotification()
+            short messageType = GetMessageType(msg);
+            if (messageType >= 0)
             {
-                AccountId = accountId,
-                IsPermanent = isPermanent,
-                GameResult = gameResult
-            });
-            stream.Write(GetBytesSpan(jsonData));
-            Send(stream.ToArray());
-            Log.Print(LogType.Game, $"Player {accountId} leaves game");
+                Send(messageType, msg, originalCallbackId);
+                return true;
+            }
+
+            return false;
         }
 
-        [Serializable]
-        class PlayerLeavingNotification
+        private bool Send(short msgType, AllianceMessageBase msg, int originalCallbackId = 0)
         {
-            public long AccountId;
-            public bool IsPermanent;
-            public GameResult GameResult;
+            NetworkWriter networkWriter = new NetworkWriter();
+            networkWriter.Write(msgType);
+            networkWriter.Write(originalCallbackId);
+            msg.Serialize(networkWriter);
+            Send(networkWriter.ToArray());
+            return true;
         }
 
-        class ServerGame {
+        public short GetMessageType(AllianceMessageBase msg)
+        {
+            short num = (short)GetMessageTypes().IndexOf(msg.GetType());
+            if (num < 0)
+            {
+                Log.Print(LogType.Error, $"Message type {msg.GetType().Name} is not in the MonitorGameServerInsightMessages MessageTypes list and doesnt have a type");
+            }
+
+            return num;
+        }
+
+        class ServerGame
+        {
             public LobbyGameInfo gameInfo;
             public LobbyTeamInfo teamInfo;
         }

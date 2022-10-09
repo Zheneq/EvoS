@@ -11,6 +11,7 @@ using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Text;
+using CentralServer.BridgeServer;
 using WebSocketSharp;
 
 namespace CentralServer.LobbyServer
@@ -255,6 +256,18 @@ namespace CentralServer.LobbyServer
                 ResponseId = request.RequestId
             };
             Send(response);
+
+            if (CurrentServer != null)
+            {
+                CurrentServer.clients.Remove(this);
+                GameStatusNotification notify = new GameStatusNotification()
+                {
+                    GameServerProcessCode = CurrentServer.ProcessCode,
+                    GameStatus = GameStatus.Stopped // TODO check if there is a better way to make client leave mid-game
+                };
+                Send(notify);
+                CurrentServer = null; // we will probably want to save it somewhere for reconnection
+            }
         }
 
 
