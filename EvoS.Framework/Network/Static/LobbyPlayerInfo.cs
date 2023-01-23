@@ -15,7 +15,7 @@ namespace EvoS.Framework.Network.Static
 
         public bool ReplacedWithBots { get; set; }
 
-        public static LobbyPlayerInfo FromServer(LobbyServerPlayerInfo serverInfo, int maxPlayerLevel,
+        public static LobbyPlayerInfo FromServer(LobbyServerPlayerInfo serverInfo,
             MatchmakingQueueConfig queueConfig)
         {
             LobbyPlayerInfo lobbyPlayerInfo = null;
@@ -57,22 +57,6 @@ namespace EvoS.Framework.Network.Static
                         ((!serverInfo.IsRemoteControlled) ? 0 : serverInfo.ControllingPlayerInfo.PlayerId),
                     EffectiveClientAccessLevel = serverInfo.EffectiveClientAccessLevel
                 };
-                if (serverInfo.AccountLevel >= maxPlayerLevel)
-                {
-//                    lobbyPlayerInfo.DisplayedStat = LocalizationPayload.Create("TotalSeasonLevelStatNumber", "Global",
-//                        new LocalizationArg[]
-//                        {
-//                            LocalizationArg_Int32.Create(serverInfo.TotalLevel)
-//                        });
-                }
-                else
-                {
-//                    lobbyPlayerInfo.DisplayedStat = LocalizationPayload.Create("LevelStatNumber", "Global",
-//                        new LocalizationArg[]
-//                        {
-//                            LocalizationArg_Int32.Create(serverInfo.AccountLevel)
-//                        });
-                }
             }
 
             return lobbyPlayerInfo;

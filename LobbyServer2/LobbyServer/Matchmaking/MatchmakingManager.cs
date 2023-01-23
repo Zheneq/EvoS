@@ -169,7 +169,7 @@ namespace CentralServer.LobbyServer.Matchmaking
                     GameInfo = practiceGameInfo,
                     GameResult = GameResult.NoResult,
                     Observer = false,
-                    PlayerInfo = LobbyPlayerInfo.FromServer(teamInfo.TeamPlayerInfo[0], 0, queueConfig),
+                    PlayerInfo = LobbyPlayerInfo.FromServer(teamInfo.TeamPlayerInfo[0], queueConfig),
                     Reconnection = false,
                     GameplayOverrides = client.GetGameplayOverrides()
                 };
@@ -179,9 +179,9 @@ namespace CentralServer.LobbyServer.Matchmaking
                 practiceGameInfo.GameStatus = GameStatus.Launched;
                 GameInfoNotification notification2 = new GameInfoNotification()
                 {
-                    TeamInfo = LobbyTeamInfo.FromServer(teamInfo, 0, queueConfig),
+                    TeamInfo = LobbyTeamInfo.FromServer(teamInfo, queueConfig),
                     GameInfo = practiceGameInfo,
-                    PlayerInfo = LobbyPlayerInfo.FromServer(teamInfo.TeamPlayerInfo[0], 0, queueConfig)
+                    PlayerInfo = LobbyPlayerInfo.FromServer(teamInfo.TeamPlayerInfo[0], queueConfig)
                 };
 
                 client.Send(notification2);
@@ -197,6 +197,8 @@ namespace CentralServer.LobbyServer.Matchmaking
             GameSubType subType = lobbyQueue.MatchmakingQueueInfo.GameConfig.SubTypes[0];
             LobbyServerTeamInfo teamInfo = new LobbyServerTeamInfo { TeamPlayerInfo = new List<LobbyServerPlayerInfo>() };
             List<LobbyServerProtocol> clients = new List<LobbyServerProtocol>();
+
+
             // Fill team A
             foreach (long accountId in teamA)
             {
@@ -213,7 +215,6 @@ namespace CentralServer.LobbyServer.Matchmaking
                 log.Info($"adding player {client.UserName}, {client.AccountId} to team A");
                 teamInfo.TeamPlayerInfo.Add(playerInfo);
             }
-
             // Fill team B
             foreach (long accountId in teamB)
             {
@@ -263,49 +264,48 @@ namespace CentralServer.LobbyServer.Matchmaking
                 log.Info($"No available server for {gameType} gamemode");
                 return;
             }
-            else
+            
+            server.clients = clients;
+            gameInfo.GameServerAddress = server.URI;
+            gameInfo.GameServerProcessCode = server.ProcessCode;
+            gameInfo.GameStatus = GameStatus.Launching;
+
+            for (int i = 0; i < clients.Count; i++)
             {
-                server.clients = clients;
-                gameInfo.GameServerAddress = server.URI;
-                gameInfo.GameServerProcessCode = server.ProcessCode;
-                gameInfo.GameStatus = GameStatus.Launching;
-
-                for (int i = 0; i < clients.Count; i++)
+                LobbyServerProtocol client = clients[i];
+                GameAssignmentNotification notification = new GameAssignmentNotification
                 {
-                    LobbyServerProtocol client = clients[i];
-                    GameAssignmentNotification notification = new GameAssignmentNotification
-                    {
-                        GameInfo = gameInfo,
-                        GameResult = GameResult.NoResult,
-                        Observer = false,
-                        PlayerInfo = LobbyPlayerInfo.FromServer(teamInfo.TeamPlayerInfo[i], 0, queueConfig),
-                        Reconnection = false,
-                        GameplayOverrides = client.GetGameplayOverrides()
-                    };
-
-                    client.Send(notification);
-                    client.CurrentServer = server;
-                }
-
-                gameInfo.GameStatus = GameStatus.Launched;
-
-                for (int i = 0; i < clients.Count; i++)
-                {
-                    LobbyServerProtocolBase client = clients[i];
-                    GameInfoNotification notification = new GameInfoNotification()
-                    {
-                        TeamInfo = LobbyTeamInfo.FromServer(teamInfo, 0, queueConfig),
-                        GameInfo = gameInfo,
-                        PlayerInfo = LobbyPlayerInfo.FromServer(teamInfo.TeamPlayerInfo[i], 0, queueConfig)
-                    };
-
-                    client.Send(notification);
-                }
-
-                clients.ForEach(c => c.OnStartGame());
-
-                log.Info($"Game {gameType} started");
+                    GameInfo = gameInfo,
+                    GameResult = GameResult.NoResult,
+                    Observer = false,
+                    PlayerInfo = LobbyPlayerInfo.FromServer(teamInfo.TeamPlayerInfo[i], queueConfig),
+                    Reconnection = false,
+                    GameplayOverrides = client.GetGameplayOverrides()
+                };
+                
+                client.Send(notification);
+                client.CurrentServer = server;
             }
+
+            gameInfo.GameStatus = GameStatus.Launched;
+
+            for (int i = 0; i < clients.Count; i++)
+            {
+                LobbyServerProtocolBase client = clients[i];
+                GameInfoNotification notification = new GameInfoNotification()
+                {
+                    TeamInfo = LobbyTeamInfo.FromServer(teamInfo, queueConfig),
+                    GameInfo = gameInfo,
+                    PlayerInfo = LobbyPlayerInfo.FromServer(teamInfo.TeamPlayerInfo[i], queueConfig)
+                };
+                
+                client.Send(notification);
+            }
+
+            clients.ForEach(c => c.OnStartGame());
+
+            log.Info($"Game {gameType} started");
+            
         }
 
         public static void StartGameVBots(List<LobbyServerProtocolBase> clients, GameType gameType)
@@ -375,7 +375,7 @@ namespace CentralServer.LobbyServer.Matchmaking
                         GameInfo = gameInfo,
                         GameResult = GameResult.NoResult,
                         Observer = false,
-                        PlayerInfo = LobbyPlayerInfo.FromServer(teamInfo.TeamPlayerInfo[i], 0, queueConfig),
+                        PlayerInfo = LobbyPlayerInfo.FromServer(teamInfo.TeamPlayerInfo[i], queueConfig),
                         Reconnection = false,
                         GameplayOverrides = client.GetGameplayOverrides()
                     };
@@ -390,9 +390,9 @@ namespace CentralServer.LobbyServer.Matchmaking
                     LobbyServerProtocolBase client = clients[i];
                     GameInfoNotification notification = new GameInfoNotification()
                     {
-                        TeamInfo = LobbyTeamInfo.FromServer(teamInfo, 0, queueConfig),
+                        TeamInfo = LobbyTeamInfo.FromServer(teamInfo, queueConfig),
                         GameInfo = gameInfo,
-                        PlayerInfo = LobbyPlayerInfo.FromServer(teamInfo.TeamPlayerInfo[i], 0, queueConfig)
+                        PlayerInfo = LobbyPlayerInfo.FromServer(teamInfo.TeamPlayerInfo[i], queueConfig)
                     };
 
                     client.Send(notification);

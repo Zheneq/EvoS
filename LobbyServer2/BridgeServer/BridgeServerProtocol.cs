@@ -1,17 +1,23 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Threading;
+using System.Threading.Tasks;
 using CentralServer.LobbyServer;
 using CentralServer.LobbyServer.Session;
 using EvoS.Framework.Constants.Enums;
+using EvoS.Framework.Logging;
 using EvoS.Framework.Misc;
 using EvoS.Framework.Network.NetworkMessages;
 using EvoS.Framework.Network.Static;
 using EvoS.Framework.Network.Unity;
 using log4net;
+using MongoDB.Bson;
+using Org.BouncyCastle.Asn1.Ocsp;
 using WebSocketSharp;
 using WebSocketSharp.Server;
+using ILog = log4net.ILog;
 
 namespace CentralServer.BridgeServer
 {
@@ -56,7 +62,7 @@ namespace CentralServer.BridgeServer
             null, // typeof(MonitorHeartbeatResponse),
             typeof(ServerGameSummaryNotification),
             typeof(PlayerDisconnectedNotification),
-            null, // typeof(ServerGameMetricsNotification),
+            typeof(ServerGameMetricsNotification),
             typeof(ServerGameStatusNotification),
             null, // typeof(MonitorHeartbeatNotification),
             null, // typeof(LaunchGameResponse),
@@ -98,57 +104,84 @@ namespace CentralServer.BridgeServer
                 ServerManager.AddServer(this);
 
                 Send(new RegisterGameServerResponse
-                    {
-                        Success = true
-                    },
+                {
+                    Success = true
+                },
                     callbackId);
             }
             else if (type == typeof(ServerGameSummaryNotification))
             {
                 ServerGameSummaryNotification request = Deserialize<ServerGameSummaryNotification>(networkReader);
+
                 log.Debug($"< {request.GetType().Name} {DefaultJsonSerializer.Serialize(request)}");
-                log.Info($"Game {GameInfo.Name} at {request.GameSummary.GameServerAddress} finished " +
-                                        $"({request.GameSummary.NumOfTurns} turns), " +
-                                        $"{request.GameSummary.GameResult} {request.GameSummary.TeamAPoints}-{request.GameSummary.TeamBPoints}");
+                log.Info($"Game {GameInfo.Name} finished ");
+
+                List<BadgeAndParticipantInfo> badges;
+                if (request.GameSummary != null)
+                {
+                    log.Info($"({request.GameSummary.NumOfTurns} turns), " +
+                             $"{request.GameSummary.GameResult} {request.GameSummary.TeamAPoints}-{request.GameSummary.TeamBPoints}");
+                    badges = request.GameSummary.BadgeAndParticipantsInfo;
+                }
+                else
+                {
+                    log.Error("Received null GameSummary. stub");
+                    badges = new List<BadgeAndParticipantInfo>();
+                }
+
                 foreach (LobbyServerProtocolBase client in clients)
                 {
                     MatchResultsNotification response = new MatchResultsNotification
                     {
-                        // TODO
-                        BadgeAndParticipantsInfo = request.GameSummary.BadgeAndParticipantsInfo
+                        BadgeAndParticipantsInfo = badges,
+                        BaseXpGained = 100,
+                        CurrencyRewards = new List<MatchResultsNotification.CurrencyReward>()
                     };
                     client.Send(response);
                 }
-
-                Send(new ShutdownGameRequest());
+                if (request.GameSummary != null)
+                {
+                    GameInfo.GameResult = request.GameSummary.GameResult;
+                }
+                else
+                {
+                    // default value
+                    GameInfo.GameResult = GameResult.TieGame;
+                }
+                
+                UpdateGameInfoToPlayers();
             }
             else if (type == typeof(PlayerDisconnectedNotification))
             {
                 PlayerDisconnectedNotification request = Deserialize<PlayerDisconnectedNotification>(networkReader);
                 log.Debug($"< {request.GetType().Name} {DefaultJsonSerializer.Serialize(request)}");
                 log.Info($"Player {request.PlayerInfo.AccountId} left game {GameInfo.GameServerProcessCode}");
+
+                OnPlayerDisconnected(request.PlayerInfo.AccountId);
                 
-                foreach (LobbyServerProtocol client in clients)
-                {
-                    if (client.AccountId == request.PlayerInfo.AccountId)
-                    {
-                        client.CurrentServer = null;
-                        break;
-                    }
-                }
             }
             else if (type == typeof(ServerGameStatusNotification))
             {
                 ServerGameStatusNotification request = Deserialize<ServerGameStatusNotification>(networkReader);
                 log.Debug($"< {request.GetType().Name} {DefaultJsonSerializer.Serialize(request)}");
                 log.Info($"Game {GameInfo.Name} {request.GameStatus}");
-                GameStatus = request.GameStatus;
+
+                UpdateGameStatus(request.GameStatus, true);
+                
                 if (GameStatus == GameStatus.Stopped)
                 {
                     foreach (LobbyServerProtocol client in clients)
                     {
                         client.CurrentServer = null;
                     }
+                }
+            }
+            else if (type == typeof(ServerGameMetricsNotification))
+            {
+                ServerGameMetricsNotification request = Deserialize<ServerGameMetricsNotification>(networkReader);
+                if (request.GameMetrics != null)
+                {
+                    log.Debug($"Game {GameInfo.Name} is on turn {request.GameMetrics.CurrentTurn} with score {request.GameMetrics.TeamAPoints}/{request.GameMetrics.TeamBPoints}");
                 }
             }
             else
@@ -242,5 +275,95 @@ namespace CentralServer.BridgeServer
 
             return num;
         }
+
+        public void UpdateGameStatus(GameStatus status, bool notify = false)
+        {
+            // Update GameInfo's GameStatus
+            GameStatus = status;
+            GameInfo.GameStatus = status;
+
+            // If status is not None, notify players of the change
+            if (status == GameStatus.None || !notify) return;
+            GameStatusNotification notification = new GameStatusNotification() { GameStatus = status};
+
+            foreach (long player in GetPlayers())
+            {
+                LobbyServerProtocol playerConnection = SessionManager.GetClientConnection(player);
+                if (playerConnection != null)
+                {
+                    playerConnection.Send(notification);
+                }
+            }
+        }
+
+        public void UpdateGameInfoToPlayers()
+        {
+            foreach(long player in GetPlayers())
+            {
+                GameInfoNotification notification = new GameInfoNotification()
+                {
+                    GameInfo = this.GameInfo,
+                    TeamInfo = LobbyTeamInfo.FromServer(this.TeamInfo, new MatchmakingQueueConfig()),
+                    PlayerInfo = LobbyPlayerInfo.FromServer(SessionManager.GetPlayerInfo(player), new MatchmakingQueueConfig()) 
+                };
+                LobbyServerProtocol playerConnection = SessionManager.GetClientConnection(player);
+                if (playerConnection != null)
+                {
+                    playerConnection.Send(notification);
+                }
+            }
+        }
+
+        public void OnPlayerUsedGGPack(long accountId)
+        {
+            int ggPackUsedAccountIDs = 0;
+            GameInfo.ggPackUsedAccountIDs.TryGetValue(accountId, out ggPackUsedAccountIDs);
+            GameInfo.ggPackUsedAccountIDs[accountId] = ggPackUsedAccountIDs + 1;
+
+            UpdateGameInfoToPlayers();
+        }
+
+        public void OnPlayerDisconnected(long accountId)
+        {
+            LobbyServerProtocol clientToRemove = null;
+
+            foreach (LobbyServerProtocol client in clients)
+            {
+                if (client.AccountId == accountId)
+                {
+                    client.CurrentServer = null;
+                    clientToRemove = client;
+                    break;
+                }
+            }
+
+            if (clientToRemove != null)
+            {
+                clients.Remove(clientToRemove);
+                clientToRemove.CurrentServer = null;
+
+                GameStatusNotification notify = new GameStatusNotification()
+                {
+                    GameServerProcessCode = ProcessCode,
+                    GameStatus = GameStatus.Stopped // TODO check if there is a better way to make client leave mid-game
+                };
+
+                /*
+                 * TODO: This seems to disconnect the player from the server
+                    2019-04-29 17:52:13.373+03:00 [INF] Received Game Assignment Notification  (assigned=True assigning=False reassigning=False)
+                    2019-04-29 17:52:13.373+03:00 [INF] Unassigned from game 0a101c39-5cc7-077f (wss://208.94.25.140:6148) [RobotFactory_Deathmatch PvP GenericPvP]
+                 */
+                clientToRemove.Send(notify);
+            }
+
+            
+            if (clients.Count == 0)
+            {
+                log.Info("No more players in game server. Sending shutdown request");
+                Send(new ShutdownGameRequest());
+            }
+        }
+
+
     }
 }
