@@ -149,7 +149,8 @@ namespace CentralServer.BridgeServer
                     GameInfo.GameResult = GameResult.TieGame;
                 }
                 
-                UpdateGameInfoToPlayers();
+                //UpdateGameInfoToPlayers();
+
             }
             else if (type == typeof(PlayerDisconnectedNotification))
             {
@@ -342,18 +343,15 @@ namespace CentralServer.BridgeServer
                 clients.Remove(clientToRemove);
                 clientToRemove.CurrentServer = null;
 
-                GameStatusNotification notify = new GameStatusNotification()
+                // Notify Game Unassignment
+                GameAssignmentNotification assignmentNotification = new GameAssignmentNotification()
                 {
-                    GameServerProcessCode = ProcessCode,
-                    GameStatus = GameStatus.Stopped // TODO check if there is a better way to make client leave mid-game
+                    GameResult = GameInfo.GameResult,
+                    Reconnection = false,
+                    GameInfo = null,
                 };
 
-                /*
-                 * TODO: This seems to disconnect the player from the server
-                    2019-04-29 17:52:13.373+03:00 [INF] Received Game Assignment Notification  (assigned=True assigning=False reassigning=False)
-                    2019-04-29 17:52:13.373+03:00 [INF] Unassigned from game 0a101c39-5cc7-077f (wss://208.94.25.140:6148) [RobotFactory_Deathmatch PvP GenericPvP]
-                 */
-                clientToRemove.Send(notify);
+                clientToRemove.Send(assignmentNotification);
             }
 
             
