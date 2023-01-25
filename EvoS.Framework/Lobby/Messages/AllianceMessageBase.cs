@@ -74,7 +74,18 @@ public class AllianceMessageBase : MessageBase
 		}
 		else
 		{
-			o = JsonConvert.DeserializeObject<T>(reader.ReadString());
+			log.Info($"Method {name} not found while deserializing {o.GetType().Name}");
+			String msg = reader.ReadString();
+
+			try
+			{
+				o = JsonConvert.DeserializeObject<T>(msg);
+			}
+			catch
+			{
+				log.Error("Fallback: an error ocurred on deserialize");
+				log.Error(msg);
+			}
 		}
 	}
 }

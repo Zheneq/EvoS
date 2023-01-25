@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using EvoS.Framework.Constants.Enums;
+using EvoS.Framework.Network.Unity;
 
 namespace EvoS.Framework.Network.Static
 {
@@ -456,5 +457,204 @@ namespace EvoS.Framework.Network.Static
         public int RankedSortKarmaDelta;
         public float UsedMMR;
         public float TotalBadgePoints;
+
+        public void Deserialize(NetworkReader reader)
+        {
+            AccountId = reader.ReadInt64();
+            InGameName = reader.ReadString();
+            CharacterPlayed = (CharacterType)reader.ReadByte();
+            FreelancerSelectionOnus = (FreelancerSelectionOnus)reader.ReadByte();
+            CharacterName = reader.ReadString();
+            CharacterSkinIndex = reader.ReadInt32();
+            Team = reader.ReadInt32();
+            TeamSlot = reader.ReadInt32();
+            PlayerId = reader.ReadInt32();
+            PrepCatalystName = reader.ReadString();
+            DashCatalystName = reader.ReadString();
+            CombatCatalystName = reader.ReadString();
+            PrepCatalystUsed = reader.ReadBoolean();
+            DashCatalystUsed = reader.ReadBoolean();
+            CombatCatalystUsed = reader.ReadBoolean();
+            PowerupsCollected = reader.ReadInt32();
+            PlayerGameResult = (PlayerGameResult)reader.ReadByte();
+            AllianceMessageBase.DeserializeObject(out MatchResults, reader);
+            TotalGameTurns = reader.ReadInt32();
+            TotalPotentialAbsorb = reader.ReadInt32();
+            TotalTechPointsGained = reader.ReadInt32();
+            TotalHealingReceived = reader.ReadInt32();
+            TotalAbsorbReceived = reader.ReadInt32();
+            NumKills = reader.ReadInt32();
+            NumDeaths = reader.ReadInt32();
+            NumAssists = reader.ReadInt32();
+            TotalPlayerDamage = reader.ReadInt32();
+            TotalPlayerHealing = reader.ReadInt32();
+            TotalPlayerAbsorb = reader.ReadInt32();
+            TotalPlayerDamageReceived = reader.ReadInt32();
+            TotalTeamDamageReceived = reader.ReadInt32();
+            NetDamageAvoidedByEvades = reader.ReadInt32();
+            DamageAvoidedByEvades = reader.ReadInt32();
+            DamageInterceptedByEvades = reader.ReadInt32();
+            MyIncomingDamageReducedByCover = reader.ReadInt32();
+            MyOutgoingDamageReducedByCover = reader.ReadInt32();
+            MyOutgoingExtraDamageFromEmpowered = reader.ReadInt32();
+            MyOutgoingReducedDamageFromWeakened = reader.ReadInt32();
+            TeamOutgoingDamageIncreasedByEmpoweredFromMe = reader.ReadInt32();
+            TeamIncomingDamageReducedByWeakenedFromMe = reader.ReadInt32();
+            MovementDeniedByMe = reader.ReadSingle();
+            EnergyGainPerTurn = reader.ReadSingle();
+            DamageEfficiency = reader.ReadSingle();
+            KillParticipation = reader.ReadSingle();
+            EffectiveHealing = reader.ReadInt32();
+            EffectiveHealingFromAbility = reader.ReadInt32();
+            TeamExtraEnergyByEnergizedFromMe = reader.ReadInt32();
+            EnemiesSightedPerTurn = reader.ReadSingle();
+            CharacterSpecificStat = reader.ReadInt32();
+            int num = reader.ReadInt32();
+            FreelancerStats = new List<int>();
+            for (int i = 0; i < num; i++)
+            {
+                FreelancerStats.Add(reader.ReadInt32());
+            }
+            BaseISOGained = reader.ReadInt32();
+            BaseFreelancerCurrencyGained = reader.ReadInt32();
+            BaseXPGainedAccount = reader.ReadInt32();
+            BaseXPGainedCharacter = reader.ReadInt32();
+            WinFreelancerCurrencyGained = reader.ReadInt32();
+            FirstWinFreelancerCurrencyGained = reader.ReadInt32();
+            EventBonusFreelancerCurrencyGained = reader.ReadInt32();
+            GGPacksSelfUsed = reader.ReadInt32();
+            GGNonSelfCount = reader.ReadInt32();
+            GGISOGained = reader.ReadInt32();
+            GGFreelancerCurrencyGained = reader.ReadInt32();
+            GGXPGainedAccount = reader.ReadInt32();
+            GGXPGainedCharacter = reader.ReadInt32();
+            ConsumableXPGainedCharacter = reader.ReadInt32();
+            PlayWithFriendXPGainedAccount = reader.ReadInt32();
+            PlayWithFriendXPGainedCharacter = reader.ReadInt32();
+            QuestXPGainedAccount = reader.ReadInt32();
+            QuestXPGainedCharacter = reader.ReadInt32();
+            EventBonusXPGainedAccount = reader.ReadInt32();
+            EventBonusXPGainedCharacter = reader.ReadInt32();
+            FirstWinXpGainedAccount = reader.ReadInt32();
+            FirstWinXpGainedCharacter = reader.ReadInt32();
+            QueueTimeXpGainedAccount = reader.ReadInt32();
+            QueueTimeXpGainedCharacter = reader.ReadInt32();
+            FreelancerOwnedXPAmount = reader.ReadInt32();
+            ActorIndex = reader.ReadInt32();
+            QueueTime = TimeSpan.FromTicks(reader.ReadInt64());
+            num = reader.ReadInt32();
+            AbilityGameSummaryList = new List<AbilityGameSummary>();
+            for (int j = 0; j < num; j++)
+            {
+                AbilityGameSummary abilityGameSummary = new AbilityGameSummary();
+                abilityGameSummary.Deserialize(reader);
+                AbilityGameSummaryList.Add(abilityGameSummary);
+            }
+            num = reader.ReadInt32();
+            TimebankUsage = new List<int>();
+            for (int k = 0; k < num; k++)
+            {
+                int item = reader.ReadInt32();
+                TimebankUsage.Add(item);
+            }
+            TotalBadgePoints = reader.ReadSingle();
+        }
+
+        // added in rogues
+        public void Serialize(NetworkWriter writer)
+        {
+            writer.Write(AccountId);
+            writer.Write(InGameName);
+            writer.Write((byte)CharacterPlayed);
+            writer.Write((byte)FreelancerSelectionOnus);
+            writer.Write(CharacterName);
+            writer.Write(CharacterSkinIndex);
+            writer.Write(Team);
+            writer.Write(TeamSlot);
+            writer.Write(PlayerId);
+            writer.Write(PrepCatalystName);
+            writer.Write(DashCatalystName);
+            writer.Write(CombatCatalystName);
+            writer.Write(PrepCatalystUsed);
+            writer.Write(DashCatalystUsed);
+            writer.Write(CombatCatalystUsed);
+            writer.Write(PowerupsCollected);
+            writer.Write((byte)PlayerGameResult);
+            AllianceMessageBase.SerializeObject(MatchResults, writer);
+            writer.Write(TotalGameTurns);
+            writer.Write(TotalPotentialAbsorb);
+            writer.Write(TotalTechPointsGained);
+            writer.Write(TotalHealingReceived);
+            writer.Write(TotalAbsorbReceived);
+            writer.Write(NumKills);
+            writer.Write(NumDeaths);
+            writer.Write(NumAssists);
+            writer.Write(TotalPlayerDamage);
+            writer.Write(TotalPlayerHealing);
+            writer.Write(TotalPlayerAbsorb);
+            writer.Write(TotalPlayerDamageReceived);
+            writer.Write(TotalTeamDamageReceived);
+            writer.Write(NetDamageAvoidedByEvades);
+            writer.Write(DamageAvoidedByEvades);
+            writer.Write(DamageInterceptedByEvades);
+            writer.Write(MyIncomingDamageReducedByCover);
+            writer.Write(MyOutgoingDamageReducedByCover);
+            writer.Write(MyOutgoingExtraDamageFromEmpowered);
+            writer.Write(MyOutgoingReducedDamageFromWeakened);
+            writer.Write(TeamOutgoingDamageIncreasedByEmpoweredFromMe);
+            writer.Write(TeamIncomingDamageReducedByWeakenedFromMe);
+            writer.Write(MovementDeniedByMe);
+            writer.Write(EnergyGainPerTurn);
+            writer.Write(DamageEfficiency);
+            writer.Write(KillParticipation);
+            writer.Write(EffectiveHealing);
+            writer.Write(EffectiveHealingFromAbility);
+            writer.Write(TeamExtraEnergyByEnergizedFromMe);
+            writer.Write(EnemiesSightedPerTurn);
+            writer.Write(CharacterSpecificStat);
+            writer.Write(FreelancerStats.Count);
+            foreach (int num in FreelancerStats)
+            {
+                writer.Write(num);
+            }
+            writer.Write(BaseISOGained);
+            writer.Write(BaseFreelancerCurrencyGained);
+            writer.Write(BaseXPGainedAccount);
+            writer.Write(BaseXPGainedCharacter);
+            writer.Write(WinFreelancerCurrencyGained);
+            writer.Write(FirstWinFreelancerCurrencyGained);
+            writer.Write(EventBonusFreelancerCurrencyGained);
+            writer.Write(GGPacksSelfUsed);
+            writer.Write(GGNonSelfCount);
+            writer.Write(GGISOGained);
+            writer.Write(GGFreelancerCurrencyGained);
+            writer.Write(GGXPGainedAccount);
+            writer.Write(GGXPGainedCharacter);
+            writer.Write(ConsumableXPGainedCharacter);
+            writer.Write(PlayWithFriendXPGainedAccount);
+            writer.Write(PlayWithFriendXPGainedCharacter);
+            writer.Write(QuestXPGainedAccount);
+            writer.Write(QuestXPGainedCharacter);
+            writer.Write(EventBonusXPGainedAccount);
+            writer.Write(EventBonusXPGainedCharacter);
+            writer.Write(FirstWinXpGainedAccount);
+            writer.Write(FirstWinXpGainedCharacter);
+            writer.Write(QueueTimeXpGainedAccount);
+            writer.Write(QueueTimeXpGainedCharacter);
+            writer.Write(FreelancerOwnedXPAmount);
+            writer.Write(ActorIndex);
+            writer.Write(QueueTime.Ticks);
+            writer.Write(AbilityGameSummaryList.Count);
+            foreach (AbilityGameSummary abilityGameSummary in AbilityGameSummaryList)
+            {
+                abilityGameSummary.Serialize(writer);
+            }
+            writer.Write(TimebankUsage.Count);
+            foreach (int num2 in TimebankUsage)
+            {
+                writer.Write(num2);
+            }
+            writer.Write(TotalBadgePoints);
+        }
     }
 }
