@@ -62,7 +62,9 @@ namespace EvoS.DirectoryServer.Account
                 UIStates = new Dictionary<AccountComponent.UIStateIdentifier, int>
                 {
                     { AccountComponent.UIStateIdentifier.HasViewedFluxHighlight, 1 },
-                    { AccountComponent.UIStateIdentifier.HasViewedGGHighlight, 1 }
+                    { AccountComponent.UIStateIdentifier.HasViewedGGHighlight, 1 },
+                    // Do not Show flashy New text next to store tab
+                    { AccountComponent.UIStateIdentifier.CashShopFeaturedItemsVersionViewed, 14 }
                 },
                 UnlockedEmojiIDs = InventoryManager.GetUnlockedEmojiIDs(accountId),
                 UnlockedLoadingScreenBackgroundIdsToActivatedState = InventoryManager.GetActivatedLoadingScreenBackgroundIds(accountId),

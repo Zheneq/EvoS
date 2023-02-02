@@ -73,7 +73,7 @@ namespace CentralServer.LobbyServer
             RegisterHandler(new EvosMessageDelegate<SelectTitleRequest>(HandleSelectTitleRequest));
             RegisterHandler(new EvosMessageDelegate<UseOverconRequest>(HandleUseOverconRequest));
             RegisterHandler(new EvosMessageDelegate<UseGGPackRequest>(HandleUseGGPackRequest));
-
+            RegisterHandler(new EvosMessageDelegate<UpdateUIStateRequest>(HandleUpdateUIStateRequest));
 
             /*
             RegisterHandler(new EvosMessageDelegate<PurchaseModResponse>(HandlePurchaseModRequest));
@@ -782,6 +782,15 @@ namespace CentralServer.LobbyServer
                     }
                 }
             }
+        }
+
+        //Allows to get rid of the flashy New tag next to store for existing users
+        public void HandleUpdateUIStateRequest(UpdateUIStateRequest request)
+        {
+            PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
+            log.Info($"Player {AccountId} requested UIState {request.UIState} {request.StateValue}");
+            account.AccountComponent.UIStates.Add(request.UIState,request.StateValue);
+            DB.Get().AccountDao.UpdateAccount(account);
         }
 
         public void OnLeaveGroup()
