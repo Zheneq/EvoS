@@ -2,3 +2,4 @@
 LobbyServerAddress: 127.0.0.1
 LobbyServerPort: 6060
 GameServerExecutable: ""
+GitHubCommits: https://api.github.com/repos/Zheneq/EvoS/commits?per_page=100
