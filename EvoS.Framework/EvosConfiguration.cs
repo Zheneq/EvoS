@@ -14,6 +14,7 @@ namespace EvoS.Framework
         public int LobbyServerPort = 6060;
         public string GameServerExecutable = "";
         public string GameServerExecutableArgs = "";
+        public string GitHubCommits = "https://api.github.com/repos/Zheneq/EvoS/commits?per_page=100";
         public bool AutoRegisterNewUsers = true;
         public DBConfig Database = new DBConfig();
 
@@ -58,7 +59,12 @@ namespace EvoS.Framework
         {
             return GetInstance().GameServerExecutableArgs;
         }
-        
+
+        public static string GetGitHubCommits()
+        {
+            return GetInstance().GitHubCommits;
+        }
+
         public static bool GetAutoRegisterNewUsers()
         {
             return GetInstance().AutoRegisterNewUsers;

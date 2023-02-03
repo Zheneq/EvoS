@@ -2,12 +2,15 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net;
+using System.Text;
 using CentralServer.LobbyServer.Character;
 using CentralServer.LobbyServer.Config;
 using CentralServer.LobbyServer.Friend;
 using CentralServer.LobbyServer.Gamemode;
 using CentralServer.LobbyServer.Group;
 using CentralServer.LobbyServer.Quest;
+using EvoS.Framework;
 using EvoS.Framework.Constants.Enums;
 using EvoS.Framework.DataAccess;
 using EvoS.Framework.Misc;
@@ -16,6 +19,7 @@ using EvoS.Framework.Network.NetworkMessages;
 using EvoS.Framework.Network.Static;
 using EvoS.Framework.Network.WebSocket;
 using log4net;
+using Newtonsoft.Json.Linq;
 using WebSocketSharp;
 
 namespace CentralServer.LobbyServer
@@ -182,13 +186,36 @@ namespace CentralServer.LobbyServer
 
         private ServerMessageOverrides GetServerMessageOverrides()
         {
+            string PatchNotesText = ConfigManager.PatchNotesText;
+
+            try
+            {
+                using WebClient wc = new WebClient();
+                wc.Headers.Set("User-Agent", "AtlasReactor");
+                string json = wc.DownloadString(EvosConfiguration.GetGitHubCommits());
+                JArray array = JArray.Parse(json);
+                StringBuilder parsed = new StringBuilder();
+                foreach (JObject obj in array)
+                {
+                    string sha = obj["sha"].ToString();
+                    string author = obj["commit"]["author"]["name"].ToString();
+                    string message = obj["commit"]["message"].ToString();
+                    parsed.Append($"[{sha.Substring(0, 7)}] [{author}]\n{message}\n\n");
+                }
+                PatchNotesText = parsed.ToString();
+            }
+            catch (Exception e)
+            {
+                log.Info($"Could not get github commits {e.Message}");
+            }
+
             return new ServerMessageOverrides
             {
                 MOTDPopUpText = ConfigManager.MOTDPopUpText, // Popup message when client connects to lobby
                 MOTDText = ConfigManager.MOTDText, // "alert" text
                 ReleaseNotesHeader = ConfigManager.PatchNotesHeader,
                 ReleaseNotesDescription = ConfigManager.PatchNotesDescription,
-                ReleaseNotesText = ConfigManager.PatchNotesText,
+                ReleaseNotesText = PatchNotesText, // ConfigManager.PatchNotesText,
             };
         }
 

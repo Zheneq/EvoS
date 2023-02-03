@@ -95,37 +95,39 @@ namespace CentralServer.LobbyServer.Matchmaking
 
             foreach (GameSubType subType in MatchmakingQueueInfo.GameConfig.SubTypes)
             {
-                // full greed for now
+                List<MatchmakingGroupInfo> groups = new List<MatchmakingGroupInfo>();
+
                 lock (GroupManager.Lock)
                 {
-                    List<GroupInfo> groups = QueuedGroups.Keys
-                        .Select(GroupManager.GetGroup)
-                        .Where(group => group != null)
-                        .ToList();
-                    List<GroupInfo> teamA = new List<GroupInfo>();
-                    List<GroupInfo> teamB = new List<GroupInfo>();
-                    int teamANum = 0;
-                    int teamBNum = 0;
-                    foreach (GroupInfo group in groups)
+                    bool success = false;
+                    // TODO: this add teams one by one until it has enough to form a game, QueuedGroups is a Dictionary
+                    // so Keys might be unsorted (no guarantee of oldest player in queue will find a game first)
+                    foreach (int groupId in QueuedGroups.Keys)
                     {
-                        if (teamANum + group.Members.Count <= subType.TeamAPlayers)
-                        {
-                            teamANum += group.Members.Count;
-                            teamA.Add(group);
-                        }
-                        else if (teamBNum + group.Members.Count <= subType.TeamBPlayers)
-                        {
-                            teamBNum += group.Members.Count;
-                            teamB.Add(group);
-                        }
-                        if (teamANum == subType.TeamAPlayers && teamBNum == subType.TeamBPlayers)
-                        {
-                            break;
-                        }
+                        // Add new groups secuentially
+                        MatchmakingGroupInfo currentGroup = new MatchmakingGroupInfo(groupId);
+                        groups.Add(currentGroup);
+                        success = TryFormTeams(subType, ref groups);
+                        if (success) break;
                     }
 
-                    if (teamANum == subType.TeamAPlayers && teamBNum == subType.TeamBPlayers)
+                    if (success)
                     {
+                        List<GroupInfo> teamA = new List<GroupInfo>();
+                        List<GroupInfo> teamB = new List<GroupInfo>();
+
+                        foreach (MatchmakingGroupInfo group in groups)
+                        {
+                            if (group.Team == Team.TeamA)
+                            {
+                                teamA.Add(GroupManager.GetGroup(group.GroupID));
+                            }
+                            else if (group.Team == Team.TeamB)
+                            {
+                                teamB.Add(GroupManager.GetGroup(group.GroupID));
+                            }
+                        }
+
                         if (!CheckGameServerAvailable())
                         {
                             log.Warn("No available game server to start a match");
@@ -147,6 +149,69 @@ namespace CentralServer.LobbyServer.Matchmaking
                     }
                 }
             }
+        }
+
+        /// <summary>
+        /// Tries to form a team with the list of groups specified. The teams are not balanced at all. it just looks for group size
+        /// </summary>
+        /// <param name="subType">GameSubtype of the game we are trying to make</param>
+        /// <param name="matchmakingGroups">available groups to form a team</param>
+        /// <returns>true if a team was formed, otherwise returns false</returns>
+        private static bool TryFormTeams(GameSubType subType, ref List<MatchmakingGroupInfo> matchmakingGroups)
+        {
+            bool success = false;
+            int teamANum = GetPlayersInTeam(Team.TeamA, matchmakingGroups);
+            int teamBNum = GetPlayersInTeam(Team.TeamB, matchmakingGroups);
+
+            // Full team? Success!
+            if (teamANum == subType.TeamAPlayers && teamBNum == subType.TeamBPlayers) return true;
+
+            foreach (MatchmakingGroupInfo group in matchmakingGroups)
+            {
+                // Team Invalid is used as "no team asigned"
+                if (group.Team != Team.Invalid) continue;
+
+                // Try to place the team either in Team A or B
+                if (teamANum + group.Players <= subType.TeamAPlayers)
+                {
+                    group.Team = Team.TeamA;
+                }
+                else if (teamBNum + group.Players <= subType.TeamBPlayers)
+                {
+                    group.Team = Team.TeamB;
+                }
+
+                // If a team was assigned for this group, we try recursion to assign a new group
+                if(group.Team != Team.Invalid)
+                {
+                    success = TryFormTeams(subType, ref matchmakingGroups);
+                    if (success) return true;
+
+                    // If we couln't form a match, this team is assigned as invalid for next iteration
+                    group.Team = Team.Invalid;
+                }
+            }
+            return success;
+        }
+
+        /// <summary>
+        /// Counts how many players are in the groups list that are assigned to the specified team
+        /// </summary>
+        /// <param name="team"></param>
+        /// <param name="groups"></param>
+        /// <returns>number of player in team</returns>
+        private static int GetPlayersInTeam(Team team, List<MatchmakingGroupInfo> groups)
+        {
+            int count = 0;
+            foreach (MatchmakingGroupInfo groupInfo in groups)
+            {
+                if (groupInfo.Team == team)
+                {
+                    count += groupInfo.Players;
+                }
+            }
+
+            return count;
         }
 
         public bool CheckGameServerAvailable()

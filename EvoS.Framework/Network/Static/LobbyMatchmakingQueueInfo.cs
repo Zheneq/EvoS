@@ -7,12 +7,19 @@ namespace EvoS.Framework.Network.Static
     [EvosMessage(744)]
     public class LobbyMatchmakingQueueInfo
     {
+        public bool ShowQueueSize;
+        public int QueuedPlayers;
+        public float PlayersPerMinute;
+        public TimeSpan AverageWaitTime = TimeSpan.FromMinutes(5.0);
+        public LobbyGameConfig GameConfig;
+        public QueueStatus QueueStatus;
+
+        public GameType GameType => GameConfig?.GameType ?? GameType.None;
+
         public override string ToString()
         {
             return (GameConfig != null) ? GameConfig.ToString() : "unknown";
         }
-
-        public GameType GameType => GameConfig?.GameType ?? GameType.None;
 
         public LobbyMatchmakingQueueInfo Clone()
         {
@@ -76,11 +83,6 @@ namespace EvoS.Framework.Network.Static
             }
         }
 
-        public bool ShowQueueSize;
-        public int QueuedPlayers;
-        public float PlayersPerMinute;
-        public TimeSpan AverageWaitTime = TimeSpan.FromMinutes(5.0);
-        public LobbyGameConfig GameConfig;
-        public QueueStatus QueueStatus;
+        
     }
 }

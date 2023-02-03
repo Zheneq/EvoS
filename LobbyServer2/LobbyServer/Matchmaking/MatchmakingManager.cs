@@ -21,6 +21,7 @@ namespace CentralServer.LobbyServer.Matchmaking
     public static class MatchmakingManager
     {
         private static readonly ILog log = LogManager.GetLogger(typeof(MatchmakingManager));
+        private static readonly object queueUpdateRunning = new object();
         
         // List of matchmaking queues by game mode (practive, coop, pvp, ranked and custom)
         private static Dictionary<GameType, MatchmakingQueue> Queues = new Dictionary<GameType, MatchmakingQueue>()
@@ -37,10 +38,14 @@ namespace CentralServer.LobbyServer.Matchmaking
         /// </summary>
         public static void Update()
         {
-            foreach (var queue in Queues.Values)
+            lock (queueUpdateRunning)
             {
-                queue.Update();
+                foreach (var queue in Queues.Values)
+                {
+                    queue.Update();
+                }
             }
+            
         }
 
         /// <summary>
