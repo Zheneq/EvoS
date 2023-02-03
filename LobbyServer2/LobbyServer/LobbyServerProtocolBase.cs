@@ -200,7 +200,13 @@ namespace CentralServer.LobbyServer
                     string sha = obj["sha"].ToString();
                     string author = obj["commit"]["author"]["name"].ToString();
                     string message = obj["commit"]["message"].ToString();
-                    parsed.Append($"[{sha.Substring(0, 7)}] [{author}]\n{message}\n\n");
+                    List<string> parts = message.Split('\n').ToList();
+                    string title = parts[0];
+                    parts.RemoveAt(0);
+                    message = String.Join('\n', parts);
+                    parsed.AppendLine($"<size=20>[{sha.Substring(0, 7)}] <color=#ff66ff>{author}</color></size>");
+                    parsed.AppendLine($"<size=30><b>{title}</b></size>");
+                    parsed.AppendLine($"{message}\n\n\n");
                 }
                 PatchNotesText = parsed.ToString();
             }

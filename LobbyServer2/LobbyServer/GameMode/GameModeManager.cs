@@ -10,7 +10,7 @@ namespace CentralServer.LobbyServer.Gamemode
 {
     class GameModeManager
     {
-        private const string ConfigPath = @"Config\GameSubTypes\";
+        private const string ConfigPath = @"Config/GameSubTypes/";
         private static readonly Dictionary<GameType, string> ConfigFiles = new Dictionary<GameType, string>()
         {
             { GameType.PvP, "1v1PvP.json" }

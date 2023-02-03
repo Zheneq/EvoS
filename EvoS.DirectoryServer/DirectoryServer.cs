@@ -48,7 +48,7 @@ namespace EvoS.DirectoryServer
         public void Configure(IApplicationBuilder app)
         {
             var serverAddressesFeature = app.ServerFeatures.Get<IServerAddressesFeature>();
-            log.Info("Started DirectoryServer on '0.0.0.0:6050'");
+            log.Info($"Started DirectoryServer on '0.0.0.0:{EvosConfiguration.GetDirectoryServerPort()}'");
 
             app.Run((context) =>
             {
