@@ -14,6 +14,7 @@ using EvoS.Framework.Misc;
 using EvoS.Framework.Network.NetworkMessages;
 using EvoS.Framework.Network.Static;
 using EvoS.DirectoryServer.Inventory;
+using EvoS.Framework;
 using log4net;
 using Newtonsoft.Json;
 using WebSocketSharp;
@@ -74,6 +75,7 @@ namespace CentralServer.LobbyServer
             RegisterHandler(new EvosMessageDelegate<UseOverconRequest>(HandleUseOverconRequest));
             RegisterHandler(new EvosMessageDelegate<UseGGPackRequest>(HandleUseGGPackRequest));
             RegisterHandler(new EvosMessageDelegate<UpdateUIStateRequest>(HandleUpdateUIStateRequest));
+            RegisterHandler(new EvosMessageDelegate<GroupChatRequest>(HandleGroupChatRequest));
 
             /* TODO: adding these to
             RegisterHandler(new EvosMessageDelegate<PurchaseModResponse>(HandlePurchaseModRequest));
@@ -639,6 +641,16 @@ namespace CentralServer.LobbyServer
                 Type = joinType,
                 // RequestId = TODO
             });
+            if (EvosConfiguration.GetPingOnGroupRequest() && !friend.IsInGroup() && !friend.IsInGame())
+            {
+                friend.Send(new ChatNotification
+                {
+                    SenderAccountId = AccountId,
+                    SenderHandle = requester.Handle,
+                    ConsoleMessageType = ConsoleMessageType.WhisperChat,
+                    Text = "[Group request]"
+                });
+            }
             
             log.Info($"{AccountId}/{requester.Handle} invited {friend.AccountId}/{request.FriendHandle} to group {group.GroupId}");
             Send(new GroupInviteResponse
@@ -889,6 +901,34 @@ namespace CentralServer.LobbyServer
             }
 
             return 0;
+        }
+
+        public void HandleGroupChatRequest(GroupChatRequest request)
+        {
+            Send(new GroupChatResponse
+            {
+                Text = request.Text,
+                ResponseId = request.RequestId,
+                Success = true
+            });
+
+            PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
+
+            ChatNotification message = new ChatNotification()
+            {
+                SenderAccountId = AccountId,
+                EmojisAllowed = request.RequestedEmojis,
+                CharacterType = account.AccountComponent.LastCharacter,
+                ConsoleMessageType = ConsoleMessageType.GroupChat,
+                SenderHandle = account.Handle,
+                Text = request.Text
+            };
+
+            foreach (long accountID in GroupManager.GetPlayerGroup(AccountId).Members)
+            {
+                LobbyServerProtocol connection = SessionManager.GetClientConnection(accountID);
+                connection.Send(message);
+            }
         }
 
         public void OnLeaveGroup()

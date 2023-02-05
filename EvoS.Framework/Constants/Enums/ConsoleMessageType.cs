@@ -17,6 +17,6 @@ namespace EvoS.Framework.Constants.Enums
         BroadcastMessage,
         PingChat,
         ScriptedChat,
-        Unicode001D
+        NUM_VALUES
     }
 }

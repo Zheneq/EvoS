@@ -29,7 +29,7 @@ namespace CentralServer.BridgeServer
         public GameStatus GameStatus { get; private set; } = GameStatus.Stopped;
         public string ProcessCode { get; } = "Artemis" + DateTime.Now.Ticks;
         public string Name => SessionInfo?.UserName ?? "ATLAS";
-        public string BuildVersion { get; private set; } = "";
+        public string BuildVersion => SessionInfo?.BuildVersion ?? "";
 
         public LobbyServerPlayerInfo GetServerPlayerInfo(long accountId)
         {
@@ -99,7 +99,6 @@ namespace CentralServer.BridgeServer
                 Address = data.Split(":")[0];
                 Port = Convert.ToInt32(data.Split(":")[1]);
                 SessionInfo = request.SessionInfo;
-                BuildVersion = GetChangelistNumberFromFullVersionString(SessionInfo);
                 ServerManager.AddServer(this);
 
                 Send(new RegisterGameServerResponse
@@ -256,13 +255,6 @@ namespace CentralServer.BridgeServer
             }
 
             return num;
-        }
-
-        private static string GetChangelistNumberFromFullVersionString(LobbySessionInfo sessionInfo)
-        {
-            // see BuildVersion#FullVersionString in hc
-            string[] buildVersionParts = sessionInfo.BuildVersion.Split('-', 5);
-            return buildVersionParts.Length >= 5 ? buildVersionParts[4] : "";
         }
     }
 }

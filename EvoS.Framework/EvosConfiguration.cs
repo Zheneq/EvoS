@@ -14,9 +14,11 @@ namespace EvoS.Framework
         public int LobbyServerPort = 6060;
         public string GameServerExecutable = "";
         public string GameServerExecutableArgs = "";
-        public string GitHubCommits = "https://api.github.com/repos/Zheneq/EvoS/commits?per_page=100";
         public bool AutoRegisterNewUsers = true;
         public DBConfig Database = new DBConfig();
+        
+        public string GitHubCommits = "https://api.github.com/repos/Zheneq/EvoS/commits?per_page=100";
+        public bool PingOnGroupRequest = true;
 
         private static EvosConfiguration GetInstance()
         {
@@ -73,6 +75,11 @@ namespace EvoS.Framework
         public static DBConfig GetDBConfig()
         {
             return GetInstance().Database;
+        }
+
+        public static bool GetPingOnGroupRequest()
+        {
+            return GetInstance().PingOnGroupRequest;
         }
 
         public enum DBType
