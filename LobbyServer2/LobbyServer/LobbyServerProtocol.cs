@@ -75,7 +75,7 @@ namespace CentralServer.LobbyServer
             RegisterHandler(new EvosMessageDelegate<UseGGPackRequest>(HandleUseGGPackRequest));
             RegisterHandler(new EvosMessageDelegate<UpdateUIStateRequest>(HandleUpdateUIStateRequest));
 
-            /*
+            /* TODO: adding these to
             RegisterHandler(new EvosMessageDelegate<PurchaseModResponse>(HandlePurchaseModRequest));
             RegisterHandler(new EvosMessageDelegate<PurchaseTauntRequest>(HandlePurchaseTauntRequest));
             RegisterHandler(new EvosMessageDelegate<PurchaseBannerBackgroundRequest>(HandlePurchaseBannerRequest));
@@ -83,6 +83,9 @@ namespace CentralServer.LobbyServer
             RegisterHandler(new EvosMessageDelegate<PurchaseChatEmojiRequest>(HandlePurchaseChatEmoji));
             RegisterHandler(new EvosMessageDelegate<PurchaseLoadoutSlotRequest>(HandlePurchaseLoadoutSlot));
             */
+
+            RegisterHandler(new EvosMessageDelegate<PurchaseAbilityVfxRequest>(HandlePurchasAbilityVfx));
+            
         }
 
         protected override void HandleClose(CloseEventArgs e)
@@ -791,6 +794,101 @@ namespace CentralServer.LobbyServer
             log.Info($"Player {AccountId} requested UIState {request.UIState} {request.StateValue}");
             account.AccountComponent.UIStates.Add(request.UIState,request.StateValue);
             DB.Get().AccountDao.UpdateAccount(account);
+        }
+
+        private void HandlePurchasAbilityVfx(PurchaseAbilityVfxRequest request)
+        {
+            log.Info($"Player {AccountId} trying to purchase vfx {request.VfxId} with {request.CurrencyType} for character {request.CharacterType} and ability {request.AbilityId} ");
+
+            //Get the users account
+            PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
+
+            // Never trust the client double check plus we need this info to deduct it from account
+            int cost = GetCostForFvx(request.VfxId, request.AbilityId);
+
+            if (account.BankComponent.CurrentAmounts.GetCurrentAmount(request.CurrencyType) < cost /*|| cost == 0*/)
+            {
+                PurchaseAbilityVfxResponse failedResponse = new PurchaseAbilityVfxResponse()
+                {
+                    ResponseId = request.RequestId,
+                    Result = PurchaseResult.Failed,
+                    CurrencyType = request.CurrencyType,
+                    CharacterType = request.CharacterType,
+                    AbilityId = request.AbilityId,
+                    VfxId = request.VfxId
+                };
+
+                Send(failedResponse);
+
+                // Notify in chat
+                Send(new ChatNotification
+                {
+                    ConsoleMessageType = ConsoleMessageType.SystemMessage,
+                    Text = "Purchase unsuccessful insufficient funds."
+                });
+
+                return;
+            }
+
+            PlayerAbilityVfxSwapData abilityVfxSwapData = new PlayerAbilityVfxSwapData() 
+            { 
+                AbilityId = request.AbilityId,
+                AbilityVfxSwapID = request.VfxId
+            };
+
+            account.CharacterData[request.CharacterType].CharacterComponent.AbilityVfxSwaps.Add(abilityVfxSwapData);
+
+            account.BankComponent.ChangeValue(request.CurrencyType, -cost, $"Purchase vfx");
+
+            DB.Get().AccountDao.UpdateAccount(account);
+
+            PurchaseAbilityVfxResponse response = new PurchaseAbilityVfxResponse()
+            {
+                ResponseId = request.RequestId,
+                Result = PurchaseResult.Success,
+                CurrencyType = request.CurrencyType,
+                CharacterType = request.CharacterType,
+                AbilityId = request.AbilityId,
+                VfxId = request.VfxId
+            };
+
+            Send(response);
+
+            // Notify in chat
+            Send(new ChatNotification
+            {
+                ConsoleMessageType = ConsoleMessageType.SystemMessage,
+                Text = "Purchase vfx succesfull."
+            });
+
+            // Update character
+            Send(new PlayerCharacterDataUpdateNotification()
+            {
+                CharacterData = account.CharacterData[request.CharacterType],
+            });
+
+            //Update account curency
+            Send(new PlayerAccountDataUpdateNotification()
+            {
+                AccountData = account,
+            });
+        }
+
+        private int GetCostForFvx(int vfxId, int AbilityId)
+        {
+            switch (vfxId)
+            {
+                case 400:
+                    if (AbilityId == 0) return 1500;
+                    if (AbilityId == 1 || AbilityId == 2 || AbilityId == 3) return 1200;
+                    if (AbilityId == 4) return 1500;
+                    break;
+                case 401:
+                    if (AbilityId == 0) return 1200;
+                    break;
+            }
+
+            return 0;
         }
 
         public void OnLeaveGroup()
