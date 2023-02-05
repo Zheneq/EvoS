@@ -19,7 +19,7 @@ public enum CharacterType
     FishMan = 20, // Finn
     Gremlins = 4, // Gremolitions
     Gryd = 32, // Unreleased
-    Iceborg = 38, // Bonn?
+    Iceborg = 38, // Vonn
     Manta = 26, // Phaedra
     Martyr = 23, // Orion
     NanoSmith = 5, // Helio

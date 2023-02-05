@@ -167,14 +167,16 @@ namespace EvoS.DirectoryServer
             foreach (PersistedCharacterData persistedCharacterData in account.CharacterData.Values)
             {
                 persistedCharacterData.CharacterComponent.UnlockSkinsAndTaunts(persistedCharacterData.CharacterType);
-                persistedCharacterData.ExperienceComponent.Level = 20;
+                if (EvosStoreConfiguration.IsAllCharactersForFree()) persistedCharacterData.ExperienceComponent.Level = EvosStoreConfiguration.GetCharactersLevels();
+                persistedCharacterData.CharacterComponent.UnlockVFX(persistedCharacterData.CharacterType);
             }
 
-            account.AccountComponent.UnlockedEmojiIDs = InventoryManager.GetUnlockedEmojiIDs(account.AccountId);
-            account.AccountComponent.UnlockedLoadingScreenBackgroundIdsToActivatedState = InventoryManager.GetActivatedLoadingScreenBackgroundIds(account.AccountId);
-            account.AccountComponent.UnlockedOverconIDs = InventoryManager.GetUnlockedOverconIDs(account.AccountId);
-            account.AccountComponent.UnlockedTitleIDs = InventoryManager.GetUnlockedTitleIDs(account.AccountId);
-            account.AccountComponent.UnlockedBannerIDs = InventoryManager.GetUnlockedBannerIDs(account.AccountId);
+            if (EvosStoreConfiguration.IsEmojisFree()) account.AccountComponent.UnlockedEmojiIDs = InventoryManager.GetUnlockedEmojiIDs(account.AccountId);
+            if (EvosStoreConfiguration.IsLoadingScreenBackgroundFree()) account.AccountComponent.UnlockedLoadingScreenBackgroundIdsToActivatedState = InventoryManager.GetActivatedLoadingScreenBackgroundIds(account.AccountId);
+            if (EvosStoreConfiguration.IsOverconsFree()) account.AccountComponent.UnlockedOverconIDs = InventoryManager.GetUnlockedOverconIDs(account.AccountId);
+            if (EvosStoreConfiguration.IsTitlesFree()) account.AccountComponent.UnlockedTitleIDs = InventoryManager.GetUnlockedTitleIDs(account.AccountId);
+            if (EvosStoreConfiguration.IsBannersFree()) account.AccountComponent.UnlockedBannerIDs = InventoryManager.GetUnlockedBannerIDs(account.AccountId);
+
             return true;
         }
 
