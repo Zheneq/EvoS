@@ -810,15 +810,15 @@ namespace CentralServer.LobbyServer
 
         private void HandlePurchasAbilityVfx(PurchaseAbilityVfxRequest request)
         {
-            log.Info($"Player {AccountId} trying to purchase vfx {request.VfxId} with {request.CurrencyType} for character {request.CharacterType} and ability {request.AbilityId} ");
-
             //Get the users account
             PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
 
             // Never trust the client double check plus we need this info to deduct it from account
-            int cost = GetCostForFvx(request.VfxId, request.AbilityId);
+            int cost = InventoryManager.GetVfxCost(request.VfxId, request.AbilityId);
 
-            if (account.BankComponent.CurrentAmounts.GetCurrentAmount(request.CurrencyType) < cost /*|| cost == 0*/)
+            log.Info($"Player {AccountId} trying to purchase vfx {request.VfxId} with {request.CurrencyType} for character {request.CharacterType} and ability {request.AbilityId} for price {cost}");
+
+            if (account.BankComponent.CurrentAmounts.GetCurrentAmount(request.CurrencyType) < cost)
             {
                 PurchaseAbilityVfxResponse failedResponse = new PurchaseAbilityVfxResponse()
                 {
@@ -831,13 +831,6 @@ namespace CentralServer.LobbyServer
                 };
 
                 Send(failedResponse);
-
-                // Notify in chat
-                Send(new ChatNotification
-                {
-                    ConsoleMessageType = ConsoleMessageType.SystemMessage,
-                    Text = "Purchase unsuccessful insufficient funds."
-                });
 
                 return;
             }
@@ -884,23 +877,6 @@ namespace CentralServer.LobbyServer
             {
                 AccountData = account,
             });
-        }
-
-        private int GetCostForFvx(int vfxId, int AbilityId)
-        {
-            switch (vfxId)
-            {
-                case 400:
-                    if (AbilityId == 0) return 1500;
-                    if (AbilityId == 1 || AbilityId == 2 || AbilityId == 3) return 1200;
-                    if (AbilityId == 4) return 1500;
-                    break;
-                case 401:
-                    if (AbilityId == 0) return 1200;
-                    break;
-            }
-
-            return 0;
         }
 
         public void HandleGroupChatRequest(GroupChatRequest request)

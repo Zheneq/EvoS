@@ -27,7 +27,7 @@ namespace EvoS.Framework.Network.Static
 
         public void UnlockSkinsAndTaunts(CharacterType character)
         {
-            if (EvosStoreConfiguration.IstauntsFree())
+            if (EvosStoreConfiguration.AreTauntsFree())
             {
                 Unlocked = true;
                 Taunts = new List<PlayerTauntData>();
@@ -41,7 +41,7 @@ namespace EvoS.Framework.Network.Static
 
         public void UnlockSkins(CharacterType characterType)
         {
-            if (EvosStoreConfiguration.IsSkinsFree())
+            if (EvosStoreConfiguration.AreSkinsFree())
             {
                 switch (characterType)
                 {
@@ -252,7 +252,7 @@ namespace EvoS.Framework.Network.Static
 
         public void UnlockVFX(CharacterType characterType)
         {
-            if (EvosStoreConfiguration.IsVfxFree())
+            if (EvosStoreConfiguration.AreVfxFree())
             {
                 switch (characterType)
                 {

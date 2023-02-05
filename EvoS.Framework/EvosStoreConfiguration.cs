@@ -5,17 +5,17 @@ namespace EvoS.Framework
     public class EvosStoreConfiguration
     {
         private static EvosStoreConfiguration Instance = null;
-        public bool vfxForFree = true;
-        public bool BannersForFree = true;
-        public bool tauntsForFree = true;
-        public bool abilityModsForFree = true;
-        public bool skinsForFree = true;
-        public bool emojisForFree = true;
-        public bool titlesForFree = true;
-        public bool loadingScreenBackgroundForFree = true;
-        public bool overconsForFree = true;
-        public bool allCharactersForFree = true;
-        public int charactersLevels = 20;
+        public bool FreeVfx = true;
+        public bool FreeBanners = true;
+        public bool FreeTaunts = true;
+        public bool FreeAbilitMods = true;
+        public bool FreeSkins = true;
+        public bool FreeEmojis = true;
+        public bool FreeTitles = true;
+        public bool FreeLoadingScreenBackground = true;
+        public bool FreeOvercons = true;
+        public bool FreeAllCharacters = true;
+        public int StartingCharactersLevel = 20;
 
         private static EvosStoreConfiguration GetInstance()
         {
@@ -24,65 +24,65 @@ namespace EvoS.Framework
                 var deserializer = new YamlDotNet.Serialization.DeserializerBuilder()
                     .Build();
 
-                Instance = deserializer.Deserialize<EvosStoreConfiguration>(File.ReadAllText("storeSettings.yaml"));
+                Instance = deserializer.Deserialize<EvosStoreConfiguration>(File.ReadAllText("Config/storeSettings.yaml"));
             }
 
             return Instance;
         }
 
-        public static bool IsVfxFree()
+        public static bool AreVfxFree()
         {
-            return GetInstance().vfxForFree;
+            return GetInstance().FreeVfx;
         }
 
-        public static bool IsBannersFree()
+        public static bool AreBannersFree()
         {
-            return GetInstance().BannersForFree;
+            return GetInstance().FreeBanners;
         }
 
-        public static bool IstauntsFree()
+        public static bool AreTauntsFree()
         {
-            return GetInstance().tauntsForFree;
+            return GetInstance().FreeTaunts;
         }
 
-        public static bool IsAbilitysFree()
+        public static bool AreAbilitysFree()
         {
-            return GetInstance().abilityModsForFree;
+            return GetInstance().FreeAbilitMods;
         }
 
-        public static bool IsSkinsFree()
+        public static bool AreSkinsFree()
         {
-            return GetInstance().skinsForFree;
+            return GetInstance().FreeSkins;
         }
 
-        public static bool IsEmojisFree()
+        public static bool AreEmojisFree()
         {
-            return GetInstance().emojisForFree;
+            return GetInstance().FreeEmojis;
         }
 
-        public static bool IsTitlesFree()
+        public static bool AreTitlesFree()
         {
-            return GetInstance().titlesForFree;
+            return GetInstance().FreeTitles;
         }
 
-        public static bool IsLoadingScreenBackgroundFree()
+        public static bool AreLoadingScreenBackgroundFree()
         {
-            return GetInstance().loadingScreenBackgroundForFree;
+            return GetInstance().FreeLoadingScreenBackground;
         }
 
-        public static bool IsOverconsFree()
+        public static bool AreOverconsFree()
         {
-            return GetInstance().overconsForFree;
+            return GetInstance().FreeOvercons;
         }
 
-        public static bool IsAllCharactersForFree()
+        public static bool AreAllCharactersForFree()
         {
-            return GetInstance().allCharactersForFree;
+            return GetInstance().FreeAllCharacters;
         }
 
-        public static int GetCharactersLevels()
+        public static int GetStartingCharactersLevel()
         {
-            return GetInstance().charactersLevels;
+            return GetInstance().StartingCharactersLevel;
         }
     }
 }

@@ -62,5 +62,99 @@ namespace EvoS.DirectoryServer.Inventory
             return fg.Contains(bannerID);
         }
 
+        internal class VfxCost
+        {
+            public int VfxId { get; set; }
+            public int AbilityId { get; set; }
+            public int Cost { get; set; }
+        }
+
+        public static int GetVfxCost(int vfxId, int AbilityId)
+        {
+            List<VfxCost> vfxList = new List<VfxCost>
+            {
+                // BattleMonk
+                new VfxCost { VfxId = 200, AbilityId = 0, Cost = 5000 },
+                // BazookaGirl
+                new VfxCost { VfxId = 300, AbilityId = 0, Cost = 5000 },
+                new VfxCost { VfxId = 300, AbilityId = 2, Cost = 1500 },
+                // DigitalSorceress
+                new VfxCost { VfxId = 400, AbilityId = 1, Cost = 5000 },
+                new VfxCost { VfxId = 400, AbilityId = 2, Cost = 1200 },
+                new VfxCost { VfxId = 400, AbilityId = 3, Cost = 1200 },
+                new VfxCost { VfxId = 400, AbilityId = 4, Cost = 1500 },
+                new VfxCost { VfxId = 401, AbilityId = 0, Cost = 1200 },
+                // Gremlins
+                new VfxCost { VfxId = 300, AbilityId = 0, Cost = 5000 },
+                // NanoSmith
+                new VfxCost { VfxId = 600, AbilityId = 3, Cost = 1500 },
+                new VfxCost { VfxId = 600, AbilityId = 0, Cost = 5000 },
+                // RageBeast 
+                new VfxCost { VfxId = 700, AbilityId = 0, Cost = 5000 },
+                // RobotAnimal
+                new VfxCost { VfxId = 800, AbilityId = 0, Cost = 5000 },
+                new VfxCost { VfxId = 800, AbilityId = 4, Cost = 1500 },
+                // Scoundrel
+                new VfxCost { VfxId = 900, AbilityId = 0, Cost = 5000 },
+                new VfxCost { VfxId = 900, AbilityId = 1, Cost = 1500 },
+                // Sniper
+                new VfxCost { VfxId = 1000, AbilityId = 0, Cost = 5000 },
+                new VfxCost { VfxId = 1000, AbilityId = 4, Cost = 1500 },
+                // SpaceMarine
+                new VfxCost { VfxId = 1100, AbilityId = 0, Cost = 5000 },
+                // Spark
+                new VfxCost { VfxId = 1200, AbilityId = 0, Cost = 5000 },
+                // TeleportingNinja
+                new VfxCost { VfxId = 1300, AbilityId = 0, Cost = 5000 },
+                // Thief
+                new VfxCost { VfxId = 1400, AbilityId = 0, Cost = 5000 },
+                // Tracker
+                new VfxCost { VfxId = 1500, AbilityId = 0, Cost = 5000 },
+                new VfxCost { VfxId = 1500, AbilityId = 1, Cost = 1200 },
+                // Trickster
+                new VfxCost { VfxId = 1600, AbilityId = 0, Cost = 1500 },
+                new VfxCost { VfxId = 1600, AbilityId = 1, Cost = 1200 },
+                // Rampart
+                new VfxCost { VfxId = 1800, AbilityId = 0, Cost = 5000 },
+                new VfxCost { VfxId = 1801, AbilityId = 3, Cost = 1200 },
+                // Claymore
+                new VfxCost { VfxId = 1900, AbilityId = 0, Cost = 5000 },
+                // Blaster
+                new VfxCost { VfxId = 2000, AbilityId = 0, Cost = 5000 },
+                // FishMan
+                new VfxCost { VfxId = 2100, AbilityId = 0, Cost = 5000 },
+                // Exo
+                new VfxCost { VfxId = 2200, AbilityId = 0, Cost = 5000 },
+                // Soldier (id 2301 ability 4 unable to get normaly)
+                new VfxCost { VfxId = 2300, AbilityId = 0, Cost = 5000 },
+                // Martyr
+                new VfxCost { VfxId = 2400, AbilityId = 0, Cost = 5000 },
+                // Sensei
+                new VfxCost { VfxId = 2500, AbilityId = 0, Cost = 5000 },
+                // Manta
+                new VfxCost { VfxId = 2700, AbilityId = 0, Cost = 5000 },
+                // Valkyrie
+                new VfxCost { VfxId = 2800, AbilityId = 0, Cost = 5000 },
+                // Archer
+                new VfxCost { VfxId = 2900, AbilityId = 0, Cost = 5000 },
+                new VfxCost { VfxId = 2900, AbilityId = 0, Cost = 1200 },
+                // Samurai
+                new VfxCost { VfxId = 3200, AbilityId = 0, Cost = 5000 },
+                // Cleric
+                new VfxCost { VfxId = 3400, AbilityId = 0, Cost = 5000 },
+                // Neko
+                new VfxCost { VfxId = 3500, AbilityId = 0, Cost = 5000 },
+                // Scamp
+                new VfxCost { VfxId = 3600, AbilityId = 0, Cost = 5000 },
+                // Dino
+                new VfxCost { VfxId = 3500, AbilityId = 0, Cost = 5000 },
+                // Iceborg
+                new VfxCost { VfxId = 3900, AbilityId = 0, Cost = 5000 },
+                // Fireborg
+                new VfxCost { VfxId = 4000, AbilityId = 0, Cost = 5000 }
+            };
+            VfxCost result = vfxList.Find(m => (m.AbilityId == AbilityId) && (m.VfxId == vfxId));
+            return result.Cost;
+        }
     }
 }

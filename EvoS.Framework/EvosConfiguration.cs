@@ -1,8 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Text;
-using YamlDotNet.Serialization.NamingConventions;
+﻿using System.IO;
+using YamlDotNet.Serialization;
 
 namespace EvoS.Framework
 {
@@ -17,14 +14,13 @@ namespace EvoS.Framework
         public bool AutoRegisterNewUsers = true;
         public DBConfig Database = new DBConfig();
         
-        public string GitHubCommits = "https://api.github.com/repos/Zheneq/EvoS/commits?per_page=100";
         public bool PingOnGroupRequest = true;
 
         private static EvosConfiguration GetInstance()
         {
             if (Instance == null)
             {
-                var deserializer = new YamlDotNet.Serialization.DeserializerBuilder()
+                var deserializer = new DeserializerBuilder()
                     .Build();
 
                 Instance = deserializer.Deserialize<EvosConfiguration>(File.ReadAllText("settings.yaml"));
@@ -60,11 +56,6 @@ namespace EvoS.Framework
         public static string GetGameServerExecutableArgs()
         {
             return GetInstance().GameServerExecutableArgs;
-        }
-
-        public static string GetGitHubCommits()
-        {
-            return GetInstance().GitHubCommits;
         }
 
         public static bool GetAutoRegisterNewUsers()
