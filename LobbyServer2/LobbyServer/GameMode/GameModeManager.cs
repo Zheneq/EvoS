@@ -1,6 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.IO;
-using CentralServer.LobbyServer.Config;
+using EvoS.Framework;
 using EvoS.Framework.Constants.Enums;
 using EvoS.Framework.Network.NetworkMessages;
 using EvoS.Framework.Network.Static;
@@ -33,7 +33,7 @@ namespace CentralServer.LobbyServer.Gamemode
         {
             GameTypeAvailability type = new GameTypeAvailability();
             type.MaxWillFillPerTeam = 4;
-            type.IsActive = ConfigManager.GameTypePracticeAvailable;
+            type.IsActive = LobbyConfiguration.GetGameTypePracticeAvailable();
             type.QueueableGroupSizes = new Dictionary<int, RequirementCollection> { { 1, null } };
             type.TeamAPlayers = 1;
             type.TeamBBots = 2;
@@ -84,7 +84,7 @@ namespace CentralServer.LobbyServer.Gamemode
         private static GameTypeAvailability GetCoopGameTypeAvailability()
         {
             GameTypeAvailability type = new GameTypeAvailability();
-            type.IsActive = ConfigManager.GameTypeCoopAvailable;
+            type.IsActive = LobbyConfiguration.GetGameTypeCoopAvailable();
             type.MaxWillFillPerTeam = 0;
             type.SubTypes = new List<GameSubType>() {
                 new GameSubType() {
@@ -105,7 +105,7 @@ namespace CentralServer.LobbyServer.Gamemode
         private static GameTypeAvailability GetPvPGameTypeAvailability()
         {
             GameTypeAvailability type = new GameTypeAvailability();
-            type.IsActive = ConfigManager.GameTypePvPAvailable;
+            type.IsActive = LobbyConfiguration.GetGameTypePvPAvailable();
             type.MaxWillFillPerTeam = 0;
             type.SubTypes = new List<GameSubType>()
             {
@@ -133,7 +133,7 @@ namespace CentralServer.LobbyServer.Gamemode
         private static GameTypeAvailability GetRankedGameTypeAvailability()
         {
             GameTypeAvailability type = new GameTypeAvailability();
-            type.IsActive = ConfigManager.GameTypeRankedAvailable;
+            type.IsActive = LobbyConfiguration.GetGameTypeRankedAvailable();
             type.MaxWillFillPerTeam = 0;
             type.SubTypes = new List<GameSubType>();
             return type;
@@ -142,7 +142,7 @@ namespace CentralServer.LobbyServer.Gamemode
         private static GameTypeAvailability GetCustomGameTypeAvailability()
         {
             GameTypeAvailability type = new GameTypeAvailability();
-            type.IsActive = ConfigManager.GameTypeCustomAvailable;
+            type.IsActive = LobbyConfiguration.GetGameTypeCustomAvailable();
             type.MaxWillFillPerTeam = 0;
             type.SubTypes = new List<GameSubType>();
             return type;
