@@ -70,6 +70,8 @@ namespace CentralServer.LobbyServer
             RegisterHandler(new EvosMessageDelegate<GroupInviteRequest>(HandleGroupInviteRequest));
             RegisterHandler(new EvosMessageDelegate<GroupConfirmationResponse>(HandleGroupConfirmationResponse));
             RegisterHandler(new EvosMessageDelegate<GroupLeaveRequest>(HandleGroupLeaveRequest));
+            RegisterHandler(new EvosMessageDelegate<GroupKickRequest>(HandleGroupKickRequest));
+            RegisterHandler(new EvosMessageDelegate<GroupPromoteRequest>(HandleGroupPromoteRequest));
             RegisterHandler(new EvosMessageDelegate<SelectBannerRequest>(HandleSelectBannerRequest));
             RegisterHandler(new EvosMessageDelegate<SelectTitleRequest>(HandleSelectTitleRequest));
             RegisterHandler(new EvosMessageDelegate<UseOverconRequest>(HandleUseOverconRequest));
@@ -188,6 +190,36 @@ namespace CentralServer.LobbyServer
             };
 
             Send(update);
+        }
+
+        private void HandleGroupPromoteRequest(GroupPromoteRequest message)
+        {
+            LobbyPlayerGroupInfo info = GroupManager.GetGroupInfo(AccountId);
+            info.Members.Find(m => m.MemberDisplayName == message.Name).IsLeader = true;
+            info.Members.Find(m => m.AccountID == AccountId).IsLeader = false;
+            
+            GroupUpdateNotification update = new GroupUpdateNotification()
+            {
+                Members = info.Members,
+                GameType = info.SelectedQueueType,
+                SubTypeMask = info.SubTypeMask,
+                GroupId = GroupManager.GetGroupID(AccountId)
+            };
+
+            Send(update);
+
+            GroupInfo group = GroupManager.GetPlayerGroup(AccountId);
+            foreach (long groupMember in group.Members)
+            {
+                SessionManager.GetClientConnection(groupMember)?.Send(update);
+            }
+
+        }
+
+        private void HandleGroupKickRequest(GroupKickRequest message)
+        {
+            LobbyPlayerGroupInfo info = GroupManager.GetGroupInfo(AccountId);
+            GroupManager.LeaveGroup(info.Members.Find(m => m.MemberDisplayName == message.MemberName).AccountID, false);
         }
 
         public void HandleRegisterGame(RegisterGameClientRequest request)
