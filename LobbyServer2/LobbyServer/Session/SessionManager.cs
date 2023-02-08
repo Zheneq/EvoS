@@ -58,7 +58,7 @@ namespace CentralServer.LobbyServer.Session
                 BotCanTaunt = false,
                 CharacterInfo = LobbyCharacterInfo.Of(account.CharacterData[account.AccountComponent.LastCharacter]),
                 ControllingPlayerId = 0,
-                EffectiveClientAccessLevel = ClientAccessLevel.Full,
+                EffectiveClientAccessLevel = account.AccountComponent.AppliedEntitlements.ContainsKey("DEVELOPER_ACCESS") ? ClientAccessLevel.Admin : ClientAccessLevel.Full,
                 EmblemID = account.AccountComponent.SelectedForegroundBannerID,
                 Handle = account.Handle,
                 IsGameOwner = true,
