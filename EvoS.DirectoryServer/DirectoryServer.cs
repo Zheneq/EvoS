@@ -177,7 +177,7 @@ namespace EvoS.DirectoryServer
             if (EvosStoreConfiguration.AreTitlesFree()) account.AccountComponent.UnlockedTitleIDs = InventoryManager.GetUnlockedTitleIDs(account.AccountId);
             if (EvosStoreConfiguration.AreBannersFree()) account.AccountComponent.UnlockedBannerIDs = InventoryManager.GetUnlockedBannerIDs(account.AccountId);
 
-            if (!EvosDevConfiguration.GetDevList().Find(m => m == account.Handle.ToString()).IsNullOrEmpty())
+            if (EvosDevConfiguration.IsDev(account))
             {
                 //Give developers access to the Developer title
                 account.AccountComponent.UnlockedTitleIDs.Add(26);

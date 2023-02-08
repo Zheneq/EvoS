@@ -1,4 +1,6 @@
-﻿using System.Collections.Generic;
+﻿using EvoS.Framework.Misc;
+using EvoS.Framework.Network.Static;
+using System.Collections.Generic;
 using System.IO;
 
 namespace EvoS.Framework
@@ -23,6 +25,10 @@ namespace EvoS.Framework
 
         public static List<string> GetDevList() {
             return GetInstance().DevList;
+        }
+
+        public static bool IsDev(PersistedAccountData account) {
+            return !GetDevList().Find(m => m == account.Handle.ToString()).IsNullOrEmpty();
         }
     }
 }
