@@ -166,7 +166,7 @@ namespace EvoS.DirectoryServer
         {
 
 #if DEBUG
-            account.AccountComponent.AppliedEntitlements.Add("DEVELOPER_ACCESS", 1);
+            account.AccountComponent.AppliedEntitlements.TryAdd("DEVELOPER_ACCESS", 1);
 #endif
 
             foreach (PersistedCharacterData persistedCharacterData in account.CharacterData.Values)
