@@ -27,7 +27,7 @@ namespace EvoS.Framework.DataAccess.Mongo
             BsonSerializer.RegisterSerializationProvider(new StructSerializationProvider());
             
             EvosConfiguration.DBConfig dbConfig = EvosConfiguration.GetDBConfig();
-            string conn = $"mongodb+srv://{dbConfig.User}:{dbConfig.Password}@{dbConfig.URI}";
+            string conn = $"mongodb{(dbConfig.MongoDbSrv ? "+srv" : "")}://{dbConfig.User}:{dbConfig.Password}@{dbConfig.URI}";
             MongoClientSettings settings = MongoClientSettings.FromConnectionString(conn);
             settings.ServerApi = new ServerApi(ServerApiVersion.V1);
             MongoClient client = new MongoClient(settings);
