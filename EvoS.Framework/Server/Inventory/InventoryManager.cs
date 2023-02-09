@@ -33,6 +33,11 @@ namespace EvoS.DirectoryServer.Inventory
             return backgrounds;
         }
 
+        public static List<int> GetDefaultUnlockedBannerIDs(long accountId)
+        {
+            return new List<int>() { 65, 95, 200, 201, 202, 203, 204, 205, 206, 207, 208, 209, 210, 211, 212, 213, 214, 215, 217, 222, 236, 237, 238, 239, 240, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 286, 324, 325, 326, 327, 328, 333, 334, 335, 336, 337, 338, 339, 340, 341, 342, 343, 345, 347, 350, 351, 352, 353, 354, 355, 356, 357, 358, 359, 360, 386, 387, 388, 389, 390, 391, 392, 393, 398, 399, 400, 401, 402, 403, 404, 405, 406, 407, 408, 409, 410, 411, 412, 423, 424, 434, 441, 442, 443, 457, 467, 468 };
+        }
+
         public static List<int> GetUnlockedOverconIDs(long accountId)
         {
             return new List<int>() { 4, 1, 2, 9, 10, 5, 3, 7, 8, 6, 12, 13, 11, 19, 20, 5, 16, 17, 15, 18, 14, 21, 24, 25, 26, 27, 28, 29, 29, 39, 37, 38, 41, 40, 43, 42, 44, 45, 46, 47, 30, 31, 32, 33, 34 };
@@ -56,7 +61,7 @@ namespace EvoS.DirectoryServer.Inventory
             return new InventoryComponent();
         }
 
-        public static Boolean BannerIsForeground(int bannerID) 
+        public static Boolean BannerIsForeground(int bannerID)
         {
             List<int> fg = new List<int>{ 96, 73, 70, 68, 67, 64, 63, 62, 201, 203, 205, 207, 209, 211, 213, 215, 251, 252, 253, 239, 240, 241, 245, 246, 247, 69, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 187, 189, 197, 199, 224, 226, 227, 229, 256, 257, 65, 261, 263, 265, 267, 222, 282, 284, 222, 296, 298, 278, 280, 299, 300, 301, 302, 303, 304, 305, 306, 307, 308, 309, 310, 311, 312, 313, 314, 315, 316, 317, 318, 319, 320, 321, 322, 323, 331, 332, 333, 334, 335, 361, 362, 363, 364, 365, 366, 367, 369, 376, 377, 378, 373, 374, 379, 381, 390, 388, 391, 387, 386, 389, 423, 426, 427, 415, 416, 379, 381, 217, 430, 431, 434, 436, 435, 438, 437, 439, 440, 444, 446, 442, 452, 453, 456, 458, 459, 460, 461, 462, 465, 466, 324, 325, 326, 327, 328, 356, 471, 473, 467, 475, 476, 477, 478, 479, 480, 481, 482 };
             return fg.Contains(bannerID);
@@ -66,6 +71,12 @@ namespace EvoS.DirectoryServer.Inventory
         {
             public int VfxId { get; set; }
             public int AbilityId { get; set; }
+            public int Cost { get; set; }
+        }
+
+        internal class BannerCost
+        {
+            public int Id { get; set; }
             public int Cost { get; set; }
         }
 
@@ -155,6 +166,63 @@ namespace EvoS.DirectoryServer.Inventory
             };
             VfxCost result = vfxList.Find(m => (m.AbilityId == AbilityId) && (m.VfxId == vfxId));
             return result.Cost;
+        }
+
+        public static int GetBannerCost(int Id)
+        {
+            List<BannerCost> List = new List<BannerCost>
+            {
+                new BannerCost { Id = 368, Cost = 1500 },
+                new BannerCost { Id = 370, Cost = 1500 },
+                new BannerCost { Id = 288, Cost = 25000 },
+                new BannerCost { Id = 376, Cost = 300 },
+                new BannerCost { Id = 377, Cost = 300 },
+                new BannerCost { Id = 378, Cost = 300 },
+                new BannerCost { Id = 383, Cost = 25000 },
+                new BannerCost { Id = 384, Cost = 25000 },
+                new BannerCost { Id = 385, Cost = 25000 },
+                new BannerCost { Id = 435, Cost = 500 },
+                new BannerCost { Id = 436, Cost = 500 },
+                new BannerCost { Id = 437, Cost = 500 },
+                new BannerCost { Id = 438, Cost = 500 },
+                new BannerCost { Id = 439, Cost = 500 },
+                new BannerCost { Id = 440, Cost = 500 },
+                new BannerCost { Id = 299, Cost = 300 },
+                new BannerCost { Id = 300, Cost = 300 },
+                new BannerCost { Id = 301, Cost = 300 },
+                new BannerCost { Id = 302, Cost = 300 },
+                new BannerCost { Id = 303, Cost = 300 },
+                new BannerCost { Id = 304, Cost = 300 },
+                new BannerCost { Id = 305, Cost = 300 },
+                new BannerCost { Id = 306, Cost = 300 },
+                new BannerCost { Id = 307, Cost = 300 },
+                new BannerCost { Id = 308, Cost = 300 },
+                new BannerCost { Id = 309, Cost = 300 },
+                new BannerCost { Id = 310, Cost = 300 },
+                new BannerCost { Id = 311, Cost = 300 },
+                new BannerCost { Id = 312, Cost = 300 },
+                new BannerCost { Id = 313, Cost = 300 },
+                new BannerCost { Id = 314, Cost = 300 },
+                new BannerCost { Id = 315, Cost = 300 },
+                new BannerCost { Id = 316, Cost = 300 },
+                new BannerCost { Id = 317, Cost = 300 },
+                new BannerCost { Id = 318, Cost = 300 },
+                new BannerCost { Id = 319, Cost = 300 },
+                new BannerCost { Id = 320, Cost = 300 },
+                new BannerCost { Id = 321, Cost = 300 },
+                new BannerCost { Id = 322, Cost = 300 },
+                new BannerCost { Id = 323, Cost = 300 },
+                new BannerCost { Id = 361, Cost = 300 },
+                new BannerCost { Id = 362, Cost = 300 },
+                new BannerCost { Id = 363, Cost = 300 },
+                new BannerCost { Id = 364, Cost = 300 },
+                new BannerCost { Id = 365, Cost = 300 },
+                new BannerCost { Id = 366, Cost = 300 },
+                new BannerCost { Id = 367, Cost = 1500 },
+                new BannerCost { Id = 369, Cost = 1500 }
+            };
+            BannerCost result = List.Find(m => m.Id == Id);
+            return result != null ? result.Cost : 100; // this way dont have to add crazy amount to the list so defaults 100
         }
     }
 }

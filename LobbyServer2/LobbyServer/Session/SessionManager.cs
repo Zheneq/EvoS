@@ -54,12 +54,12 @@ namespace CentralServer.LobbyServer.Session
             LobbyServerPlayerInfo playerInfo = new LobbyServerPlayerInfo
             {
                 AccountId = account.AccountId,
-                BannerID = account.AccountComponent.SelectedBackgroundBannerID,
+                BannerID = account.AccountComponent.SelectedBackgroundBannerID == -1 ? 95 : account.AccountComponent.SelectedBackgroundBannerID, // patch for existing users: default is 95
                 BotCanTaunt = false,
                 CharacterInfo = LobbyCharacterInfo.Of(account.CharacterData[account.AccountComponent.LastCharacter]),
                 ControllingPlayerId = 0,
                 EffectiveClientAccessLevel = ClientAccessLevel.Full,
-                EmblemID = account.AccountComponent.SelectedForegroundBannerID,
+                EmblemID = account.AccountComponent.SelectedForegroundBannerID == -1 ? 65 : account.AccountComponent.SelectedForegroundBannerID, // patch for existing users: default is 65 
                 Handle = account.Handle,
                 IsGameOwner = true,
                 IsLoadTestBot = false,

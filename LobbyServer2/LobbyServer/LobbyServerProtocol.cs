@@ -80,12 +80,12 @@ namespace CentralServer.LobbyServer
             /* TODO: adding these to
             RegisterHandler(new EvosMessageDelegate<PurchaseModResponse>(HandlePurchaseModRequest));
             RegisterHandler(new EvosMessageDelegate<PurchaseTauntRequest>(HandlePurchaseTauntRequest));
-            RegisterHandler(new EvosMessageDelegate<PurchaseBannerBackgroundRequest>(HandlePurchaseBannerRequest));
-            RegisterHandler(new EvosMessageDelegate<PurchaseBannerForegroundRequest>(HandlePurchaseEmblemRequest));
             RegisterHandler(new EvosMessageDelegate<PurchaseChatEmojiRequest>(HandlePurchaseChatEmoji));
             RegisterHandler(new EvosMessageDelegate<PurchaseLoadoutSlotRequest>(HandlePurchaseLoadoutSlot));
             */
 
+            RegisterHandler(new EvosMessageDelegate<PurchaseBannerForegroundRequest>(HandlePurchaseEmblemRequest));
+            RegisterHandler(new EvosMessageDelegate<PurchaseBannerBackgroundRequest>(HandlePurchaseBannerRequest));
             RegisterHandler(new EvosMessageDelegate<PurchaseAbilityVfxRequest>(HandlePurchasAbilityVfx));
             
         }
@@ -695,7 +695,7 @@ namespace CentralServer.LobbyServer
             PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
 
             //  Modify the correct type of banner
-            if(InventoryManager.BannerIsForeground(request.BannerID))
+            if (InventoryManager.BannerIsForeground(request.BannerID))
             {
                 account.AccountComponent.SelectedForegroundBannerID = request.BannerID;
             }
@@ -806,6 +806,117 @@ namespace CentralServer.LobbyServer
             log.Info($"Player {AccountId} requested UIState {request.UIState} {request.StateValue}");
             account.AccountComponent.UIStates.Add(request.UIState,request.StateValue);
             DB.Get().AccountDao.UpdateAccount(account);
+        }
+
+        private void HandlePurchaseEmblemRequest(PurchaseBannerForegroundRequest request)
+        {
+            //Get the users account
+            PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
+
+            // Never trust the client double check plus we need this info to deduct it from account
+            int cost = InventoryManager.GetBannerCost(request.BannerForegroundId);
+
+            log.Info($"Player {AccountId} trying to purchase emblem {request.BannerForegroundId} with {request.CurrencyType} for the price {cost}");
+
+            if (account.BankComponent.CurrentAmounts.GetCurrentAmount(request.CurrencyType) < cost)
+            {
+                PurchaseBannerForegroundResponse failedResponse = new PurchaseBannerForegroundResponse()
+                {
+                    ResponseId = request.RequestId,
+                    Result = PurchaseResult.Failed,
+                    CurrencyType = request.CurrencyType,
+                    BannerForegroundId = request.BannerForegroundId
+                };
+
+                Send(failedResponse);
+
+                return;
+            }
+
+            account.AccountComponent.UnlockedBannerIDs.Add(request.BannerForegroundId);
+
+            account.BankComponent.ChangeValue(request.CurrencyType, -cost, $"Purchase emblem");
+
+            DB.Get().AccountDao.UpdateAccount(account);
+
+            PurchaseBannerForegroundResponse response = new PurchaseBannerForegroundResponse()
+            {
+                ResponseId = request.RequestId,
+                Result = PurchaseResult.Success,
+                CurrencyType = request.CurrencyType,
+                BannerForegroundId = request.BannerForegroundId
+            };
+
+            Send(response);
+
+            // Notify in chat
+            Send(new ChatNotification
+            {
+                ConsoleMessageType = ConsoleMessageType.SystemMessage,
+                Text = "Purchase emblem succesfull."
+            });
+
+            //Update account curency
+            Send(new PlayerAccountDataUpdateNotification()
+            {
+                AccountData = account,
+            });
+
+        }
+
+        private void HandlePurchaseBannerRequest(PurchaseBannerBackgroundRequest request)
+        {
+            //Get the users account
+            PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
+
+            // Never trust the client double check plus we need this info to deduct it from account
+            int cost = InventoryManager.GetBannerCost(request.BannerBackgroundId);
+
+            log.Info($"Player {AccountId} trying to purchase banner {request.BannerBackgroundId} with {request.CurrencyType} for the price {cost}");
+
+            if (account.BankComponent.CurrentAmounts.GetCurrentAmount(request.CurrencyType) < cost)
+            {
+                PurchaseBannerBackgroundResponse failedResponse = new PurchaseBannerBackgroundResponse()
+                {
+                    ResponseId = request.RequestId,
+                    Result = PurchaseResult.Failed,
+                    CurrencyType = request.CurrencyType,
+                    BannerBackgroundId = request.BannerBackgroundId
+                };
+
+                Send(failedResponse);
+
+                return;
+            }
+
+            account.AccountComponent.UnlockedBannerIDs.Add(request.BannerBackgroundId);
+
+            account.BankComponent.ChangeValue(request.CurrencyType, -cost, $"Purchase banner");
+
+            DB.Get().AccountDao.UpdateAccount(account);
+
+            PurchaseBannerBackgroundResponse response = new PurchaseBannerBackgroundResponse()
+            {
+                ResponseId = request.RequestId,
+                Result = PurchaseResult.Success,
+                CurrencyType = request.CurrencyType,
+                BannerBackgroundId = request.BannerBackgroundId
+            };
+
+            Send(response);
+
+            // Notify in chat
+            Send(new ChatNotification
+            {
+                ConsoleMessageType = ConsoleMessageType.SystemMessage,
+                Text = "Purchase banner succesfull."
+            });
+
+            //Update account curency
+            Send(new PlayerAccountDataUpdateNotification()
+            {
+                AccountData = account,
+            });
         }
 
         private void HandlePurchasAbilityVfx(PurchaseAbilityVfxRequest request)

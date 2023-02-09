@@ -54,11 +54,11 @@ namespace EvoS.DirectoryServer.Account
                 FactionCompetitionData = new Dictionary<int, PlayerFactionCompetitionData>(),
                 FreeRotationCharacters = new CharacterType[] { },
                 LastCharacter = DefaultCharacterType,
-                SelectedBackgroundBannerID = -1,
-                SelectedForegroundBannerID = -1,
+                SelectedBackgroundBannerID = 95, // Defaults
+                SelectedForegroundBannerID = 65, // Defaults
                 SelectedRibbonID = -1,
                 SelectedTitleID = -1,
-                UnlockedBannerIDs = InventoryManager.GetUnlockedBannerIDs(accountId),
+                UnlockedBannerIDs = InventoryManager.GetDefaultUnlockedBannerIDs(accountId),
                 UIStates = new Dictionary<AccountComponent.UIStateIdentifier, int>
                 {
                     { AccountComponent.UIStateIdentifier.HasViewedFluxHighlight, 1 },

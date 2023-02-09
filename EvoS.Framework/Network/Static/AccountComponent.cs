@@ -21,8 +21,8 @@ namespace EvoS.Framework.Network.NetworkMessages
             UnlockedLoadingScreenBackgroundIdsToActivatedState = new Dictionary<int, bool>();
             NumGlobalCharacterLoadouts = 2;
             SelectedTitleID = -1;
-            SelectedForegroundBannerID = -1;
-            SelectedBackgroundBannerID = -1;
+            SelectedForegroundBannerID = 65; // Defaults
+            SelectedBackgroundBannerID = 95; // Defaults
             SelectedRibbonID = -1;
             AppliedEntitlements = new Dictionary<string, int>();
             PendingPurchases = new List<PendingPurchaseDetails>();
