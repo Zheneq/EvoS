@@ -730,8 +730,22 @@ namespace CentralServer.LobbyServer
                     log.Info($"Player {AccountId} accepted request {response.ConfirmationNumber} " +
                              $"to join group {response.GroupId} by {response.JoinerAccountId}: {response.Acceptance}");
                     // TODO validation
-                    GroupManager.JoinGroup(response.GroupId, AccountId);
-                    BroadcastRefreshFriendList();
+                    GroupInfo group = GroupManager.GetGroup(response.GroupId);
+                    if (group.Members.Count < 5)
+                    {
+                        GroupManager.JoinGroup(response.GroupId, AccountId);
+                        BroadcastRefreshFriendList();
+                    } 
+                    else
+                    {
+                        Send(new ChatNotification
+                        {
+                            SenderAccountId = AccountId,
+                            SenderHandle = "",
+                            ConsoleMessageType = ConsoleMessageType.SystemMessage,
+                            Text = "Failed to join group (Group Full)"
+                        });
+                    }
                     break;
             }
         }
