@@ -69,6 +69,7 @@ namespace CentralServer.LobbyServer
             RegisterHandler(new EvosMessageDelegate<ChatNotification>(HandleChatNotification));
             RegisterHandler(new EvosMessageDelegate<GroupInviteRequest>(HandleGroupInviteRequest));
             RegisterHandler(new EvosMessageDelegate<GroupConfirmationResponse>(HandleGroupConfirmationResponse));
+            RegisterHandler(new EvosMessageDelegate<GroupSuggestionResponse>(HandleGroupSuggestionResponse));
             RegisterHandler(new EvosMessageDelegate<GroupLeaveRequest>(HandleGroupLeaveRequest));
             RegisterHandler(new EvosMessageDelegate<GroupKickRequest>(HandleGroupKickRequest));
             RegisterHandler(new EvosMessageDelegate<GroupPromoteRequest>(HandleGroupPromoteRequest));
@@ -661,36 +662,55 @@ namespace CentralServer.LobbyServer
             PersistedAccountData requester = DB.Get().AccountDao.GetAccount(AccountId);
             PersistedAccountData leader = DB.Get().AccountDao.GetAccount(group.Leader);
             LobbyServerProtocol friend = SessionManager.GetClientConnection((long) friendAccountId);
-            friend.Send(new GroupConfirmationRequest
+            if (group.Leader == AccountId)
             {
-                GroupId = group.GroupId,
-                LeaderName = leader.Handle,
-                LeaderFullHandle = leader.Handle,
-                JoinerName = requester.Handle,
-                JoinerAccountId = AccountId,
-                ConfirmationNumber = GroupManager.CreateGroupRequest(AccountId, friend.AccountId, group.GroupId),
-                ExpirationTime = TimeSpan.FromSeconds(20),
-                Type = joinType,
-                // RequestId = TODO
-            });
-            if (EvosConfiguration.GetPingOnGroupRequest() && !friend.IsInGroup() && !friend.IsInGame())
-            {
-                friend.Send(new ChatNotification
+                friend.Send(new GroupConfirmationRequest
                 {
-                    SenderAccountId = AccountId,
-                    SenderHandle = requester.Handle,
-                    ConsoleMessageType = ConsoleMessageType.WhisperChat,
-                    Text = "[Group request]"
+                    GroupId = group.GroupId,
+                    LeaderName = leader.Handle,
+                    LeaderFullHandle = leader.Handle,
+                    JoinerName = requester.Handle,
+                    JoinerAccountId = AccountId,
+                    ConfirmationNumber = GroupManager.CreateGroupRequest(AccountId, friend.AccountId, group.GroupId),
+                    ExpirationTime = TimeSpan.FromSeconds(20),
+                    Type = joinType,
+                    // RequestId = TODO
+                });
+                if (EvosConfiguration.GetPingOnGroupRequest() && !friend.IsInGroup() && !friend.IsInGame())
+                {
+                    friend.Send(new ChatNotification
+                    {
+                        SenderAccountId = AccountId,
+                        SenderHandle = requester.Handle,
+                        ConsoleMessageType = ConsoleMessageType.WhisperChat,
+                        Text = "[Group request]"
+                    });
+                }
+            
+                log.Info($"{AccountId}/{requester.Handle} invited {friend.AccountId}/{request.FriendHandle} to group {group.GroupId}");
+                Send(new GroupInviteResponse
+                {
+                    FriendHandle = request.FriendHandle,
+                    ResponseId = request.RequestId,
+                    Success = true
+                });
+            } 
+            else
+            {
+                LobbyServerProtocol leaderSession = SessionManager.GetClientConnection(leader.AccountId);
+                leaderSession.Send(new GroupSuggestionRequest
+                {
+                    LeaderAccountId = group.Leader,
+                    SuggestedAccountFullHandle = request.FriendHandle,
+                    SuggesterAccountName = requester.Handle,
+                    SuggesterAccountId = AccountId,
                 });
             }
-            
-            log.Info($"{AccountId}/{requester.Handle} invited {friend.AccountId}/{request.FriendHandle} to group {group.GroupId}");
-            Send(new GroupInviteResponse
-            {
-                FriendHandle = request.FriendHandle,
-                ResponseId = request.RequestId,
-                Success = true
-            });
+        }
+
+        public void HandleGroupSuggestionResponse(GroupSuggestionResponse response)
+        { 
+            //Is this needed? 
         }
 
         public void HandleGroupConfirmationResponse(GroupConfirmationResponse response)
