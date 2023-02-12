@@ -199,21 +199,7 @@ namespace CentralServer.LobbyServer
             info.Members.Find(m => m.MemberDisplayName == message.Name).IsLeader = true;
             info.Members.Find(m => m.AccountID == AccountId).IsLeader = false;
             
-            GroupUpdateNotification update = new GroupUpdateNotification()
-            {
-                Members = info.Members,
-                GameType = info.SelectedQueueType,
-                SubTypeMask = info.SubTypeMask,
-                GroupId = GroupManager.GetGroupID(AccountId)
-            };
-
-            Send(update);
-
-            GroupInfo group = GroupManager.GetPlayerGroup(AccountId);
-            foreach (long groupMember in group.Members)
-            {
-                SessionManager.GetClientConnection(groupMember)?.Send(update);
-            }
+            BroadcastRefreshGroup();
 
         }
 
