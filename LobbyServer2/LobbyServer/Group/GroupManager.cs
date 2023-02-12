@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using CentralServer.LobbyServer.Matchmaking;
 using CentralServer.LobbyServer.Session;
+using EvoS.Framework;
 using EvoS.Framework.Constants.Enums;
 using EvoS.Framework.DataAccess;
 using EvoS.Framework.Network.NetworkMessages;
@@ -108,7 +109,7 @@ namespace CentralServer.LobbyServer.Group
             {
                 if (ActiveGroups.TryGetValue(groupId, out GroupInfo groupInfo))
                 {
-                    if (groupInfo.Members.Count < 5)
+                    if (groupInfo.Members.Count < LobbyConfiguration.GetMaxGroupSize())
                     {
                         groupInfo.AddPlayer(accountId);
                         PlayerToGroup.Add(accountId, groupId);

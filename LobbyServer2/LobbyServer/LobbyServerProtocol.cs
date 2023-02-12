@@ -47,7 +47,7 @@ namespace CentralServer.LobbyServer
         public bool IsInQueue() => MatchmakingManager.IsQueued(GroupManager.GetPlayerGroup(AccountId));
         
         public bool IsReady { get; private set; }
-        
+
         protected override void HandleOpen()
         {
             RegisterHandler(new EvosMessageDelegate<RegisterGameClientRequest>(HandleRegisterGame));
@@ -197,9 +197,36 @@ namespace CentralServer.LobbyServer
         {
             GroupInfo group = GroupManager.GetPlayerGroup(AccountId);
             //Sadly message.AccountId returns 0 so look it up by name/handle
-            long accountId = (long)SessionManager.GetOnlinePlayerByHandle(message.Name);
-            group.SetLeader(accountId);
-            BroadcastRefreshGroup();
+            long? accountId = SessionManager.GetOnlinePlayerByHandle(message.Name);
+            if (accountId.HasValue)
+            {
+                group.SetLeader((long)accountId);
+                BroadcastRefreshGroup();
+                //If the new leader is accountId send success true else false tho we do not have any localization does nothing atm 
+                if (group.IsLeader((long)accountId))
+                {
+                    Send(new GroupPromoteResponse()
+                    {
+                        Success = true
+                    });
+                }
+                else 
+                {
+                    Send(new GroupPromoteResponse()
+                    {
+                        //To send more need LocalizedFailure to be added
+                        Success = false
+                    });
+                }
+            }
+            else
+            {
+                Send(new GroupPromoteResponse()
+                {
+                    //To send more need LocalizedFailure to be added
+                    Success = false
+                });
+            }
         }
 
         private void HandleGroupKickRequest(GroupKickRequest message)
@@ -630,7 +657,7 @@ namespace CentralServer.LobbyServer
             
             GroupInfo group = GroupManager.GetPlayerGroup(AccountId);
 
-            if (group.Members.Count == 5)
+            if (group.Members.Count == LobbyConfiguration.GetMaxGroupSize())
             {
                 log.Warn($"{AccountId} try'd to invite {request.FriendHandle} into a full group");
                 Send(new GroupInviteResponse
