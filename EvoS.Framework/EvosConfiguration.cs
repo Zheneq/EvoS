@@ -82,11 +82,12 @@ namespace EvoS.Framework
         public class DBConfig
         {
             public DBType Type = DBType.None;
-            public string URI = "localhost";
+            public string URI = "localhost:27017";
             public string User = "user";
             public string Password = "password";
             public string Database = "atlas";
             public string Salt = "salt";
+            public bool MongoDbSrv = false;
         }
     }
 }

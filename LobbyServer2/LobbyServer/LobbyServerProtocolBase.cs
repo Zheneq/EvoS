@@ -150,7 +150,7 @@ namespace CentralServer.LobbyServer
                 GroupInfo = GroupManager.GetGroupInfo(AccountId),
                 SeasonChapterQuests = QuestManager.GetSeasonQuestDataNotification(),
                 ServerQueueConfiguration = GetServerQueueConfigurationUpdateNotification(),
-                Status = GetLobbyStatusNotification()
+                Status = GetLobbyStatusNotification(account)
             };
 
             Send(notification);
@@ -168,12 +168,12 @@ namespace CentralServer.LobbyServer
             };
         }
 
-        private LobbyStatusNotification GetLobbyStatusNotification()
+        private LobbyStatusNotification GetLobbyStatusNotification(PersistedAccountData account)
         {
             return new LobbyStatusNotification
             {
                 AllowRelogin = false,
-                ClientAccessLevel = ClientAccessLevel.Full,
+                ClientAccessLevel = account.AccountComponent.AppliedEntitlements.ContainsKey("DEVELOPER_ACCESS") ? ClientAccessLevel.Admin : ClientAccessLevel.Full, 
                 ErrorReportRate = new TimeSpan(0, 3, 0),
                 GameplayOverrides = GetGameplayOverrides(),
                 HasPurchasedGame = true,
