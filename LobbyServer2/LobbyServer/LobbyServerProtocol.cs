@@ -849,13 +849,6 @@ namespace CentralServer.LobbyServer
 
             Send(response);
 
-            // Notify in chat
-            Send(new ChatNotification
-            {
-                ConsoleMessageType = ConsoleMessageType.SystemMessage,
-                Text = "Purchase emblem succesfull."
-            });
-
             //Update account curency
             Send(new PlayerAccountDataUpdateNotification()
             {
@@ -904,13 +897,6 @@ namespace CentralServer.LobbyServer
             };
 
             Send(response);
-
-            // Notify in chat
-            Send(new ChatNotification
-            {
-                ConsoleMessageType = ConsoleMessageType.SystemMessage,
-                Text = "Purchase banner succesfull."
-            });
 
             //Update account curency
             Send(new PlayerAccountDataUpdateNotification()
@@ -969,13 +955,6 @@ namespace CentralServer.LobbyServer
             };
 
             Send(response);
-
-            // Notify in chat
-            Send(new ChatNotification
-            {
-                ConsoleMessageType = ConsoleMessageType.SystemMessage,
-                Text = "Purchase vfx succesfull."
-            });
 
             // Update character
             Send(new PlayerCharacterDataUpdateNotification()
