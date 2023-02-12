@@ -195,26 +195,11 @@ namespace CentralServer.LobbyServer
 
         private void HandleGroupPromoteRequest(GroupPromoteRequest message)
         {
-            LobbyPlayerGroupInfo info = GroupManager.GetGroupInfo(AccountId);
-            info.Members.Find(m => m.MemberDisplayName == message.Name).IsLeader = true;
-            info.Members.Find(m => m.AccountID == AccountId).IsLeader = false;
-            
-            GroupUpdateNotification update = new GroupUpdateNotification()
-            {
-                Members = info.Members,
-                GameType = info.SelectedQueueType,
-                SubTypeMask = info.SubTypeMask,
-                GroupId = GroupManager.GetGroupID(AccountId)
-            };
-
-            Send(update);
-
             GroupInfo group = GroupManager.GetPlayerGroup(AccountId);
-            foreach (long groupMember in group.Members)
-            {
-                SessionManager.GetClientConnection(groupMember)?.Send(update);
-            }
-
+            //Sadly message.AccountId returns 0 so look it up by name/handle
+            long accountId = (long)SessionManager.GetOnlinePlayerByHandle(message.Name);
+            group.SetLeader(accountId);
+            BroadcastRefreshGroup();
         }
 
         private void HandleGroupKickRequest(GroupKickRequest message)
@@ -644,6 +629,19 @@ namespace CentralServer.LobbyServer
             }
             
             GroupInfo group = GroupManager.GetPlayerGroup(AccountId);
+
+            if (group.Members.Count == 5)
+            {
+                log.Warn($"{AccountId} try'd to invite {request.FriendHandle} into a full group");
+                Send(new GroupInviteResponse
+                {
+                    FriendHandle = request.FriendHandle,
+                    ResponseId = request.RequestId,
+                    Success = false
+                });
+                return;
+            }
+
             GroupConfirmationRequest.JoinType joinType;
             if (group == null)
             {
@@ -730,22 +728,8 @@ namespace CentralServer.LobbyServer
                     log.Info($"Player {AccountId} accepted request {response.ConfirmationNumber} " +
                              $"to join group {response.GroupId} by {response.JoinerAccountId}: {response.Acceptance}");
                     // TODO validation
-                    GroupInfo group = GroupManager.GetGroup(response.GroupId);
-                    if (group.Members.Count < 5)
-                    {
-                        GroupManager.JoinGroup(response.GroupId, AccountId);
-                        BroadcastRefreshFriendList();
-                    } 
-                    else
-                    {
-                        Send(new ChatNotification
-                        {
-                            SenderAccountId = AccountId,
-                            SenderHandle = "",
-                            ConsoleMessageType = ConsoleMessageType.SystemMessage,
-                            Text = "Failed to join group (Group Full)"
-                        });
-                    }
+                    GroupManager.JoinGroup(response.GroupId, AccountId);
+                    BroadcastRefreshFriendList();
                     break;
             }
         }
