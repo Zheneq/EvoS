@@ -800,7 +800,7 @@ namespace CentralServer.LobbyServer
         {
             PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
 
-            if (account.AccountComponent.UnlockedTitleIDs.Contains(request.TitleID))
+            if (account.AccountComponent.UnlockedTitleIDs.Contains(request.TitleID) || request.TitleID == -1)
             {
                 account.AccountComponent.SelectedTitleID = request.TitleID;
                 DB.Get().AccountDao.UpdateAccount(account);
