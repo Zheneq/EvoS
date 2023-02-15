@@ -31,5 +31,17 @@ namespace EvoS.Framework.Network.Static
         public static String Skyway_LightsOut_GameMode = "Skyway_LightsOut_GameMode";
         public static String Skyway_OPU_GameMode = "Skyway_OPU_GameMode";
         public static String Skyway_SupportalCombat_GameMode = "Skyway_SupportalCombat_GameMode";
+
+        public static Dictionary<string, string> GetMapName = new Dictionary<string, string>() {
+            { "CargoShip_Deathmatch", "Flyway Freighter" },
+            { "Casino01_Deathmatch", "Hexelence" },
+            { "EvosLab_Deathmatch", "EvoS Labs" },
+            { "Oblivion_Deathmatch", "Oblivion" },
+            { "Reactor_Deathmatch", "Omni Reactor Core" },
+            { "RobotFactory_Deathmatch", "Hyperforge" },
+            { "Skyway_Deathmatch", "Cloudspire" },
+            // Add others if we ever add those types
+        };
+
     }
 }

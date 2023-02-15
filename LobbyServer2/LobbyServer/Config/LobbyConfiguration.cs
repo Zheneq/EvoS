@@ -22,6 +22,7 @@ namespace EvoS.Framework
         public bool GameTypeCustomAvailable = false;
         public int MaxGroupSize = 5;
         public string AdminChannelWebhook = "";
+        public string ChannelWebhook = "";
 
         private static LobbyConfiguration GetInstance()
         {
@@ -99,6 +100,11 @@ namespace EvoS.Framework
         public static string GetAdminChannelWebhook()
         {
             return GetInstance().AdminChannelWebhook;
+        }
+
+        public static string GetChannelWebhook()
+        {
+            return GetInstance().ChannelWebhook;
         }
     }
 }

@@ -31,5 +31,5 @@ namespace EvoS.Framework.Network.NetworkMessages
             Other,
             Botting
         }
-	}
+    }
 }
