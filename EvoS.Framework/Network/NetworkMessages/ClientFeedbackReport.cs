@@ -16,20 +16,20 @@ namespace EvoS.Framework.Network.NetworkMessages
 
         [Serializable]
         [EvosMessage(688, typeof(ClientFeedbackReport.FeedbackReason))]
-		public enum FeedbackReason
-		{
-			None,
-			Suggestion,
-			Bug,
-			UnsportsmanlikeConduct,
-			VerbalHarassment,
-			LeavingTheGameAFK,
-			HateSpeech,
-			IntentionallyFeeding,
-			SpammingAdvertising,
-			OffensiveName,
-			Other,
-			Botting
-		}
+        public enum FeedbackReason
+        {
+            None,
+            Suggestion,
+            Bug,
+            UnsportsmanlikeConduct,
+            VerbalHarassment,
+            LeavingTheGameAFK,
+            HateSpeech,
+            IntentionallyFeeding,
+            SpammingAdvertising,
+            OffensiveName,
+            Other,
+            Botting
+        }
 	}
 }
