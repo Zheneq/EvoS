@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using CentralServer.LobbyServer.Character;
 
 namespace EvoS.Framework.Network.Static
 {
@@ -47,14 +48,92 @@ namespace EvoS.Framework.Network.Static
             };
         }
 
-        // Incase players still had those mods selected after being removed or used a not so legal way to set a mod
         public static CharacterModInfo RemoveDisabledMods(CharacterModInfo LastMods, CharacterType characterType)
         {
-            // Remove "Single Minded" mod 
-            if (characterType.Equals(CharacterType.Claymore) || LastMods.ModForAbility1 == 3) LastMods.ModForAbility1 = 0;
-            // Remove "AfterShock" mod
-            if (characterType.Equals(CharacterType.Manta) || LastMods.ModForAbility4 == 1) LastMods.ModForAbility4 = 0;
+            foreach (var character in GetChacterAbilityConfigOverrides())
+            {
+                if (character.Key == characterType)
+                {
+                    for (int index = 0; index < character.Value.AbilityConfigs.Length; index++)
+                    {
+                        if (character.Value.GetAbilityConfig(index) is AbilityConfigOverride)
+                        {
+                            foreach (var Ability in character.Value.GetAbilityConfig(index).AbilityModConfigs)
+                            {
+                                if (Ability.Value.AbilityIndex == 0 && Ability.Value.AbilityModIndex == LastMods.ModForAbility0) 
+                                {
+                                    LastMods.ModForAbility0 = 0;
+                                }
+                                if (Ability.Value.AbilityIndex == 1 && Ability.Value.AbilityModIndex == LastMods.ModForAbility1)
+                                {
+                                    LastMods.ModForAbility1 = 0;
+                                }
+                                if (Ability.Value.AbilityIndex == 2 && Ability.Value.AbilityModIndex == LastMods.ModForAbility2)
+                                {
+                                    LastMods.ModForAbility2 = 0;
+                                }
+                                if (Ability.Value.AbilityIndex == 3 && Ability.Value.AbilityModIndex == LastMods.ModForAbility3)
+                                {
+                                    LastMods.ModForAbility3 = 0;
+                                }
+                                if (Ability.Value.AbilityIndex == 4 && Ability.Value.AbilityModIndex == LastMods.ModForAbility4)
+                                {
+                                    LastMods.ModForAbility4 = 0;
+                                }
+                            }  
+                        }
+                    }
+                }
+            }
             return LastMods;
+        }
+
+        public static Dictionary<CharacterType, CharacterAbilityConfigOverride> GetChacterAbilityConfigOverrides()
+        {
+            Dictionary<CharacterType, CharacterAbilityConfigOverride> overrides = new Dictionary<CharacterType, CharacterAbilityConfigOverride>();
+
+            // Disable Phaedra's "AfterShock" mod
+            CharacterAbilityConfigOverride MantaAbilityConfigOverride = new CharacterAbilityConfigOverride(CharacterType.Manta);
+            MantaAbilityConfigOverride.AbilityConfigs[4] = new AbilityConfigOverride(CharacterType.Manta, 4)
+            {
+                AbilityModConfigs = new Dictionary<int, AbilityModConfigOverride>()
+                {
+                    {
+                        1,
+                        new AbilityModConfigOverride
+                        {
+                            AbilityIndex = 4,
+                            AbilityModIndex = 1,
+                            Allowed = false,
+                            CharacterType = CharacterType.Manta
+                        }
+                    }
+                }
+            };
+            overrides.Add(CharacterType.Manta, MantaAbilityConfigOverride);
+
+            // Disable Titus' "Single Minded" mod
+            CharacterAbilityConfigOverride ClaymoreAbilityConfigOverride = new CharacterAbilityConfigOverride(CharacterType.Claymore);
+            ClaymoreAbilityConfigOverride.AbilityConfigs[1] = new AbilityConfigOverride(CharacterType.Claymore, 1)
+            {
+                AbilityModConfigs = new Dictionary<int, AbilityModConfigOverride>()
+                {
+                    {
+                        3,
+                        new AbilityModConfigOverride
+                        {
+                            AbilityIndex = 1,
+                            AbilityModIndex = 3,
+                            Allowed = false,
+                            CharacterType = CharacterType.Claymore
+                        }
+                    }
+                }
+            };
+            overrides.Add(CharacterType.Claymore, ClaymoreAbilityConfigOverride);
+
+
+            return overrides;
         }
     }
 }

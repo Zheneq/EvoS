@@ -237,7 +237,7 @@ namespace CentralServer.LobbyServer
                 AllowSpectators = false,
                 AllowSpectatorsOutsideCustom = false,
                 CharacterConfigs = CharacterConfigs.Characters,
-                CharacterAbilityConfigOverrides = CharacterManager.GetChacterAbilityConfigOverrides(),
+                CharacterAbilityConfigOverrides = LobbyCharacterInfo.GetChacterAbilityConfigOverrides(),
                 //CharacterSkinConfigOverrides = null TODO: maybe can be used to unlock all skins
                 EnableAllMods = true,
                 EnableAllAbilityVfxSwaps = true,

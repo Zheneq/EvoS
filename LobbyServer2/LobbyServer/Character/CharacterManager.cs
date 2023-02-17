@@ -44,54 +44,5 @@ namespace CentralServer.LobbyServer.Character
                 TitleID = -1,
             };
         }
-
-        // Update LobbyCharacterInfo.RemoveDisabledMods if a mod is being added here
-        public static Dictionary<CharacterType, CharacterAbilityConfigOverride> GetChacterAbilityConfigOverrides()
-        {
-            Dictionary<CharacterType, CharacterAbilityConfigOverride> overrides = new Dictionary<CharacterType,CharacterAbilityConfigOverride>();
-
-            // Disable Phaedra's "AfterShock" mod
-            CharacterAbilityConfigOverride MantaAbilityConfigOverride = new CharacterAbilityConfigOverride(CharacterType.Manta);
-            MantaAbilityConfigOverride.AbilityConfigs[4] = new AbilityConfigOverride(CharacterType.Manta, 4)
-            {
-                AbilityModConfigs = new Dictionary<int, AbilityModConfigOverride>()
-                {
-                    {
-                        1,
-                        new AbilityModConfigOverride
-                        {
-                            AbilityIndex = 4,
-                            AbilityModIndex = 1,
-                            Allowed = false,
-                            CharacterType = CharacterType.Manta
-                        }
-                    }
-                }
-            };
-            overrides.Add(CharacterType.Manta, MantaAbilityConfigOverride);
-
-            // Disable Titus' "Single Minded" mod
-            CharacterAbilityConfigOverride ClaymoreAbilityConfigOverride = new CharacterAbilityConfigOverride(CharacterType.Claymore);
-            ClaymoreAbilityConfigOverride.AbilityConfigs[1] = new AbilityConfigOverride(CharacterType.Claymore, 1)
-            {
-                AbilityModConfigs = new Dictionary<int, AbilityModConfigOverride>()
-                {
-                    {
-                        3,
-                        new AbilityModConfigOverride
-                        {
-                            AbilityIndex = 1,
-                            AbilityModIndex = 3,
-                            Allowed = false,
-                            CharacterType = CharacterType.Claymore
-                        }
-                    }
-                }
-            };
-            overrides.Add(CharacterType.Claymore, ClaymoreAbilityConfigOverride);
-
-
-            return overrides;
-        }
     }
 }
