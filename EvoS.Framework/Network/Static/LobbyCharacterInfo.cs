@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using CentralServer.LobbyServer.Character;
 
 namespace EvoS.Framework.Network.Static
 {
@@ -50,15 +49,15 @@ namespace EvoS.Framework.Network.Static
 
         public static CharacterModInfo RemoveDisabledMods(CharacterModInfo LastMods, CharacterType characterType)
         {
-            foreach (var character in GetChacterAbilityConfigOverrides())
+            foreach (var Character in GetChacterAbilityConfigOverrides())
             {
-                if (character.Key == characterType)
+                if (Character.Key == characterType)
                 {
-                    for (int index = 0; index < character.Value.AbilityConfigs.Length; index++)
+                    for (int index = 0; index < Character.Value.AbilityConfigs.Length; index++)
                     {
-                        if (character.Value.GetAbilityConfig(index) is AbilityConfigOverride)
+                        if (Character.Value.GetAbilityConfig(index) is AbilityConfigOverride)
                         {
-                            foreach (var Ability in character.Value.GetAbilityConfig(index).AbilityModConfigs)
+                            foreach (var Ability in Character.Value.GetAbilityConfig(index).AbilityModConfigs)
                             {
                                 if (Ability.Value.AbilityIndex == 0 && Ability.Value.AbilityModIndex == LastMods.ModForAbility0) 
                                 {
