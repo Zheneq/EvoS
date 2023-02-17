@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace EvoS.Framework.Network.Static
 {
@@ -9,7 +10,7 @@ namespace EvoS.Framework.Network.Static
     {
         public LobbyCharacterInfo Clone()
         {
-            return (LobbyCharacterInfo) base.MemberwiseClone();
+            return (LobbyCharacterInfo)base.MemberwiseClone();
         }
 
         public CharacterType CharacterType;
@@ -47,44 +48,39 @@ namespace EvoS.Framework.Network.Static
             };
         }
 
-        public static CharacterModInfo RemoveDisabledMods(CharacterModInfo LastMods, CharacterType characterType)
+        public static CharacterModInfo RemoveDisabledMods(CharacterModInfo lastMods, CharacterType characterType)
         {
-            foreach (var Character in GetChacterAbilityConfigOverrides())
+            var characterAbilityConfigOverrides = GetChacterAbilityConfigOverrides();
+            var abilityConfigs = characterAbilityConfigOverrides
+                .Where(c => c.Key == characterType)
+                .SelectMany(c => c.Value.AbilityConfigs)
+                .OfType<AbilityConfigOverride>();
+
+            foreach (var abilityConfig in abilityConfigs)
             {
-                if (Character.Key == characterType)
+                foreach (var abilityModConfig in abilityConfig.AbilityModConfigs)
                 {
-                    for (int index = 0; index < Character.Value.AbilityConfigs.Length; index++)
+                    switch (abilityModConfig.Value.AbilityIndex)
                     {
-                        if (Character.Value.GetAbilityConfig(index) is AbilityConfigOverride)
-                        {
-                            foreach (var Ability in Character.Value.GetAbilityConfig(index).AbilityModConfigs)
-                            {
-                                if (Ability.Value.AbilityIndex == 0 && Ability.Value.AbilityModIndex == LastMods.ModForAbility0) 
-                                {
-                                    LastMods.ModForAbility0 = 0;
-                                }
-                                if (Ability.Value.AbilityIndex == 1 && Ability.Value.AbilityModIndex == LastMods.ModForAbility1)
-                                {
-                                    LastMods.ModForAbility1 = 0;
-                                }
-                                if (Ability.Value.AbilityIndex == 2 && Ability.Value.AbilityModIndex == LastMods.ModForAbility2)
-                                {
-                                    LastMods.ModForAbility2 = 0;
-                                }
-                                if (Ability.Value.AbilityIndex == 3 && Ability.Value.AbilityModIndex == LastMods.ModForAbility3)
-                                {
-                                    LastMods.ModForAbility3 = 0;
-                                }
-                                if (Ability.Value.AbilityIndex == 4 && Ability.Value.AbilityModIndex == LastMods.ModForAbility4)
-                                {
-                                    LastMods.ModForAbility4 = 0;
-                                }
-                            }  
-                        }
+                        case 0 when abilityModConfig.Value.AbilityModIndex == lastMods.ModForAbility0:
+                            lastMods.ModForAbility0 = 0;
+                            break;
+                        case 1 when abilityModConfig.Value.AbilityModIndex == lastMods.ModForAbility1:
+                            lastMods.ModForAbility1 = 0;
+                            break;
+                        case 2 when abilityModConfig.Value.AbilityModIndex == lastMods.ModForAbility2:
+                            lastMods.ModForAbility2 = 0;
+                            break;
+                        case 3 when abilityModConfig.Value.AbilityModIndex == lastMods.ModForAbility3:
+                            lastMods.ModForAbility3 = 0;
+                            break;
+                        case 4 when abilityModConfig.Value.AbilityModIndex == lastMods.ModForAbility4:
+                            lastMods.ModForAbility4 = 0;
+                            break;
                     }
                 }
             }
-            return LastMods;
+            return lastMods;
         }
 
         public static Dictionary<CharacterType, CharacterAbilityConfigOverride> GetChacterAbilityConfigOverrides()
