@@ -45,6 +45,7 @@ namespace CentralServer.LobbyServer.Character
             };
         }
 
+        // Update LobbyCharacterInfo.RemoveDisabledMods if a mod is being added here
         public static Dictionary<CharacterType, CharacterAbilityConfigOverride> GetChacterAbilityConfigOverrides()
         {
             Dictionary<CharacterType, CharacterAbilityConfigOverride> overrides = new Dictionary<CharacterType,CharacterAbilityConfigOverride>();

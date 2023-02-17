@@ -69,7 +69,7 @@ namespace EvoS.DirectoryServer.Character
                 CharacterLevel = 1,
                 CharacterLoadouts = characterComponent.CharacterLoadouts,
                 CharacterMatches = 0,
-                CharacterMods = characterComponent.LastMods,
+                CharacterMods = LobbyCharacterInfo.RemoveDisabledMods(characterComponent.LastMods, characterType),
                 CharacterSkin = characterComponent.LastSkin,
                 CharacterTaunts = characterComponent.Taunts,
                 CharacterType = characterType,
