@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using CentralServer.LobbyServer.Character;
 
 namespace EvoS.Framework.Network.Static
 {
