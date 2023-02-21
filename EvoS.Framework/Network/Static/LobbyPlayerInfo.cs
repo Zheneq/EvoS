@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using EvoS.Framework.Constants.Enums;
+using EvoS.Framework.DataAccess;
 
 namespace EvoS.Framework.Network.Static
 {
@@ -10,7 +11,7 @@ namespace EvoS.Framework.Network.Static
     {
         public LobbyPlayerInfo Clone()
         {
-            return (LobbyPlayerInfo) base.MemberwiseClone();
+            return (LobbyPlayerInfo)base.MemberwiseClone();
         }
 
         public bool ReplacedWithBots { get; set; }
@@ -31,16 +32,19 @@ namespace EvoS.Framework.Network.Static
                     }
                 }
 
+                // Refetch data from DB was not updated otherwise
+                PersistedAccountData account = DB.Get().AccountDao.GetAccount(serverInfo.AccountId);
+
                 lobbyPlayerInfo = new LobbyPlayerInfo
                 {
-                    AccountId = serverInfo.AccountId,
+                    AccountId = account.AccountId,
                     PlayerId = serverInfo.PlayerId,
                     CustomGameVisualSlot = serverInfo.CustomGameVisualSlot,
-                    Handle = serverInfo.Handle,
-                    TitleID = serverInfo.TitleID,
+                    Handle = account.Handle,
+                    TitleID = account.AccountComponent.SelectedTitleID,
                     TitleLevel = serverInfo.TitleLevel,
-                    BannerID = serverInfo.BannerID,
-                    EmblemID = serverInfo.EmblemID,
+                    BannerID = account.AccountComponent.SelectedBackgroundBannerID,
+                    EmblemID = account.AccountComponent.SelectedForegroundBannerID,
                     RibbonID = serverInfo.RibbonID,
                     IsGameOwner = serverInfo.IsGameOwner,
                     ReplacedWithBots = serverInfo.ReplacedWithBots,
@@ -50,7 +54,7 @@ namespace EvoS.Framework.Network.Static
                     Difficulty = serverInfo.Difficulty,
                     BotCanTaunt = serverInfo.BotCanTaunt,
                     TeamId = serverInfo.TeamId,
-                    CharacterInfo = ((serverInfo.CharacterInfo == null) ? null : serverInfo.CharacterInfo.Clone()),
+                    CharacterInfo = ((serverInfo.CharacterInfo == null) ? null : LobbyCharacterInfo.Of(account.CharacterData[account.AccountComponent.LastCharacter])),
                     RemoteCharacterInfos = list,
                     ReadyState = serverInfo.ReadyState,
                     ControllingPlayerId =
@@ -59,19 +63,19 @@ namespace EvoS.Framework.Network.Static
                 };
                 if (serverInfo.AccountLevel >= maxPlayerLevel)
                 {
-//                    lobbyPlayerInfo.DisplayedStat = LocalizationPayload.Create("TotalSeasonLevelStatNumber", "Global",
-//                        new LocalizationArg[]
-//                        {
-//                            LocalizationArg_Int32.Create(serverInfo.TotalLevel)
-//                        });
+                    //                    lobbyPlayerInfo.DisplayedStat = LocalizationPayload.Create("TotalSeasonLevelStatNumber", "Global",
+                    //                        new LocalizationArg[]
+                    //                        {
+                    //                            LocalizationArg_Int32.Create(serverInfo.TotalLevel)
+                    //                        });
                 }
                 else
                 {
-//                    lobbyPlayerInfo.DisplayedStat = LocalizationPayload.Create("LevelStatNumber", "Global",
-//                        new LocalizationArg[]
-//                        {
-//                            LocalizationArg_Int32.Create(serverInfo.AccountLevel)
-//                        });
+                    //                    lobbyPlayerInfo.DisplayedStat = LocalizationPayload.Create("LevelStatNumber", "Global",
+                    //                        new LocalizationArg[]
+                    //                        {
+                    //                            LocalizationArg_Int32.Create(serverInfo.AccountLevel)
+                    //                        });
                 }
             }
 

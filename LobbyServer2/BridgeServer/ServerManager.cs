@@ -26,7 +26,7 @@ namespace CentralServer.BridgeServer
             log.Info($"Game server disconnected");
         }
 
-        public static BridgeServerProtocol GetServer(LobbyGameInfo gameInfo, LobbyServerTeamInfo teamInfo)
+        public static BridgeServerProtocol GetServer()
         {
             lock (ServerPool)
             {
@@ -34,7 +34,8 @@ namespace CentralServer.BridgeServer
                 {
                     if (server.IsAvailable())
                     {
-                        server.StartGame(gameInfo, teamInfo);
+                        // Let MatchmakingManager start it when ready (Cause mods etc can be updated pre game)
+                        //server.StartGame(gameInfo, teamInfo);
 
                         return server;
                     }

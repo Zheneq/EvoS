@@ -141,7 +141,7 @@ namespace CentralServer.LobbyServer.Matchmaking
                         {
                             RemoveGroup(group.GroupId);
                         }
-                        MatchmakingManager.StartGame(
+                        _ = MatchmakingManager.StartGameAsync(
                             teamA.SelectMany(group => group.Members).ToList(), 
                             teamB.SelectMany(group => group.Members).ToList(), 
                             GameType,
