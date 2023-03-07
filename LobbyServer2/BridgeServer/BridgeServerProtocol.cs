@@ -175,7 +175,7 @@ namespace CentralServer.BridgeServer
                                 {
                                     PlayerGameSummary playerA = teamA[teams];
                                     LobbyServerPlayerInfo playerInfoA = SessionManager.GetPlayerInfo(playerA.AccountId);
-                                    eb.AddField($"{playerInfoA.Handle} ({playerA.CharacterName})", $"**[ {playerA.KillParticipation} : {playerA.NumDeaths} : {playerA.NumKills} ] [ {playerA.TotalPlayerDamage} : {playerA.EffectiveHealing} : {playerA.TotalPlayerDamageReceived} ]**", true);
+                                    eb.AddField($"{playerInfoA.Handle} ({playerA.CharacterName})", $"**[ {playerA.NumAssists} : {playerA.NumDeaths} : {playerA.NumKills} ] [ {playerA.TotalPlayerDamage} : {playerA.TotalPlayerHealing} : {playerA.TotalPlayerDamageReceived} ]**", true);
                                 }
                                 catch
                                 {
@@ -188,7 +188,7 @@ namespace CentralServer.BridgeServer
                                 {
                                     PlayerGameSummary playerB = teamB[teams];
                                     LobbyServerPlayerInfo playerInfoB = SessionManager.GetPlayerInfo(playerB.AccountId);
-                                    eb.AddField($"{playerInfoB.Handle} ({playerB.CharacterName})", $"**[ {playerB.KillParticipation} : {playerB.NumDeaths} : {playerB.NumKills} ] [ {playerB.TotalPlayerDamage} : {playerB.EffectiveHealing} : {playerB.TotalPlayerDamageReceived} ]**", true);
+                                    eb.AddField($"{playerInfoB.Handle} ({playerB.CharacterName})", $"**[ {playerB.NumAssists} : {playerB.NumDeaths} : {playerB.NumKills} ] [ {playerB.TotalPlayerDamage} : {playerB.TotalPlayerHealing} : {playerB.TotalPlayerDamageReceived} ]**", true);
                                 }
                                 catch
                                 {
