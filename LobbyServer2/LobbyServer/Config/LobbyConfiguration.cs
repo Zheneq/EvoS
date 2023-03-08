@@ -23,6 +23,7 @@ namespace EvoS.Framework
         public int MaxGroupSize = 5;
         public string AdminChannelWebhook = "";
         public string ChannelWebhook = "";
+        public ulong? ChannelThreadId = null;
 
         private static LobbyConfiguration GetInstance()
         {
@@ -105,6 +106,11 @@ namespace EvoS.Framework
         public static string GetChannelWebhook()
         {
             return GetInstance().ChannelWebhook;
+        }
+
+        public static ulong? GetChannelThreadId()
+        {
+            return GetInstance().ChannelThreadId;
         }
     }
 }

@@ -220,7 +220,7 @@ namespace CentralServer.BridgeServer
                                 eb.Footer = footer;
 
                                 Embed[] embedArray = new Embed[] { eb.Build() };
-                                discord.SendMessageAsync(null, false, embeds: embedArray, "Atlas Reactor");
+                                discord.SendMessageAsync(null, false, embeds: embedArray, "Atlas Reactor", threadId: LobbyConfiguration.GetChannelThreadId());
                             }
                         }
                         catch (Exception exeption)
