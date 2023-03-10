@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Threading.Tasks;
 using CentralServer.LobbyServer;
 using CentralServer.LobbyServer.Session;
 using Discord;
@@ -82,7 +83,7 @@ namespace CentralServer.BridgeServer
             return $"S {Address}:{Port}";
         }
 
-        protected override void HandleMessage(MessageEventArgs e)
+        protected override async void HandleMessage(MessageEventArgs e)
         {
             NetworkReader networkReader = new NetworkReader(e.RawData);
             short messageType = networkReader.ReadInt16();
@@ -119,95 +120,345 @@ namespace CentralServer.BridgeServer
                 {
                     ServerGameSummaryNotification request = Deserialize<ServerGameSummaryNotification>(networkReader);
 
-                    if (request.GameSummary == null) request.GameSummary = new LobbyGameSummary();
-                    if (request.GameSummary.BadgeAndParticipantsInfo == null) request.GameSummary.BadgeAndParticipantsInfo = new List<BadgeAndParticipantInfo>();
+                    if (request.GameSummary == null)
+                    {
+                        GameInfo.GameResult = GameResult.TieGame;
+                        request.GameSummary = new LobbyGameSummary();
+                    }
+                    else 
+                    { 
+                        GameInfo.GameResult = request.GameSummary.GameResult;
+                    }
+
                     log.Debug($"< {request.GetType().Name} {DefaultJsonSerializer.Serialize(request)}");
                     log.Info($"Game {GameInfo?.Name} at {request.GameSummary?.GameServerAddress} finished " +
                                             $"({request.GameSummary?.NumOfTurns} turns), " +
                                             $"{request.GameSummary?.GameResult} {request.GameSummary?.TeamAPoints}-{request.GameSummary?.TeamBPoints}");
+
+                    request.GameSummary.BadgeAndParticipantsInfo = new List<BadgeAndParticipantInfo>();
+
+                    if (GameInfo.GameResult != GameResult.TieGame)
+                    {
+                        PlayerGameSummary highestHealingPlayer = request.GameSummary.PlayerGameSummaryList.OrderByDescending(p => p.GetTotalHealingFromAbility() + p.TotalPlayerAbsorb).FirstOrDefault();
+                        PlayerGameSummary highestDamagePlayer = request.GameSummary.PlayerGameSummaryList.OrderByDescending(p => p.TotalPlayerDamage).FirstOrDefault();
+                        PlayerGameSummary highestDamageRecievedPlayer = request.GameSummary.PlayerGameSummaryList.OrderByDescending(p => p.TotalPlayerDamageReceived).FirstOrDefault();
+                        PlayerGameSummary highestDamagePerTurn = request.GameSummary.PlayerGameSummaryList.OrderByDescending(p => p.GetDamageDealtPerTurn()).FirstOrDefault();
+                        PlayerGameSummary highestDamageTakenPerLife = request.GameSummary.PlayerGameSummaryList.OrderByDescending(p => p.GetDamageTakenPerLife()).FirstOrDefault();
+                        PlayerGameSummary highestEnemiesSightedPerTurn = request.GameSummary.PlayerGameSummaryList.OrderByDescending(p => p.EnemiesSightedPerTurn).FirstOrDefault();
+                        PlayerGameSummary highestMitigated = request.GameSummary.PlayerGameSummaryList.OrderByDescending(p => p.GetTeamMitigation()).FirstOrDefault();
+                        PlayerGameSummary highestDamageEfficiency = request.GameSummary.PlayerGameSummaryList.OrderByDescending(p => p.DamageEfficiency).FirstOrDefault();
+                        PlayerGameSummary highestDamageDonePerLife = request.GameSummary.PlayerGameSummaryList.OrderByDescending(p => p.GetDamageDonePerLife()).FirstOrDefault();
+                        PlayerGameSummary highestDodge = request.GameSummary.PlayerGameSummaryList.OrderByDescending(p => p.DamageAvoidedByEvades).FirstOrDefault();
+                        PlayerGameSummary highestCrowdControl = request.GameSummary.PlayerGameSummaryList.OrderByDescending(p => p.MovementDeniedByMe).FirstOrDefault();
+                        PlayerGameSummary highestBoostTeamDamage = request.GameSummary.PlayerGameSummaryList.OrderByDescending(p => p.MyOutgoingExtraDamageFromEmpowered).FirstOrDefault();
+                        PlayerGameSummary highestBoostTeamEnergize = request.GameSummary.PlayerGameSummaryList.OrderByDescending(p => p.TeamExtraEnergyByEnergizedFromMe).FirstOrDefault();
+                        List<PlayerGameSummary> sortedPlayersEnemiesSightedPerTurn = request.GameSummary.PlayerGameSummaryList.OrderByDescending(p => p.EnemiesSightedPerTurn).ToList();
+                        List<PlayerGameSummary> sortedPlayersFreelancerStats = request.GameSummary.PlayerGameSummaryList.OrderByDescending(p => p.FreelancerStats.OrderByDescending(p => p).FirstOrDefault()).ToList();
+                        List<PlayerGameSummary> sortedPlayersDamageDealtPerTurn = request.GameSummary.PlayerGameSummaryList.OrderByDescending(p => p.GetDamageDealtPerTurn()).ToList();
+                        List<PlayerGameSummary> sortedPlayersDamageEfficiency = request.GameSummary.PlayerGameSummaryList.OrderByDescending(p => p.DamageEfficiency).ToList();
+                        List<PlayerGameSummary> sortedPlayersDamageDonePerLife = request.GameSummary.PlayerGameSummaryList.OrderByDescending(p => p.GetDamageDonePerLife()).ToList();
+                        List<PlayerGameSummary> sortedPlayersDamageTakenPerLife = request.GameSummary.PlayerGameSummaryList.OrderByDescending(p => p.GetDamageTakenPerLife()).ToList();
+                        List<PlayerGameSummary> sortedPlayersDodge = request.GameSummary.PlayerGameSummaryList.OrderByDescending(p => p.DamageAvoidedByEvades).ToList();
+                        List<PlayerGameSummary> sortedPlayersCrowdControl = request.GameSummary.PlayerGameSummaryList.OrderByDescending(p => p.MovementDeniedByMe).ToList();
+                        List<PlayerGameSummary> sortedPlayersHealedShielded = request.GameSummary.PlayerGameSummaryList.OrderByDescending(p => p.GetTotalHealingFromAbility() + p.TotalPlayerAbsorb).ToList();
+                        List<PlayerGameSummary> sortedPlayersBoostTeamDamage = request.GameSummary.PlayerGameSummaryList.OrderByDescending(p => p.MyOutgoingExtraDamageFromEmpowered).ToList();
+                        List<PlayerGameSummary> sortedPlayersBoostTeamEnergize = request.GameSummary.PlayerGameSummaryList.OrderByDescending(p => p.TeamExtraEnergyByEnergizedFromMe).ToList();
+
+                        Dictionary<int, List<BadgeInfo>> badgeInfos = new Dictionary<int, List<BadgeInfo>>();
+
+                        foreach (PlayerGameSummary player in request.GameSummary.PlayerGameSummaryList)
+                        {
+                            List<BadgeInfo> playerBadgeInfos = new List<BadgeInfo>();
+
+                            if (player.NumAssists == 3) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 1 });
+                            if (player.NumAssists == 4) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 2 });
+                            if (player.NumAssists == 5) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 3 });
+
+                            int playerIndexEnemiesSightedPerTurn = sortedPlayersEnemiesSightedPerTurn.FindIndex(p => p.PlayerId == player.PlayerId);
+
+                            if (playerIndexEnemiesSightedPerTurn >= 0 && highestEnemiesSightedPerTurn != null && highestEnemiesSightedPerTurn.PlayerId == player.PlayerId)
+                            {
+                                int totalPlayers = sortedPlayersEnemiesSightedPerTurn.Count;
+                                double percentile = (totalPlayers - playerIndexEnemiesSightedPerTurn - 1) * 100.0 / totalPlayers;
+
+                                if (percentile > 50) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 4 });
+                                if (percentile > 75) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 5 });
+                                if (percentile > 80) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 6 });
+                            }
+
+                            if (player.GetDamageDealtPerTurn() >= 20 && player.GetSupportPerTurn() >= 20 && player.GetTankingPerLife() >= 200) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 9 });
+                            else if (player.GetDamageDealtPerTurn() >= 15 && player.GetSupportPerTurn() >= 15 && player.GetTankingPerLife() >= 150) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 8 });
+                            else if (player.GetDamageDealtPerTurn() >= 10 && player.GetSupportPerTurn() >= 10 && player.GetTankingPerLife() >= 100) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 7 });
+
+                            int playerIndexFreelancerStats = sortedPlayersFreelancerStats.FindIndex(p => p.PlayerId == player.PlayerId);
+
+                            if (playerIndexFreelancerStats >= 0)
+                            {
+                                int totalPlayers = sortedPlayersFreelancerStats.Count;
+                                double percentile = (totalPlayers - playerIndexFreelancerStats - 1) * 100.0 / totalPlayers;
+
+                                if (percentile > 50) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 10 });
+                                if (percentile > 75) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 11 });
+                                if (percentile > 80) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 12 });
+                            }
+
+                            if (highestDamagePerTurn != null && highestDamagePerTurn.PlayerId == player.PlayerId) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 13 });
+
+                            int playerIndexDamageDealtPerTurn = sortedPlayersDamageDealtPerTurn.FindIndex(p => p.PlayerId == player.PlayerId);
+
+                            if (playerIndexDamageDealtPerTurn >= 0 && highestDamagePerTurn != null && highestDamagePerTurn.PlayerId == player.PlayerId)
+                            {
+                                int totalPlayers = sortedPlayersDamageDealtPerTurn.Count;
+                                double percentile = (totalPlayers - playerIndexDamageDealtPerTurn - 1) * 100.0 / totalPlayers;
+
+                                if (percentile > 50) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 14 });
+                                if (percentile > 75) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 15 });
+                                if (percentile > 80) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 16 });
+                            }
+
+                            int playerIndexDamageEfficiency = sortedPlayersDamageEfficiency.FindIndex(p => p.PlayerId == player.PlayerId);
+
+                            if (playerIndexDamageEfficiency >= 0 && highestDamageEfficiency != null && highestDamageEfficiency.PlayerId == player.PlayerId)
+                            {
+                                int totalPlayers = sortedPlayersDamageEfficiency.Count;
+                                double percentile = (totalPlayers - playerIndexDamageEfficiency - 1) * 100.0 / totalPlayers;
+
+                                if (percentile > 50) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 17 });
+                                if (percentile > 75) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 18 });
+                                if (percentile > 80) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 19 });
+                            }
+
+                            int playerIndexDamageDonePerLife = sortedPlayersDamageDonePerLife.FindIndex(p => p.PlayerId == player.PlayerId);
+
+                            if (playerIndexDamageDonePerLife >= 0 && highestDamageDonePerLife != null && highestDamageDonePerLife.PlayerId == player.PlayerId)
+                            {
+                                int totalPlayers = sortedPlayersDamageDonePerLife.Count;
+                                double percentile = (totalPlayers - playerIndexDamageDonePerLife - 1) * 100.0 / totalPlayers;
+
+                                if (percentile > 50) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 21 });
+                                if (percentile > 75) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 22 });
+                                if (percentile > 80) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 23 });
+                            }
+
+                            int playerIndexDamageTakenPerLife = sortedPlayersDamageTakenPerLife.FindIndex(p => p.PlayerId == player.PlayerId);
+
+                            if (playerIndexDamageTakenPerLife >= 0 && highestDamageTakenPerLife != null && highestDamageTakenPerLife.PlayerId == player.PlayerId)
+                            {
+                                if (highestDamageTakenPerLife != null && highestDamageTakenPerLife.PlayerId == player.PlayerId) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 20 });
+                                int totalPlayers = sortedPlayersDamageTakenPerLife.Count;
+                                double percentile = (totalPlayers - playerIndexDamageTakenPerLife - 1) * 100.0 / totalPlayers;
+
+                                if (percentile > 50) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 24 });
+                                if (percentile > 75) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 25 });
+                                if (percentile > 80) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 26 });
+                            }
+
+
+                            int playerIndexDodge = sortedPlayersDodge.FindIndex(p => p.PlayerId == player.PlayerId);
+
+                            if (playerIndexDodge >= 0 && highestDodge != null && highestDodge.PlayerId == player.PlayerId)
+                            {
+                                int totalPlayers = sortedPlayersDodge.Count;
+                                double percentile = (totalPlayers - playerIndexDodge - 1) * 100.0 / totalPlayers;
+
+                                if (percentile > 50) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 27 });
+                                if (percentile > 75) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 28 });
+                                if (percentile > 80) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 29 });
+                            }
+
+                            int playerIndexCrowdControl = sortedPlayersCrowdControl.FindIndex(p => p.PlayerId == player.PlayerId);
+
+                            if (playerIndexCrowdControl >= 0 && highestCrowdControl != null && highestCrowdControl.PlayerId == player.PlayerId)
+                            {
+                                int totalPlayers = sortedPlayersCrowdControl.Count;
+                                double percentile = (totalPlayers - playerIndexCrowdControl - 1) * 100.0 / totalPlayers;
+
+                                if (percentile > 50) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 30 });
+                                if (percentile > 75) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 31 });
+                                if (percentile > 80) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 32 });
+                            }
+
+                            if (highestMitigated != null && highestMitigated.PlayerId == player.PlayerId) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 33 });
+
+                            int playerIndexHealedShielded = sortedPlayersHealedShielded.FindIndex(p => p.PlayerId == player.PlayerId);
+
+                            if (playerIndexHealedShielded >= 0 && highestHealingPlayer != null && highestHealingPlayer.PlayerId == player.PlayerId)
+                            {
+                                int totalPlayers = sortedPlayersHealedShielded.Count;
+                                double percentile = (totalPlayers - playerIndexHealedShielded - 1) * 100.0 / totalPlayers;
+
+                                if (percentile > 50) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 34 });
+                                if (percentile > 75) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 35 });
+                                if (percentile > 80) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 36 });
+                            }
+
+                            int playerIndexBoostTeamDamage = sortedPlayersBoostTeamDamage.FindIndex(p => p.PlayerId == player.PlayerId);
+
+                            if (playerIndexBoostTeamDamage >= 0 && highestBoostTeamDamage != null && highestBoostTeamDamage.PlayerId == player.PlayerId)
+                            {
+                                int totalPlayers = sortedPlayersBoostTeamDamage.Count;
+                                double percentile = (totalPlayers - playerIndexBoostTeamDamage - 1) * 100.0 / totalPlayers;
+
+                                if (percentile > 50) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 37 });
+                                if (percentile > 75) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 38 });
+                                if (percentile > 80) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 39 });
+                            }
+
+                            int playerIndexBoostTeamEnergize = sortedPlayersBoostTeamEnergize.FindIndex(p => p.PlayerId == player.PlayerId);
+
+                            if (playerIndexBoostTeamEnergize >= 0 && highestBoostTeamEnergize != null && highestBoostTeamEnergize.PlayerId == player.PlayerId)
+                            {
+                                int totalPlayers = sortedPlayersBoostTeamEnergize.Count;
+                                double percentile = (totalPlayers - playerIndexBoostTeamEnergize - 1) * 100.0 / totalPlayers;
+
+                                if (percentile > 50) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 40 });
+                                if (percentile > 75) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 41 });
+                                if (percentile > 80) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 42 });
+                            }
+
+                            badgeInfos[player.PlayerId] = playerBadgeInfos;
+                        }
+
+                        foreach (PlayerGameSummary player in request.GameSummary.PlayerGameSummaryList)
+                        {
+                            List<TopParticipantSlot> topParticipationEarned = new List<TopParticipantSlot>();
+
+                            if (highestHealingPlayer != null && highestHealingPlayer.PlayerId == player.PlayerId)
+                            {
+                                topParticipationEarned.Add(TopParticipantSlot.Supportiest);
+                            }
+                            if (highestDamagePlayer != null && highestDamagePlayer.PlayerId == player.PlayerId)
+                            {
+                                topParticipationEarned.Add(TopParticipantSlot.Deadliest);
+                            }
+                            if (highestDamageRecievedPlayer != null && highestDamageRecievedPlayer.PlayerId == player.PlayerId)
+                            {
+                                topParticipationEarned.Add(TopParticipantSlot.Tankiest);
+                            }
+
+                            var playerBadgeCounts = badgeInfos
+                                .GroupBy(b => b.Key)
+                                .Select(g => new { PlayerId = g.Key, BadgeCount = g.Count() })
+                                .OrderByDescending(x => x.BadgeCount);
+                            int maxBadgeCount = playerBadgeCounts.FirstOrDefault()?.BadgeCount ?? 0;
+                            int playerIdWithMostBadges = playerBadgeCounts
+                                .Where(x => x.BadgeCount == maxBadgeCount)
+                                .Select(x => x.PlayerId)
+                                .FirstOrDefault();
+
+                            if (playerIdWithMostBadges == player.PlayerId)
+                            {
+                                topParticipationEarned.Add(TopParticipantSlot.MostDecorated);
+                            }
+
+                            request.GameSummary.BadgeAndParticipantsInfo.Add(new BadgeAndParticipantInfo()
+                            {
+                                PlayerId = player.PlayerId,
+                                TeamId = (player.IsInTeamA() ? Team.TeamA : Team.TeamB),
+                                TeamSlot = player.TeamSlot,
+                                BadgesEarned = badgeInfos[player.PlayerId],
+                                TopParticipationEarned = topParticipationEarned,
+                                GlobalPercentiles = new Dictionary<StatDisplaySettings.StatType, PercentileInfo>(),
+                                FreelancerSpecificPercentiles = new Dictionary<int, PercentileInfo>(),
+                                FreelancerPlayed = player.CharacterPlayed
+                            });
+                        }
+                    }
+
+                    //Wait 5 seconds for gg Usages
+                    await Task.Delay(5000);
+
                     foreach (LobbyServerProtocolBase client in clients)
                     {
                         MatchResultsNotification response = new MatchResultsNotification
                         {
-                            // TODO
-                            BadgeAndParticipantsInfo = request.GameSummary.BadgeAndParticipantsInfo
+                            BadgeAndParticipantsInfo = request.GameSummary.BadgeAndParticipantsInfo,
+                            //Todo xp and stuff
+                            BaseXpGained = 0,
+                            CurrencyRewards = new List<MatchResultsNotification.CurrencyReward>()
                         };
                         client.Send(response);
                     }
+
+
+                    UpdateGameInfoToPlayers();
 
                     if (LobbyConfiguration.GetChannelWebhook().MaybeUri())
                     {
                         try
                         {
-                            DiscordWebhookClient discord = new DiscordWebhookClient(LobbyConfiguration.GetChannelWebhook());
-                            string map = Maps.GetMapName[GameInfo.GameConfig.Map];
-                            EmbedBuilder eb = new EmbedBuilder()
+                            if (GameInfo.GameResult != GameResult.TieGame)
                             {
-                                Title = $"Game Result for {(map ?? GameInfo.GameConfig.Map)}",
-                                Description = $"{(request.GameSummary.GameResult.ToString() == "TeamAWon" ? "Team A Won" : "Team B Won")} {request.GameSummary.TeamAPoints}-{request.GameSummary.TeamBPoints} ({request.GameSummary.NumOfTurns} turns)",
-                                Color = request.GameSummary.GameResult.ToString() == "TeamAWon" ? Color.Green : Color.Red
-                            };
-
-                            eb.AddField("Team A", "\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_", true);
-                            eb.AddField("│", "│", true);
-                            eb.AddField("Team B", "\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_", true);
-
-                            eb.AddField("**[ Takedowns : Deaths : Deathblows ] [ Damage : Healing : Damage Received ]**", "\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_", false);
-
-
-                            List<PlayerGameSummary> teamA = new List<PlayerGameSummary>();
-                            List<PlayerGameSummary> teamB = new List<PlayerGameSummary>();
-                            int players = 0;
-
-                            // Sort into seperate teams ignore spectators if ever
-                            while (players < request.GameSummary.PlayerGameSummaryList.Count())
-                            {
-                                PlayerGameSummary player = request.GameSummary.PlayerGameSummaryList[players];
-                                if (player.IsSpectator()) return;
-                                if (player.IsInTeamA()) teamA.Add(player);
-                                else teamB.Add(player);
-                                players++;
-                            }
-
-                            int teams = 0;
-                            int highestCount = (teamA.Count() > teamB.Count() ? teamA.Count() : teamB.Count());
-                            while (teams < highestCount) 
-                            {
-                                // try catch cause index can be out of bound if it happens (oneven teams) add a default field need to keep order of operation or fields are a jumbeld mess
-                                try
+                                DiscordWebhookClient discord = new DiscordWebhookClient(LobbyConfiguration.GetChannelWebhook());
+                                string map = Maps.GetMapName[GameInfo.GameConfig.Map];
+                                EmbedBuilder eb = new EmbedBuilder()
                                 {
-                                    PlayerGameSummary playerA = teamA[teams];
-                                    LobbyServerPlayerInfo playerInfoA = SessionManager.GetPlayerInfo(playerA.AccountId);
-                                    eb.AddField($"{playerInfoA.Handle} ({playerA.CharacterName})", $"**[ {playerA.NumAssists} : {playerA.NumDeaths} : {playerA.NumKills} ] [ {playerA.TotalPlayerDamage} : {playerA.GetTotalHealingFromAbility() + playerA.TotalPlayerAbsorb} : {playerA.TotalPlayerDamageReceived} ]**", true);
-                                }
-                                catch
-                                {
-                                    eb.AddField("-", "-", true);
-                                }
+                                    Title = $"Game Result for {(map ?? GameInfo.GameConfig.Map)}",
+                                    Description = $"{(request.GameSummary.GameResult.ToString() == "TeamAWon" ? "Team A Won" : "Team B Won")} {request.GameSummary.TeamAPoints}-{request.GameSummary.TeamBPoints} ({request.GameSummary.NumOfTurns} turns)",
+                                    Color = request.GameSummary.GameResult.ToString() == "TeamAWon" ? Color.Green : Color.Red
+                                };
 
+                                eb.AddField("Team A", "\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_", true);
                                 eb.AddField("│", "│", true);
+                                eb.AddField("Team B", "\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_", true);
 
-                                try
+                                eb.AddField("**[ Takedowns : Deaths : Deathblows ] [ Damage : Healing : Damage Received ]**", "\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_", false);
+
+
+                                List<PlayerGameSummary> teamA = new List<PlayerGameSummary>();
+                                List<PlayerGameSummary> teamB = new List<PlayerGameSummary>();
+                                int players = 0;
+
+                                // Sort into seperate teams ignore spectators if ever
+                                while (players < request.GameSummary.PlayerGameSummaryList.Count())
                                 {
-                                    PlayerGameSummary playerB = teamB[teams];
-                                    LobbyServerPlayerInfo playerInfoB = SessionManager.GetPlayerInfo(playerB.AccountId);
-                                    eb.AddField($"{playerInfoB.Handle} ({playerB.CharacterName})", $"**[ {playerB.NumAssists} : {playerB.NumDeaths} : {playerB.NumKills} ] [ {playerB.TotalPlayerDamage} : {playerB.GetTotalHealingFromAbility() + playerB.TotalPlayerAbsorb} : {playerB.TotalPlayerDamageReceived} ]**", true);
+                                    PlayerGameSummary player = request.GameSummary.PlayerGameSummaryList[players];
+                                    if (player.IsSpectator()) return;
+                                    if (player.IsInTeamA()) teamA.Add(player);
+                                    else teamB.Add(player);
+                                    players++;
                                 }
-                                catch
+
+                                int teams = 0;
+                                int highestCount = (teamA.Count() > teamB.Count() ? teamA.Count() : teamB.Count());
+                                while (teams < highestCount)
                                 {
-                                    eb.AddField("-", "-", true);
+                                    // try catch cause index can be out of bound if it happens (oneven teams) add a default field need to keep order of operation or fields are a jumbeld mess
+                                    try
+                                    {
+                                        PlayerGameSummary playerA = teamA[teams];
+                                        LobbyServerPlayerInfo playerInfoA = SessionManager.GetPlayerInfo(playerA.AccountId);
+                                        eb.AddField($"{playerInfoA.Handle} ({playerA.CharacterName})", $"**[ {playerA.NumAssists} : {playerA.NumDeaths} : {playerA.NumKills} ] [ {playerA.TotalPlayerDamage} : {playerA.GetTotalHealingFromAbility() + playerA.TotalPlayerAbsorb} : {playerA.TotalPlayerDamageReceived} ]**", true);
+                                    }
+                                    catch
+                                    {
+                                        eb.AddField("-", "-", true);
+                                    }
+
+                                    eb.AddField("│", "│", true);
+
+                                    try
+                                    {
+                                        PlayerGameSummary playerB = teamB[teams];
+                                        LobbyServerPlayerInfo playerInfoB = SessionManager.GetPlayerInfo(playerB.AccountId);
+                                        eb.AddField($"{playerInfoB.Handle} ({playerB.CharacterName})", $"**[ {playerB.NumAssists} : {playerB.NumDeaths} : {playerB.NumKills} ] [ {playerB.TotalPlayerDamage} : {playerB.GetTotalHealingFromAbility() + playerB.TotalPlayerAbsorb} : {playerB.TotalPlayerDamageReceived} ]**", true);
+                                    }
+                                    catch
+                                    {
+                                        eb.AddField("-", "-", true);
+                                    }
+                                    teams++;
                                 }
-                                teams++;
+
+                                EmbedFooterBuilder footer = new EmbedFooterBuilder
+                                {
+                                    Text = $"{Name} - {BuildVersion} - {new DateTime(GameInfo.CreateTimestamp):yyyy_MM_dd__HH_mm_ss}"
+                                };
+                                eb.Footer = footer;
+
+                                Embed[] embedArray = new Embed[] { eb.Build() };
+                                await discord.SendMessageAsync(null, false, embeds: embedArray, "Atlas Reactor", threadId: LobbyConfiguration.GetChannelThreadId());
                             }
-
-                            EmbedFooterBuilder footer = new EmbedFooterBuilder
-                            {
-                                Text = $"{Name} - {BuildVersion} - {new DateTime(GameInfo.CreateTimestamp):yyyy_MM_dd__HH_mm_ss}"
-                            };
-                            eb.Footer = footer;
-
-                            Embed[] embedArray = new Embed[] { eb.Build() };
-                            discord.SendMessageAsync(null, false, embeds: embedArray, "Atlas Reactor", threadId: LobbyConfiguration.GetChannelThreadId());
                         }
                         catch (Exception exeption)
                         {
@@ -218,8 +469,9 @@ namespace CentralServer.BridgeServer
                 {
                     log.Error(ex);
                 }
-                
 
+                //Wait a bit so people can look at stuff but we do have to send it so server can restart
+                await Task.Delay(60000);
                 Send(new ShutdownGameRequest());
             }
             else if (type == typeof(PlayerDisconnectedNotification))
@@ -250,7 +502,9 @@ namespace CentralServer.BridgeServer
                 ServerGameStatusNotification request = Deserialize<ServerGameStatusNotification>(networkReader);
                 log.Debug($"< {request.GetType().Name} {DefaultJsonSerializer.Serialize(request)}");
                 log.Info($"Game {GameInfo?.Name} {request.GameStatus}");
-                GameStatus = request.GameStatus;
+
+                UpdateGameStatus(request.GameStatus, true);
+
                 if (GameStatus == GameStatus.Stopped)
                 {
                     foreach (LobbyServerProtocol client in clients)
@@ -295,6 +549,53 @@ namespace CentralServer.BridgeServer
         {
             ServerManager.RemoveServer(ProcessCode);
             IsConnected = false;
+        }
+
+        public void UpdateGameStatus(GameStatus status, bool notify = false)
+        {
+            // Update GameInfo's GameStatus
+            GameStatus = status;
+            GameInfo.GameStatus = status;
+
+            // If status is not None, notify players of the change
+            if (status == GameStatus.None || !notify) return;
+            GameStatusNotification notification = new GameStatusNotification() { GameStatus = status };
+
+            foreach (long player in GetPlayers())
+            {
+                LobbyServerProtocol playerConnection = SessionManager.GetClientConnection(player);
+                if (playerConnection != null)
+                {
+                    playerConnection.Send(notification);
+                }
+            }
+        }
+
+        public void UpdateGameInfoToPlayers()
+        {
+            foreach (long player in GetPlayers())
+            {
+                GameInfoNotification notification = new GameInfoNotification()
+                {
+                    GameInfo = GameInfo,
+                    TeamInfo = LobbyTeamInfo.FromServer(TeamInfo, 0, new MatchmakingQueueConfig()),
+                    PlayerInfo = LobbyPlayerInfo.FromServer(SessionManager.GetPlayerInfo(player), 0, new MatchmakingQueueConfig())
+                };
+                LobbyServerProtocol playerConnection = SessionManager.GetClientConnection(player);
+                if (playerConnection != null)
+                {
+                    playerConnection.Send(notification);
+                }
+            }
+        }
+
+        public void OnPlayerUsedGGPack(long accountId)
+        {
+            int ggPackUsedAccountIDs = 0;
+            GameInfo.ggPackUsedAccountIDs.TryGetValue(accountId, out ggPackUsedAccountIDs);
+            GameInfo.ggPackUsedAccountIDs[accountId] = ggPackUsedAccountIDs + 1;
+
+            UpdateGameInfoToPlayers();
         }
 
         public bool IsAvailable()

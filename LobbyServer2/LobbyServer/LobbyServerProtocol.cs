@@ -882,6 +882,7 @@ namespace CentralServer.LobbyServer
                         };
                         client.Send(useGGPackNotification);
                     }
+                    CurrentServer.OnPlayerUsedGGPack(AccountId);
                 }
             }
         }
