@@ -351,10 +351,14 @@ namespace CentralServer.BridgeServer
                                 topParticipationEarned.Add(TopParticipantSlot.MostDecorated);
                             }
 
+                            Team team = Team.TeamB;
+                            if (player.IsInTeamA() && request.GameSummary.GameResult == GameResult.TeamAWon) team = Team.TeamA;
+                            else if (player.IsInTeamB() && request.GameSummary.GameResult == GameResult.TeamBWon) team = Team.TeamA;
+
                             request.GameSummary.BadgeAndParticipantsInfo.Add(new BadgeAndParticipantInfo()
                             {
                                 PlayerId = player.PlayerId,
-                                TeamId = (player.IsInTeamA() ? Team.TeamA : Team.TeamB),
+                                TeamId = team,
                                 TeamSlot = player.TeamSlot,
                                 BadgesEarned = badgeInfos[player.PlayerId],
                                 TopParticipationEarned = topParticipationEarned,
