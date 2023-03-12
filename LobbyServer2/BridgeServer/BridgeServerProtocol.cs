@@ -181,9 +181,10 @@ namespace CentralServer.BridgeServer
                                 int totalPlayers = sortedPlayersEnemiesSightedPerTurn.Count;
                                 double percentile = (totalPlayers - playerIndexEnemiesSightedPerTurn - 1) * 100.0 / totalPlayers;
 
-                                if (percentile > 50) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 4 });
-                                if (percentile > 75) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 5 });
+
                                 if (percentile > 80) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 6 });
+                                else if (percentile > 75) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 5 });
+                                else if (percentile > 50) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 4 });
                             }
 
                             if (player.GetDamageDealtPerTurn() >= 20 && player.GetSupportPerTurn() >= 20 && player.GetTankingPerLife() >= 200) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 9 });
@@ -197,9 +198,9 @@ namespace CentralServer.BridgeServer
                                 int totalPlayers = sortedPlayersFreelancerStats.Count;
                                 double percentile = (totalPlayers - playerIndexFreelancerStats - 1) * 100.0 / totalPlayers;
 
-                                if (percentile > 50) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 10 });
-                                if (percentile > 75) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 11 });
                                 if (percentile > 80) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 12 });
+                                else if (percentile > 75) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 11 });
+                                else if(percentile > 50) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 10 });
                             }
 
                             if (highestDamagePerTurn != null && highestDamagePerTurn.PlayerId == player.PlayerId) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 13 });
@@ -211,9 +212,9 @@ namespace CentralServer.BridgeServer
                                 int totalPlayers = sortedPlayersDamageDealtPerTurn.Count;
                                 double percentile = (totalPlayers - playerIndexDamageDealtPerTurn - 1) * 100.0 / totalPlayers;
 
-                                if (percentile > 50) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 14 });
-                                if (percentile > 75) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 15 });
                                 if (percentile > 80) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 16 });
+                                else if (percentile > 75) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 15 });
+                                else if (percentile > 50) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 14 });
                             }
 
                             int playerIndexDamageEfficiency = sortedPlayersDamageEfficiency.FindIndex(p => p.PlayerId == player.PlayerId);
@@ -223,9 +224,9 @@ namespace CentralServer.BridgeServer
                                 int totalPlayers = sortedPlayersDamageEfficiency.Count;
                                 double percentile = (totalPlayers - playerIndexDamageEfficiency - 1) * 100.0 / totalPlayers;
 
-                                if (percentile > 50) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 17 });
-                                if (percentile > 75) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 18 });
                                 if (percentile > 80) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 19 });
+                                else if (percentile > 75) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 18 });
+                                else if (percentile > 50) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 17 });
                             }
 
                             int playerIndexDamageDonePerLife = sortedPlayersDamageDonePerLife.FindIndex(p => p.PlayerId == player.PlayerId);
@@ -235,9 +236,10 @@ namespace CentralServer.BridgeServer
                                 int totalPlayers = sortedPlayersDamageDonePerLife.Count;
                                 double percentile = (totalPlayers - playerIndexDamageDonePerLife - 1) * 100.0 / totalPlayers;
 
-                                if (percentile > 50) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 21 });
-                                if (percentile > 75) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 22 });
                                 if (percentile > 80) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 23 });
+                                else if (percentile > 75) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 22 });
+                                else if (percentile > 50) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 21 });
+                                
                             }
 
                             int playerIndexDamageTakenPerLife = sortedPlayersDamageTakenPerLife.FindIndex(p => p.PlayerId == player.PlayerId);
@@ -248,9 +250,9 @@ namespace CentralServer.BridgeServer
                                 int totalPlayers = sortedPlayersDamageTakenPerLife.Count;
                                 double percentile = (totalPlayers - playerIndexDamageTakenPerLife - 1) * 100.0 / totalPlayers;
 
-                                if (percentile > 50) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 24 });
-                                if (percentile > 75) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 25 });
                                 if (percentile > 80) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 26 });
+                                else if (percentile > 75) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 25 });
+                                else if (percentile > 50) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 24 });                                
                             }
 
 
@@ -261,9 +263,9 @@ namespace CentralServer.BridgeServer
                                 int totalPlayers = sortedPlayersDodge.Count;
                                 double percentile = (totalPlayers - playerIndexDodge - 1) * 100.0 / totalPlayers;
 
-                                if (percentile > 50) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 27 });
-                                if (percentile > 75) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 28 });
                                 if (percentile > 80) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 29 });
+                                else if (percentile > 75) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 28 });
+                                else if (percentile > 50) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 27 });
                             }
 
                             int playerIndexCrowdControl = sortedPlayersCrowdControl.FindIndex(p => p.PlayerId == player.PlayerId);
@@ -273,9 +275,9 @@ namespace CentralServer.BridgeServer
                                 int totalPlayers = sortedPlayersCrowdControl.Count;
                                 double percentile = (totalPlayers - playerIndexCrowdControl - 1) * 100.0 / totalPlayers;
 
-                                if (percentile > 50) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 30 });
-                                if (percentile > 75) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 31 });
                                 if (percentile > 80) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 32 });
+                                else if (percentile > 75) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 31 });
+                                else if (percentile > 50) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 30 });
                             }
 
                             if (highestMitigated != null && highestMitigated.PlayerId == player.PlayerId) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 33 });
@@ -287,9 +289,9 @@ namespace CentralServer.BridgeServer
                                 int totalPlayers = sortedPlayersHealedShielded.Count;
                                 double percentile = (totalPlayers - playerIndexHealedShielded - 1) * 100.0 / totalPlayers;
 
-                                if (percentile > 50) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 34 });
-                                if (percentile > 75) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 35 });
                                 if (percentile > 80) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 36 });
+                                else if (percentile > 75) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 35 });
+                                else if (percentile > 50) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 34 });
                             }
 
                             int playerIndexBoostTeamDamage = sortedPlayersBoostTeamDamage.FindIndex(p => p.PlayerId == player.PlayerId);
@@ -299,9 +301,9 @@ namespace CentralServer.BridgeServer
                                 int totalPlayers = sortedPlayersBoostTeamDamage.Count;
                                 double percentile = (totalPlayers - playerIndexBoostTeamDamage - 1) * 100.0 / totalPlayers;
 
-                                if (percentile > 50) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 37 });
-                                if (percentile > 75) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 38 });
                                 if (percentile > 80) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 39 });
+                                else if (percentile > 75) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 38 });
+                                else if (percentile > 50) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 37 });
                             }
 
                             int playerIndexBoostTeamEnergize = sortedPlayersBoostTeamEnergize.FindIndex(p => p.PlayerId == player.PlayerId);
@@ -311,9 +313,9 @@ namespace CentralServer.BridgeServer
                                 int totalPlayers = sortedPlayersBoostTeamEnergize.Count;
                                 double percentile = (totalPlayers - playerIndexBoostTeamEnergize - 1) * 100.0 / totalPlayers;
 
-                                if (percentile > 50) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 40 });
-                                if (percentile > 75) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 41 });
                                 if (percentile > 80) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 42 });
+                                else if (percentile > 75) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 41 });
+                                else if (percentile > 50) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 40 });                                
                             }
 
                             badgeInfos[player.PlayerId] = playerBadgeInfos;
