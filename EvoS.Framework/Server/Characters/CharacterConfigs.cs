@@ -441,7 +441,7 @@ namespace CentralServer.LobbyServer.Character
                 new CharacterConfig()
                 {
                     AllowForBots = true,
-                    AllowForPlayers = false,
+                    AllowForPlayers = true,
                     CharacterRole = CharacterRole.Tank,
                     CharacterType = CharacterType.Valkyrie,
                     Difficulty = 1,
