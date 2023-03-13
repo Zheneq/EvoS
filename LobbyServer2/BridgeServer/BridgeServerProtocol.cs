@@ -137,7 +137,7 @@ namespace CentralServer.BridgeServer
 
                     request.GameSummary.BadgeAndParticipantsInfo = new List<BadgeAndParticipantInfo>();
 
-                    if (GameInfo.GameResult != GameResult.TieGame)
+                    if (request.GameSummary.GameResult == GameResult.TeamAWon || request.GameSummary.GameResult == GameResult.TeamBWon)
                     {
                         PlayerGameSummary highestHealingPlayer = request.GameSummary.PlayerGameSummaryList.OrderByDescending(p => p.GetTotalHealingFromAbility() + p.TotalPlayerAbsorb).FirstOrDefault();
                         PlayerGameSummary highestDamagePlayer = request.GameSummary.PlayerGameSummaryList.OrderByDescending(p => p.TotalPlayerDamage).FirstOrDefault();
@@ -393,7 +393,7 @@ namespace CentralServer.BridgeServer
                     {
                         try
                         {
-                            if (GameInfo.GameResult != GameResult.TieGame)
+                            if (request.GameSummary.GameResult == GameResult.TeamAWon || request.GameSummary.GameResult == GameResult.TeamBWon)
                             {
                                 DiscordWebhookClient discord = new DiscordWebhookClient(LobbyConfiguration.GetChannelWebhook());
                                 string map = Maps.GetMapName[GameInfo.GameConfig.Map];
