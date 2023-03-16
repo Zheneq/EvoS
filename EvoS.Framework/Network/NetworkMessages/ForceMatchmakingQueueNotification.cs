@@ -13,9 +13,9 @@ namespace EvoS.Framework.Network.NetworkMessages
         [EvosMessage(748)]
         public enum ActionType
         {
-            Unicode001D,
-            Unicode000E,
-            Unicode0012
+            Unknown,
+            Join,
+            Leave
         }
     }
 }

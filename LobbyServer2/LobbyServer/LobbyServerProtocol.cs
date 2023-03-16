@@ -428,9 +428,17 @@ namespace CentralServer.LobbyServer
 
         public void HandlePreviousGameInfoRequest(PreviousGameInfoRequest request)
         {
+
+            BridgeServerProtocol server = ServerManager.GetServerWithPlayer(AccountId);
+            LobbyGameInfo lobbyGameInfo = null;
+
+            if (server != null) {
+                lobbyGameInfo = server.GameInfo;
+            }
+
             PreviousGameInfoResponse response = new PreviousGameInfoResponse()
             {
-                PreviousGameInfo = null,
+                PreviousGameInfo = lobbyGameInfo,
                 ResponseId = request.RequestId
             };
             Send(response);
@@ -1087,9 +1095,94 @@ namespace CentralServer.LobbyServer
 
         public void HandleRejoinGameRequest(RejoinGameRequest request)
         {
-            log.Info($"TODO: {UserName} want to reconnect to a game");
-            // log.Info(request.ToJson());
-            // Send(new RejoinGameResponse() { ResponseId = request.RequestId });
+            log.Info($"{UserName} want to reconnect to a game");
+            if (request.PreviousGameInfo != null)
+            {
+                BridgeServerProtocol server = ServerManager.GetServerWithPlayer(AccountId);
+                LobbyServerPlayerInfo playerInfo;
+                try
+                {
+                    playerInfo = server.GetServerPlayerInfo(AccountId);
+                }
+                catch (EvosException)
+                {
+                    // no longer in a game
+                    Send(new RejoinGameResponse() { ResponseId = request.RequestId, Success = false });
+                    return;
+                }
+
+                Send(new RejoinGameResponse() { ResponseId = request.RequestId, Success = true });
+                LobbyGameInfo gameInfo = new LobbyGameInfo
+                {
+                    AcceptedPlayers = server.clients.Count,
+                    AcceptTimeout = new TimeSpan(0, 0, 0),
+                    //SelectTimeout = TimeSpan.FromSeconds(30),
+                    LoadoutSelectTimeout = TimeSpan.FromSeconds(30),
+                    ActiveHumanPlayers = server.clients.Count,
+                    ActivePlayers = server.clients.Count,
+                    CreateTimestamp = DateTime.Now.Ticks,
+                    IsActive = true,
+                    GameConfig = new LobbyGameConfig
+                    {
+                        GameOptionFlags = GameOptionFlag.NoInputIdleDisconnect & GameOptionFlag.NoInputIdleDisconnect,
+                        GameServerShutdownTime = -1,
+                        GameType = server.GameInfo.GameConfig.GameType,
+                        InstanceSubTypeBit = 1,
+                        IsActive = true,
+                        Map = server.GameInfo.GameConfig.Map,
+                        ResolveTimeoutLimit = 1600, // TODO ?
+                        RoomName = "",
+                        Spectators = 0,
+                        SubTypes = server.GameInfo.GameConfig.SubTypes,
+                        TeamABots = 0,
+                        TeamAPlayers = server.GameInfo.GameConfig.TeamAPlayers,
+                        TeamBBots = 0,
+                        TeamBPlayers = server.GameInfo.GameConfig.TeamBPlayers,
+                    }
+                };
+
+                CurrentServer = server;
+                gameInfo.GameServerAddress = server.URI;
+                gameInfo.GameServerProcessCode = server.ProcessCode;
+                gameInfo.GameStatus = GameStatus.Assembling;
+
+                GameAssignmentNotification notification = new GameAssignmentNotification
+                {
+                    GameInfo = gameInfo,
+                    GameResult = GameResult.NoResult,
+                    Observer = false,
+                    PlayerInfo = LobbyPlayerInfo.FromServer(playerInfo, 0, new MatchmakingQueueConfig()),
+                    Reconnection = false
+                };
+                Send(notification);
+
+                gameInfo.GameStatus = GameStatus.Launching;
+
+                GameInfoNotification notification1 = new GameInfoNotification()
+                {
+                    TeamInfo = LobbyTeamInfo.FromServer(server.TeamInfo, 0, new MatchmakingQueueConfig()),
+                    GameInfo = gameInfo,
+                    PlayerInfo = LobbyPlayerInfo.FromServer(playerInfo, 0, new MatchmakingQueueConfig())
+                };
+
+                Send(notification1);
+
+                gameInfo.GameStatus = GameStatus.Launched;
+
+
+                GameInfoNotification notification2 = new GameInfoNotification()
+                {
+                    TeamInfo = LobbyTeamInfo.FromServer(server.TeamInfo, 0, new MatchmakingQueueConfig()),
+                    GameInfo = gameInfo,
+                    PlayerInfo = LobbyPlayerInfo.FromServer(playerInfo, 0, new MatchmakingQueueConfig())
+                };
+
+                Send(notification2);
+
+                OnStartGame(server);
+
+                server.StartGameForReconection(gameInfo, playerInfo);
+            }
         }
 
         public void OnLeaveGroup()

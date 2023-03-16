@@ -1,5 +1,7 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using CentralServer.LobbyServer.Matchmaking;
+using EvoS.Framework.Constants.Enums;
 using log4net;
 
 namespace CentralServer.BridgeServer
@@ -38,6 +40,24 @@ namespace CentralServer.BridgeServer
                 }
             }
             
+            return null;
+        }
+
+        public static BridgeServerProtocol GetServerWithPlayer(long accountId)
+        {
+            foreach (BridgeServerProtocol server in ServerPool.Values)
+            {
+                if (server.GameStatus == GameStatus.Started) 
+                { 
+                    foreach (long player in server.GetPlayers())
+                    {
+                        if (player.Equals(accountId))
+                        {
+                            return server;
+                        }
+                    }
+                }
+            }
             return null;
         }
 

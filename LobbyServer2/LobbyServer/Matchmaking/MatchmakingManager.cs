@@ -73,6 +73,13 @@ namespace CentralServer.LobbyServer.Matchmaking
                 foreach (long member in group.Members)
                 {
                     SessionManager.GetClientConnection(member)?.BroadcastRefreshFriendList();
+                    SessionManager.GetClientConnection(member)?.Send(new MatchmakingQueueToPlayersNotification()
+                    {
+                        AccountId = member,
+                        MessageToSend = MatchmakingQueueToPlayersNotification.MatchmakingQueueMessage.QueueConfirmed,
+                        GameType = gameType,
+                        SubTypeMask = 1
+                    });
                 }
             }
 
@@ -294,7 +301,6 @@ namespace CentralServer.LobbyServer.Matchmaking
                     };
 
                     client.Send(notification);
-
                 }
 
                 gameInfo.GameStatus = GameStatus.LoadoutSelecting;
@@ -335,6 +341,14 @@ namespace CentralServer.LobbyServer.Matchmaking
                             GameResult = GameResult.NoResult,
                             Reconnection = false
                         });
+
+                        //Remove ready from players
+                        ForceMatchmakingQueueNotification forceMatchmakingQueueNotification = new ForceMatchmakingQueueNotification()
+                        {
+                            Action = ForceMatchmakingQueueNotification.ActionType.Leave,
+                            GameType = GameType.PvP
+                        };
+                        client.Send(forceMatchmakingQueueNotification);
                     }
                     return;
                 }

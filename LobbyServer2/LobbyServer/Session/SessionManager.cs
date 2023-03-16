@@ -56,7 +56,7 @@ namespace CentralServer.LobbyServer.Session
             }
         }
 
-        public static LobbyServerPlayerInfo UpdateLobbyServerPlayerInfo(long accountId)
+        public static LobbyServerPlayerInfo UpdateLobbyServerPlayerInfo(long accountId, bool replacedWithBots = false)
         {
             PersistedAccountData account = DB.Get().AccountDao.GetAccount(accountId);
             LobbyServerPlayerInfo playerInfo = new LobbyServerPlayerInfo
@@ -74,7 +74,7 @@ namespace CentralServer.LobbyServer.Session
                 IsNPCBot = false,
                 PlayerId = 0,
                 ReadyState = ReadyState.Unknown,
-                ReplacedWithBots = false,
+                ReplacedWithBots = replacedWithBots,
                 RibbonID = account.AccountComponent.SelectedRibbonID,
                 TitleID = account.AccountComponent.SelectedTitleID,
                 TitleLevel = 1
@@ -135,28 +135,52 @@ namespace CentralServer.LobbyServer.Session
         public static LobbySessionInfo CreateSession(long accountId)
         {
             // Remove any previous session from this account
-            Sessions.TryRemove(accountId, out _);
-            PersistedAccountData account = DB.Get().AccountDao.GetAccount(accountId);
+            //Sessions.TryRemove(accountId, out _);
+            Sessions.TryGetValue(accountId, out LobbySessionInfo session);
+            LobbySessionInfo sessionInfo;
 
-            LobbySessionInfo sessionInfo = new LobbySessionInfo()
+            if (session == null)
             {
-                AccountId = accountId,
-                Handle = account.Handle,
-                UserName = account.Handle,
-                ConnectionAddress = "127.0.0.1",
-                BuildVersion = "STABLE-122-100",
-                LanguageCode = "",
-                FakeEntitlements = "",
-                ProcessCode = "",
-                ProcessType = ProcessType.AtlasReactor,
-                SessionToken = GenerateToken(account.Handle),
-                ReconnectSessionToken = GenerateToken(account.Handle),
-                Region = Region.EU,
-            };
+                PersistedAccountData account = DB.Get().AccountDao.GetAccount(accountId);
 
-            // Add session for account
-            Sessions.TryAdd(accountId, sessionInfo);
+                sessionInfo = new LobbySessionInfo()
+                {
+                    AccountId = accountId,
+                    Handle = account.Handle,
+                    UserName = account.Handle,
+                    ConnectionAddress = "127.0.0.1",
+                    BuildVersion = "STABLE-122-100",
+                    LanguageCode = "",
+                    FakeEntitlements = "",
+                    ProcessCode = "",
+                    ProcessType = ProcessType.AtlasReactor,
+                    SessionToken = GenerateToken(account.Handle),
+                    ReconnectSessionToken = GenerateToken(account.Handle),
+                    Region = Region.EU,
+                };
 
+                // Add session for account
+                Sessions.TryAdd(accountId, sessionInfo);
+            }
+            else {
+                PersistedAccountData account = DB.Get().AccountDao.GetAccount(accountId);
+
+                sessionInfo = new LobbySessionInfo()
+                {
+                    AccountId = accountId,
+                    Handle = account.Handle,
+                    UserName = account.Handle,
+                    ConnectionAddress = "127.0.0.1",
+                    BuildVersion = "STABLE-122-100",
+                    LanguageCode = "",
+                    FakeEntitlements = "",
+                    ProcessCode = "",
+                    ProcessType = ProcessType.AtlasReactor,
+                    SessionToken = session.SessionToken,
+                    ReconnectSessionToken = session.ReconnectSessionToken,
+                    Region = Region.EU,
+                };
+            }
             return sessionInfo;
         }
 

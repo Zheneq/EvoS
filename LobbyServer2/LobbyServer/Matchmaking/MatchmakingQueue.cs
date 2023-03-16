@@ -57,6 +57,8 @@ namespace CentralServer.LobbyServer.Matchmaking
         {
             added = QueuedGroups.TryAdd(groupId, 0);
             MatchmakingQueueInfo.QueuedPlayers = GetPlayerCount();
+            MatchmakingQueueInfo.AverageWaitTime = TimeSpan.FromSeconds(0);
+            MatchmakingQueueInfo.QueueStatus = ServerManager.IsAnyServerAvailable() ? QueueStatus.WaitingForHumans : QueueStatus.AllServersBusy;
             log.Info($"Added group {groupId} to {GameType} queue");
             log.Info($"{GetPlayerCount()} players in {GameType} queue ({QueuedGroups.Count} groups)");
 

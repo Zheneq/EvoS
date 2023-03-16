@@ -27,7 +27,7 @@ namespace CentralServer.BridgeServer
         public int Port;
         private LobbySessionInfo SessionInfo;
         public LobbyGameInfo GameInfo { private set; get; }
-        private LobbyServerTeamInfo TeamInfo;
+        public LobbyServerTeamInfo TeamInfo;
         public List<LobbyServerProtocol> clients = new List<LobbyServerProtocol>();
         public string URI => "ws://" + Address + ":" + Port;
         public GameStatus GameStatus { get; private set; } = GameStatus.Stopped;
@@ -475,7 +475,7 @@ namespace CentralServer.BridgeServer
                 {
                     log.Error(ex);
                 }
-
+                GameStatus = GameStatus.Stopped;
                 //Wait a bit so people can look at stuff but we do have to send it so server can restart
                 await Task.Delay(60000);
                 Send(new ShutdownGameRequest());
@@ -485,12 +485,16 @@ namespace CentralServer.BridgeServer
                 PlayerDisconnectedNotification request = Deserialize<PlayerDisconnectedNotification>(networkReader);
                 log.Debug($"< {request.GetType().Name} {DefaultJsonSerializer.Serialize(request)}");
                 log.Info($"Player {request.PlayerInfo.AccountId} left game {GameInfo?.GameServerProcessCode}");
-                
+
+                //Need to be double checked if this is correct? we need to replacedWithBots set to be true
+                SessionManager.UpdateLobbyServerPlayerInfo(request.PlayerInfo.AccountId, true);
+
                 foreach (LobbyServerProtocol client in clients)
                 {
                     if (client.AccountId == request.PlayerInfo.AccountId)
                     {
                         client.CurrentServer = null;
+                        
                         break;
                     }
                 }
@@ -516,6 +520,15 @@ namespace CentralServer.BridgeServer
                     foreach (LobbyServerProtocol client in clients)
                     {
                         client.CurrentServer = null;
+
+                        //Unready people when game is finishd
+                        ForceMatchmakingQueueNotification forceMatchmakingQueueNotification = new ForceMatchmakingQueueNotification()
+                        {
+                            Action = ForceMatchmakingQueueNotification.ActionType.Leave,
+                            GameType = GameType.PvP
+                        };
+
+                        client.Send(forceMatchmakingQueueNotification);
                     }
                 }
             }
@@ -615,6 +628,19 @@ namespace CentralServer.BridgeServer
             // TODO release if game did not start?
         }
 
+        public void StartGameForReconection(LobbyGameInfo gameInfo, LobbyServerPlayerInfo playerInfo)
+        {
+            JoinGameServerRequest request = new JoinGameServerRequest
+            {
+                OrigRequestId = 0,
+                GameServerProcessCode = gameInfo.GameServerProcessCode,
+                PlayerInfo = playerInfo,
+                SessionInfo = SessionManager.GetSessionInfo(playerInfo.AccountId)
+            };
+            Send(request);
+            
+        }
+
         public void StartGame(LobbyGameInfo gameInfo, LobbyServerTeamInfo teamInfo)
         {
             GameInfo = gameInfo;
@@ -637,7 +663,7 @@ namespace CentralServer.BridgeServer
                 };
                 Send(request);
             }
-            
+
             Send(new LaunchGameRequest()
             {
                 GameInfo = gameInfo,
