@@ -1104,8 +1104,6 @@ namespace CentralServer.LobbyServer
         {
             log.Info($"{UserName} want to reconnect to a game");
 
-            Send(new RejoinGameResponse() { ResponseId = request.RequestId, Success = true });
-
             if (request.PreviousGameInfo != null && request.Accept)
             {
                 BridgeServerProtocol server = ServerManager.GetServerWithPlayer(AccountId);
@@ -1121,6 +1119,7 @@ namespace CentralServer.LobbyServer
                     return;
                 }
 
+                Send(new RejoinGameResponse() { ResponseId = request.RequestId, Success = true });
                 LobbyGameInfo gameInfo = new LobbyGameInfo
                 {
                     AcceptedPlayers = server.clients.Count,
@@ -1189,6 +1188,10 @@ namespace CentralServer.LobbyServer
                 OnStartGame(server);
 
                 server.StartGameForReconection(gameInfo, playerInfo);
+            }
+            else 
+            {
+                Send(new RejoinGameResponse() { ResponseId = request.RequestId, Success = false });
             }
         }
 
