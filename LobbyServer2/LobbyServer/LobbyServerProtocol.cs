@@ -433,7 +433,12 @@ namespace CentralServer.LobbyServer
             LobbyGameInfo lobbyGameInfo = null;
 
             if (server != null) {
-                lobbyGameInfo = server.GameInfo;
+                //We are not in a game when we are supposed to be continue with this request
+                //We only get this state if we are timed out from gameserver 1m interval
+                if (!server.clients.Find(p => p.AccountId == AccountId).IsInGame())
+                {
+                    lobbyGameInfo = server.GameInfo;
+                }
             }
 
             PreviousGameInfoResponse response = new PreviousGameInfoResponse()
@@ -484,8 +489,10 @@ namespace CentralServer.LobbyServer
 
             if (CurrentServer != null)
             {
-                CurrentServer.clients.Remove(this);
-                CurrentServer = null; // we will probably want to save it somewhere for reconnection
+                if (CurrentServer.GameStatus == GameStatus.Stopped) { 
+                    CurrentServer.clients.Remove(this);
+                    CurrentServer = null;
+                }
             }
         }
         
@@ -1096,7 +1103,10 @@ namespace CentralServer.LobbyServer
         public void HandleRejoinGameRequest(RejoinGameRequest request)
         {
             log.Info($"{UserName} want to reconnect to a game");
-            if (request.PreviousGameInfo != null)
+
+            Send(new RejoinGameResponse() { ResponseId = request.RequestId, Success = true });
+
+            if (request.PreviousGameInfo != null && request.Accept)
             {
                 BridgeServerProtocol server = ServerManager.GetServerWithPlayer(AccountId);
                 LobbyServerPlayerInfo playerInfo;
@@ -1111,7 +1121,6 @@ namespace CentralServer.LobbyServer
                     return;
                 }
 
-                Send(new RejoinGameResponse() { ResponseId = request.RequestId, Success = true });
                 LobbyGameInfo gameInfo = new LobbyGameInfo
                 {
                     AcceptedPlayers = server.clients.Count,
@@ -1146,38 +1155,36 @@ namespace CentralServer.LobbyServer
                 gameInfo.GameServerProcessCode = server.ProcessCode;
                 gameInfo.GameStatus = GameStatus.Assembling;
 
-                GameAssignmentNotification notification = new GameAssignmentNotification
+                LobbyPlayerInfo lobbyPlayerInfo = LobbyPlayerInfo.FromServer(playerInfo, 0, new MatchmakingQueueConfig());
+                LobbyTeamInfo lobbyTeamInfo = LobbyTeamInfo.FromServer(server.TeamInfo, 0, new MatchmakingQueueConfig());
+                playerInfo.ReplacedWithBots = true;
+
+                Send(new GameAssignmentNotification
                 {
                     GameInfo = gameInfo,
                     GameResult = GameResult.NoResult,
                     Observer = false,
-                    PlayerInfo = LobbyPlayerInfo.FromServer(playerInfo, 0, new MatchmakingQueueConfig()),
+                    PlayerInfo = lobbyPlayerInfo,
                     Reconnection = false
-                };
-                Send(notification);
+                });
 
                 gameInfo.GameStatus = GameStatus.Launching;
 
-                GameInfoNotification notification1 = new GameInfoNotification()
+                Send(new GameInfoNotification()
                 {
-                    TeamInfo = LobbyTeamInfo.FromServer(server.TeamInfo, 0, new MatchmakingQueueConfig()),
+                    TeamInfo = lobbyTeamInfo,
                     GameInfo = gameInfo,
-                    PlayerInfo = LobbyPlayerInfo.FromServer(playerInfo, 0, new MatchmakingQueueConfig())
-                };
-
-                Send(notification1);
+                    PlayerInfo = lobbyPlayerInfo
+                });
 
                 gameInfo.GameStatus = GameStatus.Launched;
 
-
-                GameInfoNotification notification2 = new GameInfoNotification()
+                Send(new GameInfoNotification()
                 {
-                    TeamInfo = LobbyTeamInfo.FromServer(server.TeamInfo, 0, new MatchmakingQueueConfig()),
+                    TeamInfo = lobbyTeamInfo,
                     GameInfo = gameInfo,
-                    PlayerInfo = LobbyPlayerInfo.FromServer(playerInfo, 0, new MatchmakingQueueConfig())
-                };
-
-                Send(notification2);
+                    PlayerInfo = lobbyPlayerInfo
+                });
 
                 OnStartGame(server);
 

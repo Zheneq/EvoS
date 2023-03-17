@@ -486,15 +486,12 @@ namespace CentralServer.BridgeServer
                 log.Debug($"< {request.GetType().Name} {DefaultJsonSerializer.Serialize(request)}");
                 log.Info($"Player {request.PlayerInfo.AccountId} left game {GameInfo?.GameServerProcessCode}");
 
-                //Need to be double checked if this is correct? we need to replacedWithBots set to be true
-                SessionManager.UpdateLobbyServerPlayerInfo(request.PlayerInfo.AccountId, true);
-
                 foreach (LobbyServerProtocol client in clients)
                 {
                     if (client.AccountId == request.PlayerInfo.AccountId)
                     {
                         client.CurrentServer = null;
-                        
+
                         break;
                     }
                 }
