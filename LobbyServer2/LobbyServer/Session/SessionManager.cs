@@ -56,7 +56,7 @@ namespace CentralServer.LobbyServer.Session
             }
         }
 
-        public static LobbyServerPlayerInfo UpdateLobbyServerPlayerInfo(long accountId, bool replacedWithBots = false)
+        public static LobbyServerPlayerInfo UpdateLobbyServerPlayerInfo(long accountId)
         {
             PersistedAccountData account = DB.Get().AccountDao.GetAccount(accountId);
             LobbyServerPlayerInfo playerInfo = new LobbyServerPlayerInfo
@@ -74,7 +74,7 @@ namespace CentralServer.LobbyServer.Session
                 IsNPCBot = false,
                 PlayerId = 0,
                 ReadyState = ReadyState.Unknown,
-                ReplacedWithBots = replacedWithBots,
+                ReplacedWithBots = false,
                 RibbonID = account.AccountComponent.SelectedRibbonID,
                 TitleID = account.AccountComponent.SelectedTitleID,
                 TitleLevel = 1
