@@ -2,8 +2,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using CentralServer.LobbyServer.Group;
-using EvoS.DirectoryServer.Account;
+using CentralServer.BridgeServer;
 using EvoS.Framework.Constants.Enums;
 using EvoS.Framework.DataAccess;
 using EvoS.Framework.Exceptions;
@@ -134,15 +133,20 @@ namespace CentralServer.LobbyServer.Session
 
         public static LobbySessionInfo CreateSession(long accountId)
         {
-            // Remove any previous session from this account
-            //Sessions.TryRemove(accountId, out _);
+            // If we have a game with this accountId do not remove the session we need the info to be able to reconnect
+            // Else remove it and create a new Session
+            BridgeServerProtocol server = ServerManager.GetServerWithPlayer(accountId);
+            if (server == null)
+            {
+                Sessions.TryRemove(accountId, out _);
+            }
+
             Sessions.TryGetValue(accountId, out LobbySessionInfo session);
             LobbySessionInfo sessionInfo;
+            PersistedAccountData account = DB.Get().AccountDao.GetAccount(accountId);
 
             if (session == null)
             {
-                PersistedAccountData account = DB.Get().AccountDao.GetAccount(accountId);
-
                 sessionInfo = new LobbySessionInfo()
                 {
                     AccountId = accountId,
@@ -163,8 +167,6 @@ namespace CentralServer.LobbyServer.Session
                 Sessions.TryAdd(accountId, sessionInfo);
             }
             else {
-                PersistedAccountData account = DB.Get().AccountDao.GetAccount(accountId);
-
                 sessionInfo = new LobbySessionInfo()
                 {
                     AccountId = accountId,
