@@ -60,8 +60,8 @@ namespace CentralServer.BridgeServer
             typeof(JoinGameServerRequest),
             null, // typeof(JoinGameAsObserverRequest),
             typeof(ShutdownGameRequest),
-            null, // typeof(DisconnectPlayerRequest),
-            null, // typeof(ReconnectPlayerRequest),
+            typeof(DisconnectPlayerRequest),
+            typeof(ReconnectPlayerRequest),
             null, // typeof(MonitorHeartbeatResponse),
             typeof(ServerGameSummaryNotification),
             typeof(PlayerDisconnectedNotification),
@@ -109,14 +109,14 @@ namespace CentralServer.BridgeServer
                 ServerManager.AddServer(this);
 
                 Send(new RegisterGameServerResponse
-                    {
-                        Success = true
-                    },
-                    callbackId);
+                {
+                    Success = true
+                }, 
+                callbackId);
             }
             else if (type == typeof(ServerGameSummaryNotification))
             {
-                try 
+                try
                 {
                     ServerGameSummaryNotification request = Deserialize<ServerGameSummaryNotification>(networkReader);
 
@@ -125,8 +125,8 @@ namespace CentralServer.BridgeServer
                         GameInfo.GameResult = GameResult.TieGame;
                         request.GameSummary = new LobbyGameSummary();
                     }
-                    else 
-                    { 
+                    else
+                    {
                         GameInfo.GameResult = request.GameSummary.GameResult;
                     }
 
@@ -200,7 +200,7 @@ namespace CentralServer.BridgeServer
 
                                 if (percentile > 80) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 12 });
                                 else if (percentile > 75) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 11 });
-                                else if(percentile > 50) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 10 });
+                                else if (percentile > 50) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 10 });
                             }
 
                             if (highestDamagePerTurn != null && highestDamagePerTurn.PlayerId == player.PlayerId) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 13 });
@@ -239,7 +239,7 @@ namespace CentralServer.BridgeServer
                                 if (percentile > 80) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 23 });
                                 else if (percentile > 75) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 22 });
                                 else if (percentile > 50) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 21 });
-                                
+
                             }
 
                             int playerIndexDamageTakenPerLife = sortedPlayersDamageTakenPerLife.FindIndex(p => p.PlayerId == player.PlayerId);
@@ -252,7 +252,7 @@ namespace CentralServer.BridgeServer
 
                                 if (percentile > 80) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 26 });
                                 else if (percentile > 75) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 25 });
-                                else if (percentile > 50) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 24 });                                
+                                else if (percentile > 50) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 24 });
                             }
 
 
@@ -315,7 +315,7 @@ namespace CentralServer.BridgeServer
 
                                 if (percentile > 80) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 42 });
                                 else if (percentile > 75) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 41 });
-                                else if (percentile > 50) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 40 });                                
+                                else if (percentile > 50) playerBadgeInfos.Add(new BadgeInfo() { BadgeId = 40 });
                             }
 
                             badgeInfos[player.PlayerId] = playerBadgeInfos;
@@ -383,9 +383,8 @@ namespace CentralServer.BridgeServer
                             BaseXpGained = 0,
                             CurrencyRewards = new List<MatchResultsNotification.CurrencyReward>()
                         };
-                        client.Send(response);
+                        client?.Send(response);
                     }
-
 
                     UpdateGameInfoToPlayers();
 
@@ -471,7 +470,8 @@ namespace CentralServer.BridgeServer
                             log.Info($"Failed to send report to discord webhook {exeption.Message}");
                         }
                     }
-                } catch(NullReferenceException ex)
+                }
+                catch (NullReferenceException ex)
                 {
                     log.Error(ex);
                 }
@@ -495,6 +495,18 @@ namespace CentralServer.BridgeServer
                         break;
                     }
                 }
+            }
+            else if (type == typeof(DisconnectPlayerRequest))
+            {
+                DisconnectPlayerRequest request = Deserialize<DisconnectPlayerRequest>(networkReader);
+                log.Debug($"< {request.GetType().Name} {DefaultJsonSerializer.Serialize(request)}");
+                log.Info($"Sending Disconnect player Request for accountId {request.PlayerInfo.AccountId}");
+            }
+            else if (type == typeof(ReconnectPlayerRequest))
+            {
+                ReconnectPlayerRequest request = Deserialize<ReconnectPlayerRequest>(networkReader);
+                log.Debug($"< {request.GetType().Name} {DefaultJsonSerializer.Serialize(request)}");
+                log.Info($"Sending reconnect player Request for accountId {request.AccountId} with reconectionsession id {request.NewSessionId}");
             }
             else if (type == typeof(ServerGameMetricsNotification))
             {
@@ -627,6 +639,15 @@ namespace CentralServer.BridgeServer
 
         public void StartGameForReconection(LobbyGameInfo gameInfo, LobbyServerPlayerInfo playerInfo)
         {
+            //Can we modify ReconnectPlayerRequest and send the a new SessionToken to?
+            ReconnectPlayerRequest reconnectPlayerRequest = new ReconnectPlayerRequest()
+            {
+                AccountId = playerInfo.AccountId,
+                NewSessionId = SessionManager.GetSessionInfo(playerInfo.AccountId).ReconnectSessionToken
+            };
+            
+            Send(reconnectPlayerRequest);
+
             JoinGameServerRequest request = new JoinGameServerRequest
             {
                 OrigRequestId = 0,

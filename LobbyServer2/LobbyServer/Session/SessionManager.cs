@@ -166,7 +166,8 @@ namespace CentralServer.LobbyServer.Session
                 // Add session for account
                 Sessions.TryAdd(accountId, sessionInfo);
             }
-            else {
+            else
+            {
                 sessionInfo = new LobbySessionInfo()
                 {
                     AccountId = accountId,
@@ -179,7 +180,7 @@ namespace CentralServer.LobbyServer.Session
                     ProcessCode = "",
                     ProcessType = ProcessType.AtlasReactor,
                     SessionToken = session.SessionToken,
-                    ReconnectSessionToken = session.ReconnectSessionToken,
+                    ReconnectSessionToken = GenerateToken(account.Handle), // This can be regenerated since we send ReconnectPlayerRequest that sends the new ReconnectSessionToken
                     Region = Region.EU,
                 };
             }
