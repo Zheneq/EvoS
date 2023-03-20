@@ -1,11 +1,16 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
+using System.Numerics;
 using System.Reflection;
 using System.Threading.Tasks;
 using CentralServer.LobbyServer;
+using CentralServer.LobbyServer.Gamemode;
+using CentralServer.LobbyServer.Matchmaking;
 using CentralServer.LobbyServer.Session;
 using Discord;
+using Discord.Rest;
 using Discord.Webhook;
 using EvoS.Framework;
 using EvoS.Framework.Constants.Enums;
@@ -16,6 +21,7 @@ using EvoS.Framework.Network.Unity;
 using log4net;
 using WebSocketSharp;
 using WebSocketSharp.Server;
+using static EvoS.Framework.Network.NetworkMessages.GroupSuggestionResponse;
 
 namespace CentralServer.BridgeServer
 {
@@ -27,17 +33,17 @@ namespace CentralServer.BridgeServer
         public int Port;
         private LobbySessionInfo SessionInfo;
         public LobbyGameInfo GameInfo { private set; get; }
-        public LobbyServerTeamInfo TeamInfo;
-        public List<LobbyServerProtocol> clients = new List<LobbyServerProtocol>();
+        public LobbyServerTeamInfo TeamInfo = new LobbyServerTeamInfo() { TeamPlayerInfo = new List<LobbyServerPlayerInfo>() };
+        
         public string URI => "ws://" + Address + ":" + Port;
-        public GameStatus GameStatus { get; private set; } = GameStatus.Stopped;
+        public GameStatus ServerGameStatus { get; private set; } = GameStatus.Stopped;
         public string ProcessCode { get; } = "Artemis" + DateTime.Now.Ticks;
         public string Name => SessionInfo?.UserName ?? "ATLAS";
         public string BuildVersion => SessionInfo?.BuildVersion ?? "";
         public bool IsPrivate { get; private set; }
         public bool IsConnected { get; private set; } = true;
 
-        public LobbyServerPlayerInfo GetServerPlayerInfo(long accountId)
+        public LobbyServerPlayerInfo GetPlayerInfo(long accountId)
         {
             return TeamInfo.TeamPlayerInfo.Find(p => p.AccountId == accountId);
         }
@@ -50,6 +56,23 @@ namespace CentralServer.BridgeServer
         public IEnumerable<long> GetPlayers()
         {
             return from p in TeamInfo.TeamPlayerInfo select p.AccountId;
+        }
+
+        public List<LobbyServerProtocol> GetClients()
+        {
+            List<LobbyServerProtocol> clients = new List<LobbyServerProtocol>();
+
+            // If we don't have any player in teams, return an empty list
+            if (TeamInfo == null || TeamInfo.TeamPlayerInfo == null) return clients;
+
+            foreach (LobbyServerPlayerInfo player in TeamInfo.TeamPlayerInfo)
+            {
+                if (player.IsSpectator || player.IsNPCBot || player.ReplacedWithBots) continue;
+                LobbyServerProtocol client = SessionManager.GetClientConnection(player.AccountId);
+                if (client != null) clients.Add(client);
+            }
+
+            return clients;
         }
 
         public static readonly List<Type> BridgeMessageTypes = new List<Type>
@@ -72,7 +95,7 @@ namespace CentralServer.BridgeServer
             typeof(JoinGameServerResponse),
             null, // typeof(JoinGameAsObserverResponse)
         };
-        
+
         protected List<Type> GetMessageTypes()
         {
             return BridgeMessageTypes;
@@ -374,7 +397,7 @@ namespace CentralServer.BridgeServer
                     //Wait 5 seconds for gg Usages
                     await Task.Delay(5000);
 
-                    foreach (LobbyServerProtocolBase client in clients)
+                    foreach (LobbyServerProtocolBase client in GetClients())
                     {
                         MatchResultsNotification response = new MatchResultsNotification
                         {
@@ -386,7 +409,8 @@ namespace CentralServer.BridgeServer
                         client?.Send(response);
                     }
 
-                    UpdateGameInfoToPlayers();
+
+                    SendGameInfoNotifications();
 
                     if (LobbyConfiguration.GetChannelWebhook().MaybeUri())
                     {
@@ -475,7 +499,7 @@ namespace CentralServer.BridgeServer
                 {
                     log.Error(ex);
                 }
-                GameStatus = GameStatus.Stopped;
+                ServerGameStatus = GameStatus.Stopped;
                 //Wait a bit so people can look at stuff but we do have to send it so server can restart
                 await Task.Delay(60000);
                 Send(new ShutdownGameRequest());
@@ -486,15 +510,15 @@ namespace CentralServer.BridgeServer
                 log.Debug($"< {request.GetType().Name} {DefaultJsonSerializer.Serialize(request)}");
                 log.Info($"Player {request.PlayerInfo.AccountId} left game {GameInfo?.GameServerProcessCode}");
 
-                foreach (LobbyServerProtocol client in clients)
+                foreach (LobbyServerProtocol client in GetClients())
                 {
                     if (client.AccountId == request.PlayerInfo.AccountId)
                     {
                         client.CurrentServer = null;
-
                         break;
                     }
                 }
+                GetPlayerInfo(request.PlayerInfo.AccountId).ReplacedWithBots = true;
             }
             else if (type == typeof(DisconnectPlayerRequest))
             {
@@ -522,11 +546,11 @@ namespace CentralServer.BridgeServer
                 log.Debug($"< {request.GetType().Name} {DefaultJsonSerializer.Serialize(request)}");
                 log.Info($"Game {GameInfo?.Name} {request.GameStatus}");
 
-                UpdateGameStatus(request.GameStatus, true);
+                ServerGameStatus = request.GameStatus;
 
-                if (GameStatus == GameStatus.Stopped)
+                if (ServerGameStatus == GameStatus.Stopped)
                 {
-                    foreach (LobbyServerProtocol client in clients)
+                    foreach (LobbyServerProtocol client in GetClients())
                     {
                         client.CurrentServer = null;
 
@@ -579,97 +603,61 @@ namespace CentralServer.BridgeServer
             IsConnected = false;
         }
 
-        public void UpdateGameStatus(GameStatus status, bool notify = false)
-        {
-            // Update GameInfo's GameStatus
-            GameStatus = status;
-            GameInfo.GameStatus = status;
-
-            // If status is not None, notify players of the change
-            if (status == GameStatus.None || !notify) return;
-            GameStatusNotification notification = new GameStatusNotification() { GameStatus = status };
-
-            foreach (long player in GetPlayers())
-            {
-                LobbyServerProtocol playerConnection = SessionManager.GetClientConnection(player);
-                if (playerConnection != null)
-                {
-                    playerConnection.Send(notification);
-                }
-            }
-        }
-
-        public void UpdateGameInfoToPlayers()
-        {
-            foreach (long player in GetPlayers())
-            {
-                GameInfoNotification notification = new GameInfoNotification()
-                {
-                    GameInfo = GameInfo,
-                    TeamInfo = LobbyTeamInfo.FromServer(TeamInfo, 0, new MatchmakingQueueConfig()),
-                    PlayerInfo = LobbyPlayerInfo.FromServer(SessionManager.GetPlayerInfo(player), 0, new MatchmakingQueueConfig())
-                };
-                LobbyServerProtocol playerConnection = SessionManager.GetClientConnection(player);
-                if (playerConnection != null)
-                {
-                    playerConnection.Send(notification);
-                }
-            }
-        }
-
         public void OnPlayerUsedGGPack(long accountId)
         {
             int ggPackUsedAccountIDs = 0;
             GameInfo.ggPackUsedAccountIDs.TryGetValue(accountId, out ggPackUsedAccountIDs);
             GameInfo.ggPackUsedAccountIDs[accountId] = ggPackUsedAccountIDs + 1;
 
-            UpdateGameInfoToPlayers();
+            SendGameInfoNotifications();
         }
 
         public bool IsAvailable()
         {
-            return GameStatus == GameStatus.Stopped && !IsPrivate && IsConnected;
+            return ServerGameStatus == GameStatus.Stopped && !IsPrivate && IsConnected;
         }
 
         public void ReserveForGame()
         {
-            GameStatus = GameStatus.Assembling;
+            ServerGameStatus = GameStatus.Assembling;
             // TODO release if game did not start?
         }
 
-        public void StartGameForReconection(LobbyGameInfo gameInfo, LobbyServerPlayerInfo playerInfo)
+        public void StartGameForReconection(long accountId)
         {
+            LobbyServerPlayerInfo playerInfo = GetPlayerInfo(accountId);
+            LobbySessionInfo sessionInfo = SessionManager.GetSessionInfo(accountId);
+
             //Can we modify ReconnectPlayerRequest and send the a new SessionToken to?
             ReconnectPlayerRequest reconnectPlayerRequest = new ReconnectPlayerRequest()
             {
-                AccountId = playerInfo.AccountId,
-                NewSessionId = SessionManager.GetSessionInfo(playerInfo.AccountId).ReconnectSessionToken
+                AccountId = accountId,
+                NewSessionId = sessionInfo.ReconnectSessionToken
             };
             
             Send(reconnectPlayerRequest);
 
+            
+
             JoinGameServerRequest request = new JoinGameServerRequest
             {
                 OrigRequestId = 0,
-                GameServerProcessCode = gameInfo.GameServerProcessCode,
+                GameServerProcessCode = GameInfo.GameServerProcessCode,
                 PlayerInfo = playerInfo,
-                SessionInfo = SessionManager.GetSessionInfo(playerInfo.AccountId)
+                SessionInfo = sessionInfo
             };
             Send(request);
-            
         }
 
-        public void StartGame(LobbyGameInfo gameInfo, LobbyServerTeamInfo teamInfo)
+        public void StartGame()
         {
-            GameInfo = gameInfo;
-            TeamInfo = teamInfo;
-            GameStatus = GameStatus.Assembling;
-            Dictionary<int, LobbySessionInfo> sessionInfos = teamInfo.TeamPlayerInfo
+            ServerGameStatus = GameStatus.Assembling;
+            Dictionary<int, LobbySessionInfo> sessionInfos = TeamInfo.TeamPlayerInfo
                 .ToDictionary(
                     playerInfo => playerInfo.PlayerId,
                     playerInfo => SessionManager.GetSessionInfo(playerInfo.AccountId) ?? new LobbySessionInfo());  // fallback for bots TODO something smarter
 
-            foreach (LobbyServerPlayerInfo playerInfo in teamInfo.TeamPlayerInfo)
+            foreach (LobbyServerPlayerInfo playerInfo in TeamInfo.TeamPlayerInfo)
             {
                 LobbySessionInfo sessionInfo = sessionInfos[playerInfo.PlayerId];
                 JoinGameServerRequest request = new JoinGameServerRequest
@@ -684,8 +672,8 @@ namespace CentralServer.BridgeServer
 
             Send(new LaunchGameRequest()
             {
-                GameInfo = gameInfo,
-                TeamInfo = teamInfo,
+                GameInfo = GameInfo,
+                TeamInfo = TeamInfo,
                 SessionInfo = sessionInfos,
                 GameplayOverrides = new LobbyGameplayOverrides()
             });
@@ -725,6 +713,117 @@ namespace CentralServer.BridgeServer
             }
 
             return num;
+        }
+
+        public void FillTeam(List<long> players, Team team)
+        {
+            foreach (long accountId in players)
+            {
+                LobbyServerProtocol client = SessionManager.GetClientConnection(accountId);
+                if (client == null)
+                {
+                    log.Error($"Tried to add {accountId} to a game but they are not connected!");
+                    continue;
+                }
+
+                LobbyServerPlayerInfo playerInfo = SessionManager.GetPlayerInfo(client.AccountId);
+                playerInfo.ReadyState = ReadyState.Ready;
+                playerInfo.TeamId = team;
+                playerInfo.PlayerId = this.TeamInfo.TeamPlayerInfo.Count + 1;
+                log.Info($"adding player {client.UserName}, {client.AccountId} to {team}. readystate: {playerInfo.ReadyState}");
+                this.TeamInfo.TeamPlayerInfo.Add(playerInfo);
+            }
+        }
+
+        public void BuildGameInfo(GameType gameType, GameSubType gameMode)
+        {
+            int playerCount = GetClients().Count;
+            this.GameInfo = new LobbyGameInfo
+            {
+                AcceptedPlayers = playerCount,
+                AcceptTimeout = new TimeSpan(0, 0, 0),
+                //SelectTimeout = TimeSpan.FromSeconds(30),
+                LoadoutSelectTimeout = TimeSpan.FromSeconds(30),
+                ActiveHumanPlayers = playerCount,
+                ActivePlayers = playerCount,
+                CreateTimestamp = DateTime.Now.Ticks,
+                GameConfig = new LobbyGameConfig
+                {
+                    GameOptionFlags = GameOptionFlag.NoInputIdleDisconnect & GameOptionFlag.NoInputIdleDisconnect,
+                    GameServerShutdownTime = -1,
+                    GameType = gameType,
+                    InstanceSubTypeBit = 1,
+                    IsActive = true,
+                    Map = MatchmakingQueue.SelectMap(gameMode),
+                    ResolveTimeoutLimit = 1600, // TODO ?
+                    RoomName = "",
+                    Spectators = 0,
+                    SubTypes = GameModeManager.GetGameTypeAvailabilities()[gameType].SubTypes,
+                    TeamABots = 0,
+                    TeamAPlayers = TeamInfo.TeamAPlayerInfo.Count(),
+                    TeamBBots = 0,
+                    TeamBPlayers = TeamInfo.TeamBPlayerInfo.Count(),
+                },
+                GameResult = GameResult.NoResult,
+                GameServerAddress = this.URI,
+                GameServerProcessCode = this.ProcessCode
+            };
+        }
+
+        public void SetGameStatus(GameStatus status)
+        {
+            GameInfo.GameStatus = status;
+        }
+
+        public void SendGameInfoNotifications()
+        {
+            foreach (long player in GetPlayers())
+            {
+                LobbyServerProtocol playerConnection = SessionManager.GetClientConnection(player);
+                if (playerConnection != null)
+                {
+                    SendGameInfo(playerConnection);
+                }
+            }
+        }
+
+        public void SendGameInfo(LobbyServerProtocol playerConnection) 
+        {
+            LobbyServerPlayerInfo playerInfo = GetPlayerInfo(playerConnection.AccountId);
+            GameInfoNotification notification = new GameInfoNotification()
+            {
+                GameInfo = GameInfo,
+                TeamInfo = LobbyTeamInfo.FromServer(TeamInfo, 0, new MatchmakingQueueConfig()),
+                PlayerInfo = LobbyPlayerInfo.FromServer(playerInfo, 0, new MatchmakingQueueConfig())
+            };
+
+            playerConnection.Send(notification);
+        }
+
+        public void SendGameAssignmentNotification(LobbyServerProtocol client, bool reconnection = false)
+        {
+            LobbyServerPlayerInfo playerInfo = GetPlayerInfo(client.AccountId);
+            GameAssignmentNotification notification = new GameAssignmentNotification
+            {
+                GameInfo = GameInfo,
+                GameResult = GameInfo.GameResult,
+                Observer = false,
+                PlayerInfo = LobbyPlayerInfo.FromServer(playerInfo, 0, new MatchmakingQueueConfig()),
+                Reconnection = reconnection,
+                GameplayOverrides = client.GetGameplayOverrides()
+            };
+
+            client.Send(notification);
+        }
+
+        public void UpdateModsAndCatalysts()
+        {
+            MatchmakingQueueConfig queueConfig = new MatchmakingQueueConfig();
+
+            for (int i = 0; i < GetClients().Count; i++)
+            {
+                TeamInfo.TeamPlayerInfo[i].CharacterInfo = LobbyPlayerInfo.FromServer(TeamInfo.TeamPlayerInfo[i], 0, queueConfig).CharacterInfo;
+            }
         }
     }
 }

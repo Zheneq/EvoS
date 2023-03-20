@@ -1,6 +1,7 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Policy;
 using System.Threading.Tasks;
 using CentralServer.BridgeServer;
 using CentralServer.LobbyServer.Character;
@@ -66,6 +67,11 @@ namespace CentralServer.LobbyServer.Matchmaking
             {
                 // Send 'Assigned to queue notification' to the players
                 GroupManager.Broadcast(group, new MatchmakingQueueAssignmentNotification() { MatchmakingQueueInfo = info });
+                GroupManager.Broadcast(group, new MatchmakingQueueToPlayersNotification() 
+                {
+                    GameType = gameType,
+                    MessageToSend = MatchmakingQueueToPlayersNotification.MatchmakingQueueMessage.QueueConfirmed,    
+                });
 
                 // Update the queue
                 queue.Update();
@@ -125,6 +131,7 @@ namespace CentralServer.LobbyServer.Matchmaking
 
         public static void StartPractice(LobbyServerProtocolBase client)
         {
+            /*
             MatchmakingQueueConfig queueConfig = new MatchmakingQueueConfig();
             LobbyGameInfo practiceGameInfo = new LobbyGameInfo
             {
@@ -201,287 +208,98 @@ namespace CentralServer.LobbyServer.Matchmaking
 
                 client.Send(notification2);
             }
+            */
         }
 
         public static async Task StartGameAsync(List<long> teamA, List<long> teamB, GameType gameType, GameSubType gameSubType)
         {
             log.Info($"Starting {gameType} game...");
-            MatchmakingQueueConfig queueConfig = new MatchmakingQueueConfig();
 
-            MatchmakingQueue lobbyQueue = Queues[gameType];
-            GameSubType subType = lobbyQueue.MatchmakingQueueInfo.GameConfig.SubTypes[0];
-            LobbyServerTeamInfo teamInfo = new LobbyServerTeamInfo { TeamPlayerInfo = new List<LobbyServerPlayerInfo>() };
-            List<LobbyServerProtocol> clients = new List<LobbyServerProtocol>();
-            // Fill team A
-            foreach (long accountId in teamA)
-            {
-                LobbyServerProtocol client = SessionManager.GetClientConnection(accountId);
-                if (client == null)
-                {
-                    log.Error($"Tried to add {accountId} to a game but they are not connected!");
-                    continue;
-                }
-                clients.Add(client);
-                LobbyServerPlayerInfo playerInfo = SessionManager.GetPlayerInfo(client.AccountId);
-                playerInfo.TeamId = Team.TeamA;
-                playerInfo.PlayerId = teamInfo.TeamPlayerInfo.Count + 1;
-                log.Info($"adding player {client.UserName}, {client.AccountId} to team A");
-                teamInfo.TeamPlayerInfo.Add(playerInfo);
-            }
-
-            // Fill team B
-            foreach (long accountId in teamB)
-            {
-                LobbyServerProtocol client = SessionManager.GetClientConnection(accountId);
-                if (client == null)
-                {
-                    log.Error($"Tried to add {accountId} to a game but they are not connected!");
-                    continue;
-                }
-                clients.Add(client);
-                LobbyServerPlayerInfo playerInfo = SessionManager.GetPlayerInfo(client.AccountId);
-                playerInfo.TeamId = Team.TeamB;
-                playerInfo.PlayerId = teamInfo.TeamPlayerInfo.Count + 1;
-                log.Info($"adding player {client.UserName}, {client.AccountId} to team B");
-                teamInfo.TeamPlayerInfo.Add(playerInfo);
-            }
-
-            LobbyGameInfo gameInfo = new LobbyGameInfo
-            {
-                AcceptedPlayers = clients.Count,
-                AcceptTimeout = new TimeSpan(0, 0, 0),
-                //SelectTimeout = TimeSpan.FromSeconds(30),
-                LoadoutSelectTimeout = TimeSpan.FromSeconds(30),
-                ActiveHumanPlayers = clients.Count,
-                ActivePlayers = clients.Count,
-                CreateTimestamp = DateTime.Now.Ticks,
-                GameConfig = new LobbyGameConfig
-                {
-                    GameOptionFlags = GameOptionFlag.NoInputIdleDisconnect & GameOptionFlag.NoInputIdleDisconnect,
-                    GameServerShutdownTime = -1,
-                    GameType = gameType,
-                    InstanceSubTypeBit = 1,
-                    IsActive = true,
-                    Map = MatchmakingQueue.SelectMap(gameSubType),
-                    ResolveTimeoutLimit = 1600, // TODO ?
-                    RoomName = "",
-                    Spectators = 0,
-                    SubTypes = GameModeManager.GetGameTypeAvailabilities()[gameType].SubTypes,
-                    TeamABots = 0,
-                    TeamAPlayers = teamInfo.TeamAPlayerInfo.Count(),
-                    TeamBBots = 0,
-                    TeamBPlayers = teamInfo.TeamBPlayerInfo.Count(),
-                }
-            };
-
+            // Get a server
             BridgeServerProtocol server = ServerManager.GetServer();
             if (server == null)
             {
                 log.Info($"No available server for {gameType} gamemode");
                 return;
             }
-            else
+
+            MatchmakingQueueConfig queueConfig = new MatchmakingQueueConfig();
+
+            // Fill Teams
+            server.FillTeam(teamA, Team.TeamA);
+            server.FillTeam(teamB, Team.TeamB);
+            server.BuildGameInfo(gameType, gameSubType);
+
+            // Unassign from queue
+            SendUnassignQueueNotification(server.GetClients());
+
+            // Assign players to game
+            server.SetGameStatus(GameStatus.FreelancerSelecting);
+            server.GetClients().ForEach((client)=>server.SendGameAssignmentNotification(client));
+
+            // Enter loadout selection
+            server.SetGameStatus(GameStatus.LoadoutSelecting);
+            server.SendGameInfoNotifications();
+
+
+            // Wait Loadout Selection time
+            await Task.Delay(server.GameInfo.LoadoutSelectTimeout);
+
+            log.Info("Launching...");
+            server.SetGameStatus(GameStatus.Launching);
+
+            //Update teamInfo with new mods catas
+            server.UpdateModsAndCatalysts();
+            
+
+            // If game server failed to start, we go back to the character select screen
+            if (!server.IsConnected)
             {
-                server.clients = clients;
-                gameInfo.GameServerAddress = server.URI;
-                gameInfo.GameServerProcessCode = server.ProcessCode;
-                gameInfo.GameStatus = GameStatus.Assembling;
-
-                for (int i = 0; i < clients.Count; i++)
+                log.Error($"Server {server.URI} reserved for game {server.GameInfo.Name} has disconnected");
+                foreach (LobbyServerProtocol client in server.GetClients())
                 {
-                    LobbyServerProtocol client = clients[i];
-                    GameAssignmentNotification notification = new GameAssignmentNotification
+                    client.Send(new GameAssignmentNotification
                     {
-                        GameInfo = gameInfo,
+                        GameInfo = null,
                         GameResult = GameResult.NoResult,
-                        Observer = false,
-                        PlayerInfo = LobbyPlayerInfo.FromServer(teamInfo.TeamPlayerInfo[i], 0, queueConfig),
-                        Reconnection = false,
-                        GameplayOverrides = client.GetGameplayOverrides()
-                    };
-
-                    client.Send(notification);
+                        Reconnection = false
+                    });
                 }
+                return;
+            }
 
-                gameInfo.GameStatus = GameStatus.LoadoutSelecting;
+            server.StartGame();
 
-                for (int i = 0; i < clients.Count; i++)
-                {
-                    LobbyServerProtocolBase client = clients[i];
-                    GameInfoNotification notification = new GameInfoNotification()
-                    {
+            
+            foreach (LobbyServerProtocol client in server.GetClients())
+            {
+                server.SendGameInfo(client);
+                client.CurrentServer = server;
+            }
 
-                        TeamInfo = LobbyTeamInfo.FromServer(teamInfo, 0, queueConfig),
-                        GameInfo = gameInfo,
-                        PlayerInfo = LobbyPlayerInfo.FromServer(teamInfo.TeamPlayerInfo[i], 0, queueConfig)
-                    };
+            server.SetGameStatus(GameStatus.Launched);
+            server.SendGameInfoNotifications();
 
-                    client.Send(notification);
-                }
+            server.GetClients().ForEach(c => c.OnStartGame(server));
 
-                await Task.Delay(gameInfo.LoadoutSelectTimeout);
+            log.Info($"Game {gameType} started");
+        }
 
-                gameInfo.GameStatus = GameStatus.Launching;
-
-                //Update teamInfo with new mods catas
-                for (int i = 0; i < clients.Count; i++)
-                {
-                    teamInfo.TeamPlayerInfo[i].CharacterInfo = LobbyPlayerInfo.FromServer(teamInfo.TeamPlayerInfo[i], 0, queueConfig).CharacterInfo;
-                }
-
-                // We are ready to start the game
-                if (!server.IsConnected)
-                {
-                    log.Error($"Server {server.URI} reserved for game {gameInfo.Name} has disconnected");
-                    foreach (LobbyServerProtocol client in clients)
-                    {
-                        client.Send(new GameAssignmentNotification
-                        {
-                            GameInfo = null,
-                            GameResult = GameResult.NoResult,
-                            Reconnection = false
-                        });
-
-                        //Remove ready from players
-                        ForceMatchmakingQueueNotification forceMatchmakingQueueNotification = new ForceMatchmakingQueueNotification()
-                        {
-                            Action = ForceMatchmakingQueueNotification.ActionType.Leave,
-                            GameType = GameType.PvP
-                        };
-                        client.Send(forceMatchmakingQueueNotification);
-                    }
-                    return;
-                }
-                server.StartGame(gameInfo, teamInfo);
-
-                for (int i = 0; i < clients.Count; i++)
-                {
-                    LobbyServerProtocol client = clients[i];
-                    GameInfoNotification notification1 = new GameInfoNotification()
-                    {
-
-                        TeamInfo = LobbyTeamInfo.FromServer(teamInfo, 0, queueConfig),
-                        GameInfo = gameInfo,
-                        PlayerInfo = LobbyPlayerInfo.FromServer(teamInfo.TeamPlayerInfo[i], 0, queueConfig)
-                    };
-
-                    client.Send(notification1);
-                    client.CurrentServer = server;
-                }
-
-                gameInfo.GameStatus = GameStatus.Launched;
-
-                for (int i = 0; i < clients.Count; i++)
-                {
-                    LobbyServerProtocolBase client = clients[i];
-                    GameInfoNotification notification = new GameInfoNotification()
-                    {
-                        TeamInfo = LobbyTeamInfo.FromServer(teamInfo, 0, queueConfig),
-                        GameInfo = gameInfo,
-                        PlayerInfo = LobbyPlayerInfo.FromServer(teamInfo.TeamPlayerInfo[i], 0, queueConfig)
-                    };
-
-                    client.Send(notification);
-                }
-
-                clients.ForEach(c => c.OnStartGame(server));
-
-                log.Info($"Game {gameType} started");
+        public static void SendUnassignQueueNotification(List<LobbyServerProtocol> clients)
+        {
+            foreach (LobbyServerProtocol client in clients)
+            {
+                SendUnassignQueueNotification(client);
             }
         }
 
-        public static void StartGameVBots(List<LobbyServerProtocolBase> clients, GameType gameType)
+        public static void SendUnassignQueueNotification(LobbyServerProtocol client)
         {
-            MatchmakingQueueConfig queueConfig = new MatchmakingQueueConfig();
-            LobbyGameInfo gameInfo = new LobbyGameInfo
+            client.Send(new MatchmakingQueueAssignmentNotification
             {
-                AcceptedPlayers = clients.Count,
-                AcceptTimeout = new TimeSpan(0, 0, 0),
-                ActiveHumanPlayers = clients.Count,
-                ActivePlayers = clients.Count,
-                CreateTimestamp = DateTime.Now.Ticks,
-                GameConfig = new LobbyGameConfig
-                {
-                    GameOptionFlags = GameOptionFlag.NoInputIdleDisconnect & GameOptionFlag.NoInputIdleDisconnect,
-                    GameServerShutdownTime = -1,
-                    GameType = gameType,
-                    InstanceSubTypeBit = 1,
-                    IsActive = true,
-                    Map = Maps.Skyway_Deathmatch,
-                    ResolveTimeoutLimit = 1600, // TODO ?
-                    RoomName = "",
-                    Spectators = 0,
-                    SubTypes = GameModeManager.GetGameTypeAvailabilities()[gameType].SubTypes,
-                    TeamABots = 0,
-                    TeamAPlayers = clients.Count,
-                    TeamBBots = 2,
-                    TeamBPlayers = 0,
-                }
-            };
-
-            LobbyServerTeamInfo teamInfo = new LobbyServerTeamInfo();
-            teamInfo.TeamPlayerInfo = new List<LobbyServerPlayerInfo>();
-
-            for (int i = 0; i < clients.Count; i++)
-            {
-                LobbyServerPlayerInfo playerInfo = SessionManager.GetPlayerInfo(clients[i].AccountId);
-                playerInfo.TeamId = Team.TeamA;
-                playerInfo.PlayerId = i + 1;
-                teamInfo.TeamPlayerInfo.Add(playerInfo);
-            }
-
-            for (int i = 0; i < 2; i++)
-            {
-                LobbyServerPlayerInfo playerInfo = CharacterManager.GetPunchingDummyPlayerInfo();
-                playerInfo.TeamId = Team.TeamB;
-                playerInfo.PlayerId = teamInfo.TeamPlayerInfo.Count + 1;
-                teamInfo.TeamPlayerInfo.Add(playerInfo);
-            }
-
-            BridgeServerProtocol server = ServerManager.GetServer();
-            if (server == null)
-            {
-                log.Warn("No available server for practice gamemode");
-            }
-            else
-            {
-                gameInfo.GameServerAddress = server.URI;
-                gameInfo.GameServerProcessCode = server.ProcessCode;
-                gameInfo.GameStatus = GameStatus.Launching;
-
-                server.StartGame(gameInfo, teamInfo);
-
-                for (int i = 0; i < clients.Count; i++)
-                {
-                    LobbyServerProtocolBase client = clients[i];
-                    GameAssignmentNotification notification = new GameAssignmentNotification
-                    {
-                        GameInfo = gameInfo,
-                        GameResult = GameResult.NoResult,
-                        Observer = false,
-                        PlayerInfo = LobbyPlayerInfo.FromServer(teamInfo.TeamPlayerInfo[i], 0, queueConfig),
-                        Reconnection = false,
-                        GameplayOverrides = client.GetGameplayOverrides()
-                    };
-
-                    client.Send(notification);
-                }
-
-                gameInfo.GameStatus = GameStatus.Launched;
-
-                for (int i = 0; i < clients.Count; i++)
-                {
-                    LobbyServerProtocolBase client = clients[i];
-                    GameInfoNotification notification = new GameInfoNotification()
-                    {
-                        TeamInfo = LobbyTeamInfo.FromServer(teamInfo, 0, queueConfig),
-                        GameInfo = gameInfo,
-                        PlayerInfo = LobbyPlayerInfo.FromServer(teamInfo.TeamPlayerInfo[i], 0, queueConfig)
-                    };
-
-                    client.Send(notification);
-                }
-            }
+                MatchmakingQueueInfo = null,
+                Reason = "MatchFound@NewFrontEndScene"
+            });
         }
     }
 }

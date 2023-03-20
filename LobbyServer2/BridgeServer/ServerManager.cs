@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using CentralServer.LobbyServer.Matchmaking;
 using EvoS.Framework.Constants.Enums;
@@ -47,7 +47,7 @@ namespace CentralServer.BridgeServer
         {
             foreach (BridgeServerProtocol server in ServerPool.Values)
             {
-                if (server.GameStatus == GameStatus.Started) 
+                if (server.ServerGameStatus == GameStatus.Started) 
                 { 
                     foreach (long player in server.GetPlayers())
                     {
