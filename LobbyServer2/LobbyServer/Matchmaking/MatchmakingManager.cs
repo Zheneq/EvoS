@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -66,6 +66,11 @@ namespace CentralServer.LobbyServer.Matchmaking
             {
                 // Send 'Assigned to queue notification' to the players
                 GroupManager.Broadcast(group, new MatchmakingQueueAssignmentNotification() { MatchmakingQueueInfo = info });
+                GroupManager.Broadcast(group, new MatchmakingQueueToPlayersNotification() 
+                {
+                    GameType = gameType,
+                    MessageToSend = MatchmakingQueueToPlayersNotification.MatchmakingQueueMessage.QueueConfirmed,    
+                });
 
                 // Update the queue
                 queue.Update();
