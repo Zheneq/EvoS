@@ -35,6 +35,7 @@ namespace CentralServer.LobbyServer
         public ushort SelectedSubTypeMask;
         public BotDifficulty AllyDifficulty;
         public BotDifficulty EnemyDifficulty;
+        public bool SessionCleaned = false; // tracks clean up methods execution for reconnection
 
         protected override string GetConnContext()
         {

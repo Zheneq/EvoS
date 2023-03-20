@@ -100,6 +100,11 @@ namespace CentralServer.LobbyServer
 
         protected override void HandleClose(CloseEventArgs e)
         {
+            if (!SessionCleaned)
+            {
+                SessionCleaned = true;
+                GroupManager.LeaveGroup(AccountId, false);
+            } 
             LobbyServerPlayerInfo playerInfo = SessionManager.GetPlayerInfo(this.AccountId);
             if (playerInfo != null)
             {
@@ -119,7 +124,6 @@ namespace CentralServer.LobbyServer
                 SessionManager.OnPlayerDisconnect(this);
             }
             BroadcastRefreshFriendList();
-            GroupManager.LeaveGroup(AccountId, false);
         }
 
         public void BroadcastRefreshFriendList()

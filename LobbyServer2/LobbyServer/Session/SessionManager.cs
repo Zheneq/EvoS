@@ -1,8 +1,9 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using CentralServer.BridgeServer;
+using CentralServer.LobbyServer.Group;
 using EvoS.Framework.Constants.Enums;
 using EvoS.Framework.DataAccess;
 using EvoS.Framework.Exceptions;
@@ -95,7 +96,9 @@ namespace CentralServer.LobbyServer.Session
                 if (session != null && session.SessionToken == client.SessionToken)
                 {
                     ActiveConnections.TryRemove(client.AccountId, out _);
-                }
+                    // TODO: this sends to every player even if its in game and the disconnected player is not
+                    //client.Broadcast(new ChatNotification() { Text = $"{client.UserName} disconnected", ConsoleMessageType = ConsoleMessageType.SystemMessage });
+                }                
             }
         }
 
@@ -193,6 +196,11 @@ namespace CentralServer.LobbyServer.Session
             ActiveConnections.TryGetValue(accountId, out client);
             if (client != null)
             {
+                if (!client.SessionCleaned)
+                {
+                    client.SessionCleaned = true;
+                    GroupManager.LeaveGroup(accountId, false);
+                }
                 client.WebSocket.Close();
                 ActiveConnections.TryRemove(accountId, out client);
             }
