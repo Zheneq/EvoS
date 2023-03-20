@@ -501,8 +501,7 @@ namespace CentralServer.LobbyServer
 
             if (CurrentServer != null)
             {
-                if (CurrentServer.GameStatus == GameStatus.Stopped) { 
-                    CurrentServer.clients.Remove(this);
+                if (CurrentServer.ServerGameStatus == GameStatus.Stopped) {
                     CurrentServer = null;
                 }
             }
