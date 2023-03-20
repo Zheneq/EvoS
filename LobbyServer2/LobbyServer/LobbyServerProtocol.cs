@@ -289,6 +289,21 @@ namespace CentralServer.LobbyServer
                     SendLobbyServerReadyNotification();
 
                     GroupManager.CreateGroup(AccountId);
+
+                    // Send 'Connected to lobby server' notification to chat
+                    foreach (long playerAccountId in SessionManager.GetOnlinePlayers())
+                    {
+                        LobbyServerProtocol player =  SessionManager.GetClientConnection(playerAccountId);
+                        if (player.CurrentServer == null)
+                        {
+                            ChatNotification chatNotification = new ChatNotification
+                            {
+                                ConsoleMessageType = ConsoleMessageType.SystemMessage,
+                                Text = $"<link=name>{sessionInfo.Handle}</link> connected to lobby server"
+                            };
+                            player.Send(chatNotification);
+                        }
+                    }
                 }
                 else
                 {
