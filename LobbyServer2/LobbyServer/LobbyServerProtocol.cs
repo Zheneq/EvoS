@@ -463,8 +463,13 @@ namespace CentralServer.LobbyServer
             BridgeServerProtocol server = ServerManager.GetServerWithPlayer(AccountId);
             LobbyGameInfo lobbyGameInfo = null;
 
-            if (server != null) {
-                lobbyGameInfo = server.GameInfo;
+            if (server != null)
+            {
+                // Make sure we wait untill gameserver disconects us
+                if (server.GetPlayerInfo(AccountId).ReplacedWithBots)
+                {
+                    lobbyGameInfo = server.GameInfo;
+                }
             }
 
             PreviousGameInfoResponse response = new PreviousGameInfoResponse()
@@ -1155,9 +1160,10 @@ namespace CentralServer.LobbyServer
             playerInfo.ReplacedWithBots = false;
 
             server.SendGameAssignmentNotification(this, true);
-            server.SendGameInfo(this);
-
+            server.SendGameInfo(this, GameStatus.Launching);
+            server.SendGameInfo(this, GameStatus.Launched);
             OnStartGame(server);
+            server.SendGameInfo(this, GameStatus.Started);
             server.StartGameForReconection(AccountId);
         }
 

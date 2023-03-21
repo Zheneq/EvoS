@@ -1,8 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
-using System.Numerics;
 using System.Reflection;
 using System.Threading.Tasks;
 using CentralServer.LobbyServer;
@@ -10,7 +8,6 @@ using CentralServer.LobbyServer.Gamemode;
 using CentralServer.LobbyServer.Matchmaking;
 using CentralServer.LobbyServer.Session;
 using Discord;
-using Discord.Rest;
 using Discord.Webhook;
 using EvoS.Framework;
 using EvoS.Framework.Constants.Enums;
@@ -20,8 +17,6 @@ using EvoS.Framework.Network.Static;
 using EvoS.Framework.Network.Unity;
 using log4net;
 using WebSocketSharp;
-using WebSocketSharp.Server;
-using static EvoS.Framework.Network.NetworkMessages.GroupSuggestionResponse;
 
 namespace CentralServer.BridgeServer
 {
@@ -376,14 +371,10 @@ namespace CentralServer.BridgeServer
                                 topParticipationEarned.Add(TopParticipantSlot.MostDecorated);
                             }
 
-                            Team team = Team.TeamB;
-                            if (player.IsInTeamA() && request.GameSummary.GameResult == GameResult.TeamAWon) team = Team.TeamA;
-                            else if (player.IsInTeamB() && request.GameSummary.GameResult == GameResult.TeamBWon) team = Team.TeamA;
-
                             request.GameSummary.BadgeAndParticipantsInfo.Add(new BadgeAndParticipantInfo()
                             {
                                 PlayerId = player.PlayerId,
-                                TeamId = team,
+                                TeamId = player.IsInTeamA() ? Team.TeamA : Team.TeamB,
                                 TeamSlot = player.TeamSlot,
                                 BadgesEarned = badgeInfos[player.PlayerId],
                                 TopParticipationEarned = topParticipationEarned,
@@ -787,8 +778,14 @@ namespace CentralServer.BridgeServer
             }
         }
 
-        public void SendGameInfo(LobbyServerProtocol playerConnection) 
+        public void SendGameInfo(LobbyServerProtocol playerConnection, GameStatus gamestatus = GameStatus.None) 
         {
+
+            if (gamestatus != GameStatus.None) 
+            {
+                GameInfo.GameStatus = gamestatus;
+            }
+
             LobbyServerPlayerInfo playerInfo = GetPlayerInfo(playerConnection.AccountId);
             GameInfoNotification notification = new GameInfoNotification()
             {

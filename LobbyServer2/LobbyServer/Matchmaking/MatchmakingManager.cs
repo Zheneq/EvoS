@@ -247,10 +247,10 @@ namespace CentralServer.LobbyServer.Matchmaking
 
             log.Info("Launching...");
             server.SetGameStatus(GameStatus.Launching);
+            server.SendGameInfoNotifications();
 
             //Update teamInfo with new mods catas
             server.UpdateModsAndCatalysts();
-            
 
             // If game server failed to start, we go back to the character select screen
             if (!server.IsConnected)
@@ -281,6 +281,10 @@ namespace CentralServer.LobbyServer.Matchmaking
             server.SendGameInfoNotifications();
 
             server.GetClients().ForEach(c => c.OnStartGame(server));
+
+            //send this to or stats break 11hour debuging later lol
+            server.SetGameStatus(GameStatus.Started);
+            server.SendGameInfoNotifications();
 
             log.Info($"Game {gameType} started");
         }
