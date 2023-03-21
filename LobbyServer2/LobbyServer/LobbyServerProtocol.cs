@@ -1155,6 +1155,16 @@ namespace CentralServer.LobbyServer
 
             Send(new RejoinGameResponse() { ResponseId = request.RequestId, Success = true });
 
+            PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
+            LobbyCharacterInfo character = LobbyCharacterInfo.Of(account.CharacterData[account.AccountComponent.LastCharacter]);
+
+            if (character.CharacterType != server.TeamInfo.TeamPlayerInfo.Find(p => p.AccountId == AccountId).CharacterType)
+            {
+                //Update db with the new LastCharacter
+                account.AccountComponent.LastCharacter = server.TeamInfo.TeamPlayerInfo.Find(p => p.AccountId == AccountId).CharacterType;
+                DB.Get().AccountDao.UpdateAccount(account);
+            }
+
             CurrentServer = server;
 
             playerInfo.ReplacedWithBots = false;
