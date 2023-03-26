@@ -8,6 +8,7 @@ using CentralServer.LobbyServer.Gamemode;
 using CentralServer.LobbyServer.Group;
 using EvoS.Framework;
 using EvoS.Framework.Constants.Enums;
+using EvoS.Framework.Network.NetworkMessages;
 using EvoS.Framework.Network.Static;
 using log4net;
 using WebSocketSharp;
@@ -58,7 +59,7 @@ namespace CentralServer.LobbyServer.Matchmaking
             added = QueuedGroups.TryAdd(groupId, 0);
             MatchmakingQueueInfo.QueuedPlayers = GetPlayerCount();
             MatchmakingQueueInfo.AverageWaitTime = TimeSpan.FromSeconds(0);
-            MatchmakingQueueInfo.QueueStatus = ServerManager.IsAnyServerAvailable() ? QueueStatus.WaitingForHumans : QueueStatus.AllServersBusy;
+            MatchmakingQueueInfo.QueueStatus = QueueStatus.WaitingForHumans;
             log.Info($"Added group {groupId} to {GameType} queue");
             log.Info($"{GetPlayerCount()} players in {GameType} queue ({QueuedGroups.Count} groups)");
 
@@ -133,6 +134,17 @@ namespace CentralServer.LobbyServer.Matchmaking
                         if (!CheckGameServerAvailable())
                         {
                             log.Warn("No available game server to start a match");
+                            foreach (MatchmakingGroupInfo group in groups)
+                            {
+                                GroupManager.Broadcast(GroupManager.GetGroup(group.GroupID), new MatchmakingQueueAssignmentNotification() { 
+                                    MatchmakingQueueInfo = new LobbyMatchmakingQueueInfo()
+                                    {
+                                        QueuedPlayers = GetPlayerCount(),
+                                        AverageWaitTime = TimeSpan.FromSeconds(0),
+                                        QueueStatus = QueueStatus.AllServersBusy
+                                    }
+                                });
+                            }
                             return;
                         }
                         foreach (GroupInfo group in teamA)
