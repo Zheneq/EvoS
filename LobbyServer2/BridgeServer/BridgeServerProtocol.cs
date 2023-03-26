@@ -545,14 +545,16 @@ namespace CentralServer.BridgeServer
                     {
                         client.CurrentServer = null;
 
-                        //Unready people when game is finishd
-                        ForceMatchmakingQueueNotification forceMatchmakingQueueNotification = new ForceMatchmakingQueueNotification()
+                        if (GameInfo != null)
                         {
-                            Action = ForceMatchmakingQueueNotification.ActionType.Leave,
-                            GameType = GameType.PvP
-                        };
-
-                        client.Send(forceMatchmakingQueueNotification);
+                            //Unready people when game is finisht
+                            ForceMatchmakingQueueNotification forceMatchmakingQueueNotification = new ForceMatchmakingQueueNotification()
+                            {
+                                Action = ForceMatchmakingQueueNotification.ActionType.Leave,
+                                GameType = GameInfo.GameConfig.GameType
+                            };
+                            client.Send(forceMatchmakingQueueNotification);
+                        }
                     }
                 }
             }
