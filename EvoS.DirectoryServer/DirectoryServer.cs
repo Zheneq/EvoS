@@ -2,7 +2,6 @@ using System;
 using System.IO;
 using System.Net;
 using System.Threading;
-using CentralServer.LobbyServer;
 using CentralServer.LobbyServer.Session;
 using EvoS.DirectoryServer.Account;
 using EvoS.DirectoryServer.Inventory;
@@ -19,7 +18,6 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Http;
 using Newtonsoft.Json;
-using static EvoS.Framework.DataAccess.Daos.LoginDao;
 
 namespace EvoS.DirectoryServer
 {
@@ -208,6 +206,13 @@ namespace EvoS.DirectoryServer
 #if DEBUG
             account.AccountComponent.AppliedEntitlements.TryAdd("DEVELOPER_ACCESS", 1);
 #endif
+
+            // Check if WillFill is missing in CharacterData, if it is add it
+            account.CharacterData.TryGetValue(CharacterType.PendingWillFill, out PersistedCharacterData checkForMissingWillFill);
+            if (checkForMissingWillFill == null)
+            {
+                account.CharacterData.TryAdd(CharacterType.PendingWillFill, new PersistedCharacterData(CharacterType.PendingWillFill));
+            }
 
             foreach (PersistedCharacterData persistedCharacterData in account.CharacterData.Values)
             {

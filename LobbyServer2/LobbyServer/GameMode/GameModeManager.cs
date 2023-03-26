@@ -106,7 +106,7 @@ namespace CentralServer.LobbyServer.Gamemode
         {
             GameTypeAvailability type = new GameTypeAvailability();
             type.IsActive = LobbyConfiguration.GetGameTypePvPAvailable();
-            type.MaxWillFillPerTeam = 0;
+            type.MaxWillFillPerTeam = 4;
             type.SubTypes = new List<GameSubType>()
             {
                 LoadGameSubType(ConfigFiles[GameType.PvP])

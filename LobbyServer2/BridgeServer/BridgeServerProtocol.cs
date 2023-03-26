@@ -4,6 +4,7 @@ using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using CentralServer.LobbyServer;
+using CentralServer.LobbyServer.Character;
 using CentralServer.LobbyServer.Gamemode;
 using CentralServer.LobbyServer.Matchmaking;
 using CentralServer.LobbyServer.Session;
@@ -11,6 +12,7 @@ using Discord;
 using Discord.Webhook;
 using EvoS.Framework;
 using EvoS.Framework.Constants.Enums;
+using EvoS.Framework.DataAccess;
 using EvoS.Framework.Misc;
 using EvoS.Framework.Network.NetworkMessages;
 using EvoS.Framework.Network.Static;
@@ -29,7 +31,7 @@ namespace CentralServer.BridgeServer
         private LobbySessionInfo SessionInfo;
         public LobbyGameInfo GameInfo { private set; get; }
         public LobbyServerTeamInfo TeamInfo = new LobbyServerTeamInfo() { TeamPlayerInfo = new List<LobbyServerPlayerInfo>() };
-        
+
         public string URI => "ws://" + Address + ":" + Port;
         public GameStatus ServerGameStatus { get; private set; } = GameStatus.Stopped;
         public string ProcessCode { get; } = "Artemis" + DateTime.Now.Ticks;
@@ -129,7 +131,7 @@ namespace CentralServer.BridgeServer
                 Send(new RegisterGameServerResponse
                 {
                     Success = true
-                }, 
+                },
                 callbackId);
             }
             else if (type == typeof(ServerGameSummaryNotification))
@@ -625,10 +627,8 @@ namespace CentralServer.BridgeServer
                 AccountId = accountId,
                 NewSessionId = sessionInfo.ReconnectSessionToken
             };
-            
-            Send(reconnectPlayerRequest);
 
-            
+            Send(reconnectPlayerRequest);
 
             JoinGameServerRequest request = new JoinGameServerRequest
             {
@@ -733,7 +733,7 @@ namespace CentralServer.BridgeServer
             {
                 AcceptedPlayers = playerCount,
                 AcceptTimeout = new TimeSpan(0, 0, 0),
-                //SelectTimeout = TimeSpan.FromSeconds(30),
+                SelectTimeout = TimeSpan.FromSeconds(30),
                 LoadoutSelectTimeout = TimeSpan.FromSeconds(30),
                 ActiveHumanPlayers = playerCount,
                 ActivePlayers = playerCount,
@@ -778,10 +778,10 @@ namespace CentralServer.BridgeServer
             }
         }
 
-        public void SendGameInfo(LobbyServerProtocol playerConnection, GameStatus gamestatus = GameStatus.None) 
+        public void SendGameInfo(LobbyServerProtocol playerConnection, GameStatus gamestatus = GameStatus.None)
         {
 
-            if (gamestatus != GameStatus.None) 
+            if (gamestatus != GameStatus.None)
             {
                 GameInfo.GameStatus = gamestatus;
             }
@@ -821,6 +821,163 @@ namespace CentralServer.BridgeServer
             {
                 TeamInfo.TeamPlayerInfo[i].CharacterInfo = LobbyPlayerInfo.FromServer(TeamInfo.TeamPlayerInfo[i], 0, queueConfig).CharacterInfo;
             }
+        }
+
+        public bool CheckDuplicatedAndFill()
+        {
+            var teamACharacters = GetCharactersByTeam(Team.TeamA);
+            var teamBCharacters = GetCharactersByTeam(Team.TeamB);
+
+            var duplicateCharsA = GetDuplicateCharacters(teamACharacters);
+            var duplicateCharsB = GetDuplicateCharacters(teamBCharacters);
+
+            bool didWeHadFillOrDuplicate = false;
+            
+            foreach (long player in GetPlayers())
+            {
+                LobbyServerPlayerInfo playerInfo = GetPlayerInfo(player);
+                LobbyServerProtocol playerConnection = SessionManager.GetClientConnection(player);
+                if (playerConnection != null)
+                { 
+                    if (IsCharacterUnavailable(playerInfo, duplicateCharsA, duplicateCharsB))
+                    {
+                        var thiefName = GetThiefName(playerInfo, duplicateCharsA, duplicateCharsB);
+
+                        playerConnection.Send(new FreelancerUnavailableNotification()
+                        {
+                            oldCharacterType = playerInfo.CharacterType,
+                            thiefName = thiefName,
+                            ItsTooLateToChange = false
+                        });
+
+                        playerInfo.ReadyState = ReadyState.Unknown;
+
+                        didWeHadFillOrDuplicate = true;
+                    }
+
+                    playerConnection.Send(new EnterFreelancerResolutionPhaseNotification()
+                    {
+                        SubPhase = FreelancerResolutionPhaseSubType.DUPLICATE_FREELANCER
+                    });
+
+                    SendGameInfo(playerConnection);
+                }
+            }
+
+            return didWeHadFillOrDuplicate;
+        }
+
+        private ILookup<CharacterType, LobbyServerPlayerInfo> GetCharactersByTeam(Team team)
+        {
+            return TeamInfo.TeamPlayerInfo
+                .Where(p => p.TeamId == team)
+                .ToLookup(p => p.CharacterInfo.CharacterType);
+        }
+
+        private IEnumerable<LobbyServerPlayerInfo> GetDuplicateCharacters(ILookup<CharacterType, LobbyServerPlayerInfo> characters)
+        {
+            return characters.Where(c => c.Count() > 1).SelectMany(c => c);
+        }
+
+        private bool IsCharacterUnavailable(LobbyServerPlayerInfo playerInfo, IEnumerable<LobbyServerPlayerInfo> duplicateCharsA, IEnumerable<LobbyServerPlayerInfo> duplicateCharsB)
+        {
+            return playerInfo.CharacterType == CharacterType.PendingWillFill ||
+                   (playerInfo.TeamId == Team.TeamA && duplicateCharsA.Contains(playerInfo) && duplicateCharsA.First() != playerInfo) ||
+                   (playerInfo.TeamId == Team.TeamB && duplicateCharsB.Contains(playerInfo) && duplicateCharsB.First() != playerInfo);
+        }
+
+        private string GetThiefName(LobbyServerPlayerInfo playerInfo, IEnumerable<LobbyServerPlayerInfo> duplicateCharsA, IEnumerable<LobbyServerPlayerInfo> duplicateCharsB)
+        {
+            if (playerInfo.CharacterType == CharacterType.PendingWillFill) return "";
+
+            var thiefChars = playerInfo.TeamId == Team.TeamA ? duplicateCharsA : duplicateCharsB;
+            return thiefChars.Where(p => p.CharacterType == playerInfo.CharacterType && p.AccountId != playerInfo.AccountId).Select(p => p.Handle).FirstOrDefault();
+        }
+
+        public void CheckIfAllSelected()
+        {
+            var teamACharacters = GetCharactersByTeam(Team.TeamA);
+            var teamBCharacters = GetCharactersByTeam(Team.TeamB);
+
+            var duplicateCharsA = GetDuplicateCharacters(teamACharacters);
+            var duplicateCharsB = GetDuplicateCharacters(teamBCharacters);
+            
+            foreach (long player in GetPlayers())
+            {
+                LobbyServerPlayerInfo playerInfo = GetPlayerInfo(player);
+                LobbyServerProtocol playerConnection = SessionManager.GetClientConnection(player);
+                PersistedAccountData account = DB.Get().AccountDao.GetAccount(playerInfo.AccountId);
+
+                if (playerConnection != null && IsCharacterUnavailable(playerInfo, duplicateCharsA, duplicateCharsB) && playerInfo.ReadyState != ReadyState.Ready)
+                {
+                    CharacterType randomType = account.AccountComponent.LastCharacter;
+                    if (account.AccountComponent.LastCharacter == playerInfo.CharacterType)
+                    {
+                        // If they do not press ready and do not select a new character force them a random character else use the one they selected
+                        randomType = AssignRandomCharacter(playerInfo, teamACharacters, teamBCharacters);
+                    }
+                    
+                    UpdateAccountCharacter(playerInfo, randomType);
+                    NotifyCharacterChange(playerConnection, playerInfo, randomType);
+                    SetPlayerReady(playerConnection, playerInfo, randomType);
+                }
+            }
+        }
+
+        private CharacterType AssignRandomCharacter(LobbyServerPlayerInfo playerInfo, ILookup<CharacterType, LobbyServerPlayerInfo> teamACharacters, ILookup<CharacterType, LobbyServerPlayerInfo> teamBCharacters)
+        {
+            Random rand = new Random();
+            List<CharacterType> availableTypes = CharacterConfigs.Characters
+                .Where(cc => cc.Value.AllowForPlayers && cc.Value.CharacterRole != CharacterRole.None)
+                .Select(cc => cc.Key)
+                .ToList();
+
+            CharacterType randomType = CharacterType.None;
+
+            while (true)
+            {
+                randomType = availableTypes[rand.Next(availableTypes.Count)];
+
+                if (playerInfo.TeamId == Team.TeamA && !teamACharacters[randomType].Any()) break;
+                if (playerInfo.TeamId == Team.TeamB && !teamBCharacters[randomType].Any()) break;
+            }
+
+            log.Info($"Selecting random character for {playerInfo.Handle} {randomType}");
+
+            return randomType;
+        }
+
+        private void UpdateAccountCharacter(LobbyServerPlayerInfo playerInfo, CharacterType randomType)
+        {
+            PersistedAccountData account = DB.Get().AccountDao.GetAccount(playerInfo.AccountId);
+            account.AccountComponent.LastCharacter = randomType;
+            DB.Get().AccountDao.UpdateAccount(account);
+        }
+
+        private void NotifyCharacterChange(LobbyServerProtocol playerConnection, LobbyServerPlayerInfo playerInfo, CharacterType randomType)
+        {
+            PersistedAccountData account = DB.Get().AccountDao.GetAccount(playerInfo.AccountId);
+
+            playerConnection.Send(new ForcedCharacterChangeFromServerNotification()
+            {
+                ChararacterInfo = LobbyCharacterInfo.Of(account.CharacterData[randomType]),
+            });
+
+            playerConnection.Send(new FreelancerUnavailableNotification()
+            {
+                oldCharacterType = playerInfo.CharacterType,
+                newCharacterType = randomType,
+                ItsTooLateToChange = true,
+            });
+        }
+
+        private void SetPlayerReady(LobbyServerProtocol playerConnection, LobbyServerPlayerInfo playerInfo, CharacterType randomType)
+        {
+            PersistedAccountData account = DB.Get().AccountDao.GetAccount(playerInfo.AccountId);
+
+            playerInfo.CharacterInfo = LobbyCharacterInfo.Of(account.CharacterData[randomType]);
+            playerInfo.ReadyState = ReadyState.Ready;
+            SendGameInfo(playerConnection);
         }
     }
 }

@@ -1,15 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Security.Policy;
 using System.Threading.Tasks;
 using CentralServer.BridgeServer;
-using CentralServer.LobbyServer.Character;
-using CentralServer.LobbyServer.Gamemode;
 using CentralServer.LobbyServer.Group;
 using CentralServer.LobbyServer.Session;
 using EvoS.Framework.Constants.Enums;
-using EvoS.Framework.Misc;
 using EvoS.Framework.Network.NetworkMessages;
 using EvoS.Framework.Network.Static;
 using log4net;
@@ -223,24 +219,47 @@ namespace CentralServer.LobbyServer.Matchmaking
                 return;
             }
 
-            MatchmakingQueueConfig queueConfig = new MatchmakingQueueConfig();
-
             // Fill Teams
             server.FillTeam(teamA, Team.TeamA);
             server.FillTeam(teamB, Team.TeamB);
             server.BuildGameInfo(gameType, gameSubType);
-
+            
             // Unassign from queue
             SendUnassignQueueNotification(server.GetClients());
+
+            //Assign Current Server
+            server.GetClients().ForEach(c => c.CurrentServer = server);
 
             // Assign players to game
             server.SetGameStatus(GameStatus.FreelancerSelecting);
             server.GetClients().ForEach((client)=>server.SendGameAssignmentNotification(client));
 
+            // Check for duplicated and WillFill characters
+            if (server.CheckDuplicatedAndFill())
+            {
+                // Wait for Freelancer selection time
+                TimeSpan timeout = server.GameInfo.SelectTimeout;
+                TimeSpan timePassed = TimeSpan.Zero;
+                bool allReady = false;
+
+                while (!allReady && timePassed <= timeout)
+                {
+                    allReady = server.GetPlayers().All(player => server.GetPlayerInfo(player).ReadyState == ReadyState.Ready);
+
+                    if (!allReady)
+                    {
+                        timePassed += TimeSpan.FromSeconds(1);
+                        await Task.Delay(1000);
+                    }
+                }
+
+                // Check if all characters have selected a new freelancer; if not, force them to change
+                server.CheckIfAllSelected();
+            }
+
             // Enter loadout selection
             server.SetGameStatus(GameStatus.LoadoutSelecting);
             server.SendGameInfoNotifications();
-
 
             // Wait Loadout Selection time
             await Task.Delay(server.GameInfo.LoadoutSelectTimeout);
@@ -274,7 +293,6 @@ namespace CentralServer.LobbyServer.Matchmaking
             foreach (LobbyServerProtocol client in server.GetClients())
             {
                 server.SendGameInfo(client);
-                client.CurrentServer = server;
             }
 
             server.SetGameStatus(GameStatus.Launched);

@@ -462,6 +462,19 @@ namespace CentralServer.LobbyServer.Character
                     IsHidden = true
                 }
             },
+            {
+                CharacterType.PendingWillFill,
+                new CharacterConfig()
+                {
+                    AllowForBots = false,
+                    AllowForPlayers = true,
+                    CharacterRole = CharacterRole.None,
+                    CharacterType = CharacterType.PendingWillFill,
+                    Difficulty = 1,
+                    GameTypesProhibitedFrom = new List<GameType>(),
+                    IsHidden = false
+                }
+            }
         };
     }
 }

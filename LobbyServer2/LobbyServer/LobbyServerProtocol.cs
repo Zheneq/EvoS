@@ -429,6 +429,18 @@ namespace CentralServer.LobbyServer
                 OriginalPlayerInfoUpdate = update,
                 ResponseId = request.RequestId
             };
+
+            if (CurrentServer != null)
+            {
+                CurrentServer.SendGameInfoNotifications();
+                if (CurrentServer.GameInfo.GameStatus == GameStatus.FreelancerSelecting)
+                {
+                    Send(new ForcedCharacterChangeFromServerNotification()
+                    {
+                        ChararacterInfo = playerInfo.CharacterInfo,
+                    });
+                }
+            }
             Send(response);
             BroadcastRefreshGroup();
         }
@@ -537,6 +549,13 @@ namespace CentralServer.LobbyServer
             }
             else
             {
+                if (CurrentServer != null)
+                {
+                    if (contextualReadyState.ReadyState == ReadyState.Ready)
+                    {
+                        CurrentServer.GetPlayerInfo(AccountId).ReadyState = ReadyState.Ready;
+                    }
+                }
                 UpdateGroupReadyState();
                 BroadcastRefreshGroup();
             }
