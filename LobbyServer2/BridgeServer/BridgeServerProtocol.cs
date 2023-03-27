@@ -30,7 +30,7 @@ namespace CentralServer.BridgeServer
         public int Port;
         private LobbySessionInfo SessionInfo;
         public LobbyGameInfo GameInfo { private set; get; }
-        public LobbyServerTeamInfo TeamInfo = new LobbyServerTeamInfo() { TeamPlayerInfo = new List<LobbyServerPlayerInfo>() };
+        public LobbyServerTeamInfo TeamInfo { private set; get; } = new LobbyServerTeamInfo() { TeamPlayerInfo = new List<LobbyServerPlayerInfo>() };
 
         public string URI => "ws://" + Address + ":" + Port;
         public GameStatus ServerGameStatus { get; private set; } = GameStatus.Stopped;
@@ -449,8 +449,8 @@ namespace CentralServer.BridgeServer
                                     try
                                     {
                                         PlayerGameSummary playerA = teamA[teams];
-                                        LobbyServerPlayerInfo playerInfoA = SessionManager.GetPlayerInfo(playerA.AccountId);
-                                        eb.AddField($"{playerInfoA.Handle} ({playerA.CharacterName})", $"**[ {playerA.NumAssists} : {playerA.NumDeaths} : {playerA.NumKills} ] [ {playerA.TotalPlayerDamage} : {playerA.GetTotalHealingFromAbility() + playerA.TotalPlayerAbsorb} : {playerA.TotalPlayerDamageReceived} ]**", true);
+                                        PersistedAccountData account = DB.Get().AccountDao.GetAccount(playerA.AccountId);
+                                        eb.AddField($"{account.Handle} ({playerA.CharacterName})", $"**[ {playerA.NumAssists} : {playerA.NumDeaths} : {playerA.NumKills} ] [ {playerA.TotalPlayerDamage} : {playerA.GetTotalHealingFromAbility() + playerA.TotalPlayerAbsorb} : {playerA.TotalPlayerDamageReceived} ]**", true);
                                     }
                                     catch
                                     {
@@ -462,8 +462,8 @@ namespace CentralServer.BridgeServer
                                     try
                                     {
                                         PlayerGameSummary playerB = teamB[teams];
-                                        LobbyServerPlayerInfo playerInfoB = SessionManager.GetPlayerInfo(playerB.AccountId);
-                                        eb.AddField($"{playerInfoB.Handle} ({playerB.CharacterName})", $"**[ {playerB.NumAssists} : {playerB.NumDeaths} : {playerB.NumKills} ] [ {playerB.TotalPlayerDamage} : {playerB.GetTotalHealingFromAbility() + playerB.TotalPlayerAbsorb} : {playerB.TotalPlayerDamageReceived} ]**", true);
+                                        PersistedAccountData account = DB.Get().AccountDao.GetAccount(playerB.AccountId);
+                                        eb.AddField($"{account.Handle} ({playerB.CharacterName})", $"**[ {playerB.NumAssists} : {playerB.NumDeaths} : {playerB.NumKills} ] [ {playerB.TotalPlayerDamage} : {playerB.GetTotalHealingFromAbility() + playerB.TotalPlayerAbsorb} : {playerB.TotalPlayerDamageReceived} ]**", true);
                                     }
                                     catch
                                     {
@@ -547,14 +547,16 @@ namespace CentralServer.BridgeServer
                     {
                         client.CurrentServer = null;
 
-                        //Unready people when game is finishd
-                        ForceMatchmakingQueueNotification forceMatchmakingQueueNotification = new ForceMatchmakingQueueNotification()
+                        if (GameInfo != null)
                         {
-                            Action = ForceMatchmakingQueueNotification.ActionType.Leave,
-                            GameType = GameType.PvP
-                        };
-
-                        client.Send(forceMatchmakingQueueNotification);
+                            //Unready people when game is finisht
+                            ForceMatchmakingQueueNotification forceMatchmakingQueueNotification = new ForceMatchmakingQueueNotification()
+                            {
+                                Action = ForceMatchmakingQueueNotification.ActionType.Leave,
+                                GameType = GameInfo.GameConfig.GameType
+                            };
+                            client.Send(forceMatchmakingQueueNotification);
+                        }
                     }
                 }
             }
@@ -720,16 +722,16 @@ namespace CentralServer.BridgeServer
                 LobbyServerPlayerInfo playerInfo = SessionManager.GetPlayerInfo(client.AccountId);
                 playerInfo.ReadyState = ReadyState.Ready;
                 playerInfo.TeamId = team;
-                playerInfo.PlayerId = this.TeamInfo.TeamPlayerInfo.Count + 1;
+                playerInfo.PlayerId = TeamInfo.TeamPlayerInfo.Count + 1;
                 log.Info($"adding player {client.UserName}, {client.AccountId} to {team}. readystate: {playerInfo.ReadyState}");
-                this.TeamInfo.TeamPlayerInfo.Add(playerInfo);
+                TeamInfo.TeamPlayerInfo.Add(playerInfo);
             }
         }
 
         public void BuildGameInfo(GameType gameType, GameSubType gameMode)
         {
             int playerCount = GetClients().Count;
-            this.GameInfo = new LobbyGameInfo
+            GameInfo = new LobbyGameInfo
             {
                 AcceptedPlayers = playerCount,
                 AcceptTimeout = new TimeSpan(0, 0, 0),
