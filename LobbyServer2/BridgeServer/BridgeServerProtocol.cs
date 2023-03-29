@@ -491,7 +491,7 @@ namespace CentralServer.BridgeServer
                 {
                     log.Error(ex);
                 }
-                ServerGameStatus = GameStatus.Stopped;
+                ServerGameStatus = GameStatus.None;
                 //Wait a bit so people can look at stuff but we do have to send it so server can restart
                 await Task.Delay(60000);
                 Send(new ShutdownGameRequest());
