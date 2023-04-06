@@ -909,7 +909,7 @@ namespace CentralServer.BridgeServer
             IEnumerable<LobbyServerPlayerInfo> duplicateCharsA = GetDuplicateCharacters(teamACharacters);
             IEnumerable<LobbyServerPlayerInfo> duplicateCharsB = GetDuplicateCharacters(teamBCharacters);
 
-            List<CharacterType> usedRandomCharacters = new List<CharacterType>();
+            HashSet<CharacterType> usedRandomCharacters = new HashSet<CharacterType>();
 
             foreach (long player in GetPlayers())
             {
@@ -944,7 +944,7 @@ namespace CentralServer.BridgeServer
         private CharacterType AssignRandomCharacter(
             LobbyServerPlayerInfo playerInfo,
             ILookup<CharacterType,LobbyServerPlayerInfo> teammates,
-            List<CharacterType> usedRandomCharacters)
+            HashSet<CharacterType> usedRandomCharacters)
         {
             HashSet<CharacterType> usedCharacters = teammates.Select(ct => ct.Key).ToHashSet();
 
