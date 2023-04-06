@@ -827,11 +827,11 @@ namespace CentralServer.BridgeServer
 
         public bool CheckDuplicatedAndFill()
         {
-            var teamACharacters = GetCharactersByTeam(Team.TeamA);
-            var teamBCharacters = GetCharactersByTeam(Team.TeamB);
+            ILookup<CharacterType, LobbyServerPlayerInfo> teamACharacters = GetCharactersByTeam(Team.TeamA);
+            ILookup<CharacterType, LobbyServerPlayerInfo> teamBCharacters = GetCharactersByTeam(Team.TeamB);
 
-            var duplicateCharsA = GetDuplicateCharacters(teamACharacters);
-            var duplicateCharsB = GetDuplicateCharacters(teamBCharacters);
+            IEnumerable<LobbyServerPlayerInfo> duplicateCharsA = GetDuplicateCharacters(teamACharacters);
+            IEnumerable<LobbyServerPlayerInfo> duplicateCharsB = GetDuplicateCharacters(teamBCharacters);
 
             bool didWeHadFillOrDuplicate = false;
             
@@ -892,7 +892,7 @@ namespace CentralServer.BridgeServer
         {
             if (playerInfo.CharacterType == CharacterType.PendingWillFill) return "";
 
-            var thiefChars = playerInfo.TeamId == Team.TeamA ? duplicateCharsA : duplicateCharsB;
+            IEnumerable<LobbyServerPlayerInfo> thiefChars = playerInfo.TeamId == Team.TeamA ? duplicateCharsA : duplicateCharsB;
             return thiefChars
                 .Where(p =>
                     p.CharacterType == playerInfo.CharacterType
@@ -903,12 +903,14 @@ namespace CentralServer.BridgeServer
 
         public void CheckIfAllSelected()
         {
-            var teamACharacters = GetCharactersByTeam(Team.TeamA);
-            var teamBCharacters = GetCharactersByTeam(Team.TeamB);
+            ILookup<CharacterType, LobbyServerPlayerInfo> teamACharacters = GetCharactersByTeam(Team.TeamA);
+            ILookup<CharacterType, LobbyServerPlayerInfo> teamBCharacters = GetCharactersByTeam(Team.TeamB);
 
-            var duplicateCharsA = GetDuplicateCharacters(teamACharacters);
-            var duplicateCharsB = GetDuplicateCharacters(teamBCharacters);
-            
+            IEnumerable<LobbyServerPlayerInfo> duplicateCharsA = GetDuplicateCharacters(teamACharacters);
+            IEnumerable<LobbyServerPlayerInfo> duplicateCharsB = GetDuplicateCharacters(teamBCharacters);
+
+            List<CharacterType> usedRandomCharacters = new List<CharacterType>();
+
             foreach (long player in GetPlayers())
             {
                 LobbyServerPlayerInfo playerInfo = GetPlayerInfo(player);
@@ -922,10 +924,16 @@ namespace CentralServer.BridgeServer
                     CharacterType randomType = account.AccountComponent.LastCharacter;
                     if (account.AccountComponent.LastCharacter == playerInfo.CharacterType)
                     {
-                        // If they do not press ready and do not select a new character force them a random character else use the one they selected
-                        randomType = AssignRandomCharacter(playerInfo, playerInfo.TeamId == Team.TeamA ? teamACharacters : teamBCharacters);
+                        // If they do not press ready and do not select a new character
+                        // force them a random character else use the one they selected
+                        randomType = AssignRandomCharacter(
+                            playerInfo, 
+                            playerInfo.TeamId == Team.TeamA ? teamACharacters : teamBCharacters, 
+                            usedRandomCharacters);
                     }
-                    
+
+                    usedRandomCharacters.Add(randomType);
+
                     UpdateAccountCharacter(playerInfo, randomType);
                     NotifyCharacterChange(playerConnection, playerInfo, randomType);
                     SetPlayerReady(playerConnection, playerInfo, randomType);
@@ -935,7 +943,8 @@ namespace CentralServer.BridgeServer
 
         private CharacterType AssignRandomCharacter(
             LobbyServerPlayerInfo playerInfo,
-            ILookup<CharacterType,LobbyServerPlayerInfo> teammates)
+            ILookup<CharacterType,LobbyServerPlayerInfo> teammates,
+            List<CharacterType> usedRandomCharacters)
         {
             HashSet<CharacterType> usedCharacters = teammates.Select(ct => ct.Key).ToHashSet();
 
@@ -943,7 +952,8 @@ namespace CentralServer.BridgeServer
                 .Where(cc =>
                     cc.Value.AllowForPlayers
                     && cc.Value.CharacterRole != CharacterRole.None
-                    && !usedCharacters.Contains(cc.Key))
+                    && !usedCharacters.Contains(cc.Key)
+                    && !usedRandomCharacters.Contains(cc.Key))
                 .Select(cc => cc.Key)
                 .ToList();
 
