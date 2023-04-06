@@ -16,8 +16,11 @@ namespace EvoS.Framework.Network.Static
 
         public bool ReplacedWithBots { get; set; }
 
-        public static LobbyPlayerInfo FromServer(LobbyServerPlayerInfo serverInfo, int maxPlayerLevel,
-            MatchmakingQueueConfig queueConfig)
+        public static LobbyPlayerInfo FromServer(
+            LobbyServerPlayerInfo serverInfo, 
+            int maxPlayerLevel,
+            MatchmakingQueueConfig queueConfig, 
+            bool keepOldData = false)
         {
             LobbyPlayerInfo lobbyPlayerInfo = null;
             if (serverInfo != null)
@@ -32,29 +35,30 @@ namespace EvoS.Framework.Network.Static
                     }
                 }
 
-                // Refetch data from DB was not updated otherwise
+                // If keepOldData is set to true we keep the old values
+                // Else we use new fresh data
                 PersistedAccountData account = DB.Get().AccountDao.GetAccount(serverInfo.AccountId);
 
                 lobbyPlayerInfo = new LobbyPlayerInfo
                 {
-                    AccountId = account.AccountId,
+                    AccountId = keepOldData ? serverInfo.AccountId : account.AccountId,
                     PlayerId = serverInfo.PlayerId,
                     CustomGameVisualSlot = serverInfo.CustomGameVisualSlot,
-                    Handle = account.Handle,
-                    TitleID = account.AccountComponent.SelectedTitleID,
+                    Handle = keepOldData ? serverInfo.Handle : account.Handle,
+                    TitleID = keepOldData ? serverInfo.TitleID : account.AccountComponent.SelectedTitleID,
                     TitleLevel = serverInfo.TitleLevel,
-                    BannerID = account.AccountComponent.SelectedBackgroundBannerID,
-                    EmblemID = account.AccountComponent.SelectedForegroundBannerID,
+                    BannerID = keepOldData ? serverInfo.BannerID : account.AccountComponent.SelectedBackgroundBannerID,
+                    EmblemID = keepOldData ? serverInfo.EmblemID : account.AccountComponent.SelectedForegroundBannerID,
                     RibbonID = serverInfo.RibbonID,
                     IsGameOwner = serverInfo.IsGameOwner,
                     ReplacedWithBots = serverInfo.ReplacedWithBots,
                     IsNPCBot = serverInfo.IsNPCBot,
                     IsLoadTestBot = serverInfo.IsLoadTestBot,
-                    BotsMasqueradeAsHumans = (queueConfig != null && queueConfig.BotsMasqueradeAsHumans),
+                    BotsMasqueradeAsHumans = queueConfig != null && queueConfig.BotsMasqueradeAsHumans,
                     Difficulty = serverInfo.Difficulty,
                     BotCanTaunt = serverInfo.BotCanTaunt,
                     TeamId = serverInfo.TeamId,
-                    CharacterInfo = ((serverInfo.CharacterInfo == null) ? null : LobbyCharacterInfo.Of(account.CharacterData[account.AccountComponent.LastCharacter])),
+                    CharacterInfo = (serverInfo.CharacterInfo == null) ? null : (keepOldData ? serverInfo.CharacterInfo : LobbyCharacterInfo.Of(account.CharacterData[account.AccountComponent.LastCharacter])),
                     RemoteCharacterInfos = list,
                     ReadyState = serverInfo.ReadyState,
                     ControllingPlayerId =
