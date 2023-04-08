@@ -227,8 +227,14 @@ namespace CentralServer.LobbyServer.Matchmaking
             // Unassign from queue
             SendUnassignQueueNotification(server.GetClients());
 
-            //Assign Current Server
+            // Assign Current Server
             server.GetClients().ForEach(c => c.CurrentServer = server);
+
+            // Store there old CharacterType we set it back when match ends
+            // ForcedCharacterChangeFromServerNotification does not persist after a game ends
+            // Even tho the server thinks they are another character the client thinks its the previus one
+            // So Duplicate check does not work as client.CharacterType != server.CharacterType
+            server.GetClients().ForEach(c => c.OldCharacter = server.GetPlayerInfo(c.AccountId).CharacterType);
 
             // Assign players to game
             server.SetGameStatus(GameStatus.FreelancerSelecting);
@@ -280,6 +286,16 @@ namespace CentralServer.LobbyServer.Matchmaking
                 log.Error($"Server {server.URI} reserved for game {server.GameInfo.Name} has disconnected");
                 foreach (LobbyServerProtocol client in server.GetClients())
                 {
+
+                    // Set client back to previus CharacterType
+                    if (server.GetPlayerInfo(client.AccountId).CharacterType != client.OldCharacter) {
+                        server.ResetCharacterToOriginal(client);
+                    }
+                    client.OldCharacter = CharacterType.None;
+
+                    // Clear CurrentServer
+                    client.CurrentServer = null;
+
                     client.Send(new GameAssignmentNotification
                     {
                         GameInfo = null,

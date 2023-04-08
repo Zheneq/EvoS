@@ -51,6 +51,8 @@ namespace CentralServer.LobbyServer
         
         public bool IsReady { get; private set; }
 
+        public CharacterType OldCharacter { get; set; }
+
         protected override void HandleOpen()
         {
             RegisterHandler(new EvosMessageDelegate<RegisterGameClientRequest>(HandleRegisterGame));
@@ -110,16 +112,25 @@ namespace CentralServer.LobbyServer
             {
                 log.Info(string.Format(Messages.PlayerDisconnected, this.UserName));
 
-                // BridgeServerProtocol server = ServerManager.GetServerWithPlayer(AccountId);
-                // if (server != null)
-                // {
-                //     server.Send(new DisconnectPlayerRequest()
-                //     {
-                //         SessionInfo = SessionManager.GetSessionInfo(this.AccountId),
-                //         PlayerInfo = playerInfo,
-                //         GameResult = GameResult.ClientLeft
-                //     });
-                // }
+                BridgeServerProtocol server = ServerManager.GetServerWithPlayer(AccountId);
+                if (server != null)
+                {
+                    //     server.Send(new DisconnectPlayerRequest()
+                    //     {
+                    //         SessionInfo = SessionManager.GetSessionInfo(this.AccountId),
+                    //         PlayerInfo = playerInfo,
+                    //         GameResult = GameResult.ClientLeft
+                    //     });
+
+                    // Set client back to previus CharacterType
+                    LobbyServerProtocol client = SessionManager.GetClientConnection(AccountId);
+                    if (server.GetPlayerInfo(AccountId).CharacterType != client.OldCharacter)
+                    {
+                        server.ResetCharacterToOriginal(client, true);
+                    }
+                    // We set it back on reconnect if need be
+                    client.OldCharacter = CharacterType.None;
+                }
 
                 SessionManager.OnPlayerDisconnect(this);
             }
@@ -433,7 +444,7 @@ namespace CentralServer.LobbyServer
             if (CurrentServer != null)
             {
                 CurrentServer.SendGameInfoNotifications();
-                if (CurrentServer.GameInfo.GameStatus == GameStatus.FreelancerSelecting)
+                if (CurrentServer.GameInfo.GameStatus == GameStatus.FreelancerSelecting && update.CharacterType.HasValue)
                 {
                     Send(new ForcedCharacterChangeFromServerNotification()
                     {
@@ -532,7 +543,16 @@ namespace CentralServer.LobbyServer
 
             if (CurrentServer != null)
             {
-                if (CurrentServer.ServerGameStatus == GameStatus.Stopped) {
+                LobbyServerProtocol client = SessionManager.GetClientConnection(AccountId);
+                if (CurrentServer.GetPlayerInfo(AccountId).CharacterType != client.OldCharacter)
+                {
+                    CurrentServer.ResetCharacterToOriginal(client);
+                }
+                // We set it back on reconnect if need be
+                client.OldCharacter = CharacterType.None;
+
+                if (CurrentServer.ServerGameStatus == GameStatus.Stopped)
+                {
                     CurrentServer = null;
                 }
             }
@@ -1180,12 +1200,21 @@ namespace CentralServer.LobbyServer
             PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
             LobbyCharacterInfo character = LobbyCharacterInfo.Of(account.CharacterData[account.AccountComponent.LastCharacter]);
 
-            if (character.CharacterType != server.TeamInfo.TeamPlayerInfo.Find(p => p.AccountId == AccountId).CharacterType)
+            CharacterType oldCharacterType = server.TeamInfo.TeamPlayerInfo.Find(p => p.AccountId == AccountId).CharacterType;
+
+            if (character.CharacterType != oldCharacterType)
             {
                 //Update db with the new LastCharacter
-                account.AccountComponent.LastCharacter = server.TeamInfo.TeamPlayerInfo.Find(p => p.AccountId == AccountId).CharacterType;
+                account.AccountComponent.LastCharacter = oldCharacterType;
                 DB.Get().AccountDao.UpdateAccount(account);
+                Send(new ForcedCharacterChangeFromServerNotification()
+                {
+                    ChararacterInfo = LobbyCharacterInfo.Of(account.CharacterData[oldCharacterType]),
+                });
             }
+
+            // Set OldCharacter to last selected character before reconnect
+            OldCharacter = character.CharacterType;
 
             CurrentServer = server;
 

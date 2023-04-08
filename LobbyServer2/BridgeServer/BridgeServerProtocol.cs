@@ -557,6 +557,13 @@ namespace CentralServer.BridgeServer
                             };
                             client.Send(forceMatchmakingQueueNotification);
                         }
+
+                        // Set client back to previus CharacterType
+                        if (GetPlayerInfo(client.AccountId).CharacterType != client.OldCharacter)
+                        {
+                            ResetCharacterToOriginal(client);
+                        }
+                        client.OldCharacter = CharacterType.None;
                     }
                 }
             }
@@ -726,7 +733,7 @@ namespace CentralServer.BridgeServer
                 playerInfo.ReadyState = ReadyState.Ready;
                 playerInfo.TeamId = team;
                 playerInfo.PlayerId = TeamInfo.TeamPlayerInfo.Count + 1;
-                log.Info($"adding player {client.UserName}, {client.AccountId} to {team}. readystate: {playerInfo.ReadyState}");
+                log.Info($"adding player {client.UserName} ({playerInfo.CharacterType}), {client.AccountId} to {team}. readystate: {playerInfo.ReadyState}");
                 TeamInfo.TeamPlayerInfo.Add(playerInfo);
             }
         }
@@ -931,7 +938,7 @@ namespace CentralServer.BridgeServer
                 LobbyServerPlayerInfo playerInfo = GetPlayerInfo(player);
                 LobbyServerProtocol playerConnection = SessionManager.GetClientConnection(player);
                 PersistedAccountData account = DB.Get().AccountDao.GetAccount(playerInfo.AccountId);
-
+                
                 if (playerConnection != null
                     && IsCharacterUnavailable(playerInfo, duplicateCharsA, duplicateCharsB)
                     && playerInfo.ReadyState != ReadyState.Ready)
@@ -1012,6 +1019,22 @@ namespace CentralServer.BridgeServer
             playerInfo.CharacterInfo = LobbyCharacterInfo.Of(account.CharacterData[randomType]);
             playerInfo.ReadyState = ReadyState.Ready;
             SendGameInfo(playerConnection);
+        }
+
+        public void ResetCharacterToOriginal(LobbyServerProtocol playerConnection, bool isDisconnected = false) 
+        {
+            if (playerConnection.OldCharacter != CharacterType.None)
+            {
+                UpdateAccountCharacter(GetPlayerInfo(playerConnection.AccountId), playerConnection.OldCharacter);
+                if (!isDisconnected)
+                {
+                    LobbyServerPlayerInfo playerInfo = SessionManager.UpdateLobbyServerPlayerInfo(playerConnection.AccountId);
+                    playerConnection.Send(new ForcedCharacterChangeFromServerNotification()
+                    {
+                        ChararacterInfo = playerInfo.CharacterInfo,
+                    });
+                }
+            }
         }
     }
 }
