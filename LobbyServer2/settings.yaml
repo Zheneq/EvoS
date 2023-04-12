@@ -10,3 +10,4 @@ Database:
   Database: "atlas"
   Salt: "salt"
   MongoDbSrv: false
+  UseCredentials: true # Set to false to ignore user and password in database

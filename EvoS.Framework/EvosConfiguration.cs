@@ -88,6 +88,7 @@ namespace EvoS.Framework
             public string Database = "atlas";
             public string Salt = "salt";
             public bool MongoDbSrv = false;
+            public bool UseCredentials = true;
         }
     }
 }
