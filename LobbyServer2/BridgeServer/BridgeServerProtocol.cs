@@ -1028,10 +1028,11 @@ namespace CentralServer.BridgeServer
                 UpdateAccountCharacter(GetPlayerInfo(playerConnection.AccountId), playerConnection.OldCharacter);
                 if (!isDisconnected)
                 {
-                    LobbyServerPlayerInfo playerInfo = SessionManager.UpdateLobbyServerPlayerInfo(playerConnection.AccountId);
-                    playerConnection.Send(new ForcedCharacterChangeFromServerNotification()
+                    SessionManager.UpdateLobbyServerPlayerInfo(playerConnection.AccountId);
+                    PersistedAccountData account = DB.Get().AccountDao.GetAccount(playerConnection.AccountId);
+                    playerConnection.Send(new PlayerAccountDataUpdateNotification()
                     {
-                        ChararacterInfo = playerInfo.CharacterInfo,
+                        AccountData = account,
                     });
                 }
             }
