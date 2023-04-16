@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Threading;
@@ -208,10 +209,27 @@ namespace EvoS.DirectoryServer
 #endif
 
             // Check if WillFill is missing in CharacterData, if it is add it
-            account.CharacterData.TryGetValue(CharacterType.PendingWillFill, out PersistedCharacterData checkForMissingWillFill);
-            if (checkForMissingWillFill == null)
+            account.CharacterData.TryGetValue(CharacterType.PendingWillFill, out PersistedCharacterData willFill);
+            if (willFill == null)
             {
                 account.CharacterData.TryAdd(CharacterType.PendingWillFill, new PersistedCharacterData(CharacterType.PendingWillFill));
+                willFill = account.CharacterData[CharacterType.PendingWillFill];
+            }
+
+            // PATCH Make sure PendingWillFill has default CharacterLoadouts
+            if (willFill.CharacterComponent.CharacterLoadouts.Count == 0) 
+            {
+                willFill.CharacterComponent.CharacterLoadouts = new List<CharacterLoadout>()
+                {
+                    new CharacterLoadout
+                    (
+                        new CharacterModInfo() { ModForAbility0 = 0, ModForAbility1 = 0, ModForAbility2 = 0, ModForAbility3 = 0, ModForAbility4 = 0 },
+                        new CharacterAbilityVfxSwapInfo() { VfxSwapForAbility0 = 0, VfxSwapForAbility1 = 0, VfxSwapForAbility2 = 0, VfxSwapForAbility3 = 0, VfxSwapForAbility4 = 0 },
+                        "Default",
+                        ModStrictness.AllModes
+                    )
+                };
+                willFill.CharacterComponent.LastSelectedLoadout = 0;
             }
 
             foreach (PersistedCharacterData persistedCharacterData in account.CharacterData.Values)
