@@ -26,10 +26,8 @@ namespace CentralServer.LobbyServer.Discord
 
         private readonly DiscordConfiguration conf;
         
-        private readonly DiscordClientWrapper gameLogChannel;
-        private readonly DiscordClientWrapper adminChannel;
-        private readonly DiscordClientWrapper lobbyChannel;
-        
+        private readonly DiscordClientWrapper discordBot;
+
         private readonly CancellationTokenSource cancelTokenSource = new CancellationTokenSource();
 
         private static readonly DiscordLobbyUtils.Status NO_STATUS = new DiscordLobbyUtils.Status { totalPlayers = -1, inGame = -1, inQueue = -1 };
@@ -45,23 +43,13 @@ namespace CentralServer.LobbyServer.Discord
                 return;
             }
 
-            if (conf.GameLogChannel.IsChannel())
+            if (conf.BotToken.IsNullOrEmpty() || conf.BotToken.Length < 70)
             {
-                log.Info("Discord game log is enabled");
-                gameLogChannel = new DiscordClientWrapper(conf.GameLogChannel);
+                log.Info("Discord is not configured correctly");
+                return;
             }
 
-            if (conf.AdminChannel.IsChannel())
-            {
-                log.Info("Discord admin is enabled");
-                adminChannel = new DiscordClientWrapper(conf.AdminChannel);
-            }
-            
-            if (conf.LobbyChannel.IsChannel())
-            {
-                log.Info("Discord lobby is enabled");
-                lobbyChannel = new DiscordClientWrapper(conf.LobbyChannel);
-            }
+            discordBot = new DiscordClientWrapper(conf);
         }
 
         public static DiscordManager Get()
@@ -71,26 +59,18 @@ namespace CentralServer.LobbyServer.Discord
 
         public void Start()
         {
-            if (lobbyChannel != null)
+            if (discordBot != null)
             {
                 _ = SendServerStatusLoop(cancelTokenSource.Token);
                 ChatManager.Get().OnGlobalChatMessage += SendGlobalChatMessageAsync;
-            }
-            if (adminChannel != null)
-            {
-                ChatManager.Get().OnChatMessage += SendChatMessageAuditAsync;
             }
         }
 
         public void Shutdown()
         {
-            if (lobbyChannel != null)
+            if (discordBot != null)
             {
                 ChatManager.Get().OnGlobalChatMessage -= SendGlobalChatMessageAsync;
-            }
-            if (adminChannel != null)
-            {
-                ChatManager.Get().OnChatMessage -= SendChatMessageAuditAsync;
             }
             cancelTokenSource.Cancel();
             cancelTokenSource.Dispose();
@@ -108,10 +88,11 @@ namespace CentralServer.LobbyServer.Discord
 
         public async void SendGameReport(LobbyGameInfo gameInfo, string serverName, string serverVersion, LobbyGameSummary gameSummary)
         {
-            if (gameLogChannel == null)
+            if (discordBot == null || conf.GameLogChannel == 0)
             {
                 return;
             }
+
             try
             {
                 if (gameSummary.GameResult != GameResult.TeamAWon
@@ -119,13 +100,10 @@ namespace CentralServer.LobbyServer.Discord
                 {
                     return;
                 }
-                await gameLogChannel.SendMessageAsync(
+                await discordBot.SendMessageAsync(
                     null,
                     false,
-                    embeds: new[] {
-                        MakeGameReportEmbed(gameInfo, serverName, serverVersion, gameSummary)
-                    },
-                    "Atlas Reactor");
+                    MakeGameReportEmbed(gameInfo, serverName, serverVersion, gameSummary));
             }
             catch (Exception e)
             {
@@ -135,10 +113,17 @@ namespace CentralServer.LobbyServer.Discord
 
         private async Task SendServerStatus()
         {
-            if (lobbyChannel == null || !conf.LobbyEnableServerStatus)
+            if (discordBot == null || !conf.LobbyEnableServerStatus || conf.LobbyChannel == 0)
             {
                 return;
             }
+
+            while (!discordBot.IsReady())
+            {
+                log.Info("Waiting for bot to login");
+                await Task.Delay(5000);
+            }
+
             DiscordLobbyUtils.Status status = DiscordLobbyUtils.GetStatus();
             if (conf.LobbyChannelUpdateOnChangeOnly && lastStatus.Equals(status))
             {
@@ -146,21 +131,18 @@ namespace CentralServer.LobbyServer.Discord
             }
             try
             {
-                await lobbyChannel.SendMessageAsync(
-                        embeds: new []
-                        {
+                await discordBot.SendMessageAsync(
+                        embed:
                             new EmbedBuilder
                             {
                                 Title = DiscordLobbyUtils.BuildPlayerCountSummary(status),
                                 Color = Color.Green
-                            }.Build()
-                        },
-                        username: "Atlas Reactor")
+                            }.Build())
                     .ContinueWith(x => lastStatus = status);
             }
             catch (Exception e)
             {
-                log.Error("Failed to send status to discord webhook", e);
+                log.Error("Failed to send status to discord", e);
             }
         }
 
@@ -171,15 +153,13 @@ namespace CentralServer.LobbyServer.Discord
 
         private async Task SendGlobalChatMessage(ChatNotification notification)
         {
-            if (lobbyChannel == null || !conf.LobbyEnableChat)
+            if (discordBot == null || !conf.LobbyEnableChat || conf.LobbyChannel == 0)
             {
                 return;
             }
             try
             {
-                await lobbyChannel.SendMessageAsync(
-                    notification.Text,
-                    username: notification.SenderHandle);
+                await discordBot.SendMessageAsync($"{notification.SenderHandle}: {notification.Text}");
             }
             catch (Exception e)
             {
@@ -194,16 +174,15 @@ namespace CentralServer.LobbyServer.Discord
 
         private async Task SendChatMessageAudit(ChatNotification notification)
         {
-            if (adminChannel == null || !conf.AdminEnableChatAudit)
+            if (discordBot == null || !conf.AdminEnableChatAudit || conf.AdminChatAuditChannelId == 0)
             {
                 return;
             }
             try
             {
                 List<long> recipients = DiscordLobbyUtils.GetMessageRecipients(notification, out string fallback, out string context);
-                await adminChannel.SendMessageAsync(
-                    username: notification.SenderHandle,
-                    embeds: new[] { new EmbedBuilder
+                await discordBot.SendMessageAsync(
+                    embed: new EmbedBuilder
                     {
                         Title = notification.Text,
                         Description = !recipients.IsNullOrEmpty()
@@ -211,8 +190,8 @@ namespace CentralServer.LobbyServer.Discord
                             : fallback,
                         Color = DiscordLobbyUtils.GetColor(notification.ConsoleMessageType),
                         Footer = new EmbedFooterBuilder { Text = context }
-                    }.Build() },
-                    threadIdOverride: conf.AdminChatAuditThreadId);
+                    }.Build(),
+                    channelIdOverride: conf.AdminChannel);
             }
             catch (Exception e)
             {
@@ -257,7 +236,7 @@ namespace CentralServer.LobbyServer.Discord
         
         public async void SendPlayerFeedback(long accountId, ClientFeedbackReport message)
         {
-            if (adminChannel == null || !conf.AdminEnableUserReports)
+            if (discordBot == null || !conf.AdminEnableUserReports || conf.AdminChannel == 0)
             {
                 return;
             }
@@ -275,12 +254,11 @@ namespace CentralServer.LobbyServer.Discord
                 {
                     eb.AddField("Reported Account", $"{message.ReportedPlayerHandle} #{message.ReportedPlayerAccountId}", true);
                 }
-                await adminChannel.SendMessageAsync(
+                await discordBot.SendMessageAsync(
                     null,
                     false,
-                    embeds: new[] { eb.Build() },
-                    "Atlas Reactor",
-                    threadIdOverride: conf.AdminUserReportThreadId);
+                    embed: eb.Build(),
+                    channelIdOverride: conf.AdminChannel);
             }
             catch (Exception e)
             {
