@@ -10,6 +10,10 @@ namespace CentralServer.LobbyServer.Discord
         public DiscordChannel GameLogChannel;
         public DiscordChannel LobbyChannel;
 
+        public string BotToken = "";
+        public ulong? BotChannelId;
+        public bool UseDiscordBot;
+
         public bool AdminEnableUserReports;
         public ulong? AdminUserReportThreadId;
         public bool AdminEnableChatAudit;

@@ -29,7 +29,8 @@ namespace CentralServer.LobbyServer.Discord
         private readonly DiscordClientWrapper gameLogChannel;
         private readonly DiscordClientWrapper adminChannel;
         private readonly DiscordClientWrapper lobbyChannel;
-        
+        private readonly DiscordClientWrapper discordBot;
+
         private readonly CancellationTokenSource cancelTokenSource = new CancellationTokenSource();
 
         private static readonly DiscordLobbyUtils.Status NO_STATUS = new DiscordLobbyUtils.Status { totalPlayers = -1, inGame = -1, inQueue = -1 };
@@ -43,6 +44,23 @@ namespace CentralServer.LobbyServer.Discord
             {
                 log.Info("Discord is not enabled");
                 return;
+            }
+
+            if (!conf.UseDiscordBot)
+            {
+                log.Info("Discord bot is not enabled");
+            }
+            else 
+            {
+                if (conf.BotToken.IsNullOrEmpty() || conf.BotToken.Length < 70 || !conf.BotChannelId.HasValue || conf.BotChannelId == 0)
+                {
+                    log.Info("Discord bot is not configured correctly");
+                } 
+                else
+                {
+                    // Init bot but we dont use it for anything not yet anyway we just want chat from discord to atlas and commands
+                    discordBot = new DiscordClientWrapper(conf);
+                }
             }
 
             if (conf.GameLogChannel.IsChannel())
