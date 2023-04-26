@@ -29,7 +29,7 @@ namespace CentralServer.LobbyServer.Discord
         private readonly DiscordClientWrapper gameLogChannel;
         private readonly DiscordClientWrapper adminChannel;
         private readonly DiscordClientWrapper lobbyChannel;
-        private readonly DiscordClientWrapper discordBot;
+        private readonly DiscordBotWrapper discordBot;
 
         private readonly CancellationTokenSource cancelTokenSource = new CancellationTokenSource();
 
@@ -59,7 +59,7 @@ namespace CentralServer.LobbyServer.Discord
                 else
                 {
                     // Init bot but we dont use it for anything not yet anyway we just want chat from discord to atlas and commands
-                    discordBot = new DiscordClientWrapper(conf);
+                    discordBot = new DiscordBotWrapper(conf);
                 }
             }
 
