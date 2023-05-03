@@ -230,6 +230,9 @@ namespace CentralServer.LobbyServer.Matchmaking
             // Assign Current Server
             server.GetClients().ForEach(c => c.CurrentServer = server);
 
+            // Reset UsedGGBoostsCount on each match
+            server.GetClients().ForEach(c => c.UsedGGBoostsCount = 0);
+
             // Store there old CharacterType we set it back when match ends
             // ForcedCharacterChangeFromServerNotification does not persist after a game ends
             // Even tho the server thinks they are another character the client thinks its the previus one

@@ -54,6 +54,7 @@ namespace CentralServer.LobbyServer
 
         public CharacterType OldCharacter { get; set; }
         
+        public int UsedGGBoostsCount { get; set; }
         
         public event Action<LobbyServerProtocol, ChatNotification> OnChatNotification = delegate {};
         public event Action<LobbyServerProtocol, GroupChatRequest> OnGroupChatRequest = delegate {};
@@ -921,7 +922,7 @@ namespace CentralServer.LobbyServer
             PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
             UseGGPackResponse response = new UseGGPackResponse()
             {
-                GGPackUserName = account.UserName,
+                GGPackUserName = account.Handle,
                 GGPackUserBannerBackground = account.AccountComponent.SelectedBackgroundBannerID,
                 GGPackUserBannerForeground = account.AccountComponent.SelectedForegroundBannerID,
                 GGPackUserRibbon = account.AccountComponent.SelectedRibbonID,
@@ -930,21 +931,23 @@ namespace CentralServer.LobbyServer
                 ResponseId = request.RequestId
             };
             Send(response);
+            UsedGGBoostsCount++;
 
             if (CurrentServer != null)
             {
-                foreach(LobbyServerProtocol client in CurrentServer.GetClients())
+                foreach (LobbyServerProtocol client in CurrentServer.GetClients())
                 {
                     if (client.AccountId != AccountId)
                     {
                         UseGGPackNotification useGGPackNotification = new UseGGPackNotification()
                         {
-                            GGPackUserName = account.UserName,
+                            GGPackUserName = account.Handle,
                             GGPackUserBannerBackground = account.AccountComponent.SelectedBackgroundBannerID,
                             GGPackUserBannerForeground = account.AccountComponent.SelectedForegroundBannerID,
                             GGPackUserRibbon = account.AccountComponent.SelectedRibbonID,
                             GGPackUserTitle = account.AccountComponent.SelectedTitleID,
-                            GGPackUserTitleLevel = 1
+                            GGPackUserTitleLevel = 1,
+                            NumGGPacksUsed = UsedGGBoostsCount
                         };
                         client.Send(useGGPackNotification);
                     }
