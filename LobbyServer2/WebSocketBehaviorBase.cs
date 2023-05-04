@@ -70,7 +70,7 @@ namespace CentralServer
         private static bool IsMinorError(ErrorEventArgs e)
         {
             return e.Exception is IOException
-                   || "The stream has been closed".Equals(e.Exception.Message);
+                   || "The stream has been closed".Equals(e.Exception?.Message);
         }
 
         protected virtual void HandleError(ErrorEventArgs e)
