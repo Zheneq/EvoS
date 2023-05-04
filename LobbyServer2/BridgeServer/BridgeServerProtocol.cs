@@ -324,14 +324,8 @@ namespace CentralServer.BridgeServer
 
         public void OnPlayerUsedGGPack(long accountId)
         {
-            int ggPackUsedAccountIDs = 0;
-            GameInfo.ggPackUsedAccountIDs.TryGetValue(accountId, out ggPackUsedAccountIDs);
+            GameInfo.ggPackUsedAccountIDs.TryGetValue(accountId, out int ggPackUsedAccountIDs);
             GameInfo.ggPackUsedAccountIDs[accountId] = ggPackUsedAccountIDs + 1;
-
-            // *EDGE CASE* Set to true to keep all current game characters
-            // Incase someone leaves a match and changes there character,banners etc..,
-            // make sure we have the old character data and not the new character data for this state
-            SendGameInfoNotifications(true);
         }
 
         public bool IsAvailable()

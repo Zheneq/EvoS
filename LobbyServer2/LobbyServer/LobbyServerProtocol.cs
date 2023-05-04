@@ -54,8 +54,6 @@ namespace CentralServer.LobbyServer
 
         public CharacterType OldCharacter { get; set; }
         
-        public int UsedGGBoostsCount { get; set; }
-        
         public event Action<LobbyServerProtocol, ChatNotification> OnChatNotification = delegate {};
         public event Action<LobbyServerProtocol, GroupChatRequest> OnGroupChatRequest = delegate {};
         
@@ -931,10 +929,10 @@ namespace CentralServer.LobbyServer
                 ResponseId = request.RequestId
             };
             Send(response);
-            UsedGGBoostsCount++;
 
             if (CurrentServer != null)
             {
+                CurrentServer.OnPlayerUsedGGPack(AccountId);
                 foreach (LobbyServerProtocol client in CurrentServer.GetClients())
                 {
                     if (client.AccountId != AccountId)
@@ -947,11 +945,11 @@ namespace CentralServer.LobbyServer
                             GGPackUserRibbon = account.AccountComponent.SelectedRibbonID,
                             GGPackUserTitle = account.AccountComponent.SelectedTitleID,
                             GGPackUserTitleLevel = 1,
-                            NumGGPacksUsed = UsedGGBoostsCount
+                            NumGGPacksUsed = CurrentServer.GameInfo.ggPackUsedAccountIDs[AccountId]
                         };
                         client.Send(useGGPackNotification);
                     }
-                    CurrentServer.OnPlayerUsedGGPack(AccountId);
+                    
                 }
             }
         }
