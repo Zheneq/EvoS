@@ -492,6 +492,16 @@ namespace CentralServer.BridgeServer
                                 .SelectMany(players => players))
                         .ToList();
 
+                    foreach (LobbyServerPlayerInfo character in characters.SelectMany(x => x)) 
+                    {
+                        CharacterConfigs.Characters.TryGetValue(character.CharacterInfo.CharacterType, out CharacterConfig characterConfig);
+                        if (!characterConfig.AllowForPlayers)
+                        {
+                            log.Info($"{character.Handle} is not allowed to play {character.CharacterType} forcing change");
+                            playersRequiredToSwitch.Add(character);
+                        }
+                    }
+
                     Dictionary<CharacterType, string> thiefNames = GetThiefNames(characters);
 
                     foreach (LobbyServerPlayerInfo playerInfo in playersRequiredToSwitch)
@@ -556,8 +566,10 @@ namespace CentralServer.BridgeServer
         private bool IsCharacterUnavailable(LobbyServerPlayerInfo playerInfo, IEnumerable<LobbyServerPlayerInfo> duplicateCharsA, IEnumerable<LobbyServerPlayerInfo> duplicateCharsB)
         {
             IEnumerable<LobbyServerPlayerInfo> duplicateChars = playerInfo.TeamId == Team.TeamA ? duplicateCharsA : duplicateCharsB;
+            CharacterConfigs.Characters.TryGetValue(playerInfo.CharacterInfo.CharacterType, out CharacterConfig characterConfig);
             return playerInfo.CharacterType == CharacterType.PendingWillFill
-                   || (playerInfo.TeamId == Team.TeamA && duplicateChars.Contains(playerInfo) && duplicateChars.First() != playerInfo);
+                   || (playerInfo.TeamId == Team.TeamA && duplicateChars.Contains(playerInfo) && duplicateChars.First() != playerInfo)
+                   || !characterConfig.AllowForPlayers;
         }
 
         private Dictionary<CharacterType, string> GetThiefNames(ILookup<CharacterType, LobbyServerPlayerInfo> characters)
@@ -591,7 +603,7 @@ namespace CentralServer.BridgeServer
                         && playerInfo.ReadyState != ReadyState.Ready)
                     {
                         CharacterType randomType = account.AccountComponent.LastCharacter;
-                        if (account.AccountComponent.LastCharacter == playerInfo.CharacterType)  // TODO it does not automatically mean that currently selected character is allowed
+                        if (account.AccountComponent.LastCharacter == playerInfo.CharacterType)
                         {
                             // If they do not press ready and do not select a new character
                             // force them a random character else use the one they selected
