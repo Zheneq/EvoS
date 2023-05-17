@@ -260,10 +260,13 @@ namespace CentralServer.LobbyServer.Matchmaking
                         await Task.Delay(1000);
                     }
                 }
-            }
 
+                //Update teamInfo with new characters
+                server.UpdateTeamInfo();
+            }
             // Enter loadout selection
             server.SetGameStatus(GameStatus.LoadoutSelecting);
+
             // Check if all characters have selected a new freelancer; if not, force them to change
             server.CheckIfAllSelected();
             
@@ -278,7 +281,7 @@ namespace CentralServer.LobbyServer.Matchmaking
             server.SendGameInfoNotifications();
 
             //Update teamInfo with new mods catas
-            server.UpdateModsAndCatalysts();
+            server.UpdateTeamInfo();
 
             // If game server failed to start, we go back to the character select screen
             if (!server.IsConnected)

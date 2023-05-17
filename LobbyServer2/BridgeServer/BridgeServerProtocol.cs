@@ -465,7 +465,7 @@ namespace CentralServer.BridgeServer
             client.Send(notification);
         }
 
-        public void UpdateModsAndCatalysts()
+        public void UpdateTeamInfo()
         {
             MatchmakingQueueConfig queueConfig = new MatchmakingQueueConfig();
 
