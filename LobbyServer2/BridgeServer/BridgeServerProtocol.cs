@@ -425,5 +425,10 @@ namespace CentralServer.BridgeServer
         {
             GetPlayerInfo(accountId).ReadyState = ReadyState.Ready;
         }
+
+        public void Shutdown()
+        {
+            Send(new ShutdownGameRequest());
+        }
     }
 }

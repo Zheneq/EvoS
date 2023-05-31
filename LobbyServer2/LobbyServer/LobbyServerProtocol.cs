@@ -157,6 +157,11 @@ namespace CentralServer.LobbyServer
 
         public bool LeaveServer(BridgeServerProtocol server)
         {
+            if (server == null)
+            {
+                log.Error($"{AccountId} is asked to leave null server (current server = {CurrentServer?.ProcessCode ?? "null"})");
+                return true;
+            }
             if (CurrentServer == null)
             {
                 log.Debug($"{AccountId} is asked to leave {server.ProcessCode} while they are not on any server");
@@ -355,11 +360,7 @@ namespace CentralServer.LobbyServer
                     LobbyServerProtocol player = SessionManager.GetClientConnection(playerAccountId);
                     if (player != null && !player.IsInGame())
                     {
-                        player.Send(new ChatNotification
-                        {
-                            ConsoleMessageType = ConsoleMessageType.SystemMessage,
-                            Text = $"<link=name>{sessionInfo.Handle}</link> connected to lobby server"
-                        });
+                        player.SendSystemMessage($"<link=name>{sessionInfo.Handle}</link> connected to lobby server");
                     }
                 }
             }
@@ -569,7 +570,10 @@ namespace CentralServer.LobbyServer
         public void HandleLeaveGameRequest(LeaveGameRequest request)
         {
             BridgeServerProtocol server = CurrentServer;
-            LeaveServer(server);
+            if (server != null)
+            {
+                LeaveServer(server);
+            }
             Send(new LeaveGameResponse
             {
                 Success = true,
@@ -1355,12 +1359,27 @@ namespace CentralServer.LobbyServer
         public void OnStartGame(BridgeServerProtocol server)
         {
             IsReady = false;
+            SendSystemMessage(
+                (server.Name != "" ? $"You are playing on {server.Name} server. " : "") +
+                (server.BuildVersion != "" ? $"Build {server.BuildVersion}. " : "") +
+                $"Game {LobbyServerUtils.GameIdString(server.GameInfo)}.");
+        }
+
+        public void SendSystemMessage(string text)
+        {
             Send(new ChatNotification
             {
                 ConsoleMessageType = ConsoleMessageType.SystemMessage,
-                Text = (server.Name != "" ? $"You are playing on {server.Name} server. " : "") +
-                       (server.BuildVersion != "" ? $"Build {server.BuildVersion}. " : "") +
-                       $"Game {LobbyServerUtils.GameIdString(server.GameInfo)}."
+                Text = text
+            });
+        }
+
+        public void SendSystemMessage(LocalizationPayload text)
+        {
+            Send(new ChatNotification
+            {
+                ConsoleMessageType = ConsoleMessageType.SystemMessage,
+                LocalizedText = text
             });
         }
 

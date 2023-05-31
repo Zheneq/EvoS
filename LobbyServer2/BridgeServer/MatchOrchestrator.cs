@@ -20,17 +20,20 @@ namespace CentralServer.BridgeServer
         public static readonly object characterSelectionLock = new object();
         
         private readonly BridgeServerProtocol server;
-
+        
         public MatchOrchestrator(BridgeServerProtocol server)
         {
             this.server = server;
         }
-        
+
         public async Task StartGameAsync(List<long> teamA, List<long> teamB, GameType gameType, GameSubType gameSubType)
         {
             // Fill Teams
-            FillTeam(teamA, Team.TeamA);
-            FillTeam(teamB, Team.TeamB);
+            if (!FillTeam(teamA, Team.TeamA) || !FillTeam(teamB, Team.TeamB))
+            {
+                return;
+            }
+
             server.BuildGameInfo(gameType, gameSubType);
 
             // Assign Current Server
@@ -67,6 +70,11 @@ namespace CentralServer.BridgeServer
 
             // Check if all characters have selected a new freelancer; if not, force them to change
             CheckIfAllSelected();
+
+            if (!CheckIfAllParticipantsAreConnected())
+            {
+                return;
+            }
             
             server.SendGameInfoNotifications();
 
@@ -79,20 +87,8 @@ namespace CentralServer.BridgeServer
             server.SendGameInfoNotifications();
 
             // If game server failed to start, we go back to the character select screen
-            if (!server.IsConnected)
+            if (!CheckIfAllParticipantsAreConnected())
             {
-                log.Error($"Server {server.URI} reserved for game {server.GameInfo.Name} has disconnected");
-                foreach (LobbyServerProtocol client in server.GetClients())
-                {
-                    client.LeaveServer(server);
-
-                    client.Send(new GameAssignmentNotification
-                    {
-                        GameInfo = null,
-                        GameResult = GameResult.NoResult,
-                        Reconnection = false
-                    });
-                }
                 return;
             }
 
@@ -118,6 +114,63 @@ namespace CentralServer.BridgeServer
             log.Info($"Game {gameType} started");
         }
 
+        private bool CheckIfAllParticipantsAreConnected()
+        {
+            return CheckIfServerIsConnected() && CheckIfPlayersAreConnected();
+        }
+
+        private bool CheckIfServerIsConnected()
+        {
+            bool res = server.IsConnected;
+            if (!res)
+            {
+                log.Error($"Server {server.URI} reserved for game {server.GameInfo.Name} has disconnected");
+                CancelMatch();
+            }
+            return res;
+        }
+
+        private bool CheckIfPlayersAreConnected()
+        {
+            foreach (long accountId in server.GetPlayers())
+            {
+                LobbyServerProtocol playerConnection = SessionManager.GetClientConnection(accountId);
+                if (playerConnection == null || !playerConnection.IsConnected || playerConnection.CurrentServer != server)
+                {
+                    log.Error($"Player {accountId} who was to participate in game {server.GameInfo.Name} has disconnected");
+                    CancelMatch(DB.Get().AccountDao.GetAccount(accountId)?.Handle);
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private void CancelMatch(string dodgerHandle = null)
+        {
+            foreach (LobbyServerProtocol client in server.GetClients())
+            {
+                client.LeaveServer(server);
+
+                client.Send(new GameAssignmentNotification
+                {
+                    GameInfo = null,
+                    GameResult = GameResult.NoResult,
+                    Reconnection = false
+                });
+            
+                client.SendSystemMessage(LocalizationPayload.Create("FailedStartGameServer", "Frontend"));
+                if (dodgerHandle != null)
+                {
+                    client.SendSystemMessage(LocalizationPayload.Create(
+                        "PlayerDisconnected", "Disconnect", LocalizationArg_Handle.Create(dodgerHandle)));
+                }
+            
+            }
+        
+            server.Shutdown();
+        }
+
         public async Task FinalizeGame(LobbyGameSummary gameSummary)
         {
             //Wait 5 seconds for gg Usages
@@ -140,21 +193,22 @@ namespace CentralServer.BridgeServer
 
             //Wait a bit so people can look at stuff but we do have to send it so server can restart
             await Task.Delay(60000);
-            server.Send(new ShutdownGameRequest());
+            server.Shutdown();
         }
 
-        private void FillTeam(List<long> players, Team team)
+        private bool FillTeam(List<long> players, Team team)
         {
             foreach (long accountId in players)
             {
                 LobbyServerProtocol client = SessionManager.GetClientConnection(accountId);
+                PersistedAccountData account = DB.Get().AccountDao.GetAccount(accountId);
                 if (client == null)
                 {
-                    log.Error($"Tried to add {accountId} to a game but they are not connected!");
-                    continue;
+                    log.Error($"Tried to add {account.Handle} to a game but they are not connected!");
+                    CancelMatch(account.Handle);
+                    return false;
                 }
 
-                PersistedAccountData account = DB.Get().AccountDao.GetAccount(client.AccountId);
                 LobbyServerPlayerInfo playerInfo = LobbyServerPlayerInfo.Of(account);
                 playerInfo.ReadyState = ReadyState.Ready;
                 playerInfo.TeamId = team;
@@ -162,6 +216,8 @@ namespace CentralServer.BridgeServer
                 log.Info($"adding player {client.UserName} ({playerInfo.CharacterType}), {client.AccountId} to {team}. readystate: {playerInfo.ReadyState}");
                 server.TeamInfo.TeamPlayerInfo.Add(playerInfo);
             }
+
+            return true;
         }
 
         public bool UpdateCharacterInfo(long accountId, LobbyCharacterInfo characterInfo, LobbyPlayerInfoUpdate update)
