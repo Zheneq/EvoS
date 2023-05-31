@@ -198,27 +198,6 @@ namespace CentralServer.LobbyServer.Session
             return session.sessionInfo;
         }
 
-        // TODO remove?
-        public static void CleanSessionAfterReconnect(long accountId)
-        {
-            lock (SessionInfos)
-            {
-                SessionInfos.TryGetValue(accountId, out SessionInfo client);
-                if (client?.conn == null)
-                {
-                    return;
-                }
-                log.Info($"Cleaning session for {accountId}");
-                if (!client.conn.SessionCleaned)
-                {
-                    client.conn.SessionCleaned = true;
-                    GroupManager.LeaveGroup(accountId, false);
-                }
-
-                KillSession(accountId);
-            }
-        }
-
         private static LobbySessionInfo KillSession(long accountId)
         {
             if (SessionInfos.TryRemove(accountId, out SessionInfo sessionInfo))

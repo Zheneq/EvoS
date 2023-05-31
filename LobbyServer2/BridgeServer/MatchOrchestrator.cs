@@ -159,11 +159,14 @@ namespace CentralServer.BridgeServer
                     Reconnection = false
                 });
             
-                client.SendSystemMessage(LocalizationPayload.Create("FailedStartGameServer", "Frontend"));
                 if (dodgerHandle != null)
                 {
                     client.SendSystemMessage(LocalizationPayload.Create(
                         "PlayerDisconnected", "Disconnect", LocalizationArg_Handle.Create(dodgerHandle)));
+                }
+                else
+                {
+                    client.SendSystemMessage(LocalizationPayload.Create("FailedStartGameServer", "Frontend"));
                 }
             
             }
@@ -250,15 +253,6 @@ namespace CentralServer.BridgeServer
                 serverPlayerInfo.CharacterInfo = characterInfo;
 
                 server.SendGameInfoNotifications();
-                // TODO remove?
-                if (server.GameInfo.GameStatus == GameStatus.FreelancerSelecting && update.CharacterType.HasValue)
-                {
-                    SessionManager.GetClientConnection(accountId).Send(new ForcedCharacterChangeFromServerNotification
-                    {
-                        ChararacterInfo = characterInfo,
-                    });
-                }
-
                 return true;
             }
         }
