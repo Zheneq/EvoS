@@ -84,14 +84,6 @@ namespace CentralServer.BridgeServer
                 log.Error($"Server {server.URI} reserved for game {server.GameInfo.Name} has disconnected");
                 foreach (LobbyServerProtocol client in server.GetClients())
                 {
-
-                    // Set client back to previus CharacterType
-                    if (server.GetPlayerInfo(client.AccountId).CharacterType != client.OldCharacter) {
-                        ResetCharacterToOriginal(client);
-                    }
-                    client.OldCharacter = CharacterType.None;
-
-                    // Clear CurrentServer
                     client.LeaveServer(server);
 
                     client.Send(new GameAssignmentNotification
@@ -162,7 +154,8 @@ namespace CentralServer.BridgeServer
                     continue;
                 }
 
-                LobbyServerPlayerInfo playerInfo = SessionManager.GetPlayerInfo(client.AccountId);
+                PersistedAccountData account = DB.Get().AccountDao.GetAccount(client.AccountId);
+                LobbyServerPlayerInfo playerInfo = LobbyServerPlayerInfo.Of(account);
                 playerInfo.ReadyState = ReadyState.Ready;
                 playerInfo.TeamId = team;
                 playerInfo.PlayerId = server.TeamInfo.TeamPlayerInfo.Count + 1;
@@ -371,8 +364,6 @@ namespace CentralServer.BridgeServer
 
                         usedFillCharacters.Add(randomType);
 
-                        UpdateAccountCharacter(playerInfo, randomType);
-                        SessionManager.UpdateLobbyServerPlayerInfo(player);
                         if (playerConnection != null)
                         {
                             NotifyCharacterChange(playerConnection, playerInfo, randomType);
@@ -422,14 +413,6 @@ namespace CentralServer.BridgeServer
             return randomType;
         }
 
-        // TODO remove
-        private void UpdateAccountCharacter(LobbyServerPlayerInfo playerInfo, CharacterType randomType)
-        {
-            PersistedAccountData account = DB.Get().AccountDao.GetAccount(playerInfo.AccountId);
-            account.AccountComponent.LastCharacter = randomType;
-            DB.Get().AccountDao.UpdateAccount(account);
-        }
-
         private void NotifyCharacterChange(LobbyServerProtocol playerConnection, LobbyServerPlayerInfo playerInfo, CharacterType randomType)
         {
             PersistedAccountData account = DB.Get().AccountDao.GetAccount(playerInfo.AccountId);
@@ -454,24 +437,6 @@ namespace CentralServer.BridgeServer
             playerInfo.CharacterInfo = LobbyCharacterInfo.Of(account.CharacterData[randomType]);
             playerInfo.ReadyState = ReadyState.Ready;
             server.SendGameInfo(playerConnection);
-        }
-
-        // TODO remove
-        public void ResetCharacterToOriginal(LobbyServerProtocol playerConnection, bool isDisconnected = false) 
-        {
-            if (playerConnection.OldCharacter != CharacterType.None)
-            {
-                UpdateAccountCharacter(server.GetPlayerInfo(playerConnection.AccountId), playerConnection.OldCharacter);
-                if (!isDisconnected)
-                {
-                    SessionManager.UpdateLobbyServerPlayerInfo(playerConnection.AccountId);
-                    PersistedAccountData account = DB.Get().AccountDao.GetAccount(playerConnection.AccountId);
-                    playerConnection.Send(new PlayerAccountDataUpdateNotification()
-                    {
-                        AccountData = account,
-                    });
-                }
-            }
         }
     }
 }

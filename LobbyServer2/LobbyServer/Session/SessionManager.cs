@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Net;
 using CentralServer.BridgeServer;
@@ -9,8 +8,6 @@ using CentralServer.LobbyServer.Group;
 using EvoS.Framework.Constants.Enums;
 using EvoS.Framework.DataAccess;
 using EvoS.Framework.Exceptions;
-using EvoS.Framework.Misc;
-using EvoS.Framework.Network;
 using EvoS.Framework.Network.NetworkMessages;
 using EvoS.Framework.Network.Static;
 using EvoS.Framework.Network.WebSocket;
@@ -24,7 +21,6 @@ namespace CentralServer.LobbyServer.Session
         
         private class SessionInfo
         {
-            public LobbyServerPlayerInfo playerInfo;
             public LobbyServerProtocol conn;
             public LobbySessionInfo session;
         }
@@ -52,10 +48,8 @@ namespace CentralServer.LobbyServer.Session
         public static event Action<LobbyServerProtocol> OnPlayerConnected = delegate {};
         public static event Action<LobbyServerProtocol> OnPlayerDisconnected = delegate {};
 
-        public static LobbyServerPlayerInfo OnPlayerConnect(LobbyServerProtocol client, RegisterGameClientRequest registerRequest)
+        public static void OnPlayerConnect(LobbyServerProtocol client, RegisterGameClientRequest registerRequest)
         {
-            if (registerRequest == null) return null;
-
             lock (SessionInfos)
             {
                 
@@ -81,65 +75,16 @@ namespace CentralServer.LobbyServer.Session
                 client.SelectedSubTypeMask = 0;
                 client.SessionToken = sessionInfo.SessionToken;
 
-                LobbyServerPlayerInfo playerInfo = LoadPlayerInfo(account.AccountId);
                 SessionInfos.TryRemove(client.AccountId, out _);
                 SessionInfos.TryAdd(client.AccountId, new SessionInfo
                 {
                     conn = client,
-                    session = sessionInfo,
-                    playerInfo = playerInfo
+                    session = sessionInfo
                 });
                 ConnectingSessions.TryRemove(client.AccountId, out _);
                 
                 OnPlayerConnected(client);
-
-                return playerInfo;
             }
-        }
-
-        public static LobbyServerPlayerInfo UpdateLobbyServerPlayerInfo(long accountId)
-        {
-            LobbyServerPlayerInfo playerInfo = LoadPlayerInfo(accountId);
-
-            SessionInfos.TryGetValue(playerInfo.AccountId, out SessionInfo session);
-            if (session != null)
-            {
-                session.playerInfo = playerInfo;
-            }
-                
-            return playerInfo;
-        }
-
-        public static LobbyServerPlayerInfo LoadPlayerInfo(long accountId)
-        {
-            PersistedAccountData account = DB.Get().AccountDao.GetAccount(accountId);
-            LobbyServerPlayerInfo playerInfo = new LobbyServerPlayerInfo
-            {
-                AccountId = account.AccountId,
-                BannerID = account.AccountComponent.SelectedBackgroundBannerID == -1
-                    ? 95
-                    : account.AccountComponent.SelectedBackgroundBannerID, // patch for existing users: default is 95
-                BotCanTaunt = false,
-                CharacterInfo = LobbyCharacterInfo.Of(account.CharacterData[account.AccountComponent.LastCharacter]),
-                ControllingPlayerId = 0,
-                EffectiveClientAccessLevel = account.AccountComponent.AppliedEntitlements.ContainsKey("DEVELOPER_ACCESS")
-                    ? ClientAccessLevel.Admin
-                    : ClientAccessLevel.Full,
-                EmblemID = account.AccountComponent.SelectedForegroundBannerID == -1
-                    ? 65
-                    : account.AccountComponent.SelectedForegroundBannerID, // patch for existing users: default is 65 
-                Handle = account.Handle,
-                IsGameOwner = true,
-                IsLoadTestBot = false,
-                IsNPCBot = false,
-                PlayerId = 0,
-                ReadyState = ReadyState.Unknown,
-                ReplacedWithBots = false,
-                RibbonID = account.AccountComponent.SelectedRibbonID,
-                TitleID = account.AccountComponent.SelectedTitleID,
-                TitleLevel = 1
-            };
-            return playerInfo;
         }
 
         public static void OnPlayerDisconnect(LobbyServerProtocol client)
@@ -168,12 +113,6 @@ namespace CentralServer.LobbyServer.Session
             }
         }
 
-        public static LobbyServerPlayerInfo GetPlayerInfo(long accountId)
-        {
-            SessionInfos.TryGetValue(accountId, out SessionInfo sessionInfo);
-            return sessionInfo?.playerInfo;
-        }
-
         public static LobbyServerProtocol GetClientConnection(long accountId)
         {
             SessionInfos.TryGetValue(accountId, out SessionInfo sessionInfo);
@@ -188,7 +127,7 @@ namespace CentralServer.LobbyServer.Session
 
         public static long? GetOnlinePlayerByHandle(string handle)
         {
-            return SessionInfos.Values.FirstOrDefault(si => si.playerInfo?.Handle == handle)?.playerInfo?.AccountId;
+            return SessionInfos.Values.FirstOrDefault(si => si.session?.Handle == handle)?.session?.AccountId;
         }
 
         public static HashSet<long> GetOnlinePlayers()

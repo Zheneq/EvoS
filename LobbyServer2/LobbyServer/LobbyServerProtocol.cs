@@ -52,7 +52,7 @@ namespace CentralServer.LobbyServer
         
         public bool IsReady { get; private set; }
 
-        public CharacterType OldCharacter { get; set; }
+        public LobbyServerPlayerInfo PlayerInfo => CurrentServer?.GetPlayerInfo(AccountId);
         
         public event Action<LobbyServerProtocol, ChatNotification> OnChatNotification = delegate {};
         public event Action<LobbyServerProtocol, GroupChatRequest> OnGroupChatRequest = delegate {};
@@ -127,34 +127,21 @@ namespace CentralServer.LobbyServer
             {
                 SessionCleaned = true;
                 GroupManager.LeaveGroup(AccountId, false);
-            } 
-            LobbyServerPlayerInfo playerInfo = SessionManager.GetPlayerInfo(this.AccountId);
-            if (playerInfo != null)
-            {
-                log.Info(string.Format(Messages.PlayerDisconnected, this.UserName));
-
-                BridgeServerProtocol server = ServerManager.GetServerWithPlayer(AccountId);
-                if (server != null)
-                {
-                    //     server.Send(new DisconnectPlayerRequest()
-                    //     {
-                    //         SessionInfo = SessionManager.GetSessionInfo(this.AccountId),
-                    //         PlayerInfo = playerInfo,
-                    //         GameResult = GameResult.ClientLeft
-                    //     });
-
-                    // Set client back to previus CharacterType
-                    LobbyServerProtocol client = SessionManager.GetClientConnection(AccountId);
-                    if (server.GetPlayerInfo(AccountId).CharacterType != client.OldCharacter)
-                    {
-                        server.ResetCharacterToOriginal(client, true);
-                    }
-                    // We set it back on reconnect if need be
-                    client.OldCharacter = CharacterType.None;
-                }
-
-                SessionManager.OnPlayerDisconnect(this);
             }
+            log.Info(string.Format(Messages.PlayerDisconnected, this.UserName));
+
+            // BridgeServerProtocol server = ServerManager.GetServerWithPlayer(AccountId);
+            // if (server != null)
+            // {
+            //     server.Send(new DisconnectPlayerRequest()
+            //     {
+            //         SessionInfo = SessionManager.GetSessionInfo(this.AccountId),
+            //         PlayerInfo = server.GetPlayerInfo(AccountId),
+            //         GameResult = GameResult.ClientLeft
+            //     });
+            // }
+
+            SessionManager.OnPlayerDisconnect(this);
             BroadcastRefreshFriendList();
         }
 
@@ -182,6 +169,13 @@ namespace CentralServer.LobbyServer
             }
 
             CurrentServer = null;
+            
+            // forcing catalyst panel update -- otherwise it would show catas for the character from the last game
+            Send(new ForcedCharacterChangeFromServerNotification 
+            {
+                ChararacterInfo = DB.Get().AccountDao.GetAccount(AccountId).GetCharacterInfo(),
+            });
+            
             return true;
         }
 
@@ -319,54 +313,54 @@ namespace CentralServer.LobbyServer
         {
             try
             {
-                LobbyServerPlayerInfo playerInfo = SessionManager.OnPlayerConnect(this, request);
+                SessionManager.OnPlayerConnect(this, request);
 
-                if (playerInfo != null)
-                {
-                    log.Info(string.Format(Messages.LoginSuccess, this.UserName));
-                    LobbySessionInfo sessionInfo = SessionManager.GetSessionInfo(request.SessionInfo.AccountId);
-                    RegisterGameClientResponse response = new RegisterGameClientResponse
-                    {
-                        AuthInfo = request.AuthInfo, // Send original, if some data is missing on a new instance the game fails
-                        SessionInfo = sessionInfo,
-                        ResponseId = request.RequestId
-                    };
-
-                    // Overwrite the values we need
-                    response.AuthInfo.Password = null;
-                    response.AuthInfo.AccountId = AccountId;
-                    response.AuthInfo.Handle = playerInfo.Handle;
-                    response.AuthInfo.TicketData = new SessionTicketData
-                    {
-                        AccountID = AccountId,
-                        SessionToken = sessionInfo.SessionToken,
-                        ReconnectionSessionToken = sessionInfo.ReconnectSessionToken
-                    }.ToStringWithSignature();
-                    
-
-                    Send(response);
-                    SendLobbyServerReadyNotification();
-
-                    GroupManager.CreateGroup(AccountId);
-
-                    // Send 'Connected to lobby server' notification to chat
-                    foreach (long playerAccountId in SessionManager.GetOnlinePlayers())
-                    {
-                        LobbyServerProtocol player = SessionManager.GetClientConnection(playerAccountId);
-                        if (player != null && !player.IsInGame())
-                        {
-                            player.Send(new ChatNotification
-                            {
-                                ConsoleMessageType = ConsoleMessageType.SystemMessage,
-                                Text = $"<link=name>{sessionInfo.Handle}</link> connected to lobby server"
-                            });
-                        }
-                    }
-                }
-                else
+                if (request == null)
                 {
                     SendErrorResponse(new RegisterGameClientResponse(), request.RequestId, Messages.LoginFailed);
                     WebSocket.Close();
+                    return;
+                }
+                
+                log.Info(string.Format(Messages.LoginSuccess, this.UserName));
+                LobbySessionInfo sessionInfo = SessionManager.GetSessionInfo(request.SessionInfo.AccountId);
+                RegisterGameClientResponse response = new RegisterGameClientResponse
+                {
+                    AuthInfo = request.AuthInfo, // Send original, if some data is missing on a new instance the game fails
+                    SessionInfo = sessionInfo,
+                    ResponseId = request.RequestId
+                };
+
+                // Overwrite the values we need
+                response.AuthInfo.Password = null;
+                response.AuthInfo.AccountId = AccountId;
+                response.AuthInfo.Handle = sessionInfo.Handle;
+                response.AuthInfo.TicketData = new SessionTicketData
+                {
+                    AccountID = AccountId,
+                    SessionToken = sessionInfo.SessionToken,
+                    ReconnectionSessionToken = sessionInfo.ReconnectSessionToken
+                }.ToStringWithSignature();
+
+                Send(response);
+                SendLobbyServerReadyNotification();
+
+                GroupManager.CreateGroup(AccountId);
+                
+                // TODO fix ability select panel
+
+                // Send 'Connected to lobby server' notification to chat
+                foreach (long playerAccountId in SessionManager.GetOnlinePlayers())
+                {
+                    LobbyServerProtocol player = SessionManager.GetClientConnection(playerAccountId);
+                    if (player != null && !player.IsInGame())
+                    {
+                        player.Send(new ChatNotification
+                        {
+                            ConsoleMessageType = ConsoleMessageType.SystemMessage,
+                            Text = $"<link=name>{sessionInfo.Handle}</link> connected to lobby server"
+                        });
+                    }
                 }
             }
             catch (Exception e)
@@ -422,11 +416,22 @@ namespace CentralServer.LobbyServer
         {
             LobbyPlayerInfoUpdate update = request.PlayerInfoUpdate;
             PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
+            LobbyServerPlayerInfo playerInfo = PlayerInfo;
+            bool updateSelectedCharacter = playerInfo == null;
+            playerInfo ??= LobbyServerPlayerInfo.Of(account);
             
             // TODO validate what player has purchased
 
             // building character info to validate it for current game
-            CharacterType characterType = update.CharacterType ?? account.AccountComponent.LastCharacter;
+            CharacterType characterType = update.CharacterType
+                                          ?? CurrentServer?.GetPlayerInfo(AccountId)?.CharacterType
+                                          ?? account.AccountComponent.LastCharacter;
+            
+            log.Debug($"HandlePlayerInfoUpdateRequest characterType={characterType} " +
+                     $"(update={update.CharacterType} " +
+                     $"server={CurrentServer?.GetPlayerInfo(AccountId)?.CharacterType} " +
+                     $"account={account.AccountComponent.LastCharacter})");
+            
             CharacterComponent characterComponent = (CharacterComponent)account.CharacterData[characterType].CharacterComponent.Clone();
             if (update.CharacterSkin.HasValue) characterComponent.LastSkin = update.CharacterSkin.Value;
             if (update.CharacterCards.HasValue) characterComponent.LastCards = update.CharacterCards.Value;
@@ -436,29 +441,37 @@ namespace CentralServer.LobbyServer
             if (update.LastSelectedLoadout.HasValue) characterComponent.LastSelectedLoadout = update.LastSelectedLoadout.Value;
             LobbyCharacterInfo characterInfo = LobbyCharacterInfo.Of(account.CharacterData[characterType], characterComponent);
             
-            if (CurrentServer != null && !CurrentServer.UpdateCharacterInfo(AccountId, characterInfo, update))
+            if (CurrentServer != null)
             {
-                Send(new PlayerInfoUpdateResponse
+                if (!CurrentServer.UpdateCharacterInfo(AccountId, characterInfo, update))
                 {
-                    Success = false,
-                    ResponseId = request.RequestId
-                });
-                return;
+                    Send(new PlayerInfoUpdateResponse
+                    {
+                        Success = false,
+                        ResponseId = request.RequestId
+                    });
+                    return;
+                }
+            }
+            else
+            {
+                playerInfo.CharacterInfo = characterInfo;
             }
 
-            // committing changes
-            if (update.CharacterType.HasValue)
+            // persisting changes
+            if (updateSelectedCharacter && update.CharacterType.HasValue)
             {
                 account.AccountComponent.LastCharacter = update.CharacterType.Value;
             }
             account.CharacterData[characterType].CharacterComponent = characterComponent;
             DB.Get().AccountDao.UpdateAccount(account);
-            LobbyServerPlayerInfo playerInfo = SessionManager.UpdateLobbyServerPlayerInfo(AccountId);
             
             if (request.GameType != null && request.GameType.HasValue)
             {
                 SetGameType(request.GameType.Value);
             }
+            
+            // without this client instantly resets character type back to what it was
             if (update.CharacterType != null && update.CharacterType.HasValue)
             {
                 PlayerAccountDataUpdateNotification updateNotification = new PlayerAccountDataUpdateNotification
@@ -467,13 +480,13 @@ namespace CentralServer.LobbyServer
                 };
                 Send(updateNotification);
             }
+            
             if (update.AllyDifficulty != null && update.AllyDifficulty.HasValue)
                 SetAllyDifficulty(update.AllyDifficulty.Value);
             if (update.ContextualReadyState != null && update.ContextualReadyState.HasValue)
                 SetContextualReadyState(update.ContextualReadyState.Value);
             if (update.EnemyDifficulty != null && update.EnemyDifficulty.HasValue)
                 SetEnemyDifficulty(update.EnemyDifficulty.Value);
-
 
             Send(new PlayerInfoUpdateResponse
             {
@@ -556,21 +569,7 @@ namespace CentralServer.LobbyServer
         public void HandleLeaveGameRequest(LeaveGameRequest request)
         {
             BridgeServerProtocol server = CurrentServer;
-            if (server != null)
-            {
-                if (server.GetPlayerInfo(AccountId)?.CharacterType != OldCharacter)
-                {
-                    server.ResetCharacterToOriginal(this);
-                }
-                // We set it back on reconnect if need be
-                OldCharacter = CharacterType.None;
-
-                if (server.ServerGameStatus == GameStatus.Stopped)
-                {
-                    LeaveServer(server);
-                }
-            }
-
+            LeaveServer(server);
             Send(new LeaveGameResponse
             {
                 Success = true,
@@ -1326,45 +1325,20 @@ namespace CentralServer.LobbyServer
             }
             
             LobbyServerPlayerInfo playerInfo = server.GetPlayerInfo(AccountId);
-            Send(new RejoinGameResponse() { ResponseId = request.RequestId, Success = true });
-
-            PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
-            LobbyCharacterInfo character = LobbyCharacterInfo.Of(account.CharacterData[account.AccountComponent.LastCharacter]);
-
-            LobbyServerPlayerInfo lobbyServerPlayerInfo = server.TeamInfo.TeamPlayerInfo.Find(p => p.AccountId == AccountId);
-            if (lobbyServerPlayerInfo == null)
+            if (playerInfo == null)
             {
                 // no longer in a game
-                Send(new RejoinGameResponse() { ResponseId = request.RequestId, Success = false });
+                Send(new RejoinGameResponse { ResponseId = request.RequestId, Success = false });
                 return;
             }
             
-            CharacterType oldCharacterType = lobbyServerPlayerInfo.CharacterType;
-
-            if (character.CharacterType != oldCharacterType)
-            {
-                //Update db with the new LastCharacter
-                account.AccountComponent.LastCharacter = oldCharacterType;
-                DB.Get().AccountDao.UpdateAccount(account);
-                Send(new ForcedCharacterChangeFromServerNotification()
-                {
-                    ChararacterInfo = LobbyCharacterInfo.Of(account.CharacterData[oldCharacterType]),
-                });
-            }
-
-            // Set OldCharacter to last selected character before reconnect
-            OldCharacter = character.CharacterType;
-
+            Send(new RejoinGameResponse { ResponseId = request.RequestId, Success = true });
             JoinServer(server);
-
             playerInfo.ReplacedWithBots = false;
-
             server.SendGameAssignmentNotification(this, true);
-            server.SendGameInfo(this, GameStatus.Launching);
-            server.SendGameInfo(this, GameStatus.Launched);
             OnStartGame(server);
-            server.SendGameInfo(this, GameStatus.Started);
-            server.StartGameForReconection(AccountId);
+            server.SendGameInfo(this);
+            server.StartGameForReconnection(AccountId);
         }
 
         public void OnLeaveGroup()

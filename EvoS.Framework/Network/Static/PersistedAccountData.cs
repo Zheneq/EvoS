@@ -165,5 +165,15 @@ namespace EvoS.Framework.Network.Static
         {
             return string.Format("[{0}] {1}", AccountId, Handle);
         }
+
+        public LobbyCharacterInfo GetCharacterInfo()
+        {
+            if (CharacterData.TryGetValue(AccountComponent.LastCharacter, out PersistedCharacterData data))
+            {
+                return LobbyCharacterInfo.Of(data);
+            }
+
+            return null;
+        }
     }
 }

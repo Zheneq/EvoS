@@ -214,14 +214,6 @@ namespace CentralServer.BridgeServer
                             };
                         client.Send(forceMatchmakingQueueNotification);
                     }
-
-                    // Set client back to previus CharacterType
-                    if (GetPlayerInfo(client.AccountId).CharacterType != client.OldCharacter)
-                    {
-                        ResetCharacterToOriginal(client);
-                    }
-
-                    client.OldCharacter = CharacterType.None;
                 }
             }
         }
@@ -272,28 +264,14 @@ namespace CentralServer.BridgeServer
             await Orchestrator.StartGameAsync(teamA, teamB, gameType, gameSubType);
         }
 
-        public void StartGameForReconection(long accountId)
+        public void StartGameForReconnection(long accountId)
         {
-            LobbyServerPlayerInfo playerInfo = GetPlayerInfo(accountId);
             LobbySessionInfo sessionInfo = SessionManager.GetSessionInfo(accountId);
-
-            //Can we modify ReconnectPlayerRequest and send the a new SessionToken to?
-            ReconnectPlayerRequest reconnectPlayerRequest = new ReconnectPlayerRequest()
+            Send(new ReconnectPlayerRequest
             {
                 AccountId = accountId,
                 NewSessionId = sessionInfo.ReconnectSessionToken
-            };
-
-            Send(reconnectPlayerRequest);
-
-            JoinGameServerRequest request = new JoinGameServerRequest
-            {
-                OrigRequestId = 0,
-                GameServerProcessCode = GameInfo.GameServerProcessCode,
-                PlayerInfo = playerInfo,
-                SessionInfo = sessionInfo
-            };
-            Send(request);
+            });
         }
 
         public void StartGame()
@@ -400,6 +378,7 @@ namespace CentralServer.BridgeServer
 
         public void SendGameInfo(LobbyServerProtocol playerConnection, GameStatus gamestatus = GameStatus.None)
         {
+            // TODO do not mutate on send
             if (gamestatus != GameStatus.None)
             {
                 GameInfo.GameStatus = gamestatus;
@@ -430,11 +409,6 @@ namespace CentralServer.BridgeServer
             };
 
             client.Send(notification);
-        }
-
-        public void ResetCharacterToOriginal(LobbyServerProtocol playerConnection, bool isDisconnected = false) 
-        {
-            Orchestrator.ResetCharacterToOriginal(playerConnection, isDisconnected);
         }
 
         public bool UpdateCharacterInfo(long accountId, LobbyCharacterInfo characterInfo, LobbyPlayerInfoUpdate update)
