@@ -386,31 +386,30 @@ namespace CentralServer.BridgeServer
             GameInfo.GameStatus = status;
         }
 
-        public void SendGameInfoNotifications(bool keepOldData = false)
+        public void SendGameInfoNotifications()
         {
             foreach (long player in GetPlayers())
             {
                 LobbyServerProtocol playerConnection = SessionManager.GetClientConnection(player);
                 if (playerConnection != null)
                 {
-                    SendGameInfo(playerConnection, GameStatus.None, keepOldData);
+                    SendGameInfo(playerConnection);
                 }
             }
         }
 
-        public void SendGameInfo(LobbyServerProtocol playerConnection, GameStatus gamestatus = GameStatus.None, bool keepOldData = false)
+        public void SendGameInfo(LobbyServerProtocol playerConnection, GameStatus gamestatus = GameStatus.None)
         {
-
             if (gamestatus != GameStatus.None)
             {
                 GameInfo.GameStatus = gamestatus;
             }
 
             LobbyServerPlayerInfo playerInfo = GetPlayerInfo(playerConnection.AccountId);
-            GameInfoNotification notification = new GameInfoNotification()
+            GameInfoNotification notification = new GameInfoNotification
             {
                 GameInfo = GameInfo,
-                TeamInfo = LobbyTeamInfo.FromServer(TeamInfo, 0, new MatchmakingQueueConfig(), keepOldData),
+                TeamInfo = LobbyTeamInfo.FromServer(TeamInfo, 0, new MatchmakingQueueConfig()),
                 PlayerInfo = LobbyPlayerInfo.FromServer(playerInfo, 0, new MatchmakingQueueConfig())
             };
 
@@ -438,9 +437,19 @@ namespace CentralServer.BridgeServer
             Orchestrator.ResetCharacterToOriginal(playerConnection, isDisconnected);
         }
 
-        public bool ValidateSelectedCharacter(long accountId, CharacterType character)
+        public bool UpdateCharacterInfo(long accountId, LobbyCharacterInfo characterInfo, LobbyPlayerInfoUpdate update)
         {
-            return Orchestrator.ValidateSelectedCharacter(accountId, character);
+            return Orchestrator.UpdateCharacterInfo(accountId, characterInfo, update);
+        }
+
+        public void OnAccountVisualsUpdated(long accountId)
+        {
+            Orchestrator.UpdateAccountVisuals(accountId);
+        }
+
+        public void SetPlayerReady(long accountId)
+        {
+            GetPlayerInfo(accountId).ReadyState = ReadyState.Ready;
         }
     }
 }

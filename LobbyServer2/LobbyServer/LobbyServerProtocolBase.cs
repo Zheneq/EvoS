@@ -239,10 +239,6 @@ namespace CentralServer.LobbyServer
         {
             EnemyDifficulty = difficulty;
         }
-        protected void SetLastSelectedLoadout(int lastSelectedLoadout)
-        {
-            log.Debug("last selected loadout changed to " + lastSelectedLoadout);
-        }
 
     }
 }

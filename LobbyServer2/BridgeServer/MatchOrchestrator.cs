@@ -36,15 +36,9 @@ namespace CentralServer.BridgeServer
             // Assign Current Server
             server.GetClients().ForEach(c => c.JoinServer(server));
 
-            // Store there old CharacterType we set it back when match ends
-            // ForcedCharacterChangeFromServerNotification does not persist after a game ends
-            // Even tho the server thinks they are another character the client thinks its the previus one
-            // So Duplicate check does not work as client.CharacterType != server.CharacterType
-            server.GetClients().ForEach(c => c.OldCharacter = server.GetPlayerInfo(c.AccountId).CharacterType);
-
             // Assign players to game
             server.SetGameStatus(GameStatus.FreelancerSelecting);
-            server.GetClients().ForEach((client)=>server.SendGameAssignmentNotification(client));
+            server.GetClients().ForEach(client => server.SendGameAssignmentNotification(client));
 
             // Check for duplicated and WillFill characters
             if (CheckDuplicatedAndFill())
@@ -66,10 +60,8 @@ namespace CentralServer.BridgeServer
                         await Task.Delay(1000);
                     }
                 }
-
-                //Update teamInfo with new characters
-                UpdateTeamInfo();
             }
+            
             // Enter loadout selection
             server.SetGameStatus(GameStatus.LoadoutSelecting);
 
@@ -85,9 +77,6 @@ namespace CentralServer.BridgeServer
             log.Info("Launching...");
             server.SetGameStatus(GameStatus.Launching);
             server.SendGameInfoNotifications();
-
-            //Update teamInfo with new mods catas
-            UpdateTeamInfo();
 
             // If game server failed to start, we go back to the character select screen
             if (!server.IsConnected)
@@ -182,13 +171,60 @@ namespace CentralServer.BridgeServer
             }
         }
 
-        private void UpdateTeamInfo()
+        public bool UpdateCharacterInfo(long accountId, LobbyCharacterInfo characterInfo, LobbyPlayerInfoUpdate update)
         {
-            MatchmakingQueueConfig queueConfig = new MatchmakingQueueConfig();
+            LobbyServerPlayerInfo serverPlayerInfo = server.GetPlayerInfo(accountId);
+            LobbyCharacterInfo serverCharacterInfo = serverPlayerInfo.CharacterInfo;
 
-            for (int i = 0; i < server.GetClients().Count; i++)
+            if (server.GameInfo.GameStatus == GameStatus.LoadoutSelecting
+                && update.CharacterType != null
+                && update.CharacterType.HasValue
+                && update.CharacterType != serverCharacterInfo.CharacterType)
             {
-                server.TeamInfo.TeamPlayerInfo[i].CharacterInfo = LobbyPlayerInfo.FromServer(server.TeamInfo.TeamPlayerInfo[i], 0, queueConfig).CharacterInfo;
+                log.Warn($"{accountId} attempted to switch from {serverCharacterInfo.CharacterType} " +
+                         $"to {update.CharacterType} during LoadoutSelecting status");
+                return false;
+            }
+            
+            lock (characterSelectionLock)
+            {
+                CharacterType characterType = update.CharacterType ?? serverCharacterInfo.CharacterType;
+                if (update.ContextualReadyState != null
+                    && update.ContextualReadyState.HasValue
+                    && server.ServerGameStatus == GameStatus.FreelancerSelecting 
+                    && !ValidateSelectedCharacter(accountId, characterType))
+                {
+                    log.Warn($"{accountId} attempted to ready up while in game using illegal character {characterType}");
+                    return false;
+                }
+
+                serverPlayerInfo.CharacterInfo = characterInfo;
+
+                server.SendGameInfoNotifications();
+                // TODO remove?
+                if (server.GameInfo.GameStatus == GameStatus.FreelancerSelecting && update.CharacterType.HasValue)
+                {
+                    SessionManager.GetClientConnection(accountId).Send(new ForcedCharacterChangeFromServerNotification
+                    {
+                        ChararacterInfo = characterInfo,
+                    });
+                }
+
+                return true;
+            }
+        }
+
+        public void UpdateAccountVisuals(long accountId)
+        {
+            LobbyServerPlayerInfo serverPlayerInfo = server.GetPlayerInfo(accountId);
+            PersistedAccountData account = DB.Get().AccountDao.GetAccount(accountId);
+            if (account != null)
+            {
+                serverPlayerInfo.TitleID = account.AccountComponent.SelectedTitleID;
+                serverPlayerInfo.TitleLevel = account.AccountComponent.TitleLevels.GetValueOrDefault(account.AccountComponent.SelectedTitleID, 1);
+                serverPlayerInfo.BannerID = account.AccountComponent.SelectedBackgroundBannerID;
+                serverPlayerInfo.EmblemID = account.AccountComponent.SelectedForegroundBannerID;
+                serverPlayerInfo.RibbonID = account.AccountComponent.SelectedRibbonID;
             }
         }
 
@@ -347,7 +383,7 @@ namespace CentralServer.BridgeServer
             }
         }
 
-        public bool ValidateSelectedCharacter(long accountId, CharacterType character)
+        private bool ValidateSelectedCharacter(long accountId, CharacterType character)
         {
             lock (characterSelectionLock)
             {
@@ -386,6 +422,7 @@ namespace CentralServer.BridgeServer
             return randomType;
         }
 
+        // TODO remove
         private void UpdateAccountCharacter(LobbyServerPlayerInfo playerInfo, CharacterType randomType)
         {
             PersistedAccountData account = DB.Get().AccountDao.GetAccount(playerInfo.AccountId);
@@ -419,6 +456,7 @@ namespace CentralServer.BridgeServer
             server.SendGameInfo(playerConnection);
         }
 
+        // TODO remove
         public void ResetCharacterToOriginal(LobbyServerProtocol playerConnection, bool isDisconnected = false) 
         {
             if (playerConnection.OldCharacter != CharacterType.None)

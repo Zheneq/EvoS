@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using EvoS.Framework.Constants.Enums;
-using EvoS.Framework.DataAccess;
+using Newtonsoft.Json;
 
 namespace EvoS.Framework.Network.Static
 {
@@ -11,79 +11,79 @@ namespace EvoS.Framework.Network.Static
     {
         public LobbyPlayerInfo Clone()
         {
-            return (LobbyPlayerInfo)base.MemberwiseClone();
+            return (LobbyPlayerInfo)MemberwiseClone();
         }
 
         public bool ReplacedWithBots { get; set; }
+        [JsonIgnore] public bool IsRemoteControlled => ControllingPlayerId != 0;
+        [JsonIgnore] public bool IsSpectator => TeamId == Team.Spectator;
+        [JsonIgnore] public CharacterType CharacterType => CharacterInfo?.CharacterType ?? CharacterType.None;
+        [JsonIgnore] public bool IsReady => ReadyState == ReadyState.Ready || IsAIControlled || IsRemoteControlled;
+        [JsonIgnore] public bool IsAIControlled => IsNPCBot || IsLoadTestBot;
+
+        public string GetHandle()
+        {
+            // if (IsRemoteControlled)
+            // {
+            // 	return $"{StringUtil.TR_CharacterName(CharacterInfo.CharacterType.ToString())} ({Handle})";
+            // }
+            // if (IsNPCBot && !BotsMasqueradeAsHumans)
+            // {
+            // 	return StringUtil.TR_CharacterName(CharacterInfo.CharacterType.ToString());
+            // }
+            return Handle;
+        }
 
         public static LobbyPlayerInfo FromServer(
             LobbyServerPlayerInfo serverInfo, 
             int maxPlayerLevel,
-            MatchmakingQueueConfig queueConfig, 
-            bool keepOldData = false)
+            MatchmakingQueueConfig queueConfig)
         {
-            LobbyPlayerInfo lobbyPlayerInfo = null;
-            if (serverInfo != null)
+            if (serverInfo == null)
             {
-                List<LobbyCharacterInfo> list = null;
-                if (serverInfo.RemoteCharacterInfos != null)
-                {
-                    list = new List<LobbyCharacterInfo>();
-                    foreach (LobbyCharacterInfo lobbyCharacterInfo in serverInfo.RemoteCharacterInfos)
-                    {
-                        list.Add(lobbyCharacterInfo.Clone());
-                    }
-                }
+                return null;
+            }
 
-                // If keepOldData is set to true we keep the old values
-                // Else we use new fresh data
-                PersistedAccountData account = DB.Get().AccountDao.GetAccount(serverInfo.AccountId);
-
-                lobbyPlayerInfo = new LobbyPlayerInfo
+            List<LobbyCharacterInfo> list = null;
+            if (serverInfo.RemoteCharacterInfos != null)
+            {
+                list = new List<LobbyCharacterInfo>();
+                foreach (LobbyCharacterInfo lobbyCharacterInfo in serverInfo.RemoteCharacterInfos)
                 {
-                    AccountId = keepOldData ? serverInfo.AccountId : account.AccountId,
-                    PlayerId = serverInfo.PlayerId,
-                    CustomGameVisualSlot = serverInfo.CustomGameVisualSlot,
-                    Handle = keepOldData ? serverInfo.Handle : account.Handle,
-                    TitleID = keepOldData ? serverInfo.TitleID : account.AccountComponent.SelectedTitleID,
-                    TitleLevel = serverInfo.TitleLevel,
-                    BannerID = keepOldData ? serverInfo.BannerID : account.AccountComponent.SelectedBackgroundBannerID,
-                    EmblemID = keepOldData ? serverInfo.EmblemID : account.AccountComponent.SelectedForegroundBannerID,
-                    RibbonID = serverInfo.RibbonID,
-                    IsGameOwner = serverInfo.IsGameOwner,
-                    ReplacedWithBots = serverInfo.ReplacedWithBots,
-                    IsNPCBot = serverInfo.IsNPCBot,
-                    IsLoadTestBot = serverInfo.IsLoadTestBot,
-                    BotsMasqueradeAsHumans = queueConfig != null && queueConfig.BotsMasqueradeAsHumans,
-                    Difficulty = serverInfo.Difficulty,
-                    BotCanTaunt = serverInfo.BotCanTaunt,
-                    TeamId = serverInfo.TeamId,
-                    CharacterInfo = (serverInfo.CharacterInfo == null) ? null : (keepOldData ? serverInfo.CharacterInfo : LobbyCharacterInfo.Of(account.CharacterData[account.AccountComponent.LastCharacter])),
-                    RemoteCharacterInfos = list,
-                    ReadyState = serverInfo.ReadyState,
-                    ControllingPlayerId =
-                        ((!serverInfo.IsRemoteControlled) ? 0 : serverInfo.ControllingPlayerInfo.PlayerId),
-                    EffectiveClientAccessLevel = serverInfo.EffectiveClientAccessLevel
-                };
-                if (serverInfo.AccountLevel >= maxPlayerLevel)
-                {
-                    //                    lobbyPlayerInfo.DisplayedStat = LocalizationPayload.Create("TotalSeasonLevelStatNumber", "Global",
-                    //                        new LocalizationArg[]
-                    //                        {
-                    //                            LocalizationArg_Int32.Create(serverInfo.TotalLevel)
-                    //                        });
-                }
-                else
-                {
-                    //                    lobbyPlayerInfo.DisplayedStat = LocalizationPayload.Create("LevelStatNumber", "Global",
-                    //                        new LocalizationArg[]
-                    //                        {
-                    //                            LocalizationArg_Int32.Create(serverInfo.AccountLevel)
-                    //                        });
+                    list.Add(lobbyCharacterInfo.Clone());
                 }
             }
 
-            return lobbyPlayerInfo;
+            return new LobbyPlayerInfo
+            {
+                AccountId = serverInfo.AccountId,
+                PlayerId = serverInfo.PlayerId,
+                CustomGameVisualSlot = serverInfo.CustomGameVisualSlot,
+                Handle = serverInfo.Handle,
+                TitleID = serverInfo.TitleID,
+                TitleLevel = serverInfo.TitleLevel,
+                BannerID = serverInfo.BannerID,
+                EmblemID = serverInfo.EmblemID,
+                RibbonID = serverInfo.RibbonID,
+                IsGameOwner = serverInfo.IsGameOwner,
+                ReplacedWithBots = serverInfo.ReplacedWithBots,
+                IsNPCBot = serverInfo.IsNPCBot,
+                IsLoadTestBot = serverInfo.IsLoadTestBot,
+                BotsMasqueradeAsHumans = queueConfig != null && queueConfig.BotsMasqueradeAsHumans,
+                Difficulty = serverInfo.Difficulty,
+                BotCanTaunt = serverInfo.BotCanTaunt,
+                TeamId = serverInfo.TeamId,
+                CharacterInfo = serverInfo.CharacterInfo?.Clone(),
+                RemoteCharacterInfos = list,
+                ReadyState = serverInfo.ReadyState,
+                ControllingPlayerId = serverInfo.IsRemoteControlled ? serverInfo.ControllingPlayerInfo.PlayerId : 0,
+                EffectiveClientAccessLevel = serverInfo.EffectiveClientAccessLevel,
+                DisplayedStat = serverInfo.AccountLevel >= maxPlayerLevel
+                    ? LocalizationPayload.Create("TotalSeasonLevelStatNumber", "Global",
+                        LocalizationArg_Int32.Create(serverInfo.TotalLevel))
+                    : LocalizationPayload.Create("LevelStatNumber", "Global",
+                        LocalizationArg_Int32.Create(serverInfo.AccountLevel))
+            };
         }
 
         public long AccountId;

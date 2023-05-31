@@ -353,7 +353,7 @@ namespace CentralServer.LobbyServer
                     foreach (long playerAccountId in SessionManager.GetOnlinePlayers())
                     {
                         LobbyServerProtocol player = SessionManager.GetClientConnection(playerAccountId);
-                        if (player != null && player.CurrentServer == null)
+                        if (player != null && !player.IsInGame())
                         {
                             player.Send(new ChatNotification
                             {
@@ -422,15 +422,22 @@ namespace CentralServer.LobbyServer
         {
             LobbyPlayerInfoUpdate update = request.PlayerInfoUpdate;
             PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
+            
+            // TODO validate what player has purchased
 
-            if (CurrentServer != null
-                && CurrentServer.GameInfo.GameStatus == GameStatus.LoadoutSelecting
-                && update.CharacterType != null
-                && update.CharacterType.HasValue
-                && update.CharacterType != account.AccountComponent.LastCharacter)
+            // building character info to validate it for current game
+            CharacterType characterType = update.CharacterType ?? account.AccountComponent.LastCharacter;
+            CharacterComponent characterComponent = (CharacterComponent)account.CharacterData[characterType].CharacterComponent.Clone();
+            if (update.CharacterSkin.HasValue) characterComponent.LastSkin = update.CharacterSkin.Value;
+            if (update.CharacterCards.HasValue) characterComponent.LastCards = update.CharacterCards.Value;
+            if (update.CharacterMods.HasValue) characterComponent.LastMods = update.CharacterMods.Value;
+            if (update.CharacterAbilityVfxSwaps.HasValue) characterComponent.LastAbilityVfxSwaps = update.CharacterAbilityVfxSwaps.Value;
+            if (update.CharacterLoadoutChanges.HasValue) characterComponent.CharacterLoadouts = update.CharacterLoadoutChanges.Value.CharacterLoadoutChanges;
+            if (update.LastSelectedLoadout.HasValue) characterComponent.LastSelectedLoadout = update.LastSelectedLoadout.Value;
+            LobbyCharacterInfo characterInfo = LobbyCharacterInfo.Of(account.CharacterData[characterType], characterComponent);
+            
+            if (CurrentServer != null && !CurrentServer.UpdateCharacterInfo(AccountId, characterInfo, update))
             {
-                log.Warn($"{account.Handle} attempted to switch from {account.AccountComponent.LastCharacter} " +
-                         $"to {update.CharacterType} during LoadoutSelecting status");
                 Send(new PlayerInfoUpdateResponse
                 {
                     Success = false,
@@ -439,99 +446,42 @@ namespace CentralServer.LobbyServer
                 return;
             }
 
-            CharacterType selectedCharacter = update.CharacterType ?? account.AccountComponent.LastCharacter;
-            if (update.ContextualReadyState != null
-                && update.ContextualReadyState.HasValue
-                && CurrentServer != null 
-                && CurrentServer.ServerGameStatus == GameStatus.FreelancerSelecting 
-                && !CurrentServer.ValidateSelectedCharacter(AccountId, selectedCharacter))
-            {
-                log.Warn($"{account.Handle} attempted to ready up while in game using illegal character {selectedCharacter}");
-                Send(new PlayerInfoUpdateResponse
-                {
-                    Success = false,
-                    ResponseId = request.RequestId
-                });
-                return;
-            }
-
-            // Everything below is supposed to be validated against what the player has purchased
-            // Change Character
+            // committing changes
             if (update.CharacterType.HasValue)
             {
                 account.AccountComponent.LastCharacter = update.CharacterType.Value;
             }
-            CharacterComponent characterComponent = account.CharacterData[account.AccountComponent.LastCharacter].CharacterComponent;
-
-            // Change Skin
-            if (update.CharacterSkin.HasValue) characterComponent.LastSkin = update.CharacterSkin.Value;
-            
-            // Change Catalysts
-            if (update.CharacterCards.HasValue) characterComponent.LastCards = update.CharacterCards.Value;
-
-            // Change Mods
-            if (update.CharacterMods.HasValue) characterComponent.LastMods = update.CharacterMods.Value;
-
-            // Change Ability VFX
-            if (update.CharacterAbilityVfxSwaps.HasValue) characterComponent.LastAbilityVfxSwaps = update.CharacterAbilityVfxSwaps.Value;
-
-            // Change Loadout
-            if (update.CharacterLoadoutChanges.HasValue)
-            {
-                characterComponent.CharacterLoadouts = update.CharacterLoadoutChanges.Value.CharacterLoadoutChanges;
-            }
-            if (update.LastSelectedLoadout.HasValue)
-            {
-                characterComponent.LastSelectedLoadout = update.LastSelectedLoadout.Value;
-            }
-
-
+            account.CharacterData[characterType].CharacterComponent = characterComponent;
             DB.Get().AccountDao.UpdateAccount(account);
             LobbyServerPlayerInfo playerInfo = SessionManager.UpdateLobbyServerPlayerInfo(AccountId);
-
-
+            
             if (request.GameType != null && request.GameType.HasValue)
+            {
                 SetGameType(request.GameType.Value);
-
+            }
             if (update.CharacterType != null && update.CharacterType.HasValue)
             {
-                PlayerAccountDataUpdateNotification updateNotification = new PlayerAccountDataUpdateNotification()
+                PlayerAccountDataUpdateNotification updateNotification = new PlayerAccountDataUpdateNotification
                 {
                     AccountData = account.CloneForClient()
                 };
                 Send(updateNotification);
             }
-
             if (update.AllyDifficulty != null && update.AllyDifficulty.HasValue)
                 SetAllyDifficulty(update.AllyDifficulty.Value);
             if (update.ContextualReadyState != null && update.ContextualReadyState.HasValue)
                 SetContextualReadyState(update.ContextualReadyState.Value);
             if (update.EnemyDifficulty != null && update.EnemyDifficulty.HasValue)
                 SetEnemyDifficulty(update.EnemyDifficulty.Value);
-            if (update.LastSelectedLoadout != null && update.LastSelectedLoadout.HasValue)
-                SetLastSelectedLoadout(update.LastSelectedLoadout.Value);
 
-            
-            PlayerInfoUpdateResponse response = new PlayerInfoUpdateResponse()
+
+            Send(new PlayerInfoUpdateResponse
             {
                 PlayerInfo = LobbyPlayerInfo.FromServer(playerInfo, 0, new MatchmakingQueueConfig()),
                 CharacterInfo = playerInfo.CharacterInfo,
                 OriginalPlayerInfoUpdate = update,
                 ResponseId = request.RequestId
-            };
-
-            if (CurrentServer != null)
-            {
-                CurrentServer.SendGameInfoNotifications();
-                if (CurrentServer.GameInfo.GameStatus == GameStatus.FreelancerSelecting && update.CharacterType.HasValue)
-                {
-                    Send(new ForcedCharacterChangeFromServerNotification()
-                    {
-                        ChararacterInfo = playerInfo.CharacterInfo,
-                    });
-                }
-            }
-            Send(response);
+            });
             BroadcastRefreshGroup();
         }
 
@@ -654,7 +604,7 @@ namespace CentralServer.LobbyServer
                 {
                     if (contextualReadyState.ReadyState == ReadyState.Ready)
                     {
-                        CurrentServer.GetPlayerInfo(AccountId).ReadyState = ReadyState.Ready;
+                        CurrentServer.SetPlayerReady(AccountId);
                     }
                 }
                 else
@@ -874,6 +824,14 @@ namespace CentralServer.LobbyServer
             BroadcastRefreshFriendList();
         }
 
+        private void OnAccountVisualsUpdated()
+        {
+
+            BroadcastRefreshFriendList();
+            BroadcastRefreshGroup();
+            CurrentServer?.OnAccountVisualsUpdated(AccountId);
+        }
+
         public void HandleSelectBannerRequest(SelectBannerRequest request)
         {
             PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
@@ -891,8 +849,7 @@ namespace CentralServer.LobbyServer
             // Update the account
             DB.Get().AccountDao.UpdateAccount(account);
 
-            BroadcastRefreshFriendList();
-            BroadcastRefreshGroup();
+            OnAccountVisualsUpdated();
             
             // Send response
             Send(new SelectBannerResponse()
@@ -911,9 +868,8 @@ namespace CentralServer.LobbyServer
             {
                 account.AccountComponent.SelectedTitleID = request.TitleID;
                 DB.Get().AccountDao.UpdateAccount(account);
-            
-                BroadcastRefreshFriendList();
-                BroadcastRefreshGroup();
+
+                OnAccountVisualsUpdated();
             }
             
             Send(new SelectTitleResponse

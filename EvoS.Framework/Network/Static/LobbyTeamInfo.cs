@@ -38,8 +38,7 @@ namespace EvoS.Framework.Network.Static
         public static LobbyTeamInfo FromServer(
             LobbyServerTeamInfo serverInfo, 
             int maxPlayerLevel,
-            MatchmakingQueueConfig queueConfig, 
-            bool keepOldData = false)
+            MatchmakingQueueConfig queueConfig)
         {
             LobbyTeamInfo lobbyTeamInfo = null;
             if (serverInfo != null)
@@ -54,8 +53,7 @@ namespace EvoS.Framework.Network.Static
                             LobbyPlayerInfo.FromServer(
                                 serverInfo2, 
                                 maxPlayerLevel,
-                                queueConfig,
-                                keepOldData));
+                                queueConfig));
                     }
                 }
             }
