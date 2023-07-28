@@ -98,8 +98,8 @@ namespace CentralServer.ApiServer
                 {
                     accountId = acc.AccountId,
                     handle = acc.Handle,
-                    bannerBg = acc.AccountComponent.SelectedBackgroundBannerID,
-                    bannerFg = acc.AccountComponent.SelectedForegroundBannerID,
+                    bannerBg = acc.AccountComponent.SelectedBackgroundBannerID == -1  ? 95 : acc.AccountComponent.SelectedBackgroundBannerID, // if no Banner is set default to 95
+                    bannerFg = acc.AccountComponent.SelectedForegroundBannerID == -1  ? 65 : acc.AccountComponent.SelectedForegroundBannerID, // if no Foreground Banner is set default to 65
                     status = FriendManager.GetStatusString(SessionManager.GetClientConnection(acc.AccountId)),
                 };
             }
