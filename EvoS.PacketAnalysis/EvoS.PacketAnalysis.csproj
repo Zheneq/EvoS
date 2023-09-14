@@ -25,11 +25,8 @@
     </ItemGroup>
 
     <ItemGroup>
-        <Reference Include="0Harmony, Version=2.0.0.0, Culture=neutral, PublicKeyToken=null">
-            <HintPath Condition="Exists('..\..\..\Harmony\Harmony')">..\..\..\Harmony\Harmony\bin\Release\netcoreapp3.0\0Harmony.dll</HintPath>
-            <HintPath Condition="Exists('..\..\Harmony\Harmony')">..\..\Harmony\Harmony\bin\Release\netcoreapp3.0\0Harmony.dll</HintPath>
-            <HintPath Condition="Exists('..\Harmony\Harmony')">..\Harmony\Harmony\bin\Release\netcoreapp3.0\0Harmony.dll</HintPath>
-            <HintPath Condition="Exists('..\0Harmony.dll')">..\0Harmony.dll</HintPath>
+        <Reference Include="0Harmony">
+          <HintPath>C:\Users\user\.nuget\packages\lib.harmony\2.0.2\lib\netcoreapp3.0\0Harmony.dll</HintPath>
         </Reference>
     </ItemGroup>
 

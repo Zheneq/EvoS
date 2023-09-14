@@ -8,6 +8,7 @@ namespace EvoS.Framework.Network.Game.Messages
     {
         public int TurnIndex;
         public AbilityPriority PhaseIndex;
+        public ClientResolutionActionMessageData Item;
 
         public override void Serialize(NetworkWriter writer)
         {
@@ -17,8 +18,21 @@ namespace EvoS.Framework.Network.Game.Messages
 
         public override void Deserialize(NetworkReader reader)
         {
+            Deserialize(reader, null);
+        }
+
+        public override void Deserialize(NetworkReader reader, Component context)
+        {
             TurnIndex = (int) reader.ReadPackedUInt32();
             PhaseIndex = (AbilityPriority) reader.ReadSByte();
+
+            if (context != null)
+            {
+                // deserializers are not implemented
+                // IBitStream stream = new NetworkReaderAdapter(reader);
+                // ClientResolutionAction action = ClientResolutionAction.ClientResolutionAction_DeSerializeFromStream(context, ref stream);
+                // Item = new ClientResolutionActionMessageData(action, TurnIndex, (int)PhaseIndex);
+            }
         }
 
         public override string ToString()
@@ -27,6 +41,20 @@ namespace EvoS.Framework.Network.Game.Messages
                    $"{nameof(TurnIndex)}: {TurnIndex}, " +
                    $"{nameof(PhaseIndex)}: {PhaseIndex}" +
                    ")";
+        }
+        
+        public class ClientResolutionActionMessageData
+        {
+            public ClientResolutionAction m_action;
+            public int m_turnIndex;
+            public AbilityPriority m_phase;
+
+            public ClientResolutionActionMessageData(ClientResolutionAction action, int turnIndex, int phaseIndex)
+            {
+                m_action = action;
+                m_turnIndex = turnIndex;
+                m_phase = (AbilityPriority)phaseIndex;
+            }
         }
     }
 }

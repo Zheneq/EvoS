@@ -14,9 +14,9 @@ namespace EvoS.PacketAnalysis.Packets
         public PacketInteraction PacketInteraction;
         public uint NetId;
 
-        public void Deserialize(UNetSerializer serializer)
+        public void Deserialize(UNetSerializer serializer, Component context)
         {
-            Message = serializer.Deserialize(this, Direction == PacketDirection.FromClient);
+            Message = serializer.Deserialize(this, context, Direction == PacketDirection.FromClient);
         }
     }
 }

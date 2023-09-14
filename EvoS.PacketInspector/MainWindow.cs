@@ -58,6 +58,7 @@ namespace EvoS.PacketInspector
             AddColumn(_treePackets, 4, "Size");
             AddColumn(_treePackets, 5, "Type");
             AddColumn(_treePackets, 6, "Info", cellData: PacketsCellDataFunc);
+            // AddColumn(_treePackets, 7, "Ts");
 
             AddColumn(_treePacketInfo, 0, "Key");
             AddColumn(_treePacketInfo, 1, "Type");
@@ -350,12 +351,13 @@ namespace EvoS.PacketInspector
             {
                 _treeStorePackets.AppendValues(
                     packet,
-                    packet.Direction == PacketDirection.FromClient ? ">" : "<",
+                    (packet.Direction == PacketDirection.FromClient ? "> " : "< ") + packet.Timestamp,
                     packet.PacketNum,
                     packet.msgSeqNum,
                     packet.reader.Length,
                     packet.msgType.ToString(),
                     packet.Message?.ToString() ?? $"[msgType={packet.msgType} no message]"
+                    //packet.Timestamp
                 );
 
                 if (++i % batchSize == 0)

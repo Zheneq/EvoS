@@ -77,7 +77,7 @@ namespace EvoS.Framework.Network
 
         public virtual void ProcessUnetMessage(NetworkMessage msg)
         {
-            var deserialized = Deserialize(msg);
+            var deserialized = Deserialize(msg, null);
 
             if (deserialized != null)
             {
@@ -95,7 +95,7 @@ namespace EvoS.Framework.Network
             }
         }
 
-        public MessageBase Deserialize(NetworkMessage msg, bool fromClient = true)
+        public MessageBase Deserialize(NetworkMessage msg, Component context, bool fromClient = true)
         {
             var buffer = msg.reader.ReadBytes(msg.reader.Length);
             msg.reader.SeekZero();
@@ -118,7 +118,7 @@ namespace EvoS.Framework.Network
                 var readMessage = (MessageBase) Activator.CreateInstance(type);
                 readMessage.msgType = msg.msgType;
                 readMessage.msgSeqNum = msg.msgSeqNum;
-                readMessage.Deserialize(msg.reader);
+                readMessage.Deserialize(msg.reader, context);
                 return readMessage;
             }
             catch (Exception e)

@@ -80,7 +80,7 @@ namespace EvoS.PacketAnalysis
         {
             foreach (var packet in _packetProvider.Packets)
             {
-                packet.Deserialize(_serializer);
+                packet.Deserialize(_serializer, Game.GameFlow);
 
                 if (packet.Message != null)
                 {

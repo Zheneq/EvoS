@@ -41,7 +41,7 @@ namespace EvoS.PacketAnalysis
         public static void PatchMethod(MethodInfo root)
         {
             if (!_patchedMethods.Add(root) || _avoidTypes.Contains(root.DeclaringType) ||
-                root.GetMethodBody() == null) return;
+                root.GetMethodBody() == null || root.IsVirtual) return;
 
             var patchTransformer =
                 new HarmonyMethod(AccessTools.Method(typeof(MethodPatcher), nameof(MethodPatcher.Transpile)));
@@ -49,45 +49,45 @@ namespace EvoS.PacketAnalysis
             harmony.Patch(root, transpiler: patchTransformer);
         }
 
-        public static void ResolveSyncListFields()
+        public static void ResolveSyncListFields(string path)
         {
-            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+            var assembly = Assembly.LoadFrom($"{path}/Managed/Assembly-CSharp.dll");
+            foreach (var type in assembly.GetTypes())
             {
-                foreach (var type in assembly.GetTypes())
+                if (!typeof(NetworkBehaviour).IsAssignableFrom(type)) continue;
+
+                Log.Print(LogType.Misc, $"Analyzing {type.FullName}");
+
+                // execute the static constructor instead of parsing its instructions
+                System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(type.TypeHandle);
+
+                foreach (var method in AccessTools.GetDeclaredMethods(type))
                 {
-                    if (!typeof(NetworkBehaviour).IsAssignableFrom(type)) continue;
+                    if (!method.Name.StartsWith("InvokeSyncList")) continue;
 
-                    // execute the static constructor instead of parsing its instructions
-                    System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(type.TypeHandle);
+                    var methodParams = method.GetParameters();
+                    if (methodParams.Length != 2 ||
+                        methodParams[0].ParameterType.FullName != "EvoS.Framework.Network.Unity.NetworkBehaviour" ||
+                        methodParams[1].ParameterType.FullName != "EvoS.Framework.Network.Unity.NetworkReader")
+                        continue;
 
-                    foreach (var method in AccessTools.GetDeclaredMethods(type))
+                    var methodDelegate = (NetworkBehaviour.CmdDelegate) Delegate.CreateDelegate(
+                        typeof(NetworkBehaviour.CmdDelegate), method);
+
+                    var instructions = AnalysisUtils.GetMethodInstructions(method);
+                    var hash = 0;
+                    foreach (var instruction in instructions)
                     {
-                        if (!method.Name.StartsWith("InvokeSyncList")) continue;
+                        if (instruction.opcode != OpCodes.Ldfld) continue;
 
-                        var methodParams = method.GetParameters();
-                        if (methodParams.Length != 2 ||
-                            methodParams[0].ParameterType.FullName != "EvoS.Framework.Network.Unity.NetworkBehaviour" ||
-                            methodParams[1].ParameterType.FullName != "EvoS.Framework.Network.Unity.NetworkReader")
-                            continue;
-
-                        var methodDelegate = (NetworkBehaviour.CmdDelegate) Delegate.CreateDelegate(
-                            typeof(NetworkBehaviour.CmdDelegate), method);
-
-                        var instructions = AnalysisUtils.GetMethodInstructions(method);
-                        var hash = 0;
-                        foreach (var instruction in instructions)
-                        {
-                            if (instruction.opcode != OpCodes.Ldfld) continue;
-
-                            hash = NetworkBehaviour.GetHashByDelegate(methodDelegate);
-                            SyncListLookup.Add(hash, (FieldInfo) instruction.operand);
-                            break;
-                        }
-
-                        if (hash != 0) continue;
-
-                        Log.Print(LogType.Warning, $"No SyncList found in {method.FullDescription()}");
+                        hash = NetworkBehaviour.GetHashByDelegate(methodDelegate);
+                        SyncListLookup.Add(hash, (FieldInfo) instruction.operand);
+                        break;
                     }
+
+                    if (hash != 0) continue;
+
+                    Log.Print(LogType.Warning, $"No SyncList found in {method.FullDescription()}");
                 }
             }
         }

@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
         <OutputType>WinExe</OutputType>
@@ -14,11 +14,18 @@
 
     <ItemGroup>
         <PackageReference Include="GtkSharp" Version="3.22.25.56" />
+        <PackageReference Include="Lib.Harmony" Version="2.0.2" />
         <PackageReference Include="nucs.JsonSettings" Version="1.0.7" />
     </ItemGroup>
 
     <ItemGroup>
         <ProjectReference Include="..\EvoS.PacketAnalysis\EvoS.PacketAnalysis.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Reference Include="0Harmony">
+        <HintPath>C:\Users\user\.nuget\packages\lib.harmony\2.0.2\lib\netcoreapp3.0\0Harmony.dll</HintPath>
+      </Reference>
     </ItemGroup>
 
 </Project>

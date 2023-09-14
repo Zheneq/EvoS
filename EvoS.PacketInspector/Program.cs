@@ -5,6 +5,7 @@ using Gtk;
 using EvoS.PacketAnalysis;
 using McMaster.Extensions.CommandLineUtils;
 using nucs.JsonSettings;
+using EvoS.Framework.Logging;
 
 namespace EvoS.PacketInspector
 {
@@ -43,9 +44,13 @@ namespace EvoS.PacketInspector
                 }
             }
 
+            Log.Print(LogType.Misc, $"Found asset root at {Settings.AtlasReactorData}");
             HashResolver.Init(AssetLoader.BasePath);
-            Patcher.ResolveSyncListFields();
+            Log.Print(LogType.Misc, $"Resolved hashes");
+            Patcher.ResolveSyncListFields(Settings.AtlasReactorData);
+            Log.Print(LogType.Misc, $"Resolved sync lists");
             Patcher.PatchAll();
+            Log.Print(LogType.Misc, $"Patched the library");
 
             var win = new MainWindow();
             if (!PacketsDir.IsNullOrEmpty())
