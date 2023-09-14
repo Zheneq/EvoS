@@ -14,7 +14,6 @@
 
     <ItemGroup>
         <PackageReference Include="GtkSharp" Version="3.22.25.56" />
-        <PackageReference Include="Lib.Harmony" Version="2.0.2" />
         <PackageReference Include="nucs.JsonSettings" Version="1.0.7" />
     </ItemGroup>
 
