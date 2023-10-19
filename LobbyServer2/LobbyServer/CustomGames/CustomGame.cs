@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using CentralServer.BridgeServer;
 using CentralServer.LobbyServer.Character;
 using CentralServer.LobbyServer.Group;
@@ -15,7 +16,7 @@ using log4net;
 
 namespace CentralServer.LobbyServer.CustomGames;
 
-public class CustomGame : GameServerBase
+public class CustomGame : Game
 {
     private static readonly ILog log = LogManager.GetLogger(typeof(CustomGame));
 
@@ -28,7 +29,7 @@ public class CustomGame : GameServerBase
     public CustomGame(long accountId, LobbyGameConfig gameConfig)
     {
         Owner = accountId;
-        Name = $"CG-{LobbyServerUtils.GetHandle(accountId)}";
+        // Name = $"CG-{LobbyServerUtils.GetHandle(accountId)}";
         List<GroupInfo> teamA = new List<GroupInfo>
         {
             GroupManager.GetPlayerGroup(accountId)
@@ -49,7 +50,7 @@ public class CustomGame : GameServerBase
             GameServerProcessCode = $"CustomGame-{Guid.NewGuid()}",
         };
         lobbyGameInfo.GameConfig.GameType = GameType.Custom;
-        ProcessCode = lobbyGameInfo.GameServerProcessCode;
+        // ProcessCode = lobbyGameInfo.GameServerProcessCode;
 
         LobbyServerTeamInfo teamInfo = new LobbyServerTeamInfo()
         {
@@ -90,9 +91,9 @@ public class CustomGame : GameServerBase
             if (playerCheck.AccountId == 0) continue;
             
             LobbyServerProtocol playerConnection = SessionManager.GetClientConnection(playerCheck.AccountId);
-            if (playerConnection?.CurrentServer == this)
+            if (playerConnection?.CurrentGame == this)
             {
-                playerConnection.LeaveServer(this);
+                playerConnection.LeaveGame(this);
             }
         }
     }
@@ -369,7 +370,7 @@ public class CustomGame : GameServerBase
                     GameResult = GameResult.ClientKicked,
                     Reconnection = false
                 });
-                playerConnection?.LeaveServer(this);
+                playerConnection?.LeaveGame(this);
             }
         }
         
@@ -399,7 +400,7 @@ public class CustomGame : GameServerBase
                         Reconnection = false
                     });
                 }
-                playerConnection.LeaveServer(this);
+                playerConnection.LeaveGame(this);
             }
 
             CustomGameManager.DeleteGame(Owner);
@@ -441,11 +442,11 @@ public class CustomGame : GameServerBase
 
         if (allAreReady && GameInfo.GameConfig.TotalHumanPlayers == (teamInfo.TeamAPlayerInfo.Count() + teamInfo.TeamBPlayerInfo.Count()))
         {
-            StartGame();
+            StartCustomGame();
         }
     }
 
-    private void StartGame()
+    private void StartCustomGame()
     {
         log.Info($"Starting Custom game...");
 
@@ -464,12 +465,58 @@ public class CustomGame : GameServerBase
         // Remove custom game server
         CustomGameManager.DeleteGame(Owner);
 
-        _ = server.StartCustomGameAsync(TeamInfo, GameInfo);
+        BuildGameInfoCustomGame(GameInfo);
+        _ = StartCustomGameAsync();
     }
 
-    protected override string GetConnContext()
+    public async Task StartCustomGameAsync()
     {
-        return $"CG {ProcessCode}";
+        // this all loads me into a custom game
+        TeamInfo.TeamPlayerInfo.ForEach(p => log.Info($"Player {p.AccountId} is on team {p.TeamId}"));
+
+        // Assign all users to the new Current Server
+        GetClients().ForEach(c => c.JoinGame(this));
+
+        // Assign players to game
+        SetGameStatus(GameStatus.FreelancerSelecting);
+        GetClients().ForEach(client => SendGameAssignmentNotification(client));
+
+        SetGameStatus(GameStatus.LoadoutSelecting);
+
+        if (!CheckIfAllParticipantsAreConnected())
+        {
+            return;
+        }
+
+        SendGameInfoNotifications();
+
+        // Wait Loadout Selection time
+        log.Info($"Waiting for {GameInfo.LoadoutSelectTimeout} to let players update their loadouts");
+
+        await Task.Delay(GameInfo.LoadoutSelectTimeout);
+
+        log.Info("Launching...");
+        SetGameStatus(GameStatus.Launching);
+        SendGameInfoNotifications();
+
+        // If game server failed to start, we go back to the character select screen
+        if (!CheckIfAllParticipantsAreConnected())
+        {
+            return;
+        }
+
+        StartGame();
+
+        SetGameStatus(GameStatus.Launched);
+        SendGameInfoNotifications();
+
+        GetClients().ForEach(c => c.OnStartGame(this));
+
+        //send this to or stats break 11hour debuging later lol
+        SetGameStatus(GameStatus.Started);
+        SendGameInfoNotifications();
+
+        log.Info($"Game Custom started");
     }
 
     // TODO merge with match orchestrator
@@ -566,5 +613,19 @@ public class CustomGame : GameServerBase
                  $"teammates: {string.Join(", ", usedCharacters)}, " +
                  $"used fill characters: {string.Join(", ", usedFillCharacters)})");
         return randomType;
+    }
+
+    public void BuildGameInfoCustomGame(LobbyGameInfo gameinfo)
+    {
+        GameInfo = gameinfo.Clone();
+        GameInfo.ActivePlayers = TeamInfo.TeamPlayerInfo.Count;
+        GameInfo.LoadoutSelectTimeout = TimeSpan.FromSeconds(30);
+        GameInfo.AcceptedPlayers = TeamInfo.TeamPlayerInfo.Count;
+        GameInfo.ActiveHumanPlayers = TeamInfo.TeamPlayerInfo.Count(p => p.IsHumanControlled);
+        GameInfo.GameConfig.TeamAPlayers = TeamInfo.TeamAPlayerInfo.Count();
+        GameInfo.GameConfig.TeamAPlayers = TeamInfo.TeamAPlayerInfo.Count();
+        GameInfo.GameConfig.Spectators = TeamInfo.SpectatorInfo.Count();
+        GameInfo.GameServerAddress = Server?.URI;
+        // GameInfo.GameServerProcessCode = this.ProcessCode; // TODO CUSTOM GAMES Actual server process code doesn't match the one on the client and in ServerManager, might cause issues
     }
 }

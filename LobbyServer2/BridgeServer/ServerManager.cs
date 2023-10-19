@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using CentralServer.LobbyServer.Matchmaking;
 using EvoS.Framework;
-using EvoS.Framework.Constants.Enums;
 using log4net;
 
 namespace CentralServer.BridgeServer
@@ -62,28 +61,6 @@ namespace CentralServer.BridgeServer
             log.Info($"Failed to find a server for the game ({num} servers available)");
 
             return null;
-        }
-
-        public static BridgeServerProtocol GetServerWithPlayer(long accountId)
-        {
-            lock (ServerPool)
-            {
-                foreach (BridgeServerProtocol server in ServerPool.Values)
-                {
-                    if (server.ServerGameStatus is >= GameStatus.Launched and < GameStatus.Stopped)
-                    {
-                        foreach (long player in server.GetPlayers())
-                        {
-                            if (player.Equals(accountId))
-                            {
-                                return server;
-                            }
-                        }
-                    }
-                }
-
-                return null;
-            }
         }
 
         public static bool IsAnyServerAvailable()

@@ -29,26 +29,26 @@ namespace CentralServer.LobbyServer
     {
         private static readonly ILog log = LogManager.GetLogger(typeof(LobbyServerProtocol));
 
-        private GameServerBase _currentServer;
+        private Game _currentGame;
 
         public PlayerOnlineStatus Status = PlayerOnlineStatus.Online;
         
-        public GameServerBase CurrentServer
+        public Game CurrentGame
         {
-            get => _currentServer;
+            get => _currentGame;
             private set
             {
-                if (_currentServer != value)
+                if (_currentGame != value)
                 {
-                    _currentServer = value;
+                    _currentGame = value;
                     BroadcastRefreshFriendList();
                 }
             }
         }
 
-        public bool IsInGame() => CurrentServer != null;
+        public bool IsInGame() => CurrentGame != null;
 
-        public bool IsInCharacterSelect() => CurrentServer != null && CurrentServer.ServerGameStatus <= GameStatus.FreelancerSelecting;
+        public bool IsInCharacterSelect() => CurrentGame != null && CurrentGame.GameStatus <= GameStatus.FreelancerSelecting;
 
         public bool IsInGroup() => !GroupManager.GetPlayerGroup(AccountId)?.IsSolo() ?? false;
 
@@ -58,7 +58,7 @@ namespace CentralServer.LobbyServer
 
         public bool IsReady { get; private set; }
 
-        public LobbyServerPlayerInfo PlayerInfo => CurrentServer?.GetPlayerInfo(AccountId);
+        public LobbyServerPlayerInfo PlayerInfo => CurrentGame?.GetPlayerInfo(AccountId);
 
         public event Action<LobbyServerProtocol, ChatNotification> OnChatNotification = delegate { };
         public event Action<LobbyServerProtocol, GroupChatRequest> OnGroupChatRequest = delegate { };
@@ -167,7 +167,7 @@ namespace CentralServer.LobbyServer
 
         private void HandleJoinGameRequest(JoinGameRequest joinGameRequest)
         {
-            GameServerBase game = CustomGameManager.JoinGame(
+            Game game = CustomGameManager.JoinGame(
                 AccountId,
                 joinGameRequest.GameServerProcessCode,
                 joinGameRequest.AsSpectator,
@@ -183,7 +183,7 @@ namespace CentralServer.LobbyServer
                 return;
             }
             
-            JoinServer(game);
+            JoinGame(game);
             Send(new JoinGameResponse
             {
                 ResponseId = joinGameRequest.RequestId
@@ -193,7 +193,7 @@ namespace CentralServer.LobbyServer
         private void HandleGameInfoUpdateRequest(GameInfoUpdateRequest gameInfoUpdateRequest)
         {
             bool success = CustomGameManager.UpdateGameInfo(AccountId, gameInfoUpdateRequest.GameInfo, gameInfoUpdateRequest.TeamInfo);
-            GameServerBase game = CustomGameManager.GetMyGame(AccountId);
+            Game game = CustomGameManager.GetMyGame(AccountId);
 
             Send(new GameInfoUpdateResponse
             {
@@ -206,7 +206,7 @@ namespace CentralServer.LobbyServer
         
         private void HandleCreateGameRequest(CreateGameRequest createGameRequest)
         {
-            GameServerBase game = CustomGameManager.CreateGame(AccountId, createGameRequest.GameConfig);
+            Game game = CustomGameManager.CreateGame(AccountId, createGameRequest.GameConfig);
             if (game == null)
             {
                 Send(new CreateGameResponse
@@ -218,7 +218,7 @@ namespace CentralServer.LobbyServer
                 return;
             }
             GroupManager.GetPlayerGroup(AccountId).Members
-                .ForEach(groupMember => SessionManager.GetClientConnection(groupMember)?.JoinServer(game));
+                .ForEach(groupMember => SessionManager.GetClientConnection(groupMember)?.JoinGame(game));
             Send(new CreateGameResponse
             {
                 ResponseId = createGameRequest.RequestId,
@@ -244,33 +244,33 @@ namespace CentralServer.LobbyServer
             BroadcastRefreshFriendList();
         }
 
-        public void JoinServer(GameServerBase server)
+        public void JoinGame(Game game)
         {
-            GameServerBase prevServer = CurrentServer;
-            CurrentServer = server;
-            log.Info($"{LobbyServerUtils.GetHandle(AccountId)} joined {server?.ProcessCode} (was in {prevServer?.ProcessCode})");
+            Game prevServer = CurrentGame;
+            CurrentGame = game;
+            log.Info($"{LobbyServerUtils.GetHandle(AccountId)} joined {game?.ProcessCode} (was in {prevServer?.ProcessCode})");
         }
 
-        public bool LeaveServer(GameServerBase server)
+        public bool LeaveGame(Game game)
         {
-            if (server == null)
+            if (game == null)
             {
-                log.Error($"{AccountId} is asked to leave null server (current server = {CurrentServer?.ProcessCode ?? "null"})");
+                log.Error($"{AccountId} is asked to leave null server (current server = {CurrentGame?.ProcessCode ?? "null"})");
                 return true;
             }
-            if (CurrentServer == null)
+            if (CurrentGame == null)
             {
-                log.Debug($"{AccountId} is asked to leave {server.ProcessCode} while they are not on any server");
+                log.Debug($"{AccountId} is asked to leave {game.ProcessCode} while they are not on any server");
                 return true;
             }
-            if (CurrentServer != server)
+            if (CurrentGame != game)
             {
-                log.Debug($"{AccountId} is asked to leave {server.ProcessCode} while they are on {CurrentServer.ProcessCode}. Ignoring.");
+                log.Debug($"{AccountId} is asked to leave {game.ProcessCode} while they are on {CurrentGame.ProcessCode}. Ignoring.");
                 return false;
             }
 
-            CurrentServer = null;
-            log.Info($"{LobbyServerUtils.GetHandle(AccountId)} leaves {server.ProcessCode}");
+            CurrentGame = null;
+            log.Info($"{LobbyServerUtils.GetHandle(AccountId)} leaves {game.ProcessCode}");
             
             // forcing catalyst panel update -- otherwise it would show catas for the character from the last game
             Send(new ForcedCharacterChangeFromServerNotification
@@ -446,8 +446,6 @@ namespace CentralServer.LobbyServer
 
                 GroupManager.CreateGroup(AccountId);
 
-                // TODO fix ability select panel
-
                 // Send 'Connected to lobby server' notification to chat
                 foreach (long playerAccountId in SessionManager.GetOnlinePlayers())
                 {
@@ -519,7 +517,7 @@ namespace CentralServer.LobbyServer
         {
             LobbyPlayerInfoUpdate update = request.PlayerInfoUpdate;
             PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
-            LobbyServerPlayerInfo playerInfo = update.PlayerId == 0 ? PlayerInfo : CurrentServer?.GetPlayerById(update.PlayerId);
+            LobbyServerPlayerInfo playerInfo = update.PlayerId == 0 ? PlayerInfo : CurrentGame?.GetPlayerById(update.PlayerId);
             bool updateSelectedCharacter = playerInfo == null && update.PlayerId == 0;
             playerInfo ??= LobbyServerPlayerInfo.Of(account);
 
@@ -530,7 +528,7 @@ namespace CentralServer.LobbyServer
 
             log.Debug($"HandlePlayerInfoUpdateRequest characterType={characterType} " +
                      $"(update={update.CharacterType} " +
-                     $"server={CurrentServer?.GetPlayerInfo(AccountId)?.CharacterType} " +
+                     $"server={CurrentGame?.GetPlayerInfo(AccountId)?.CharacterType} " +
                      $"account={account.AccountComponent.LastCharacter})");
 
             CharacterComponent characterComponent = (CharacterComponent)account.CharacterData[characterType].CharacterComponent.Clone();
@@ -542,9 +540,9 @@ namespace CentralServer.LobbyServer
             if (update.LastSelectedLoadout.HasValue) characterComponent.LastSelectedLoadout = update.LastSelectedLoadout.Value;
             LobbyCharacterInfo characterInfo = LobbyCharacterInfo.Of(account.CharacterData[characterType], characterComponent);
 
-            if (CurrentServer != null)
+            if (CurrentGame != null)
             {
-                if (!CurrentServer.UpdateCharacterInfo(AccountId, characterInfo, update))
+                if (!CurrentGame.UpdateCharacterInfo(AccountId, characterInfo, update))
                 {
                     Send(new PlayerInfoUpdateResponse
                     {
@@ -622,21 +620,21 @@ namespace CentralServer.LobbyServer
 
         public void HandlePreviousGameInfoRequest(PreviousGameInfoRequest request)
         {
-            BridgeServerProtocol server = ServerManager.GetServerWithPlayer(AccountId);
+            Game game = GameManager.GetGameWithPlayer(AccountId);
             LobbyGameInfo lobbyGameInfo = null;
 
-            if (server != null)
+            if (game != null)
             {
-                if (!server.GetPlayerInfo(AccountId).ReplacedWithBots)
+                if (!game.GetPlayerInfo(AccountId).ReplacedWithBots)
                 {
-                    server.DisconnectPlayer(AccountId);
-                    log.Info($"{LobbyServerUtils.GetHandle(AccountId)} was in game {server.ProcessCode}, requesting disconnect");
+                    game.DisconnectPlayer(AccountId);
+                    log.Info($"{LobbyServerUtils.GetHandle(AccountId)} was in game {game.ProcessCode}, requesting disconnect");
                 }
                 else
                 {
-                    log.Info($"{LobbyServerUtils.GetHandle(AccountId)} was in game {server.ProcessCode}");
+                    log.Info($"{LobbyServerUtils.GetHandle(AccountId)} was in game {game.ProcessCode}");
                 }
-                lobbyGameInfo = server.GameInfo;
+                lobbyGameInfo = game.GameInfo;
             }
             else
             {
@@ -674,12 +672,12 @@ namespace CentralServer.LobbyServer
 
         public void HandleLeaveGameRequest(LeaveGameRequest request)
         {
-            GameServerBase server = CurrentServer;
-            log.Info($"{AccountId} leaves game {server?.ProcessCode}");
-            if (server != null)
+            Game game = CurrentGame;
+            log.Info($"{AccountId} leaves game {game?.ProcessCode}");
+            if (game != null)
             {
-                LeaveServer(server);
-                server.DisconnectPlayer(AccountId);
+                LeaveGame(game);
+                game.DisconnectPlayer(AccountId);
             }
             Send(new LeaveGameResponse
             {
@@ -688,7 +686,7 @@ namespace CentralServer.LobbyServer
             });
             Send(new GameStatusNotification
             {
-                GameServerProcessCode = server?.ProcessCode,
+                GameServerProcessCode = game?.ProcessCode,
                 GameStatus = GameStatus.Stopped
             });
             Send(new GameAssignmentNotification
@@ -718,23 +716,23 @@ namespace CentralServer.LobbyServer
             }
             else
             {
-                if (CurrentServer != null)
+                if (CurrentGame != null)
                 {
-                    if (CurrentServer.ProcessCode != contextualReadyState.GameProcessCode)
+                    if (CurrentGame.ProcessCode != contextualReadyState.GameProcessCode)
                     {
                         log.Error($"Received ready state {contextualReadyState.ReadyState} " +
                                   $"from {LobbyServerUtils.GetHandle(AccountId)} " +
                                   $"for game {contextualReadyState.GameProcessCode} " +
-                                  $"while they are in game {CurrentServer.ProcessCode}");
+                                  $"while they are in game {CurrentGame.ProcessCode}");
                         return;
                     }
                     if (contextualReadyState.ReadyState == ReadyState.Ready)  // TODO can be Accepted and others
                     {
-                        CurrentServer.SetPlayerReady(AccountId);
+                        CurrentGame.SetPlayerReady(AccountId);
                     }
                     else
                     {
-                        CurrentServer.SetPlayerUnReady(AccountId);
+                        CurrentGame.SetPlayerUnReady(AccountId);
                     }
                 }
                 else
@@ -995,7 +993,7 @@ namespace CentralServer.LobbyServer
         {
             BroadcastRefreshFriendList();
             BroadcastRefreshGroup();
-            CurrentServer?.OnAccountVisualsUpdated(AccountId);
+            CurrentGame?.OnAccountVisualsUpdated(AccountId);
         }
 
         public void HandleSelectBannerRequest(SelectBannerRequest request)
@@ -1056,10 +1054,10 @@ namespace CentralServer.LobbyServer
 
             Send(response);
 
-            if (CurrentServer != null)
+            if (CurrentGame != null)
             {
                 response.ResponseId = 0;
-                foreach (LobbyServerProtocol client in CurrentServer.GetClients())
+                foreach (LobbyServerProtocol client in CurrentGame.GetClients())
                 {
                     if (client.AccountId != AccountId)
                     {
@@ -1084,10 +1082,10 @@ namespace CentralServer.LobbyServer
             };
             Send(response);
 
-            if (CurrentServer != null)
+            if (CurrentGame != null)
             {
-                CurrentServer.OnPlayerUsedGGPack(AccountId);
-                foreach (LobbyServerProtocol client in CurrentServer.GetClients())
+                CurrentGame.OnPlayerUsedGGPack(AccountId);
+                foreach (LobbyServerProtocol client in CurrentGame.GetClients())
                 {
                     if (client.AccountId != AccountId)
                     {
@@ -1099,7 +1097,7 @@ namespace CentralServer.LobbyServer
                             GGPackUserRibbon = account.AccountComponent.SelectedRibbonID,
                             GGPackUserTitle = account.AccountComponent.SelectedTitleID,
                             GGPackUserTitleLevel = 1,
-                            NumGGPacksUsed = CurrentServer.GameInfo.ggPackUsedAccountIDs[AccountId]
+                            NumGGPacksUsed = CurrentGame.GameInfo.ggPackUsedAccountIDs[AccountId]
                         };
                         client.Send(useGGPackNotification);
                     }
@@ -1472,9 +1470,9 @@ namespace CentralServer.LobbyServer
 
             log.Info($"{UserName} wants to reconnect to game {request.PreviousGameInfo.GameServerProcessCode}");
             
-            BridgeServerProtocol server = ServerManager.GetServerWithPlayer(AccountId);
+            Game game = GameManager.GetGameWithPlayer(AccountId);
 
-            if (server == null)
+            if (game == null)
             {
                 // no longer in a game
                 Send(new RejoinGameResponse() { ResponseId = request.RequestId, Success = false });
@@ -1482,7 +1480,7 @@ namespace CentralServer.LobbyServer
                 return;
             }
 
-            LobbyServerPlayerInfo playerInfo = server.GetPlayerInfo(AccountId);
+            LobbyServerPlayerInfo playerInfo = game.GetPlayerInfo(AccountId);
             if (playerInfo == null)
             {
                 // no longer in a game
@@ -1492,13 +1490,8 @@ namespace CentralServer.LobbyServer
             }
 
             Send(new RejoinGameResponse { ResponseId = request.RequestId, Success = true });
-            log.Info($"Reconnecting {UserName} to game {server.GameInfo.GameServerProcessCode} ({server.ProcessCode})");
-            JoinServer(server);
-            playerInfo.ReplacedWithBots = false;
-            server.SendGameAssignmentNotification(this, true);
-            OnStartGame(server);
-            server.SendGameInfo(this);
-            server.StartGameForReconnection(AccountId);
+            log.Info($"Reconnecting {UserName} to game {game.GameInfo.GameServerProcessCode} ({game.ProcessCode})");
+            game.ReconnectPlayer(this);
         }
 
         public void OnLeaveGroup()
@@ -1512,13 +1505,13 @@ namespace CentralServer.LobbyServer
             IsReady = false;
         }
 
-        public void OnStartGame(BridgeServerProtocol server)
+        public void OnStartGame(Game game)
         {
             IsReady = false;
             SendSystemMessage(
-                (server.Name != "" ? $"You are playing on {server.Name} server. " : "") +
-                (server.BuildVersion != "" ? $"Build {server.BuildVersion}. " : "") +
-                $"Game {LobbyServerUtils.GameIdString(server.GameInfo)}.");
+                (game.Server.Name != "" ? $"You are playing on {game.Server.Name} server. " : "") +
+                (game.Server.BuildVersion != "" ? $"Build {game.Server.BuildVersion}. " : "") +
+                $"Game {LobbyServerUtils.GameIdString(game.GameInfo)}.");
         }
 
         public void SendSystemMessage(string text)

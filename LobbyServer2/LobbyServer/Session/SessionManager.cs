@@ -145,9 +145,9 @@ namespace CentralServer.LobbyServer.Session
             lock (SessionInfos) {
                 // If we have a game with this accountId do not remove the session we need the info to be able to reconnect
                 // Else remove it and create a new Session
-                BridgeServerProtocol server = ServerManager.GetServerWithPlayer(accountId);
+                Game game = GameManager.GetGameWithPlayer(accountId);
                 LobbySessionInfo oldSession = null;
-                if (server != null)
+                if (game != null)
                 {
                     oldSession = GetDisconnectedSessionInfo(accountId);
                     if (oldSession == null)

@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using CentralServer.LobbyServer.Group;
@@ -32,13 +31,13 @@ namespace CentralServer.LobbyServer.Discord
                     LobbyServerProtocol conn = SessionManager.GetClientConnection(notification.SenderAccountId);
                     LobbyServerPlayerInfo playerInfo = null;
                     string serverInfo = "";
-                    if (conn.CurrentServer != null)
+                    if (conn.CurrentGame != null)
                     {
-                        serverInfo = $"{conn.CurrentServer.Name} " +
-                                     $"{LobbyServerUtils.GameIdString(conn.CurrentServer.GameInfo)}\n" +
-                                     $"{conn.CurrentServer.GameInfo.GameConfig.Map} " +
-                                     $"{conn.CurrentServer.GameInfo.GameConfig.GameType} ";
-                        playerInfo = conn.CurrentServer.GetPlayerInfo(notification.SenderAccountId);
+                        serverInfo = $"{conn.CurrentGame.Server?.Name} " +
+                                     $"{LobbyServerUtils.GameIdString(conn.CurrentGame.GameInfo)}\n" +
+                                     $"{conn.CurrentGame.GameInfo.GameConfig.Map} " +
+                                     $"{conn.CurrentGame.GameInfo.GameConfig.GameType} ";
+                        playerInfo = conn.CurrentGame.GetPlayerInfo(notification.SenderAccountId);
                     }
 
                     string team = "";
@@ -49,18 +48,18 @@ namespace CentralServer.LobbyServer.Discord
                     
                     context = $"{serverInfo}{team}";
 
-                    if (conn.CurrentServer != null)
+                    if (conn.CurrentGame != null)
                     {
                         if (notification.ConsoleMessageType == ConsoleMessageType.GameChat)
                         {
-                            return conn.CurrentServer
+                            return conn.CurrentGame
                                 .GetPlayers()
                                 .Where(id => id != notification.SenderAccountId)
                                 .ToList();
                         }
                         if (playerInfo != null)
                         {
-                            return conn.CurrentServer
+                            return conn.CurrentGame
                                 .GetPlayers(playerInfo.TeamId)
                                 .Where(id => id != notification.SenderAccountId)
                                 .ToList();

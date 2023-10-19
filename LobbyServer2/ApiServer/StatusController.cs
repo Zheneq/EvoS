@@ -24,6 +24,7 @@ namespace CentralServer.ApiServer
         public static IResult GetStatus()
         {
             List<BridgeServerProtocol> servers = ServerManager.GetServers();
+            List<BridgeServer.Game> games = GameManager.GetGames();
             Status status = new Status
             {
                 players = SessionManager.GetOnlinePlayers()
@@ -39,8 +40,7 @@ namespace CentralServer.ApiServer
                 servers = servers
                     .Select(Server.Of)
                     .ToList(),
-                games = servers
-                    .Where(s => !s.IsAvailable())
+                games = games
                     .Select(Game.Of)
                     .ToList()
             };
@@ -50,6 +50,7 @@ namespace CentralServer.ApiServer
         public static IResult GetSimpleStatus()
         {
             List<BridgeServerProtocol> servers = ServerManager.GetServers();
+            List<BridgeServer.Game> games = GameManager.GetGames();
             HashSet<long> players = SessionManager.GetOnlinePlayers();
             Status status = new Status
             {
@@ -67,8 +68,7 @@ namespace CentralServer.ApiServer
                     .Where(s => !s.IsAvailable())
                     .Select(Server.Of)
                     .ToList(),
-                games = servers
-                    .Where(s => !s.IsAvailable())
+                games = games
                     .Select(g => Game.Of(g, true))
                     .ToList()
             };
@@ -181,14 +181,14 @@ namespace CentralServer.ApiServer
             public int teamAScore { get; set; }
             public int teamBScore { get; set; }
 
-            public static Game Of(BridgeServerProtocol s)
+            public static Game Of(BridgeServer.Game s)
             {
                 return Of(s, false);
             }
 
-            public static Game Of(BridgeServerProtocol s, bool hideTeamSensitiveData)
+            public static Game Of(BridgeServer.Game s, bool hideTeamSensitiveData)
             {
-                bool hide = hideTeamSensitiveData && s.ServerGameStatus < GameStatus.LoadoutSelecting;
+                bool hide = hideTeamSensitiveData && s.GameStatus < GameStatus.LoadoutSelecting;
                 return new Game
                 {
                     id = s.GameInfo?.GameServerProcessCode,
@@ -197,7 +197,7 @@ namespace CentralServer.ApiServer
                     server = s.ProcessCode,
                     teamA = s.TeamInfo.TeamAPlayerInfo.Select(p => GamePlayer.Of(p, hide)).ToList(),
                     teamB = s.TeamInfo.TeamBPlayerInfo.Select(p => GamePlayer.Of(p, hide)).ToList(),
-                    status = s.ServerGameStatus.ToString(),
+                    status = s.GameStatus.ToString(),
                     turn = s.GameSummary?.NumOfTurns ?? s.GameMetrics.CurrentTurn,
                     teamAScore = s.GameSummary?.TeamAPoints ?? s.GameMetrics.TeamAPoints,
                     teamBScore = s.GameSummary?.TeamBPoints ?? s.GameMetrics.TeamBPoints,

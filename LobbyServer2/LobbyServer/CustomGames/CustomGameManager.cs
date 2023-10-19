@@ -17,7 +17,7 @@ namespace CentralServer.LobbyServer.CustomGames
         private static readonly Dictionary<string, CustomGame> GamesByCode = new Dictionary<string, CustomGame>();
         private static readonly Dictionary<long, LobbyServerProtocol> Subscribers = new Dictionary<long, LobbyServerProtocol>();
 
-        public static GameServerBase CreateGame(long accountId, LobbyGameConfig gameConfig)
+        public static Game CreateGame(long accountId, LobbyGameConfig gameConfig)
         {
             CustomGame game;
             lock (Games)
@@ -28,6 +28,11 @@ namespace CentralServer.LobbyServer.CustomGames
                     game = new CustomGame(accountId, gameConfig);
                     Games.Add(accountId, game);
                     GamesByCode.Add(game.GameInfo.GameServerProcessCode, game);
+                    if (!GameManager.RegisterGame(game.GameInfo.GameServerProcessCode, game))
+                    {
+                        log.Error("Failed to register a custom game");
+                        return null;
+                    }
                 }
                 catch (Exception e)
                 {
@@ -65,12 +70,12 @@ namespace CentralServer.LobbyServer.CustomGames
             return game;
         }
 
-        public static List<GameServerBase> GetGames()
+        public static List<Game> GetGames()
         {
-            return Games.Values.Select(x => (GameServerBase)x).ToList();
+            return Games.Values.Select(x => (Game)x).ToList();
         }
 
-        public static GameServerBase GetMyGame(long accountId)
+        public static Game GetMyGame(long accountId)
         {
             Games.TryGetValue(accountId, out CustomGame game);
             return game;
@@ -156,7 +161,7 @@ namespace CentralServer.LobbyServer.CustomGames
             return true;
         }
 
-        public static GameServerBase JoinGame(long accountId, string processCode, bool asSpectator, out LocalizationPayload localizedFailure)
+        public static Game JoinGame(long accountId, string processCode, bool asSpectator, out LocalizationPayload localizedFailure)
         {
             CustomGame game = GetGame(processCode);
             if (game == null)

@@ -17,6 +17,7 @@ using EvoS.Framework.Network.NetworkMessages;
 using EvoS.Framework.Network.Static;
 using log4net;
 using log4net.Core;
+using Game = CentralServer.BridgeServer.Game;
 
 namespace CentralServer.LobbyServer.Discord
 {
@@ -473,10 +474,10 @@ namespace CentralServer.LobbyServer.Discord
                     eb.AddField("Reported Account", $"{message.ReportedPlayerHandle} #{message.ReportedPlayerAccountId}", true);
                 }
 
-                GameServerBase server = SessionManager.GetClientConnection(accountId)?.CurrentServer;
-                if (server != null)
+                Game game = SessionManager.GetClientConnection(accountId)?.CurrentGame;
+                if (game != null)
                 {
-                    eb.AddField("Game", $"{server.Name} {LobbyServerUtils.GameIdString(server.GameInfo)}", true);
+                    eb.AddField("Game", $"{game.Server?.Name} {LobbyServerUtils.GameIdString(game.GameInfo)}", true);
                 }
                 await adminChannel.SendMessageAsync(
                     null,

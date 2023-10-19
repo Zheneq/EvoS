@@ -1,11 +1,9 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using CentralServer.BridgeServer;
 using CentralServer.LobbyServer.Group;
 using CentralServer.LobbyServer.Session;
-using EvoS.Framework.Constants.Enums;
 using EvoS.Framework.Network.NetworkMessages;
 using EvoS.Framework.Network.Static;
 using log4net;
@@ -235,17 +233,13 @@ namespace CentralServer.LobbyServer.Matchmaking
         public static async Task StartGameAsync(List<long> teamA, List<long> teamB, GameType gameType, GameSubType gameSubType)
         {
             log.Info($"Starting {gameType} game...");
-
-            // Get a server
-            BridgeServerProtocol server = ServerManager.GetServer();
-            if (server == null)
+            PvpGame game = GameManager.CreatePvpGame();
+            if (game == null)
             {
-                log.Info($"No available server for {gameType} gamemode");
+                log.Info($"Failed to create {gameType} game");
                 return;
             }
-            
-            SendUnassignQueueNotification(server.GetClients());
-            await server.StartGameAsync(teamA, teamB, gameType, gameSubType);
+            await game.StartGameAsync(teamA, teamB, gameType, gameSubType);
         }
 
         public static void SendUnassignQueueNotification(List<LobbyServerProtocol> clients)

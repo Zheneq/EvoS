@@ -69,9 +69,9 @@ namespace CentralServer.LobbyServer.Chat
             };
 
             LobbyServerPlayerInfo lobbyServerPlayerInfo = null;
-            if (conn.CurrentServer != null)
+            if (conn.CurrentGame != null)
             {
-                lobbyServerPlayerInfo = conn.CurrentServer.GetPlayerInfo(conn.AccountId);
+                lobbyServerPlayerInfo = conn.CurrentGame.GetPlayerInfo(conn.AccountId);
                 if (lobbyServerPlayerInfo != null)
                 {
                     message.SenderTeam = lobbyServerPlayerInfo.TeamId;
@@ -118,14 +118,14 @@ namespace CentralServer.LobbyServer.Chat
                 }
                 case ConsoleMessageType.GameChat:
                 {
-                    if (conn.CurrentServer == null)
+                    if (conn.CurrentGame == null)
                     {
                         log.Warn($"{conn.AccountId} {account.Handle} attempted to use {notification.ConsoleMessageType} while not in game");
                         break;
                     }
                     if (!isMuted)
                     {
-                        foreach (long accountId in conn.CurrentServer.GetPlayers())
+                        foreach (long accountId in conn.CurrentGame.GetPlayers())
                         {
                             SendMessageToPlayer(accountId, message);
                         }
@@ -152,7 +152,7 @@ namespace CentralServer.LobbyServer.Chat
                 }
                 case ConsoleMessageType.TeamChat:
                 {
-                    if (conn.CurrentServer == null)
+                    if (conn.CurrentGame == null)
                     {
                         log.Warn($"{conn.AccountId} {account.Handle} attempted to use {notification.ConsoleMessageType} while not in game");
                         break;
@@ -166,7 +166,7 @@ namespace CentralServer.LobbyServer.Chat
 
                     if (!isMuted)
                     {
-                        foreach (long teammateAccountId in conn.CurrentServer.GetPlayers(lobbyServerPlayerInfo.TeamId))
+                        foreach (long teammateAccountId in conn.CurrentGame.GetPlayers(lobbyServerPlayerInfo.TeamId))
                         {
                             SendMessageToPlayer(teammateAccountId, message);
                         }

@@ -17,41 +17,41 @@ public static class QueuePenaltyManager
 {
     private static readonly ILog log = LogManager.GetLogger(typeof(QueuePenaltyManager));
     
-    public static void IssueQueuePenalties(long accountId, BridgeServerProtocol server)
+    public static void IssueQueuePenalties(long accountId, Game game)
     {
         if (!LobbyConfiguration.GetMatchAbandoningPenalty()
-            || server?.GameInfo?.GameConfig is null
-            || server.GameInfo.GameConfig.GameType != GameType.PvP)
+            || game?.GameInfo?.GameConfig is null
+            || game.GameInfo.GameConfig.GameType != GameType.PvP)
         {
             return;
         }
 
-        lock (server)
+        lock (game)
         {
-            int replacedWithBotsNum = server.TeamInfo.TeamPlayerInfo.Count(i => i.ReplacedWithBots);
-            if (replacedWithBotsNum == server.TeamInfo.TeamPlayerInfo.Count)
+            int replacedWithBotsNum = game.TeamInfo.TeamPlayerInfo.Count(i => i.ReplacedWithBots);
+            if (replacedWithBotsNum == game.TeamInfo.TeamPlayerInfo.Count)
             {
-                CapQueuePenalties(server);
+                CapQueuePenalties(game);
                 return;
             }
-            if (replacedWithBotsNum * 2 > server.TeamInfo.TeamPlayerInfo.Count)
+            if (replacedWithBotsNum * 2 > game.TeamInfo.TeamPlayerInfo.Count)
             {
                 return;
             }
-            if (server.ServerGameStatus != GameStatus.Stopped)
+            if (game.GameStatus != GameStatus.Stopped)
             {
                 SetQueuePenalty(accountId, GameType.PvP, TimeSpan.FromSeconds(200));
             }
-            else if (server.StopTime > DateTime.UtcNow)
+            else if (game.StopTime > DateTime.UtcNow)
             {
-                SetQueuePenalty(accountId, GameType.PvP, DateTime.UtcNow.Subtract(server.StopTime).Add(TimeSpan.FromSeconds(30)));
+                SetQueuePenalty(accountId, GameType.PvP, DateTime.UtcNow.Subtract(game.StopTime).Add(TimeSpan.FromSeconds(30)));
             }
         }
     }
 
-    public static void CapQueuePenalties(BridgeServerProtocol server)
+    public static void CapQueuePenalties(Game game)
     {
-        foreach (long accountId in server.GetPlayers())
+        foreach (long accountId in game.GetPlayers())
         {
             TimeSpan duration = TimeSpan.FromSeconds(15);
             LocalizationArg argDuration = LocalizationArg_TimeSpan.Create(duration);
