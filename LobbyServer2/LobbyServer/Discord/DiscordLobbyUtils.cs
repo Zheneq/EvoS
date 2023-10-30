@@ -33,7 +33,7 @@ namespace CentralServer.LobbyServer.Discord
                     string serverInfo = "";
                     if (conn.CurrentGame != null)
                     {
-                        serverInfo = $"{conn.CurrentGame.Server?.Name} " +
+                        serverInfo = $"{conn.CurrentGame.Server?.Name ?? "<no server>"} " +
                                      $"{LobbyServerUtils.GameIdString(conn.CurrentGame.GameInfo)}\n" +
                                      $"{conn.CurrentGame.GameInfo.GameConfig.Map} " +
                                      $"{conn.CurrentGame.GameInfo.GameConfig.GameType} ";

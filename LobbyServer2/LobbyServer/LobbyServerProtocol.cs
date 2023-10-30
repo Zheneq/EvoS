@@ -623,7 +623,7 @@ namespace CentralServer.LobbyServer
             Game game = GameManager.GetGameWithPlayer(AccountId);
             LobbyGameInfo lobbyGameInfo = null;
 
-            if (game != null)
+            if (game != null && game.Server != null)
             {
                 if (!game.GetPlayerInfo(AccountId).ReplacedWithBots)
                 {
@@ -1472,7 +1472,7 @@ namespace CentralServer.LobbyServer
             
             Game game = GameManager.GetGameWithPlayer(AccountId);
 
-            if (game == null)
+            if (game == null || game.Server == null)
             {
                 // no longer in a game
                 Send(new RejoinGameResponse() { ResponseId = request.RequestId, Success = false });

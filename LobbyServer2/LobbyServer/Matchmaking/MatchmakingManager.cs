@@ -239,6 +239,7 @@ namespace CentralServer.LobbyServer.Matchmaking
                 log.Info($"Failed to create {gameType} game");
                 return;
             }
+            SendUnassignQueueNotification(game.GetClients()); // TODO check if it's really needed
             await game.StartGameAsync(teamA, teamB, gameType, gameSubType);
         }
 

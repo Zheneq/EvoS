@@ -125,6 +125,7 @@ public class CustomGame : Game
             CharacterType characterType = update.CharacterType ?? serverCharacterInfo.CharacterType;
             if (update.ContextualReadyState != null
                 && update.ContextualReadyState.HasValue
+                && update.ContextualReadyState.Value.ReadyState == ReadyState.Ready // why didn't it trigger before?
                 // && ServerGameStatus == GameStatus.FreelancerSelecting
                 && !ValidateSelectedCharacter(accountId, characterType))
             {
@@ -461,6 +462,8 @@ public class CustomGame : Game
             SendGameInfoNotifications();
             return;
         }
+        
+        AssignServer(server);
 
         // Remove custom game server
         CustomGameManager.DeleteGame(Owner);
@@ -626,6 +629,7 @@ public class CustomGame : Game
         GameInfo.GameConfig.TeamAPlayers = TeamInfo.TeamAPlayerInfo.Count();
         GameInfo.GameConfig.Spectators = TeamInfo.SpectatorInfo.Count();
         GameInfo.GameServerAddress = Server?.URI;
+        GameInfo.GameServerProcessCode = Server?.ProcessCode;
         // GameInfo.GameServerProcessCode = this.ProcessCode; // TODO CUSTOM GAMES Actual server process code doesn't match the one on the client and in ServerManager, might cause issues
     }
 }

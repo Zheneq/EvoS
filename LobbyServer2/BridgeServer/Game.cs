@@ -36,6 +36,8 @@ public abstract class Game
 
     protected void AssignServer(BridgeServerProtocol server)
     {
+        Server = server;
+        // TODO clear on destroy
         server.OnGameEnded += OnGameEnded;
         server.OnStatusUpdate += OnStatusUpdate;
         server.OnGameMetricsUpdate += OnGameMetricsUpdate;
@@ -426,12 +428,13 @@ public abstract class Game
             client?.Send(response);
         }
 
-        SendGameInfoNotifications();
+        // SendGameInfoNotifications(); // moved down
         DiscordManager.Get().SendGameReport(GameInfo, Server?.Name, Server?.BuildVersion, gameSummary);
         DiscordManager.Get().SendAdminGameReport(GameInfo, Server?.Name, Server?.BuildVersion, gameSummary);
         
         //Wait a bit so people can look at stuff but we do have to send it so server can restart
         await Task.Delay(60000);
+        SendGameInfoNotifications(); // sending GameStatus.Stopped to the client triggers leaving the game
         Server?.Shutdown();
     }
 
@@ -485,6 +488,7 @@ public abstract class Game
             CharacterType characterType = update.CharacterType ?? serverCharacterInfo.CharacterType;
             if (update.ContextualReadyState != null
                 && update.ContextualReadyState.HasValue
+                && update.ContextualReadyState.Value.ReadyState == ReadyState.Ready // why didn't it trigger before?
                 && GameInfo.GameStatus == GameStatus.FreelancerSelecting
                 && !ValidateSelectedCharacter(accountId, characterType))
             {
