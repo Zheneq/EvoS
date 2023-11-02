@@ -408,7 +408,13 @@ public abstract class Game
 
         }
 
+        Terminate();
+    }
+
+    public virtual void Terminate()
+    {
         Server?.Shutdown();
+        GameManager.UnregisterGame(ProcessCode);
     }
 
     public async Task FinalizeGame(LobbyGameSummary gameSummary)
@@ -435,7 +441,7 @@ public abstract class Game
         //Wait a bit so people can look at stuff but we do have to send it so server can restart
         await Task.Delay(60000);
         SendGameInfoNotifications(); // sending GameStatus.Stopped to the client triggers leaving the game
-        Server?.Shutdown();
+        Terminate();
     }
 
     protected bool FillTeam(List<long> players, Team team)

@@ -84,8 +84,9 @@ public class CustomGame : Game
         SendGameInfoNotifications();
     }
 
-    public void Terminate()
+    public override void Terminate()
     {
+        base.Terminate();
         foreach (LobbyServerPlayerInfo playerCheck in TeamInfo.TeamPlayerInfo)
         {
             if (playerCheck.AccountId == 0) continue;

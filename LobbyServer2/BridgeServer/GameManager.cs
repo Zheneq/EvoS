@@ -33,7 +33,22 @@ public class GameManager
 
     public static bool RegisterGame(string processCode, Game game)
     {
+        if (processCode is null)
+        {
+            log.Error("Attempting to register game with no process code");
+            return false;
+        }
         return Games.TryAdd(processCode, game);
+    }
+
+    public static bool UnregisterGame(string processCode)
+    {
+        if (processCode is null)
+        {
+            log.Error("Attempting to unregister game with no process code");
+            return false;
+        }
+        return Games.TryRemove(processCode, out var game);
     }
 
     public static Game GetGameWithPlayer(long accountId)

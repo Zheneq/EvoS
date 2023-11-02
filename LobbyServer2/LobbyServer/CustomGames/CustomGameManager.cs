@@ -27,8 +27,8 @@ namespace CentralServer.LobbyServer.CustomGames
                 {
                     game = new CustomGame(accountId, gameConfig);
                     Games.Add(accountId, game);
-                    GamesByCode.Add(game.GameInfo.GameServerProcessCode, game);
-                    if (!GameManager.RegisterGame(game.GameInfo.GameServerProcessCode, game))
+                    GamesByCode.Add(game.ProcessCode, game);
+                    if (!GameManager.RegisterGame(game.ProcessCode, game))
                     {
                         log.Error("Failed to register a custom game");
                         return null;
