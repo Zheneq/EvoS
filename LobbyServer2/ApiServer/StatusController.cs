@@ -39,6 +39,9 @@ namespace CentralServer.ApiServer
                     .ToList(),
                 servers = servers
                     .Select(Server.Of)
+                    .Concat(games
+                        .Where(g => g.GameInfo?.GameConfig is { GameType: GameType.Custom } && g.Server is null)
+                        .Select(Server.OfCustomGame))
                     .ToList(),
                 games = games
                     .Select(Game.Of)
@@ -67,6 +70,9 @@ namespace CentralServer.ApiServer
                 servers = servers
                     .Where(s => !s.IsAvailable())
                     .Select(Server.Of)
+                    .Concat(games
+                        .Where(g => g.GameInfo?.GameConfig is { GameType: GameType.Custom } && g.Server is null)
+                        .Select(Server.OfCustomGame))
                     .ToList(),
                 games = games
                     .Select(g => Game.Of(g, true))
@@ -164,6 +170,15 @@ namespace CentralServer.ApiServer
                 {
                     id = s.ProcessCode,
                     name = s.Name
+                };
+            }
+
+            public static Server OfCustomGame(BridgeServer.Game g)
+            {
+                return new Server
+                {
+                    id = g.ProcessCode,
+                    name = "Custom game"
                 };
             }
         }
