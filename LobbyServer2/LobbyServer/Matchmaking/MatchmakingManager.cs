@@ -22,11 +22,11 @@ namespace CentralServer.LobbyServer.Matchmaking
         // List of matchmaking queues by game mode (practive, coop, pvp, ranked and custom)
         private static Dictionary<GameType, MatchmakingQueue> Queues = new Dictionary<GameType, MatchmakingQueue>()
         {
-            { GameType.Practice, new MatchmakingQueue(GameType.Practice) },
-            { GameType.Coop, new MatchmakingQueue(GameType.Coop) },
+            // { GameType.Practice, new MatchmakingQueue(GameType.Practice) },
+            // { GameType.Coop, new MatchmakingQueue(GameType.Coop) },
             { GameType.PvP, new MatchmakingQueue(GameType.PvP) },
-            { GameType.Ranked, new MatchmakingQueue(GameType.Ranked) },
-            { GameType.Custom, new MatchmakingQueue(GameType.Custom) }
+            // { GameType.Ranked, new MatchmakingQueue(GameType.Ranked) },
+            // { GameType.Custom, new MatchmakingQueue(GameType.Custom) }
         };
 
         public static List<MatchmakingQueue> GetQueues()
