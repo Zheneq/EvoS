@@ -390,20 +390,7 @@ public class CustomGame : Game
         if (accountId == Owner)
         {
             log.Info($"Owner Left Game kicking all players");
-            foreach (LobbyServerPlayerInfo playerCheck in TeamInfo.TeamPlayerInfo)
-            {
-                LobbyServerProtocol playerConnection = SessionManager.GetClientConnection(playerCheck.AccountId);
-                if (playerCheck.AccountId != accountId)
-                {
-                    playerConnection.Send(new GameAssignmentNotification
-                    {
-                        GameInfo = null,
-                        GameResult = GameResult.OwnerLeft,
-                        Reconnection = false
-                    });
-                }
-                playerConnection.LeaveGame(this);
-            }
+            DisperseCustomGame(GameResult.OwnerLeft, accountId);
 
             CustomGameManager.DeleteGame(Owner);
 
@@ -422,6 +409,24 @@ public class CustomGame : Game
             CustomGameManager.DeleteGame(Owner);
         }
         CustomGameManager.NotifyUpdate();
+    }
+
+    private void DisperseCustomGame(GameResult gameResult, long accountIdToIgnore = 0)
+    {
+        foreach (LobbyServerPlayerInfo playerCheck in TeamInfo.TeamPlayerInfo)
+        {
+            LobbyServerProtocol playerConnection = SessionManager.GetClientConnection(playerCheck.AccountId);
+            if (accountIdToIgnore > 0 && playerCheck.AccountId != accountIdToIgnore)
+            {
+                playerConnection.Send(new GameAssignmentNotification
+                {
+                    GameInfo = null,
+                    GameResult = gameResult,
+                    Reconnection = false
+                });
+            }
+            playerConnection.LeaveGame(this);
+        }
     }
 
     public override void SetPlayerReady(long accountId)
@@ -464,12 +469,17 @@ public class CustomGame : Game
             return;
         }
         
-        AssignServer(server);
-
         // Remove custom game server
         CustomGameManager.DeleteGame(Owner);
 
+        AssignServer(server);
         BuildGameInfoCustomGame(GameInfo);
+        if (!GameManager.RegisterGame(ProcessCode, this))
+        {
+            log.Info($"Failed to register custom game");
+            CancelMatch();
+            return;
+        }
         _ = StartCustomGameAsync();
     }
 

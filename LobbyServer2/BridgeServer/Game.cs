@@ -383,7 +383,7 @@ public abstract class Game
         return true;
     }
 
-    private void CancelMatch(string dodgerHandle = null)
+    protected void CancelMatch(string dodgerHandle = null)
     {
         foreach (LobbyServerProtocol client in GetClients())
         {
