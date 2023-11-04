@@ -948,22 +948,22 @@ namespace CentralServer.LobbyServer
                              $"to join group {response.GroupId} by {response.JoinerAccountId}: {response.Acceptance}");
 
                     // Check if the player is currently in a game.
-                    if (CurrentServer != null)
+                    if (CurrentGame != null)
                     {
                         // Get the server associated with the inviting player.
-                        BridgeServerProtocol server = ServerManager.GetServerWithPlayer(response.JoinerAccountId);
+                        Game game = GameManager.GetGameWithPlayer(response.JoinerAccountId);
 
                         // Check if the inviting player is on the same server.
-                        if (server != null && server == CurrentServer)
+                        if (game != null && game == CurrentGame)
                         {
                             // Find the player information for both the inviting player and the current player.
-                            LobbyServerPlayerInfo lobbyServerOtherPlayerInfo = server.TeamInfo.TeamPlayerInfo
+                            LobbyServerPlayerInfo lobbyServerOtherPlayerInfo = game.TeamInfo.TeamPlayerInfo
                                 .FirstOrDefault(p => p.AccountId == response.JoinerAccountId);
-                            LobbyServerPlayerInfo lobbyServerPlayerInfo = server.TeamInfo.TeamPlayerInfo
+                            LobbyServerPlayerInfo lobbyServerPlayerInfo = game.TeamInfo.TeamPlayerInfo
                                 .FirstOrDefault(p => p.AccountId == AccountId);
 
                             // Check if the players are on opposing teams.
-                            if (lobbyServerOtherPlayerInfo.TeamId != lobbyServerPlayerInfo.TeamId)
+                            if (lobbyServerOtherPlayerInfo?.TeamId != lobbyServerPlayerInfo?.TeamId)
                             {
                                 log.Info($"Player {AccountId} is trying to accept a group invite but is currently on the opposing team.");
                                 // Send an error message indicating that members of opposing teams cannot group.
