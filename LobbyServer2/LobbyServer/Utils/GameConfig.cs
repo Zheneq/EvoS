@@ -25,7 +25,7 @@ public class GameConfig
             EnableFacebook = false,
             EnableHiddenCharacters = false,
             EnableMods = true,
-            EnableSeasons = false,
+            EnableSeasons = true,
             EnableShop = true,
             EnableQuests = false,
             EnableSteamAchievements = false,
