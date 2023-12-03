@@ -456,7 +456,7 @@ namespace CentralServer.LobbyServer
             if (request == null)
             {
                 SendErrorResponse(new RegisterGameClientResponse(), 0, Messages.LoginFailed);
-                WebSocket.Close();
+                CloseConnection();
                 return;
             }
 
@@ -502,14 +502,14 @@ namespace CentralServer.LobbyServer
             catch (RegisterGameException e)
             {
                 SendErrorResponse(new RegisterGameClientResponse(), request.RequestId, e);
-                WebSocket.Close();
+                CloseConnection();
                 return;
             }
             catch (Exception e)
             {
                 SendErrorResponse(new RegisterGameClientResponse(), request.RequestId);
                 log.Error("Exception while registering game client", e);
-                WebSocket.Close();
+                CloseConnection();
                 return;
             }
             BroadcastRefreshFriendList();
