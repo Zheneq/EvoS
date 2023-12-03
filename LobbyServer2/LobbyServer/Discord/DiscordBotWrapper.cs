@@ -118,7 +118,7 @@ namespace CentralServer.LobbyServer.Discord
                 LobbyServerProtocol player = SessionManager.GetClientConnection(playerAccountId);
                 if (player != null && player.CurrentGame == null)
                 {
-                    player.Send(message);
+                    await player.Send(message);
                 }
             }
         }
@@ -150,7 +150,7 @@ namespace CentralServer.LobbyServer.Discord
                         ConsoleMessageType = ConsoleMessageType.BroadcastMessage,
                         Text = msg,
                     };
-                    SessionManager.Broadcast(message);
+                    await SessionManager.Broadcast(message);
                     await command.RespondAsync($"Broadcast: {msg}", ephemeral: true);
                     break;
                 }

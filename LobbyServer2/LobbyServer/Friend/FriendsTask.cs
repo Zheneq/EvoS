@@ -17,7 +17,7 @@ public class FriendsTask : PeriodicRunner
     {
     }
 
-    protected override Task ExecuteAsync(CancellationToken cancellationToken)
+    protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {
         HashSet<long> pendingUpdate = FriendManager.GetAndResetPendingUpdate();
         HashSet<long> onlinePlayers = SessionManager.GetOnlinePlayers();
@@ -29,9 +29,11 @@ public class FriendsTask : PeriodicRunner
         log.Debug($"Got {pendingUpdate.Count} updates total for {receivers.Count} players");
         foreach (long accId in receivers)
         {
-            SessionManager.GetClientConnection(accId)?.RefreshFriendList();
+            LobbyServerProtocol conn = SessionManager.GetClientConnection(accId);
+            if (conn is not null)
+            {
+                await conn.RefreshFriendList();
+            }
         }
-
-        return Task.CompletedTask;
     }
 }

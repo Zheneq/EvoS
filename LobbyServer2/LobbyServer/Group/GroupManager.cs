@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using CentralServer.LobbyServer.Matchmaking;
 using CentralServer.LobbyServer.Session;
 using CentralServer.LobbyServer.Utils;
@@ -254,14 +255,22 @@ namespace CentralServer.LobbyServer.Group
         private static void OnGroupMembersUpdated(GroupInfo groupInfo)
         {
             MatchmakingManager.RemoveGroupFromQueue(groupInfo, true);
-            SessionManager.GetClientConnection(groupInfo.Leader)?.BroadcastRefreshGroup(true);
+            LobbyServerProtocol leaderConn = SessionManager.GetClientConnection(groupInfo.Leader);
+            if (leaderConn is not null)
+            {
+                leaderConn.BroadcastRefreshGroup(true).Wait();
+            }
         }
 
-        public static void Broadcast(GroupInfo group, WebSocketMessage message)
+        public static async Task Broadcast(GroupInfo group, WebSocketMessage message)
         {
             foreach (long groupMember in group.Members)
             {
-                SessionManager.GetClientConnection(groupMember)?.Send(message);
+                LobbyServerProtocol conn = SessionManager.GetClientConnection(groupMember);
+                if (conn is not null)
+                {
+                    await conn.Send(message);
+                }
             }
         }
     }

@@ -101,5 +101,35 @@ namespace EvoS.Framework
         {
             return address.GetSubnet(subnet).Equals(otherAddress.GetSubnet(subnet));
         }
+        
+        // from websocket-sharp
+        public static bool MaybeUri(this string value)
+        {
+            if (value == null || value.Length == 0)
+                return false;
+            int length = value.IndexOf(':');
+            return length != -1 && length < 10 && value.Substring(0, length).IsPredefinedScheme();
+        }
+        
+        // from websocket-sharp
+        public static bool IsPredefinedScheme(this string value)
+        {
+            if (value == null || value.Length < 2)
+                return false;
+            char ch = value[0];
+            switch (ch)
+            {
+                case 'f':
+                    return value == "file" || value == "ftp";
+                case 'h':
+                    return value == "http" || value == "https";
+                case 'n':
+                    return value[1] == 'e' ? value == "news" || value == "net.pipe" || value == "net.tcp" : value == "nntp";
+                case 'w':
+                    return value == "ws" || value == "wss";
+                default:
+                    return ch == 'g' && value == "gopher" || ch == 'm' && value == "mailto";
+            }
+        }
     }
 }

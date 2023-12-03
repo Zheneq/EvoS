@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
+using System.Threading.Tasks;
 using CentralServer.BridgeServer;
 using EvoS.Framework.Constants.Enums;
 using EvoS.Framework.DataAccess;
@@ -224,14 +225,16 @@ namespace CentralServer.LobbyServer.Session
             return num;
         }
 
-        public static void Broadcast(WebSocketMessage message)
+        public static Task Broadcast(WebSocketMessage message)
         {
-            SessionInfos.Values.FirstOrDefault()?.conn.Broadcast(message);
+            SessionInfo anySession = SessionInfos.Values.FirstOrDefault();
+            if (anySession is null) return Task.CompletedTask;
+            return anySession.conn.Broadcast(message);
         }
 
-        public static void Broadcast(string msg)
+        public static Task Broadcast(string msg)
         {
-            Broadcast(new ChatNotification
+            return Broadcast(new ChatNotification
             {
                 ConsoleMessageType = ConsoleMessageType.BroadcastMessage,
                 Text = msg,

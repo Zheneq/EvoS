@@ -74,7 +74,7 @@ namespace CentralServer.LobbyServer.Matchmaking
         /// </summary>
         /// <param name="gameType">selected gamemode</param>
         /// <param name="group">group</param>
-        public static bool AddGroupToQueue(GameType gameType, GroupInfo group)
+        public static async Task<bool> AddGroupToQueue(GameType gameType, GroupInfo group)
         {
             // Get the queue
             MatchmakingQueue queue = Queues[gameType];
@@ -85,8 +85,8 @@ namespace CentralServer.LobbyServer.Matchmaking
             if (added)
             {
                 // Send 'Assigned to queue notification' to the players
-                GroupManager.Broadcast(group, new MatchmakingQueueAssignmentNotification() { MatchmakingQueueInfo = info });
-                GroupManager.Broadcast(group, new MatchmakingQueueToPlayersNotification() 
+                await GroupManager.Broadcast(group, new MatchmakingQueueAssignmentNotification() { MatchmakingQueueInfo = info });
+                await GroupManager.Broadcast(group, new MatchmakingQueueToPlayersNotification() 
                 {
                     GameType = gameType,
                     MessageToSend = MatchmakingQueueToPlayersNotification.MatchmakingQueueMessage.QueueConfirmed,    
@@ -97,14 +97,18 @@ namespace CentralServer.LobbyServer.Matchmaking
 
                 foreach (long member in group.Members)
                 {
-                    SessionManager.GetClientConnection(member)?.BroadcastRefreshFriendList();
-                    SessionManager.GetClientConnection(member)?.Send(new MatchmakingQueueToPlayersNotification()
+                    LobbyServerProtocol conn = SessionManager.GetClientConnection(member);
+                    if (conn is not null)
                     {
-                        AccountId = member,
-                        MessageToSend = MatchmakingQueueToPlayersNotification.MatchmakingQueueMessage.QueueConfirmed,
-                        GameType = gameType,
-                        SubTypeMask = 1
-                    });
+                        conn.BroadcastRefreshFriendList();
+                        await conn.Send(new MatchmakingQueueToPlayersNotification()
+                        {
+                            AccountId = member,
+                            MessageToSend = MatchmakingQueueToPlayersNotification.MatchmakingQueueMessage.QueueConfirmed,
+                            GameType = gameType,
+                            SubTypeMask = 1
+                        });
+                    }
                 }
             }
 
@@ -239,21 +243,21 @@ namespace CentralServer.LobbyServer.Matchmaking
                 log.Info($"Failed to create {gameType} game");
                 return;
             }
-            SendUnassignQueueNotification(game.GetClients()); // TODO check if it's really needed
+            await SendUnassignQueueNotification(game.GetClients()); // TODO check if it's really needed
             await game.StartGameAsync(teamA, teamB, gameType, gameSubType);
         }
 
-        public static void SendUnassignQueueNotification(List<LobbyServerProtocol> clients)
+        public static async Task SendUnassignQueueNotification(List<LobbyServerProtocol> clients)
         {
             foreach (LobbyServerProtocol client in clients)
             {
-                SendUnassignQueueNotification(client);
+                await SendUnassignQueueNotification(client);
             }
         }
 
-        public static void SendUnassignQueueNotification(LobbyServerProtocol client)
+        public static async Task SendUnassignQueueNotification(LobbyServerProtocol client)
         {
-            client.Send(new MatchmakingQueueAssignmentNotification
+            await client.Send(new MatchmakingQueueAssignmentNotification
             {
                 MatchmakingQueueInfo = null,
                 Reason = "MatchFound@NewFrontEndScene"

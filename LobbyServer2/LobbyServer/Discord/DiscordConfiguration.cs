@@ -1,4 +1,5 @@
-﻿using WebSocketSharp;
+﻿using System.Xml.XPath;
+using WebSocketSharp;
 
 namespace CentralServer.LobbyServer.Discord
 {
@@ -41,7 +42,7 @@ namespace CentralServer.LobbyServer.Discord
         {
             return channel != null
                    && channel.Webhook != null
-                   && channel.Webhook.MaybeUri();
+                   && EvoS.Framework.Extensions.MaybeUri(channel.Webhook);
         }
     }
 }

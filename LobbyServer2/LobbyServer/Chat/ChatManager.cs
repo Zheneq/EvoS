@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading.Tasks;
 using CentralServer.LobbyServer.Group;
 using CentralServer.LobbyServer.Session;
 using EvoS.DirectoryServer.Inventory;
@@ -50,7 +51,7 @@ namespace CentralServer.LobbyServer.Chat
             conn.OnGroupChatRequest -= HandleGroupChatRequest;
         }
         
-        public void HandleChatNotification(LobbyServerProtocol conn, ChatNotification notification)
+        public async Task HandleChatNotification(LobbyServerProtocol conn, ChatNotification notification)
         {
             PersistedAccountData account = DB.Get().AccountDao.GetAccount(conn.AccountId);
             bool isMuted = account.AdminComponent.Muted
@@ -91,13 +92,13 @@ namespace CentralServer.LobbyServer.Chat
                     {
                         foreach (long player in SessionManager.GetOnlinePlayers())
                         {
-                            SendMessageToPlayer(player, message);
+                            await SendMessageToPlayer(player, message);
                         }
                         OnGlobalChatMessage(message);
                     }
                     else
                     {
-                        SendMessageToPlayer(conn.AccountId, message);
+                        await SendMessageToPlayer(conn.AccountId, message);
                     }
                     break;
                 }
@@ -107,8 +108,8 @@ namespace CentralServer.LobbyServer.Chat
                     if (accountId.HasValue)
                     {
                         message.RecipientHandle = notification.RecipientHandle;
-                        SendMessageToPlayer((long)accountId, message);
-                        conn.Send(message);
+                        await SendMessageToPlayer((long)accountId, message);
+                        await conn.Send(message);
                     }
                     else
                     {
@@ -127,12 +128,12 @@ namespace CentralServer.LobbyServer.Chat
                     {
                         foreach (long accountId in conn.CurrentGame.GetPlayers())
                         {
-                            SendMessageToPlayer(accountId, message);
+                            await SendMessageToPlayer(accountId, message);
                         }
                     }
                     else
                     {
-                        SendMessageToPlayer(conn.AccountId, message);
+                        await SendMessageToPlayer(conn.AccountId, message);
                     }
                     break;
                 }
@@ -146,7 +147,7 @@ namespace CentralServer.LobbyServer.Chat
                     }
                     foreach (long member in group.Members)
                     {
-                        SendMessageToPlayer(member, message);
+                        await SendMessageToPlayer(member, message);
                     }
                     break;
                 }
@@ -168,12 +169,12 @@ namespace CentralServer.LobbyServer.Chat
                     {
                         foreach (long teammateAccountId in conn.CurrentGame.GetPlayers(lobbyServerPlayerInfo.TeamId))
                         {
-                            SendMessageToPlayer(teammateAccountId, message);
+                            await SendMessageToPlayer(teammateAccountId, message);
                         }
                     }
                     else
                     {
-                        SendMessageToPlayer(conn.AccountId, message);
+                        await SendMessageToPlayer(conn.AccountId, message);
                     }
                     break;
                 }
@@ -188,9 +189,9 @@ namespace CentralServer.LobbyServer.Chat
             OnChatMessage(message, isMuted);
         }
 
-        public void HandleGroupChatRequest(LobbyServerProtocol conn, GroupChatRequest request)
+        public async Task HandleGroupChatRequest(LobbyServerProtocol conn, GroupChatRequest request)
         {
-            conn.Send(new GroupChatResponse
+            await conn.Send(new GroupChatResponse
             {
                 Text = request.Text,
                 ResponseId = request.RequestId,
@@ -211,19 +212,25 @@ namespace CentralServer.LobbyServer.Chat
 
             foreach (long accountID in GroupManager.GetPlayerGroup(conn.AccountId).Members)
             {
-                SendMessageToPlayer(accountID, message);
+                await SendMessageToPlayer(accountID, message);
             }
 
             OnChatMessage(message, false);
         }
 
-        private void SendMessageToPlayer(long player, ChatNotification message)
+        private Task SendMessageToPlayer(long player, ChatNotification message)
         {
             SocialComponent socialComponent = DB.Get().AccountDao.GetAccount(player)?.SocialComponent;
             if (socialComponent?.IsBlocked(message.SenderAccountId) != true)
             {
-                SessionManager.GetClientConnection(player)?.Send(message);
+                LobbyServerProtocol conn = SessionManager.GetClientConnection(player);
+                if (conn is not null)
+                {
+                    return conn.Send(message);
+                }
             }
+
+            return Task.CompletedTask;
         }
     }
 }

@@ -25,7 +25,7 @@ public class GameManager
         if (!RegisterGame(server.ProcessCode, game))
         {
             log.Info($"Failed to register game {server.ProcessCode}");
-            server.Shutdown();
+            server.Shutdown().Wait();
             return null;
         }
         return game;

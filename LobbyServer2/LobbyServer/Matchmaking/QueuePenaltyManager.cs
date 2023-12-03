@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using CentralServer.BridgeServer;
 using CentralServer.LobbyServer.Group;
 using CentralServer.LobbyServer.Session;
@@ -31,7 +32,7 @@ public static class QueuePenaltyManager
             int replacedWithBotsNum = game.TeamInfo.TeamPlayerInfo.Count(i => i.ReplacedWithBots);
             if (replacedWithBotsNum == game.TeamInfo.TeamPlayerInfo.Count)
             {
-                CapQueuePenalties(game);
+                CapQueuePenalties(game).Wait();
                 return;
             }
             if (replacedWithBotsNum * 2 > game.TeamInfo.TeamPlayerInfo.Count)
@@ -49,7 +50,7 @@ public static class QueuePenaltyManager
         }
     }
 
-    public static void CapQueuePenalties(Game game)
+    public static async Task CapQueuePenalties(Game game)
     {
         foreach (long accountId in game.GetPlayers())
         {
@@ -60,7 +61,11 @@ public static class QueuePenaltyManager
             if (SetQueuePenalty(accountId, GameType.PvP, duration, capPenalty: true))
             {
                 log.Info($"{LobbyServerUtils.GetHandle(accountId)}'s queue penalty is pardoned (reset to {duration})");
-                SessionManager.GetClientConnection(accountId)?.SendSystemMessage(msg);
+                LobbyServerProtocol conn = SessionManager.GetClientConnection(accountId);
+                if (conn is not null)
+                {
+                    await conn.SendSystemMessage(msg);
+                }
             }
         }
     }
@@ -114,7 +119,7 @@ public static class QueuePenaltyManager
         return true;
     }
 
-    public static LocalizationPayload CheckQueuePenalties(long accountId, GameType selectedGameType)
+    public static async Task<LocalizationPayload> CheckQueuePenalties(long accountId, GameType selectedGameType)
     {
         PersistedAccountData account = DB.Get().AccountDao.GetAccount(accountId);
         QueuePenalties queuePenalties = account?.AdminComponent.ActiveQueuePenalties?.GetValueOrDefault(selectedGameType);
@@ -133,8 +138,14 @@ public static class QueuePenaltyManager
                 {
                     if (groupMember == accountId) continue;
                     LobbyServerProtocol conn = SessionManager.GetClientConnection(groupMember);
-                    conn?.SendSystemMessage(
-                        LocalizationPayload.Create("QueueDodgerPenaltyAppliedToGroupmate", "Matchmaking", argHandle, argDuration));
+                    if (conn is not null)
+                    {
+                        await conn.SendSystemMessage(LocalizationPayload.Create(
+                            "QueueDodgerPenaltyAppliedToGroupmate", 
+                            "Matchmaking", 
+                            argHandle,
+                            argDuration));
+                    }
                 }
             }
             

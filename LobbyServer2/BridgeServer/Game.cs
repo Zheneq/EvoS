@@ -60,12 +60,15 @@ public abstract class Game
         log.Info($"Game {LobbyServerUtils.GameIdString(GameInfo)} is assigned to server {Server?.Name}");
     }
 
-    public virtual void DisconnectPlayer(long accountId)
+    public virtual async Task DisconnectPlayer(long accountId)
     {
-        Server?.DisconnectPlayer(GetPlayerInfo(accountId));
+        if (Server is not null)
+        {
+            await Server.DisconnectPlayer(GetPlayerInfo(accountId));
+        }
     }
     
-    protected void OnGameEnded(BridgeServerProtocol server, LobbyGameSummary summary, LobbyGameSummaryOverrides overrides)
+    protected async Task OnGameEnded(BridgeServerProtocol server, LobbyGameSummary summary, LobbyGameSummaryOverrides overrides)
     {
         LobbyGameSummary gameSummary = summary;
         if (gameSummary == null)
@@ -97,10 +100,10 @@ public abstract class Game
         GameInfo.GameStatus = GameStatus.Stopped;
         StopTime = DateTime.UtcNow.Add(TimeSpan.FromSeconds(8));
 
-        _ = FinalizeGame(GameSummary);
+        await FinalizeGame(GameSummary);
     }
     
-    protected void OnStatusUpdate(BridgeServerProtocol server, GameStatus newStatus)
+    protected async Task OnStatusUpdate(BridgeServerProtocol server, GameStatus newStatus)
     {
         log.Info($"Game {GameInfo?.Name} {newStatus}");
 
@@ -110,7 +113,7 @@ public abstract class Game
         {
             foreach (LobbyServerProtocol client in GetClients())
             {
-                if (!client.LeaveGame(this))
+                if (!await client.LeaveGame(this))
                 {
                     continue;
                 }
@@ -124,21 +127,22 @@ public abstract class Game
                             Action = ForceMatchmakingQueueNotification.ActionType.Leave,
                             GameType = GameInfo.GameConfig.GameType
                         };
-                    client.Send(forceMatchmakingQueueNotification);
+                    await client.Send(forceMatchmakingQueueNotification);
                 }
             }
         }
     }
 
-    private void OnGameMetricsUpdate(BridgeServerProtocol server, ServerGameMetrics gameMetrics)
+    private Task OnGameMetricsUpdate(BridgeServerProtocol server, ServerGameMetrics gameMetrics)
     {
         GameMetrics = gameMetrics;
         log.Info($"Game {GameInfo?.Name} Turn {GameMetrics.CurrentTurn}, " +
                  $"{GameMetrics.TeamAPoints}-{GameMetrics.TeamBPoints}, " +
                  $"frame time: {GameMetrics.AverageFrameTime}");
+        return Task.CompletedTask;
     }
 
-    protected void OnPlayerDisconnect(BridgeServerProtocol server, LobbyServerPlayerInfo playerInfo, LobbySessionInfo sessionInfo)
+    protected async Task OnPlayerDisconnect(BridgeServerProtocol server, LobbyServerPlayerInfo playerInfo, LobbySessionInfo sessionInfo)
     {
         log.Info($"{LobbyServerUtils.GetHandle(playerInfo.AccountId)} left game {GameInfo?.GameServerProcessCode}");
 
@@ -146,7 +150,7 @@ public abstract class Game
         {
             if (client.AccountId == playerInfo.AccountId)
             {
-                client.LeaveGame(this);
+                await client.LeaveGame(this);
                 break;
             }
         }
@@ -160,12 +164,12 @@ public abstract class Game
         QueuePenaltyManager.IssueQueuePenalties(playerInfo.AccountId, this);
     }
 
-    protected void OnServerDisconnect(BridgeServerProtocol server)
+    protected async Task OnServerDisconnect(BridgeServerProtocol server)
     {
-        QueuePenaltyManager.CapQueuePenalties(this);
+        await QueuePenaltyManager.CapQueuePenalties(this);
     }
     
-    protected void StartGame()
+    protected async Task StartGame()
     {
         GameInfo.GameStatus = GameStatus.Assembling;
         Dictionary<int, LobbySessionInfo> sessionInfos = TeamInfo.TeamPlayerInfo
@@ -174,7 +178,7 @@ public abstract class Game
                 playerInfo => SessionManager.GetSessionInfo(playerInfo.AccountId) ?? new LobbySessionInfo());  // fallback for bots TODO something smarter
 
         Server.SendJoinGameRequests(TeamInfo, sessionInfos, GameInfo.GameServerProcessCode);
-        Server.LaunchGame(GameInfo, TeamInfo, sessionInfos);
+        await Server.LaunchGame(GameInfo, TeamInfo, sessionInfos);
     }
 
     protected void SetGameStatus(GameStatus status)
@@ -281,7 +285,7 @@ public abstract class Game
         GameInfo.ggPackUsedAccountIDs[accountId] = ggPackUsedAccountIDs + 1;
     }
 
-    public void SendGameAssignmentNotification(LobbyServerProtocol client, bool reconnection = false)
+    public async Task SendGameAssignmentNotification(LobbyServerProtocol client, bool reconnection = false)
     {
         LobbyServerPlayerInfo playerInfo = GetPlayerInfo(client.AccountId);
         GameAssignmentNotification notification = new GameAssignmentNotification
@@ -294,10 +298,10 @@ public abstract class Game
             GameplayOverrides = GameConfig.GetGameplayOverrides()
         };
 
-        client.Send(notification);
+        await client.Send(notification);
     }
 
-    public void SendGameInfoNotifications()
+    protected async Task SendGameInfoNotifications()
     {
         GameInfo.ActivePlayers = TeamInfo.TeamPlayerInfo.Count;
         GameInfo.UpdateTimestamp = DateTime.UtcNow.Ticks;
@@ -306,17 +310,17 @@ public abstract class Game
             LobbyServerProtocol playerConnection = SessionManager.GetClientConnection(player);
             if (playerConnection != null)
             {
-                SendGameInfo(playerConnection);
+                await SendGameInfo(playerConnection);
             }
         }
     }
 
-    public void SendGameInfo(LobbyServerProtocol playerConnection, GameStatus gamestatus = GameStatus.None)
+    protected async Task SendGameInfo(LobbyServerProtocol playerConnection, GameStatus gameStatus = GameStatus.None)
     {
         // TODO do not mutate on send
-        if (gamestatus != GameStatus.None)
+        if (gameStatus != GameStatus.None)
         {
-            GameInfo.GameStatus = gamestatus;
+            GameInfo.GameStatus = gameStatus;
         }
 
         LobbyServerPlayerInfo playerInfo = GetPlayerInfo(playerConnection.AccountId);
@@ -327,10 +331,10 @@ public abstract class Game
             PlayerInfo = LobbyPlayerInfo.FromServer(playerInfo, 0, new MatchmakingQueueConfig())
         };
 
-        playerConnection.Send(notification);
+        await playerConnection.Send(notification);
     }
 
-    protected void SendGameAssignmentNotification(long accountId, bool reconnection = false)
+    protected async Task SendGameAssignmentNotification(long accountId, bool reconnection = false)
     {
         LobbyServerProtocol client = SessionManager.GetClientConnection(accountId);
         if (client is null)
@@ -338,25 +342,27 @@ public abstract class Game
             log.Error($"Failed to send game assignment to {LobbyServerUtils.GetHandle(accountId)}");
             return;
         }
-        SendGameAssignmentNotification(client, reconnection);
+        await SendGameAssignmentNotification(client, reconnection);
     }
 
-    public virtual void SetPlayerReady(long accountId)
+    public virtual Task SetPlayerReady(long accountId)
     {
         GetPlayerInfo(accountId).ReadyState = ReadyState.Ready;
+        return Task.CompletedTask;
     }
 
-    public virtual void SetPlayerUnReady(long accountId)
+    public virtual Task SetPlayerUnReady(long accountId)
     {
         GetPlayerInfo(accountId).ReadyState = ReadyState.Unknown;
+        return Task.CompletedTask;
     }
 
-    protected bool CheckIfAllParticipantsAreConnected()
+    protected async Task<bool> CheckIfAllParticipantsAreConnected()
     {
-        return CheckIfServerIsConnected() && CheckIfPlayersAreConnected();
+        return await CheckIfServerIsConnected() && await CheckIfPlayersAreConnected();
     }
 
-    private bool CheckIfServerIsConnected()
+    private async Task<bool> CheckIfServerIsConnected()
     {
         bool res = true;
         if (Server is null)
@@ -372,13 +378,13 @@ public abstract class Game
 
         if (!res)
         {
-            CancelMatch();
+            await CancelMatch();
         }
 
         return res;
     }
 
-    private bool CheckIfPlayersAreConnected()
+    private async Task<bool> CheckIfPlayersAreConnected()
     {
         foreach (LobbyServerPlayerInfo playerInfo in TeamInfo.TeamPlayerInfo)
         {
@@ -390,7 +396,7 @@ public abstract class Game
             if (playerConnection == null || !playerConnection.IsConnected || playerConnection.CurrentGame != this)
             {
                 log.Error($"Player {playerInfo.Handle}/{playerInfo.AccountId} who was to participate in game {GameInfo.Name} has disconnected");
-                CancelMatch(playerInfo.Handle);
+                await CancelMatch(playerInfo.Handle);
                 return false;
             }
         }
@@ -398,13 +404,13 @@ public abstract class Game
         return true;
     }
 
-    protected void CancelMatch(string dodgerHandle = null)
+    protected async Task CancelMatch(string dodgerHandle = null)
     {
         foreach (LobbyServerProtocol client in GetClients())
         {
-            client.LeaveGame(this);
+            await client.LeaveGame(this);
 
-            client.Send(new GameAssignmentNotification
+            await client.Send(new GameAssignmentNotification
             {
                 GameInfo = null,
                 GameResult = GameResult.NoResult,
@@ -413,23 +419,26 @@ public abstract class Game
 
             if (dodgerHandle != null)
             {
-                client.SendSystemMessage(LocalizationPayload.Create(
+                await client.SendSystemMessage(LocalizationPayload.Create(
                     "PlayerDisconnected", "Disconnect", LocalizationArg_Handle.Create(dodgerHandle)));
             }
             else
             {
-                client.SendSystemMessage(LocalizationPayload.Create("FailedStartGameServer", "Frontend"));
+                await client.SendSystemMessage(LocalizationPayload.Create("FailedStartGameServer", "Frontend"));
             }
 
         }
 
-        Terminate();
+        await Terminate();
     }
 
-    public virtual void Terminate()
+    public virtual async Task Terminate()
     {
         log.Info($"Terminating {ProcessCode}");
-        Server?.Shutdown();
+        if (Server is not null)
+        {
+            await Server.Shutdown();
+        }
         GameManager.UnregisterGame(ProcessCode);
     }
 
@@ -447,7 +456,7 @@ public abstract class Game
                 BaseXpGained = 0,
                 CurrencyRewards = new List<MatchResultsNotification.CurrencyReward>()
             };
-            client?.Send(response);
+            if (client is not null) await client.Send(response);
         }
 
         // SendGameInfoNotifications(); // moved down
@@ -456,11 +465,11 @@ public abstract class Game
         
         //Wait a bit so people can look at stuff but we do have to send it so server can restart
         await Task.Delay(LobbyConfiguration.GetServerShutdownTime());
-        SendGameInfoNotifications(); // sending GameStatus.Stopped to the client triggers leaving the game
-        Terminate();
+        await SendGameInfoNotifications(); // sending GameStatus.Stopped to the client triggers leaving the game
+        await Terminate();
     }
 
-    protected bool FillTeam(List<long> players, Team team)
+    protected async Task<bool> FillTeam(List<long> players, Team team)
     {
         foreach (long accountId in players)
         {
@@ -469,7 +478,7 @@ public abstract class Game
             if (client == null)
             {
                 log.Error($"Tried to add {account.Handle} to a game but they are not connected!");
-                CancelMatch(account.Handle);
+                await CancelMatch(account.Handle);
                 return false;
             }
             int Playerid = TeamInfo.TeamPlayerInfo.Count + 1;
@@ -484,7 +493,7 @@ public abstract class Game
         return true;
     }
 
-    public virtual bool UpdateCharacterInfo(long accountId, LobbyCharacterInfo characterInfo, LobbyPlayerInfoUpdate update)
+    public virtual async Task<bool> UpdateCharacterInfo(long accountId, LobbyCharacterInfo characterInfo, LobbyPlayerInfoUpdate update)
     {
         LobbyServerPlayerInfo serverPlayerInfo = GetPlayerInfo(accountId);
         LobbyCharacterInfo serverCharacterInfo = serverPlayerInfo.CharacterInfo;
@@ -528,17 +537,18 @@ public abstract class Game
             {
                 SetSecondaryCharacter(accountId, update.PlayerId, update.CharacterType.Value);
             }
-
-            SendGameInfoNotifications();
-            return true;
         }
+
+        await SendGameInfoNotifications();
+        return true;
     }
 
-    protected bool CheckDuplicatedAndFill()
+    protected async Task<bool> CheckDuplicatedAndFill()
     {
+        bool didWeHadFillOrDuplicate = false;
+        var illegalLancers = new Dictionary<long, FreelancerUnavailableNotification>();
         lock (characterSelectionLock)
         {
-            bool didWeHadFillOrDuplicate = false;
             for (Team team = Team.TeamA; team <= Team.TeamB; ++team)
             {
                 ILookup<CharacterType, LobbyServerPlayerInfo> characters = GetCharactersByTeam(team);
@@ -578,7 +588,7 @@ public abstract class Game
                     string thiefName = thiefNames.GetValueOrDefault(playerInfo.CharacterType, "");
 
                     log.Info($"Forcing {playerInfo.Handle} to switch character as {playerInfo.CharacterType} is already picked by {thiefName}");
-                    playerConnection.Send(new FreelancerUnavailableNotification
+                    illegalLancers.Add(playerInfo.AccountId, new FreelancerUnavailableNotification
                     {
                         oldCharacterType = playerInfo.CharacterType,
                         thiefName = thiefName,
@@ -590,27 +600,36 @@ public abstract class Game
                     didWeHadFillOrDuplicate = true;
                 }
             }
-
-            if (didWeHadFillOrDuplicate)
-            {
-                log.Info("We have duplicates/fills, going into DUPLICATE_FREELANCER subphase");
-                foreach (long player in GetPlayers())
-                {
-                    LobbyServerProtocol playerConnection = SessionManager.GetClientConnection(player);
-                    if (playerConnection == null)
-                    {
-                        continue;
-                    }
-                    playerConnection.Send(new EnterFreelancerResolutionPhaseNotification()
-                    {
-                        SubPhase = FreelancerResolutionPhaseSubType.DUPLICATE_FREELANCER
-                    });
-                    SendGameInfo(playerConnection);
-                }
-            }
-
-            return didWeHadFillOrDuplicate;
         }
+        
+        foreach (var (accountId, notify) in illegalLancers)
+        {
+            LobbyServerProtocol playerConnection = SessionManager.GetClientConnection(accountId);
+            if (playerConnection is not null)
+            {
+                await playerConnection.Send(notify);
+            }
+        }
+        
+        if (didWeHadFillOrDuplicate)
+        {
+            log.Info("We have duplicates/fills, going into DUPLICATE_FREELANCER subphase");
+            foreach (long player in GetPlayers())
+            {
+                LobbyServerProtocol playerConnection = SessionManager.GetClientConnection(player);
+                if (playerConnection == null)
+                {
+                    continue;
+                }
+                await playerConnection.Send(new EnterFreelancerResolutionPhaseNotification()
+                {
+                    SubPhase = FreelancerResolutionPhaseSubType.DUPLICATE_FREELANCER
+                });
+                await SendGameInfo(playerConnection);
+            }
+        }
+
+        return didWeHadFillOrDuplicate;
     }
 
     private ILookup<CharacterType, LobbyServerPlayerInfo> GetCharactersByTeam(Team team, long? excludeAccountId = null)
@@ -674,8 +693,8 @@ public abstract class Game
                     LobbyServerProtocol playerConnection = SessionManager.GetClientConnection(player);
                     if (playerConnection != null)
                     {
-                        NotifyCharacterChange(playerConnection, playerInfo, randomType);
-                        SetPlayerReady(playerConnection, playerInfo, randomType);
+                        NotifyCharacterChange(playerConnection, playerInfo, randomType).Wait();
+                        SetPlayerReady(playerConnection, playerInfo, randomType).Wait();
                     }
                 }
             }
@@ -722,16 +741,16 @@ public abstract class Game
         return randomType;
     }
 
-    private void NotifyCharacterChange(LobbyServerProtocol playerConnection, LobbyServerPlayerInfo playerInfo, CharacterType randomType)
+    private async Task NotifyCharacterChange(LobbyServerProtocol playerConnection, LobbyServerPlayerInfo playerInfo, CharacterType randomType)
     {
         PersistedAccountData account = DB.Get().AccountDao.GetAccount(playerInfo.AccountId);
 
-        playerConnection.Send(new ForcedCharacterChangeFromServerNotification()
+        await playerConnection.Send(new ForcedCharacterChangeFromServerNotification()
         {
             ChararacterInfo = LobbyCharacterInfo.Of(account.CharacterData[randomType]),
         });
 
-        playerConnection.Send(new FreelancerUnavailableNotification()
+        await playerConnection.Send(new FreelancerUnavailableNotification()
         {
             oldCharacterType = playerInfo.CharacterType,
             newCharacterType = randomType,
@@ -739,16 +758,16 @@ public abstract class Game
         });
     }
 
-    private void SetPlayerReady(LobbyServerProtocol playerConnection, LobbyServerPlayerInfo playerInfo, CharacterType randomType)
+    private async Task SetPlayerReady(LobbyServerProtocol playerConnection, LobbyServerPlayerInfo playerInfo, CharacterType randomType)
     {
         PersistedAccountData account = DB.Get().AccountDao.GetAccount(playerInfo.AccountId);
 
         playerInfo.CharacterInfo = LobbyCharacterInfo.Of(account.CharacterData[randomType]);
         playerInfo.ReadyState = ReadyState.Ready;
-        SendGameInfo(playerConnection);
+        await SendGameInfo(playerConnection);
     }
 
-    public bool ReconnectPlayer(LobbyServerProtocol conn)
+    public async Task<bool> ReconnectPlayer(LobbyServerProtocol conn)
     {
         LobbyServerPlayerInfo playerInfo = GetPlayerInfo(conn.AccountId);
         if (playerInfo == null)
@@ -759,10 +778,10 @@ public abstract class Game
             
         conn.JoinGame(this);
         playerInfo.ReplacedWithBots = false;
-        SendGameAssignmentNotification(conn, true);
-        conn.OnStartGame(this);
-        SendGameInfo(conn);
-        Server.StartGameForReconnection(conn.AccountId);
+        await SendGameAssignmentNotification(conn, true);
+        await conn.OnStartGame(this);
+        await SendGameInfo(conn);
+        await Server.StartGameForReconnection(conn.AccountId);
 
         return true;
     }

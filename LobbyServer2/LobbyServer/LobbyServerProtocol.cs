@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using CentralServer.BridgeServer;
 using CentralServer.LobbyServer.Character;
 using CentralServer.LobbyServer.Config;
@@ -60,8 +61,8 @@ namespace CentralServer.LobbyServer
 
         public LobbyServerPlayerInfo PlayerInfo => CurrentGame?.GetPlayerInfo(AccountId);
 
-        public event Action<LobbyServerProtocol, ChatNotification> OnChatNotification = delegate { };
-        public event Action<LobbyServerProtocol, GroupChatRequest> OnGroupChatRequest = delegate { };
+        public event Func<LobbyServerProtocol, ChatNotification, Task> OnChatNotification = delegate { return Task.CompletedTask; };
+        public event Func<LobbyServerProtocol, GroupChatRequest, Task> OnGroupChatRequest = delegate { return Task.CompletedTask; };
 
 
         public LobbyServerProtocol()
@@ -131,7 +132,7 @@ namespace CentralServer.LobbyServer
             RegisterHandler<FriendUpdateRequest>(HandleFriendUpdate);
         }
 
-        private void HandleSetDevTagRequest(SetDevTagRequest request)
+        private async Task HandleSetDevTagRequest(SetDevTagRequest request)
         {
             PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
             if (account == null)
@@ -141,23 +142,23 @@ namespace CentralServer.LobbyServer
             if (account.AccountComponent.AppliedEntitlements.ContainsKey("DEVELOPER_ACCESS"))
             {
                 account.AccountComponent.DisplayDevTag = request.active;
-                Send(new SetDevTagResponse() { 
+                await Send(new SetDevTagResponse() { 
                     Success = true,
                 });
             } 
             else
             {
-                Send(new SetDevTagResponse()
+                await Send(new SetDevTagResponse()
                 {
                     Success = false,
                 });
             }
         }
 
-        private void HandleBalancedTeamRequest(BalancedTeamRequest request)
+        private async Task HandleBalancedTeamRequest(BalancedTeamRequest request)
         {
-            bool success = CustomGameManager.BalanceTeams(AccountId, request.Slots);
-            Send(new BalancedTeamResponse
+            bool success = await CustomGameManager.BalanceTeams(AccountId, request.Slots);
+            await Send(new BalancedTeamResponse
             {
                 Success = success,
                 ResponseId = request.RequestId,
@@ -165,16 +166,15 @@ namespace CentralServer.LobbyServer
             });
         }
 
-        private void HandleJoinGameRequest(JoinGameRequest joinGameRequest)
+        private async Task HandleJoinGameRequest(JoinGameRequest joinGameRequest)
         {
-            Game game = CustomGameManager.JoinGame(
+            (Game game, LocalizationPayload failure) = await CustomGameManager.JoinGame(
                 AccountId,
                 joinGameRequest.GameServerProcessCode,
-                joinGameRequest.AsSpectator,
-                out LocalizationPayload failure);
+                joinGameRequest.AsSpectator);
             if (game == null)
             {
-                Send(new JoinGameResponse
+                await Send(new JoinGameResponse
                 {
                     ResponseId = joinGameRequest.RequestId,
                     LocalizedFailure = failure,
@@ -184,18 +184,18 @@ namespace CentralServer.LobbyServer
             }
             
             JoinGame(game);
-            Send(new JoinGameResponse
+            await Send(new JoinGameResponse
             {
                 ResponseId = joinGameRequest.RequestId
             });
         }
         
-        private void HandleGameInfoUpdateRequest(GameInfoUpdateRequest gameInfoUpdateRequest)
+        private async Task HandleGameInfoUpdateRequest(GameInfoUpdateRequest gameInfoUpdateRequest)
         {
-            bool success = CustomGameManager.UpdateGameInfo(AccountId, gameInfoUpdateRequest.GameInfo, gameInfoUpdateRequest.TeamInfo);
+            bool success = await CustomGameManager.UpdateGameInfo(AccountId, gameInfoUpdateRequest.GameInfo, gameInfoUpdateRequest.TeamInfo);
             Game game = CustomGameManager.GetMyGame(AccountId);
 
-            Send(new GameInfoUpdateResponse
+            await Send(new GameInfoUpdateResponse
             {
                 Success = success,
                 ResponseId = gameInfoUpdateRequest.RequestId,
@@ -204,12 +204,12 @@ namespace CentralServer.LobbyServer
             });
         }
         
-        private void HandleCreateGameRequest(CreateGameRequest createGameRequest)
+        private async Task HandleCreateGameRequest(CreateGameRequest createGameRequest)
         {
-            Game game = CustomGameManager.CreateGame(AccountId, createGameRequest.GameConfig);
+            Game game = await CustomGameManager.CreateGame(AccountId, createGameRequest.GameConfig);
             if (game == null)
             {
-                Send(new CreateGameResponse
+                await Send(new CreateGameResponse
                 {
                     ResponseId = createGameRequest.RequestId,
                     Success = false,
@@ -219,7 +219,7 @@ namespace CentralServer.LobbyServer
             }
             GroupManager.GetPlayerGroup(AccountId).Members
                 .ForEach(groupMember => SessionManager.GetClientConnection(groupMember)?.JoinGame(game));
-            Send(new CreateGameResponse
+            await Send(new CreateGameResponse
             {
                 ResponseId = createGameRequest.RequestId,
                 AllowRetry = true,
@@ -251,7 +251,7 @@ namespace CentralServer.LobbyServer
             log.Info($"{LobbyServerUtils.GetHandle(AccountId)} joined {game?.ProcessCode} (was in {prevServer?.ProcessCode})");
         }
 
-        public bool LeaveGame(Game game)
+        public async Task<bool> LeaveGame(Game game)
         {
             if (game == null)
             {
@@ -273,7 +273,7 @@ namespace CentralServer.LobbyServer
             log.Info($"{LobbyServerUtils.GetHandle(AccountId)} leaves {game.ProcessCode}");
             
             // forcing catalyst panel update -- otherwise it would show catas for the character from the last game
-            Send(new ForcedCharacterChangeFromServerNotification
+            await Send(new ForcedCharacterChangeFromServerNotification
             {
                 ChararacterInfo = DB.Get().AccountDao.GetAccount(AccountId).GetCharacterInfo(),
             });
@@ -286,12 +286,12 @@ namespace CentralServer.LobbyServer
             FriendManager.MarkForUpdate(this);
         }
 
-        public void RefreshFriendList()
+        public async Task RefreshFriendList()
         {
-            Send(FriendManager.GetFriendStatusNotification(AccountId));
+            await Send(FriendManager.GetFriendStatusNotification(AccountId));
         }
 
-        public void UpdateGroupReadyState()
+        public async Task UpdateGroupReadyState()
         {
             GroupInfo group = GroupManager.GetPlayerGroup(AccountId);
             if (group == null)
@@ -320,7 +320,7 @@ namespace CentralServer.LobbyServer
                     log.Error($"Attempted to update group {group.GroupId} ready state with not connected leader {group.Leader}");
                     return;
                 }
-                MatchmakingManager.AddGroupToQueue(leader.SelectedGameType, group);
+                await MatchmakingManager.AddGroupToQueue(leader.SelectedGameType, group);
             }
             else if (!allAreReady && isGroupQueued)
             {
@@ -328,28 +328,32 @@ namespace CentralServer.LobbyServer
             }
         }
 
-        public void BroadcastRefreshGroup(bool resetReadyState = false)
+        public async Task BroadcastRefreshGroup(bool resetReadyState = false)
         {
             GroupInfo group = GroupManager.GetPlayerGroup(AccountId);
             if (group == null)
             {
-                RefreshGroup(resetReadyState);
+                await RefreshGroup(resetReadyState);
             }
             else
             {
                 foreach (long groupMember in group.Members)
                 {
-                    SessionManager.GetClientConnection(groupMember)?.RefreshGroup(resetReadyState);
+                    LobbyServerProtocol conn = SessionManager.GetClientConnection(groupMember);
+                    if (conn is not null)
+                    {
+                        await conn.RefreshGroup(resetReadyState);
+                    }
                 }
             }
         }
 
-        public void RefreshGroup(bool resetReadyState = false)
+        public async Task RefreshGroup(bool resetReadyState = false)
         {
             if (resetReadyState)
             {
                 IsReady = false;
-                UpdateGroupReadyState();
+                await UpdateGroupReadyState();
             }
             LobbyPlayerGroupInfo info = GroupManager.GetGroupInfo(AccountId);
 
@@ -363,10 +367,10 @@ namespace CentralServer.LobbyServer
                 GroupId = GroupManager.GetGroupID(AccountId)
             };
 
-            Send(update);
+            await Send(update);
         }
 
-        private void HandleGroupPromoteRequest(GroupPromoteRequest message)
+        private async Task HandleGroupPromoteRequest(GroupPromoteRequest message)
         {
             GroupInfo group = GroupManager.GetPlayerGroup(AccountId);
             //Sadly message.AccountId returns 0 so look it up by name/handle
@@ -374,18 +378,18 @@ namespace CentralServer.LobbyServer
             if (accountId.HasValue)
             {
                 group.SetLeader((long)accountId);
-                BroadcastRefreshGroup();
+                await BroadcastRefreshGroup();
                 //If the new leader is accountId send success true else false tho we do not have any localization does nothing atm 
                 if (group.IsLeader((long)accountId))
                 {
-                    Send(new GroupPromoteResponse()
+                    await Send(new GroupPromoteResponse()
                     {
                         Success = true
                     });
                 }
                 else
                 {
-                    Send(new GroupPromoteResponse()
+                    await Send(new GroupPromoteResponse()
                     {
                         //To send more need LocalizedFailure to be added
                         Success = false
@@ -394,7 +398,7 @@ namespace CentralServer.LobbyServer
             }
             else
             {
-                Send(new GroupPromoteResponse()
+                await Send(new GroupPromoteResponse()
                 {
                     //To send more need LocalizedFailure to be added
                     Success = false
@@ -402,7 +406,7 @@ namespace CentralServer.LobbyServer
             }
         }
 
-        private void HandleGroupKickRequest(GroupKickRequest request)
+        private async Task HandleGroupKickRequest(GroupKickRequest request)
         {
             LobbyPlayerGroupInfo info = GroupManager.GetGroupInfo(AccountId);
             GroupKickResponse response = new GroupKickResponse
@@ -442,20 +446,23 @@ namespace CentralServer.LobbyServer
                 foreach (UpdateGroupMemberData groupMember in info.Members)
                 {
                     LobbyServerProtocol conn = SessionManager.GetClientConnection(groupMember.AccountID);
-                    conn?.SendSystemMessage(LocalizationPayload.Create(
-                        "MemberKickedFromGroup", 
-                        "Group",
-                        LocalizationArg_Handle.Create(request.MemberName)));
+                    if (conn is not null)
+                    {
+                        await conn.SendSystemMessage(LocalizationPayload.Create(
+                            "MemberKickedFromGroup", 
+                            "Group",
+                            LocalizationArg_Handle.Create(request.MemberName)));
+                    }
                 }
             }
-            Send(response);
+            await Send(response);
         }
 
-        public void HandleRegisterGame(RegisterGameClientRequest request)
+        public async Task HandleRegisterGame(RegisterGameClientRequest request)
         {
             if (request == null)
             {
-                SendErrorResponse(new RegisterGameClientResponse(), 0, Messages.LoginFailed);
+                await SendErrorResponse(new RegisterGameClientResponse(), 0, Messages.LoginFailed);
                 CloseConnection();
                 return;
             }
@@ -484,8 +491,8 @@ namespace CentralServer.LobbyServer
                     ReconnectionSessionToken = sessionInfo.ReconnectSessionToken
                 }.ToStringWithSignature();
 
-                Send(response);
-                SendLobbyServerReadyNotification();
+                await Send(response);
+                await SendLobbyServerReadyNotification();
 
                 GroupManager.CreateGroup(AccountId);
 
@@ -495,19 +502,19 @@ namespace CentralServer.LobbyServer
                     LobbyServerProtocol player = SessionManager.GetClientConnection(playerAccountId);
                     if (player != null && !player.IsInGame())
                     {
-                        player.SendSystemMessage($"<link=name>{sessionInfo.Handle}</link> connected to lobby server");
+                        await player.SendSystemMessage($"<link=name>{sessionInfo.Handle}</link> connected to lobby server");
                     }
                 }
             }
             catch (RegisterGameException e)
             {
-                SendErrorResponse(new RegisterGameClientResponse(), request.RequestId, e);
+                await SendErrorResponse(new RegisterGameClientResponse(), request.RequestId, e);
                 CloseConnection();
                 return;
             }
             catch (Exception e)
             {
-                SendErrorResponse(new RegisterGameClientResponse(), request.RequestId);
+                await SendErrorResponse(new RegisterGameClientResponse(), request.RequestId);
                 log.Error("Exception while registering game client", e);
                 CloseConnection();
                 return;
@@ -515,48 +522,50 @@ namespace CentralServer.LobbyServer
             BroadcastRefreshFriendList();
         }
 
-        public void HandleOptionsNotification(OptionsNotification notification)
+        public Task HandleOptionsNotification(OptionsNotification notification)
         {
+            return Task.CompletedTask;
         }
 
-        public void HandleCustomKeyBindNotification(CustomKeyBindNotification notification)
+        public Task HandleCustomKeyBindNotification(CustomKeyBindNotification notification)
         {
             DB.Get().AccountDao.GetAccount(AccountId).AccountComponent.KeyCodeMapping = notification.CustomKeyBinds;
+            return Task.CompletedTask;
         }
 
-        public void HandlePricesRequest(PricesRequest request)
+        public async Task HandlePricesRequest(PricesRequest request)
         {
             PricesResponse response = StoreManager.GetPricesResponse();
             response.ResponseId = request.RequestId;
-            Send(response);
+            await Send(response);
         }
 
-        public void HandlePlayerUpdateStatusRequest(PlayerUpdateStatusRequest request)
+        public async Task HandlePlayerUpdateStatusRequest(PlayerUpdateStatusRequest request)
         {
             log.Info($"{this.UserName} is now {request.StatusString}");
             PlayerUpdateStatusResponse response = FriendManager.OnPlayerUpdateStatusRequest(this, request);
 
-            Send(response);
+            await Send(response);
         }
 
-        public void HandlePlayerMatchDataRequest(PlayerMatchDataRequest request)
+        public async Task HandlePlayerMatchDataRequest(PlayerMatchDataRequest request)
         {
             PlayerMatchDataResponse response = new PlayerMatchDataResponse
             {
                 MatchData = DB.Get().MatchHistoryDao.Find(AccountId),
                 ResponseId = request.RequestId
             };
-            Send(response);
+            await Send(response);
         }
 
-        public void HandleSetGameSubTypeRequest(SetGameSubTypeRequest request)
+        public async Task HandleSetGameSubTypeRequest(SetGameSubTypeRequest request)
         {
             this.SelectedSubTypeMask = request.SubTypeMask;
             SetGameSubTypeResponse response = new SetGameSubTypeResponse() { ResponseId = request.RequestId };
-            Send(response);
+            await Send(response);
         }
 
-        public void HandlePlayerInfoUpdateRequest(PlayerInfoUpdateRequest request)
+        public async Task HandlePlayerInfoUpdateRequest(PlayerInfoUpdateRequest request)
         {
             LobbyPlayerInfoUpdate update = request.PlayerInfoUpdate;
             PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
@@ -585,9 +594,9 @@ namespace CentralServer.LobbyServer
 
             if (CurrentGame != null)
             {
-                if (!CurrentGame.UpdateCharacterInfo(AccountId, characterInfo, update))
+                if (!await CurrentGame.UpdateCharacterInfo(AccountId, characterInfo, update))
                 {
-                    Send(new PlayerInfoUpdateResponse
+                    await Send(new PlayerInfoUpdateResponse
                     {
                         Success = false,
                         ResponseId = request.RequestId
@@ -617,51 +626,52 @@ namespace CentralServer.LobbyServer
             if (update.CharacterType != null && update.CharacterType.HasValue)
             {
                 PlayerAccountDataUpdateNotification updateNotification = new PlayerAccountDataUpdateNotification(account);
-                Send(updateNotification);
+                await Send(updateNotification);
             }
 
             if (update.AllyDifficulty != null && update.AllyDifficulty.HasValue)
                 SetAllyDifficulty(update.AllyDifficulty.Value);
             if (update.ContextualReadyState != null && update.ContextualReadyState.HasValue)
-                SetContextualReadyState(update.ContextualReadyState.Value);
+                await SetContextualReadyState(update.ContextualReadyState.Value);
             if (update.EnemyDifficulty != null && update.EnemyDifficulty.HasValue)
                 SetEnemyDifficulty(update.EnemyDifficulty.Value);
 
-            Send(new PlayerInfoUpdateResponse
+            await Send(new PlayerInfoUpdateResponse
             {
                 PlayerInfo = LobbyPlayerInfo.FromServer(playerInfo, 0, new MatchmakingQueueConfig()),
                 CharacterInfo = playerInfo.CharacterInfo,
                 OriginalPlayerInfoUpdate = update,
                 ResponseId = request.RequestId
             });
-            BroadcastRefreshGroup();
+            await BroadcastRefreshGroup();
         }
 
-        public void HandleCheckAccountStatusRequest(CheckAccountStatusRequest request)
+        public async Task HandleCheckAccountStatusRequest(CheckAccountStatusRequest request)
         {
             CheckAccountStatusResponse response = new CheckAccountStatusResponse()
             {
                 QuestOffers = new QuestOfferNotification() { OfferDailyQuest = false },
                 ResponseId = request.RequestId
             };
-            Send(response);
+            await Send(response);
         }
 
-        public void HandleCheckRAFStatusRequest(CheckRAFStatusRequest request)
+        public async Task HandleCheckRAFStatusRequest(CheckRAFStatusRequest request)
         {
             CheckRAFStatusResponse response = new CheckRAFStatusResponse()
             {
                 ReferralCode = "sampletext",
                 ResponseId = request.RequestId
             };
-            Send(response);
+            await Send(response);
         }
 
-        public void HandleClientErrorSummary(ClientErrorSummary request)
+        public Task HandleClientErrorSummary(ClientErrorSummary request)
         {
+            return Task.CompletedTask;
         }
 
-        public void HandlePreviousGameInfoRequest(PreviousGameInfoRequest request)
+        public async Task HandlePreviousGameInfoRequest(PreviousGameInfoRequest request)
         {
             Game game = GameManager.GetGameWithPlayer(AccountId);
             LobbyGameInfo lobbyGameInfo = null;
@@ -670,7 +680,7 @@ namespace CentralServer.LobbyServer
             {
                 if (!game.GetPlayerInfo(AccountId).ReplacedWithBots)
                 {
-                    game.DisconnectPlayer(AccountId);
+                    await game.DisconnectPlayer(AccountId);
                     log.Info($"{LobbyServerUtils.GetHandle(AccountId)} was in game {game.ProcessCode}, requesting disconnect");
                 }
                 else
@@ -689,10 +699,10 @@ namespace CentralServer.LobbyServer
                 PreviousGameInfo = lobbyGameInfo,
                 ResponseId = request.RequestId
             };
-            Send(response);
+            await Send(response);
         }
 
-        public void HandlePurchaseTintRequest(PurchaseTintRequest request)
+        public async Task HandlePurchaseTintRequest(PurchaseTintRequest request)
         {
             Console.WriteLine("PurchaseTintRequest " + JsonConvert.SerializeObject(request));
 
@@ -706,33 +716,33 @@ namespace CentralServer.LobbyServer
                 TintId = request.TintId,
                 ResponseId = request.RequestId
             };
-            Send(response);
+            await Send(response);
 
             SkinHelper sk = new SkinHelper();
             sk.AddSkin(request.CharacterType, request.SkinId, request.TextureId, request.TintId);
             sk.Save();
         }
 
-        public void HandleLeaveGameRequest(LeaveGameRequest request)
+        public async Task HandleLeaveGameRequest(LeaveGameRequest request)
         {
             Game game = CurrentGame;
             log.Info($"{AccountId} leaves game {game?.ProcessCode}");
             if (game != null)
             {
-                LeaveGame(game);
-                game.DisconnectPlayer(AccountId);
+                await LeaveGame(game);
+                await game.DisconnectPlayer(AccountId);
             }
-            Send(new LeaveGameResponse
+            await Send(new LeaveGameResponse
             {
                 Success = true,
                 ResponseId = request.RequestId
             });
-            Send(new GameStatusNotification
+            await Send(new GameStatusNotification
             {
                 GameServerProcessCode = game?.ProcessCode,
                 GameStatus = GameStatus.Stopped
             });
-            Send(new GameAssignmentNotification
+            await Send(new GameAssignmentNotification
             {
                 GameInfo = null,
                 GameResult = GameResult.NoResult,
@@ -740,19 +750,19 @@ namespace CentralServer.LobbyServer
             });
         }
 
-        protected void SetContextualReadyState(ContextualReadyState contextualReadyState)
+        protected async Task SetContextualReadyState(ContextualReadyState contextualReadyState)
         {
             log.Info($"SetContextualReadyState {contextualReadyState.ReadyState} {contextualReadyState.GameProcessCode}");
 
-            LocalizationPayload failure = QueuePenaltyManager.CheckQueuePenalties(AccountId, SelectedGameType);
+            LocalizationPayload failure = await QueuePenaltyManager.CheckQueuePenalties(AccountId, SelectedGameType);
             if (failure is not null)
             {
-                SendSystemMessage(failure);
+                await SendSystemMessage(failure);
                 return;
             }
             
             GroupInfo group = GroupManager.GetPlayerGroup(AccountId);
-            IsReady = contextualReadyState.ReadyState == ReadyState.Ready;  // TODO can be Accepted and others
+            IsReady = contextualReadyState.ReadyState == EvoS.Framework.Constants.Enums.ReadyState.Ready;  // TODO can be Accepted and others
             if (group == null)
             {
                 MatchmakingManager.StartPractice(this);
@@ -769,24 +779,24 @@ namespace CentralServer.LobbyServer
                                   $"while they are in game {CurrentGame.ProcessCode}");
                         return;
                     }
-                    if (contextualReadyState.ReadyState == ReadyState.Ready)  // TODO can be Accepted and others
+                    if (contextualReadyState.ReadyState == EvoS.Framework.Constants.Enums.ReadyState.Ready)  // TODO can be Accepted and others
                     {
-                        CurrentGame.SetPlayerReady(AccountId);
+                        await CurrentGame.SetPlayerReady(AccountId);
                     }
                     else
                     {
-                        CurrentGame.SetPlayerUnReady(AccountId);
+                        await CurrentGame.SetPlayerUnReady(AccountId);
                     }
                 }
                 else
                 {
-                    UpdateGroupReadyState();
-                    BroadcastRefreshGroup();
+                    await UpdateGroupReadyState();
+                    await BroadcastRefreshGroup();
                 }
             }
         }
 
-        public void HandleJoinMatchmakingQueueRequest(JoinMatchmakingQueueRequest request)
+        public async Task HandleJoinMatchmakingQueueRequest(JoinMatchmakingQueueRequest request)
         {
             try
             {
@@ -795,29 +805,29 @@ namespace CentralServer.LobbyServer
                 {
                     log.Warn($"{UserName} attempted to join {request.GameType} queue " +
                              $"while not being the leader of their group");
-                    Send(new JoinMatchmakingQueueResponse { Success = false, ResponseId = request.RequestId });
+                    await Send(new JoinMatchmakingQueueResponse { Success = false, ResponseId = request.RequestId });
                     return;
                 }
 
-                LocalizationPayload failure = QueuePenaltyManager.CheckQueuePenalties(AccountId, SelectedGameType);
+                LocalizationPayload failure = await QueuePenaltyManager.CheckQueuePenalties(AccountId, SelectedGameType);
                 if (failure is not null)
                 {
-                    Send(new JoinMatchmakingQueueResponse { Success = false, ResponseId = request.RequestId, LocalizedFailure = failure});
+                    await Send(new JoinMatchmakingQueueResponse { Success = false, ResponseId = request.RequestId, LocalizedFailure = failure});
                     return;
                 }
 
-                Send(new JoinMatchmakingQueueResponse { Success = true, ResponseId = request.RequestId });
+                await Send(new JoinMatchmakingQueueResponse { Success = true, ResponseId = request.RequestId });
                 IsReady = true;
-                MatchmakingManager.AddGroupToQueue(request.GameType, group);
+                await MatchmakingManager.AddGroupToQueue(request.GameType, group);
             }
             catch (Exception e)
             {
-                Send(new JoinMatchmakingQueueResponse { Success = false, ResponseId = request.RequestId });
+                await Send(new JoinMatchmakingQueueResponse { Success = false, ResponseId = request.RequestId });
                 log.Error("Failed to process join queue request", e);
             }
         }
 
-        public void HandleLeaveMatchmakingQueueRequest(LeaveMatchmakingQueueRequest request)
+        public async Task HandleLeaveMatchmakingQueueRequest(LeaveMatchmakingQueueRequest request)
         {
             try
             {
@@ -826,34 +836,34 @@ namespace CentralServer.LobbyServer
                 {
                     log.Warn($"{UserName} attempted to leave queue " +
                              $"while not being the leader of their group");
-                    Send(new LeaveMatchmakingQueueResponse { Success = false, ResponseId = request.RequestId });
+                    await Send(new LeaveMatchmakingQueueResponse { Success = false, ResponseId = request.RequestId });
                     return;
                 }
 
-                Send(new LeaveMatchmakingQueueResponse { Success = true, ResponseId = request.RequestId });
+                await Send(new LeaveMatchmakingQueueResponse { Success = true, ResponseId = request.RequestId });
                 IsReady = false;
                 MatchmakingManager.RemoveGroupFromQueue(group);
             }
             catch (Exception e)
             {
-                Send(new LeaveMatchmakingQueueResponse { Success = false, ResponseId = request.RequestId });
+                await Send(new LeaveMatchmakingQueueResponse { Success = false, ResponseId = request.RequestId });
                 log.Error("Failed to process leave queue request", e);
             }
         }
 
 
-        public void HandleChatNotification(ChatNotification notification)
+        public async Task HandleChatNotification(ChatNotification notification)
         {
-            OnChatNotification(this, notification);
+            await OnChatNotification(this, notification);
         }
 
-        public void HandleGroupInviteRequest(GroupInviteRequest request)
+        public async Task HandleGroupInviteRequest(GroupInviteRequest request)
         {
             long? friendAccountId = SessionManager.GetOnlinePlayerByHandle(request.FriendHandle);
             if (!friendAccountId.HasValue)
             {
                 log.Warn($"Failed to find player {request.FriendHandle} invited to group by {AccountId}");
-                Send(new GroupInviteResponse
+                await Send(new GroupInviteResponse
                 {
                     FriendHandle = request.FriendHandle,
                     ResponseId = request.RequestId,
@@ -866,7 +876,7 @@ namespace CentralServer.LobbyServer
             if (socialComponent?.IsBlocked(AccountId) == true)
             {
                 log.Warn($"{AccountId} attempted to invite {request.FriendHandle} who blocked them");
-                Send(new GroupInviteResponse
+                await Send(new GroupInviteResponse
                 {
                     FriendHandle = request.FriendHandle,
                     ResponseId = request.RequestId,
@@ -880,7 +890,7 @@ namespace CentralServer.LobbyServer
             if (group.Members.Count == LobbyConfiguration.GetMaxGroupSize())
             {
                 log.Warn($"{AccountId} attempted to invite {request.FriendHandle} into a full group");
-                Send(new GroupInviteResponse
+                await Send(new GroupInviteResponse
                 {
                     FriendHandle = request.FriendHandle,
                     ResponseId = request.RequestId,
@@ -912,8 +922,8 @@ namespace CentralServer.LobbyServer
 
             if (friend == null)  // can be offline
             {
-                log.Info($"{AccountId}/{requester.Handle} failed to invite {friend.AccountId}/{request.FriendHandle} to group {group.GroupId} for they are offline");
-                Send(new GroupInviteResponse
+                log.Info($"{AccountId}/{requester.Handle} failed to invite {request.FriendHandle} to group {group.GroupId} for they are offline");
+                await Send(new GroupInviteResponse
                 {
                     FriendHandle = request.FriendHandle,
                     ResponseId = request.RequestId,
@@ -924,7 +934,7 @@ namespace CentralServer.LobbyServer
 
             if (group.Leader == AccountId)
             {
-                friend.Send(new GroupConfirmationRequest
+                await friend.Send(new GroupConfirmationRequest
                 {
                     GroupId = group.GroupId,
                     LeaderName = leader.Handle,
@@ -938,7 +948,7 @@ namespace CentralServer.LobbyServer
                 });
                 if (EvosConfiguration.GetPingOnGroupRequest() && !friend.IsInGroup() && !friend.IsInGame())
                 {
-                    friend.Send(new ChatNotification
+                    await friend.Send(new ChatNotification
                     {
                         SenderAccountId = AccountId,
                         SenderHandle = requester.Handle,
@@ -948,7 +958,7 @@ namespace CentralServer.LobbyServer
                 }
 
                 log.Info($"{AccountId}/{requester.Handle} invited {friend.AccountId}/{request.FriendHandle} to group {group.GroupId}");
-                Send(new GroupInviteResponse
+                await Send(new GroupInviteResponse
                 {
                     FriendHandle = request.FriendHandle,
                     ResponseId = request.RequestId,
@@ -958,7 +968,7 @@ namespace CentralServer.LobbyServer
             else
             {
                 LobbyServerProtocol leaderSession = SessionManager.GetClientConnection(leader.AccountId);
-                leaderSession.Send(new GroupSuggestionRequest
+                await leaderSession.Send(new GroupSuggestionRequest
                 {
                     LeaderAccountId = group.Leader,
                     SuggestedAccountFullHandle = request.FriendHandle,
@@ -968,12 +978,13 @@ namespace CentralServer.LobbyServer
             }
         }
 
-        public void HandleGroupSuggestionResponse(GroupSuggestionResponse response)
+        public Task HandleGroupSuggestionResponse(GroupSuggestionResponse response)
         {
+            return Task.CompletedTask;
             //Is this needed? 
         }
 
-        public void HandleGroupConfirmationResponse(GroupConfirmationResponse response)
+        public async Task HandleGroupConfirmationResponse(GroupConfirmationResponse response)
         {
             switch (response.Acceptance)
             {
@@ -1011,7 +1022,7 @@ namespace CentralServer.LobbyServer
                                 log.Info($"Player {AccountId} is trying to accept a group invite but is currently on the opposing team.");
                                 // Send an error message indicating that members of opposing teams cannot group.
                                 // Failed to join group: Members of opposing teams cannot group.
-                                SendSystemMessage(LocalizationPayload.Create("FailedToJoinGroupError", "GroupInvite",
+                                await SendSystemMessage(LocalizationPayload.Create("FailedToJoinGroupError", "GroupInvite",
                                                                         LocalizationArg_LocalizationPayload.Create(
                                                                             LocalizationPayload.Create("CantInviteActiveOpponent", "AddFollower"))));
                                 break;
@@ -1026,20 +1037,21 @@ namespace CentralServer.LobbyServer
             }
         }
 
-        public void HandleGroupLeaveRequest(GroupLeaveRequest request)
+        public Task HandleGroupLeaveRequest(GroupLeaveRequest request)
         {
             GroupManager.CreateGroup(AccountId);
             BroadcastRefreshFriendList();
+            return Task.CompletedTask;
         }
 
-        private void OnAccountVisualsUpdated()
+        private async Task OnAccountVisualsUpdated()
         {
             BroadcastRefreshFriendList();
-            BroadcastRefreshGroup();
+            await BroadcastRefreshGroup();
             CurrentGame?.OnAccountVisualsUpdated(AccountId);
         }
 
-        public void HandleSelectBannerRequest(SelectBannerRequest request)
+        public async Task HandleSelectBannerRequest(SelectBannerRequest request)
         {
             PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
 
@@ -1056,10 +1068,10 @@ namespace CentralServer.LobbyServer
             // Update the account
             DB.Get().AccountDao.UpdateAccount(account);
 
-            OnAccountVisualsUpdated();
+            await OnAccountVisualsUpdated();
 
             // Send response
-            Send(new SelectBannerResponse()
+            await Send(new SelectBannerResponse()
             {
                 BackgroundBannerID = account.AccountComponent.SelectedBackgroundBannerID,
                 ForegroundBannerID = account.AccountComponent.SelectedForegroundBannerID,
@@ -1067,7 +1079,7 @@ namespace CentralServer.LobbyServer
             });
         }
 
-        public void HandleSelectTitleRequest(SelectTitleRequest request)
+        public async Task HandleSelectTitleRequest(SelectTitleRequest request)
         {
             PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
 
@@ -1076,17 +1088,17 @@ namespace CentralServer.LobbyServer
                 account.AccountComponent.SelectedTitleID = request.TitleID;
                 DB.Get().AccountDao.UpdateAccount(account);
 
-                OnAccountVisualsUpdated();
+                await OnAccountVisualsUpdated();
             }
 
-            Send(new SelectTitleResponse
+            await Send(new SelectTitleResponse
             {
                 CurrentTitleID = account.AccountComponent.SelectedTitleID,
                 ResponseId = request.RequestId
             });
         }
 
-        public void HandleUseOverconRequest(UseOverconRequest request)
+        public async Task HandleUseOverconRequest(UseOverconRequest request)
         {
             UseOverconResponse response = new UseOverconResponse()
             {
@@ -1095,7 +1107,7 @@ namespace CentralServer.LobbyServer
                 ResponseId = request.RequestId
             };
 
-            Send(response);
+            await Send(response);
 
             if (CurrentGame != null)
             {
@@ -1104,13 +1116,13 @@ namespace CentralServer.LobbyServer
                 {
                     if (client.AccountId != AccountId)
                     {
-                        client.Send(response);
+                        await client.Send(response);
                     }
                 }
             }
         }
 
-        public void HandleUseGGPackRequest(UseGGPackRequest request)
+        public async Task HandleUseGGPackRequest(UseGGPackRequest request)
         {
             PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
             UseGGPackResponse response = new UseGGPackResponse()
@@ -1123,7 +1135,7 @@ namespace CentralServer.LobbyServer
                 GGPackUserTitleLevel = 1,
                 ResponseId = request.RequestId
             };
-            Send(response);
+            await Send(response);
 
             if (CurrentGame != null)
             {
@@ -1142,7 +1154,7 @@ namespace CentralServer.LobbyServer
                             GGPackUserTitleLevel = 1,
                             NumGGPacksUsed = CurrentGame.GameInfo.ggPackUsedAccountIDs[AccountId]
                         };
-                        client.Send(useGGPackNotification);
+                        await client.Send(useGGPackNotification);
                     }
 
                 }
@@ -1150,15 +1162,16 @@ namespace CentralServer.LobbyServer
         }
 
         //Allows to get rid of the flashy New tag next to store for existing users
-        public void HandleUpdateUIStateRequest(UpdateUIStateRequest request)
+        public Task HandleUpdateUIStateRequest(UpdateUIStateRequest request)
         {
             PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
             log.Info($"Player {AccountId} requested UIState {request.UIState} {request.StateValue}");
             account.AccountComponent.UIStates.Add(request.UIState, request.StateValue);
             DB.Get().AccountDao.UpdateAccount(account);
+            return Task.CompletedTask;
         }
 
-        private void HandlePurchaseEmblemRequest(PurchaseBannerForegroundRequest request)
+        private async Task HandlePurchaseEmblemRequest(PurchaseBannerForegroundRequest request)
         {
             //Get the users account
             PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
@@ -1178,7 +1191,7 @@ namespace CentralServer.LobbyServer
                     BannerForegroundId = request.BannerForegroundId
                 };
 
-                Send(failedResponse);
+                await Send(failedResponse);
 
                 return;
             }
@@ -1197,14 +1210,14 @@ namespace CentralServer.LobbyServer
                 BannerForegroundId = request.BannerForegroundId
             };
 
-            Send(response);
+            await Send(response);
 
             //Update account curency
-            Send(new PlayerAccountDataUpdateNotification(account));
+            await Send(new PlayerAccountDataUpdateNotification(account));
 
         }
 
-        private void HandlePurchaseBannerRequest(PurchaseBannerBackgroundRequest request)
+        private async Task HandlePurchaseBannerRequest(PurchaseBannerBackgroundRequest request)
         {
             //Get the users account
             PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
@@ -1224,7 +1237,7 @@ namespace CentralServer.LobbyServer
                     BannerBackgroundId = request.BannerBackgroundId
                 };
 
-                Send(failedResponse);
+                await Send(failedResponse);
 
                 return;
             }
@@ -1243,13 +1256,13 @@ namespace CentralServer.LobbyServer
                 BannerBackgroundId = request.BannerBackgroundId
             };
 
-            Send(response);
+            await Send(response);
 
             //Update account curency
-            Send(new PlayerAccountDataUpdateNotification(account));
+            await Send(new PlayerAccountDataUpdateNotification(account));
         }
 
-        private void HandlePurchasAbilityVfx(PurchaseAbilityVfxRequest request)
+        private async Task HandlePurchasAbilityVfx(PurchaseAbilityVfxRequest request)
         {
             //Get the users account
             PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
@@ -1271,7 +1284,7 @@ namespace CentralServer.LobbyServer
                     VfxId = request.VfxId
                 };
 
-                Send(failedResponse);
+                await Send(failedResponse);
 
                 return;
             }
@@ -1298,21 +1311,21 @@ namespace CentralServer.LobbyServer
                 VfxId = request.VfxId
             };
 
-            Send(response);
+            await Send(response);
 
             // Update character
-            Send(new PlayerCharacterDataUpdateNotification()
+            await Send(new PlayerCharacterDataUpdateNotification()
             {
                 CharacterData = account.CharacterData[request.CharacterType],
             });
 
             //Update account curency
-            Send(new PlayerAccountDataUpdateNotification(account));
+            await Send(new PlayerAccountDataUpdateNotification(account));
         }
 
-        private void HandlePurchaseInventoryItemRequest(PurchaseInventoryItemRequest request)
+        private async Task HandlePurchaseInventoryItemRequest(PurchaseInventoryItemRequest request)
         {
-            Send(new PurchaseInventoryItemResponse
+            await Send(new PurchaseInventoryItemResponse
             {
                 Result = PurchaseResult.Failed,
                 InventoryItemID = request.InventoryItemID,
@@ -1322,9 +1335,9 @@ namespace CentralServer.LobbyServer
             });
         }
 
-        private void HandlePurchaseModRequest(PurchaseModRequest request)
+        private async Task HandlePurchaseModRequest(PurchaseModRequest request)
         {
-            Send(new PurchaseModResponse
+            await Send(new PurchaseModResponse
             {
                 Character = request.Character,
                 UnlockData = request.UnlockData,
@@ -1333,9 +1346,9 @@ namespace CentralServer.LobbyServer
             });
         }
 
-        private void HandlePurchaseTauntRequest(PurchaseTauntRequest request)
+        private async Task HandlePurchaseTauntRequest(PurchaseTauntRequest request)
         {
-            Send(new PurchaseTauntResponse
+            await Send(new PurchaseTauntResponse
             {
                 Result = PurchaseResult.Failed,
                 CurrencyType = request.CurrencyType,
@@ -1346,9 +1359,9 @@ namespace CentralServer.LobbyServer
             });
         }
 
-        private void HandlePurchaseChatEmojiRequest(PurchaseChatEmojiRequest request)
+        private async Task HandlePurchaseChatEmojiRequest(PurchaseChatEmojiRequest request)
         {
-            Send(new PurchaseChatEmojiResponse
+            await Send(new PurchaseChatEmojiResponse
             {
                 Result = PurchaseResult.Failed,
                 CurrencyType = request.CurrencyType,
@@ -1358,14 +1371,14 @@ namespace CentralServer.LobbyServer
             });
         }
 
-        private void HandlePurchaseLoadoutSlotRequest(PurchaseLoadoutSlotRequest request)
+        private async Task HandlePurchaseLoadoutSlotRequest(PurchaseLoadoutSlotRequest request)
         {
             PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
             if (account == null
                 || !account.CharacterData.TryGetValue(request.Character, out PersistedCharacterData characterData)
                 || characterData.CharacterComponent.CharacterLoadouts.Count >= 10) // hardcoded on the client side too
             {
-                Send(new PurchaseLoadoutSlotResponse
+                await Send(new PurchaseLoadoutSlotResponse
                 {
                     Character = request.Character,
                     Success = false,
@@ -1382,59 +1395,64 @@ namespace CentralServer.LobbyServer
                 ModStrictness.AllModes));
             DB.Get().AccountDao.UpdateAccount(account);
 
-            Send(new PurchaseLoadoutSlotResponse
+            await Send(new PurchaseLoadoutSlotResponse
             {
                 Character = request.Character,
                 Success = true,
                 ResponseId = request.RequestId
             });
-            Send(new PlayerCharacterDataUpdateNotification
+            await Send(new PlayerCharacterDataUpdateNotification
             {
                 CharacterData = account.CharacterData[request.Character],
             });
-            Send(new PlayerAccountDataUpdateNotification(account));
+            await Send(new PlayerAccountDataUpdateNotification(account));
         }
 
-        private void HandlePaymentMethodsRequest(PaymentMethodsRequest request)
+        private Task HandlePaymentMethodsRequest(PaymentMethodsRequest request)
         {
+            return Task.CompletedTask;
         }
 
-        private void HandleStoreOpenedMessage(StoreOpenedMessage msg)
+        private Task HandleStoreOpenedMessage(StoreOpenedMessage msg)
         {
+            return Task.CompletedTask;
         }
 
-        private void HandleUIActionNotification(UIActionNotification notify)
+        private Task HandleUIActionNotification(UIActionNotification notify)
         {
+            return Task.CompletedTask;
         }
 
-        private void HandleCrashReportArchiveNameRequest(CrashReportArchiveNameRequest request)
+        private async Task HandleCrashReportArchiveNameRequest(CrashReportArchiveNameRequest request)
         {
-            Send(new CrashReportArchiveNameResponse
+            await Send(new CrashReportArchiveNameResponse
             {
                 Success = false,
                 ResponseId = request.RequestId
             });
         }
 
-        private void HandleClientStatusReport(ClientStatusReport msg)
+        private Task HandleClientStatusReport(ClientStatusReport msg)
         {
             string shortDetails = msg.StatusDetails != null ? msg.StatusDetails.Split('\n', 2)[0] : "";
             log.Info($"ClientStatusReport {msg.Status}: {shortDetails} ({msg.UserMessage})");
+            return Task.CompletedTask;
         }
 
-        private void HandleSubscribeToCustomGamesRequest(SubscribeToCustomGamesRequest request)
+        private Task HandleSubscribeToCustomGamesRequest(SubscribeToCustomGamesRequest request)
         {
-            CustomGameManager.Subscribe(this);
+            return CustomGameManager.Subscribe(this);
         }
 
-        private void HandleUnsubscribeFromCustomGamesRequest(UnsubscribeFromCustomGamesRequest request)
+        private Task HandleUnsubscribeFromCustomGamesRequest(UnsubscribeFromCustomGamesRequest request)
         {
             CustomGameManager.Unsubscribe(this);
+            return Task.CompletedTask;
         }
 
-        private void HandleRankedLeaderboardOverviewRequest(RankedLeaderboardOverviewRequest request)
+        private async Task HandleRankedLeaderboardOverviewRequest(RankedLeaderboardOverviewRequest request)
         {
-            Send(new RankedLeaderboardOverviewResponse
+            await Send(new RankedLeaderboardOverviewResponse
             {
                 GameType = GameType.PvP,
                 TierInfoPerGroupSize = new Dictionary<int, PerGroupSizeTierInfo>(),
@@ -1443,9 +1461,9 @@ namespace CentralServer.LobbyServer
             });
         }
 
-        private void HandleCalculateFreelancerStatsRequest(CalculateFreelancerStatsRequest request)
+        private async Task HandleCalculateFreelancerStatsRequest(CalculateFreelancerStatsRequest request)
         {
-            Send(new CalculateFreelancerStatsResponse
+            await Send(new CalculateFreelancerStatsResponse
             {
                 GlobalPercentiles = new Dictionary<StatDisplaySettings.StatType, PercentileInfo>(),
                 FreelancerSpecificPercentiles = new Dictionary<int, PercentileInfo>(),
@@ -1454,15 +1472,17 @@ namespace CentralServer.LobbyServer
             });
         }
 
-        private void HandlePlayerPanelUpdatedNotification(PlayerPanelUpdatedNotification msg)
+        private Task HandlePlayerPanelUpdatedNotification(PlayerPanelUpdatedNotification msg)
         {
+            return Task.CompletedTask;
         }
 
-        private void HandleSetRegionRequest(SetRegionRequest request)
+        private Task HandleSetRegionRequest(SetRegionRequest request)
         {
+            return Task.CompletedTask;
         }
 
-        private void HandleLoadingScreenToggleRequest(LoadingScreenToggleRequest request)
+        private async Task HandleLoadingScreenToggleRequest(LoadingScreenToggleRequest request)
         {
             PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
             Dictionary<int, bool> bgs = account.AccountComponent.UnlockedLoadingScreenBackgroundIdsToActivatedState;
@@ -1470,7 +1490,7 @@ namespace CentralServer.LobbyServer
             {
                 bgs[request.LoadingScreenId] = request.NewState;
                 DB.Get().AccountDao.UpdateAccount(account);
-                Send(new LoadingScreenToggleResponse
+                await Send(new LoadingScreenToggleResponse
                 {
                     LoadingScreenId = request.LoadingScreenId,
                     CurrentState = request.NewState,
@@ -1480,7 +1500,7 @@ namespace CentralServer.LobbyServer
             }
             else
             {
-                Send(new LoadingScreenToggleResponse
+                await Send(new LoadingScreenToggleResponse
                 {
                     LoadingScreenId = request.LoadingScreenId,
                     Success = false,
@@ -1489,25 +1509,25 @@ namespace CentralServer.LobbyServer
             }
         }
 
-        private void HandleSendRAFReferralEmailsRequest(SendRAFReferralEmailsRequest request)
+        private async Task HandleSendRAFReferralEmailsRequest(SendRAFReferralEmailsRequest request)
         {
-            Send(new SendRAFReferralEmailsResponse
+            await Send(new SendRAFReferralEmailsResponse
             {
                 Success = false,
                 ResponseId = request.RequestId
             });
         }
 
-        public void HandleGroupChatRequest(GroupChatRequest request)
+        public async Task HandleGroupChatRequest(GroupChatRequest request)
         {
-            OnGroupChatRequest(this, request);
+            await OnGroupChatRequest(this, request);
         }
 
-        public void HandleRejoinGameRequest(RejoinGameRequest request)
+        public async Task HandleRejoinGameRequest(RejoinGameRequest request)
         {
             if (request.PreviousGameInfo == null || request.Accept == false)
             {
-                Send(new RejoinGameResponse() { ResponseId = request.RequestId, Success = false });
+                await Send(new RejoinGameResponse() { ResponseId = request.RequestId, Success = false });
                 return;
             }
 
@@ -1518,7 +1538,7 @@ namespace CentralServer.LobbyServer
             if (game == null || game.Server == null || !game.Server.IsConnected)
             {
                 // no longer in a game
-                Send(new RejoinGameResponse() { ResponseId = request.RequestId, Success = false });
+                await Send(new RejoinGameResponse() { ResponseId = request.RequestId, Success = false });
                 log.Info($"Game {request.PreviousGameInfo.GameServerProcessCode} not found");
                 return;
             }
@@ -1527,19 +1547,19 @@ namespace CentralServer.LobbyServer
             if (playerInfo == null)
             {
                 // no longer in a game
-                Send(new RejoinGameResponse { ResponseId = request.RequestId, Success = false });
+                await Send(new RejoinGameResponse { ResponseId = request.RequestId, Success = false });
                 log.Info($"{UserName} was not in game {request.PreviousGameInfo.GameServerProcessCode}");
                 return;
             }
 
-            Send(new RejoinGameResponse { ResponseId = request.RequestId, Success = true });
+            await Send(new RejoinGameResponse { ResponseId = request.RequestId, Success = true });
             log.Info($"Reconnecting {UserName} to game {game.GameInfo.GameServerProcessCode} ({game.ProcessCode})");
-            game.ReconnectPlayer(this);
+            await game.ReconnectPlayer(this);
         }
 
         public void OnLeaveGroup()
         {
-            RefreshGroup();
+            RefreshGroup().Wait();
             IsReady = false;
         }
 
@@ -1548,39 +1568,39 @@ namespace CentralServer.LobbyServer
             IsReady = false;
         }
 
-        public void OnStartGame(Game game)
+        public async Task OnStartGame(Game game)
         {
             IsReady = false;
-            SendSystemMessage(
+            await SendSystemMessage(
                 (game.Server.Name != "" ? $"You are playing on {game.Server.Name} server. " : "") +
                 (game.Server.BuildVersion != "" ? $"Build {game.Server.BuildVersion}. " : "") +
                 $"Game {LobbyServerUtils.GameIdString(game.GameInfo)}.");
         }
 
-        public void SendSystemMessage(string text)
+        public async Task SendSystemMessage(string text)
         {
-            Send(new ChatNotification
+            await Send(new ChatNotification
             {
                 ConsoleMessageType = ConsoleMessageType.SystemMessage,
                 Text = text
             });
         }
 
-        public void SendSystemMessage(LocalizationPayload text)
+        public async Task SendSystemMessage(LocalizationPayload text)
         {
-            Send(new ChatNotification
+            await Send(new ChatNotification
             {
                 ConsoleMessageType = ConsoleMessageType.SystemMessage,
                 LocalizedText = text
             });
         }
 
-        private void HandleClientFeedbackReport(ClientFeedbackReport message)
+        private async Task HandleClientFeedbackReport(ClientFeedbackReport message)
         {
-            DiscordManager.Get().SendPlayerFeedback(AccountId, message);
+            await DiscordManager.Get().SendPlayerFeedback(AccountId, message);
         }
 
-        private void HandleFriendUpdate(FriendUpdateRequest request)
+        private async Task HandleFriendUpdate(FriendUpdateRequest request)
         {
             long friendAccountId = LobbyServerUtils.ResolveAccountId(request.FriendAccountId, request.FriendHandle);
             if (friendAccountId == 0 || friendAccountId == AccountId)
@@ -1588,7 +1608,7 @@ namespace CentralServer.LobbyServer
                 string failure = FriendManager.GetFailTerm(request.FriendOperation);
                 string context = failure != null ? "FriendList" : "Global";
                 failure ??= "FailedMessage";
-                Send(FriendUpdateResponse.of(
+                await Send(FriendUpdateResponse.of(
                     request,
                     LocalizationPayload.Create(failure, context,
                         LocalizationArg_LocalizationPayload.Create(
@@ -1604,7 +1624,7 @@ namespace CentralServer.LobbyServer
 
             if (account == null || friendAccount == null)
             {
-                Send(FriendUpdateResponse.of(request, LocalizationPayload.Create("ServerError@Global")));
+                await Send(FriendUpdateResponse.of(request, LocalizationPayload.Create("ServerError@Global")));
                 log.Info($"Failed to find account {AccountId} and/or {friendAccountId}");
                 return;
             }
@@ -1618,12 +1638,12 @@ namespace CentralServer.LobbyServer
                     if (updated)
                     {
                         DB.Get().AccountDao.UpdateAccount(account);
-                        Send(FriendUpdateResponse.of(request));
-                        RefreshFriendList();
+                        await Send(FriendUpdateResponse.of(request));
+                        await RefreshFriendList();
                     }
                     else
                     {
-                        Send(FriendUpdateResponse.of(
+                        await Send(FriendUpdateResponse.of(
                             request, 
                             LocalizationPayload.Create("FailedFriendBlock", "FriendList",
                                 LocalizationArg_LocalizationPayload.Create(
@@ -1642,8 +1662,8 @@ namespace CentralServer.LobbyServer
                         DB.Get().AccountDao.UpdateAccount(account);
                     }
 
-                    Send(FriendUpdateResponse.of(request));
-                    RefreshFriendList();
+                    await Send(FriendUpdateResponse.of(request));
+                    await RefreshFriendList();
                     return;
                 }
                 case FriendOperation.Remove:
@@ -1661,7 +1681,7 @@ namespace CentralServer.LobbyServer
                 {
                     log.Warn($"{account.Handle} attempted to {request.FriendOperation} {friendAccount.Handle}, " +
                              $"but this operation is not supported yet");
-                    Send(FriendUpdateResponse.of(request, LocalizationPayload.Create("ServerError@Global")));
+                    await Send(FriendUpdateResponse.of(request, LocalizationPayload.Create("ServerError@Global")));
                     return;
                 }
             }

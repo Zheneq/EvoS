@@ -97,7 +97,7 @@ namespace CentralServer.BridgeServer
 
             if (server.IsConnected)
             {
-                server.Shutdown();
+                await server.Shutdown();
                 await Task.Delay(TimeSpan.FromSeconds(10));
             }
             if (server.IsConnected)

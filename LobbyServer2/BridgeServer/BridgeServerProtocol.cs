@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Threading.Tasks;
 using CentralServer.LobbyServer.Session;
 using CentralServer.LobbyServer.Utils;
 using EvoS.Framework.Constants.Enums;
@@ -14,11 +16,11 @@ namespace CentralServer.BridgeServer
     {
         private static readonly ILog log = LogManager.GetLogger(typeof(BridgeServerProtocol));
         
-        public event Action<BridgeServerProtocol, LobbyGameSummary, LobbyGameSummaryOverrides> OnGameEnded = delegate {};
-        public event Action<BridgeServerProtocol, GameStatus> OnStatusUpdate = delegate {};
-        public event Action<BridgeServerProtocol, ServerGameMetrics> OnGameMetricsUpdate = delegate {};
-        public event Action<BridgeServerProtocol, LobbyServerPlayerInfo, LobbySessionInfo> OnPlayerDisconnect = delegate {};
-        public event Action<BridgeServerProtocol> OnServerDisconnect = delegate {};
+        public event Func<BridgeServerProtocol, LobbyGameSummary, LobbyGameSummaryOverrides, Task> OnGameEnded = delegate { return Task.CompletedTask; };
+        public event Func<BridgeServerProtocol, GameStatus, Task> OnStatusUpdate = delegate { return Task.CompletedTask; };
+        public event Func<BridgeServerProtocol, ServerGameMetrics, Task> OnGameMetricsUpdate = delegate { return Task.CompletedTask; };
+        public event Func<BridgeServerProtocol, LobbyServerPlayerInfo, LobbySessionInfo, Task> OnPlayerDisconnect = delegate { return Task.CompletedTask; };
+        public event Func<BridgeServerProtocol, Task> OnServerDisconnect = delegate { return Task.CompletedTask; };
 
         public string Address;
         public int Port;
@@ -36,7 +38,19 @@ namespace CentralServer.BridgeServer
         {
             return BridgeMessageSerializer.DeserializeMessage(data, out callbackId);
         }
-        
+
+        protected override bool SerializeMessage(MemoryStream stream, AllianceMessageBase message, int callbackId)
+        {
+            short messageType = BridgeMessageSerializer.GetMessageType(message);
+            if (messageType >= 0)
+            {
+                stream.Write(BridgeMessageSerializer.SerializeMessage(messageType, message, callbackId));
+                return true;
+            }
+
+            return false;
+        }
+
         protected override string GetConnContext()
         {
             return $"S {Address}:{Port}";
@@ -71,7 +85,7 @@ namespace CentralServer.BridgeServer
             }
         }
 
-        private void HandleRegisterGameServerRequest(RegisterGameServerRequest request, int callbackId)
+        private Task HandleRegisterGameServerRequest(RegisterGameServerRequest request, int callbackId)
         {
             string data = request.SessionInfo.ConnectionAddress;
             Address = data.Split(":")[0];
@@ -82,63 +96,68 @@ namespace CentralServer.BridgeServer
             IsPrivate = request.isPrivate;
             ServerManager.AddServer(this);
 
-            Send(new RegisterGameServerResponse
-            {
-                Success = true
-            },
+            return Send(new RegisterGameServerResponse
+                {
+                    Success = true
+                },
                 callbackId);
         }
 
-        private void HandleServerGameSummaryNotification(ServerGameSummaryNotification notify)
+        private Task HandleServerGameSummaryNotification(ServerGameSummaryNotification notify)
         {
-            OnGameEnded(this, notify.GameSummary, notify.GameSummaryOverrides);
+            return OnGameEnded(this, notify.GameSummary, notify.GameSummaryOverrides);
         }
 
-        private void HandlePlayerDisconnectedNotification(PlayerDisconnectedNotification request)
+        private Task HandlePlayerDisconnectedNotification(PlayerDisconnectedNotification request)
         {
-            OnPlayerDisconnect(this, request.PlayerInfo, request.SessionInfo);
+            return OnPlayerDisconnect(this, request.PlayerInfo, request.SessionInfo);
         }
 
-        private void HandleServerGameMetricsNotification(ServerGameMetricsNotification request)
+        private Task HandleServerGameMetricsNotification(ServerGameMetricsNotification request)
         {
             if (request.GameMetrics is null)
             {
                 log.Error("Invalid game metrics notification");
-                return;
+                return Task.CompletedTask;
             }
-            OnGameMetricsUpdate(this, request.GameMetrics);
+
+            return OnGameMetricsUpdate(this, request.GameMetrics);
         }
 
-        private void HandleServerGameStatusNotification(ServerGameStatusNotification request)
+        private Task HandleServerGameStatusNotification(ServerGameStatusNotification request)
         {
-            OnStatusUpdate(this, request.GameStatus);
+            return OnStatusUpdate(this, request.GameStatus);
         }
 
-        private void HandleMonitorHeartbeatNotification(MonitorHeartbeatNotification notify)
+        private Task HandleMonitorHeartbeatNotification(MonitorHeartbeatNotification notify)
         {
-
+            return Task.CompletedTask;
         }
 
-        private void HandleLaunchGameResponse(LaunchGameResponse response)
+        private Task HandleLaunchGameResponse(LaunchGameResponse response)
         {
             log.Info(
                 $"Game {response.GameInfo?.Name} launched ({response.GameServerAddress}, {response.GameInfo?.GameStatus}) " +
                 $"with {response.GameInfo?.ActiveHumanPlayers} players");
+            return Task.CompletedTask;
         }
 
-        private void HandleJoinGameServerResponse(JoinGameServerResponse response)
+        private Task HandleJoinGameServerResponse(JoinGameServerResponse response)
         {
             log.Info(
                 $"Player {response.PlayerInfo?.Handle} {response.PlayerInfo?.AccountId} {response.PlayerInfo?.CharacterType} " +
                 $"joined {response.GameServerProcessCode}");
+            return Task.CompletedTask;
         }
 
-        private void HandleReconnectPlayerResponse(ReconnectPlayerResponse response)
+        private Task HandleReconnectPlayerResponse(ReconnectPlayerResponse response)
         {
             if (!response.Success)
             {
                 log.Error("Reconnecting player is not found on the server");
             }
+
+            return Task.CompletedTask;
         }
 
         protected override void HandleClose(CloseEventArgs e)
@@ -159,19 +178,19 @@ namespace CentralServer.BridgeServer
             // TODO release if game did not start?
         }
 
-        public void StartGameForReconnection(long accountId)
+        public Task StartGameForReconnection(long accountId)
         {
             LobbySessionInfo sessionInfo = SessionManager.GetSessionInfo(accountId);
-            Send(new ReconnectPlayerRequest
+            return Send(new ReconnectPlayerRequest
             {
                 AccountId = accountId,
                 NewSessionId = sessionInfo.SessionToken
             });
         }
 
-        public void LaunchGame(LobbyGameInfo GameInfo, LobbyServerTeamInfo TeamInfo, Dictionary<int, LobbySessionInfo> sessionInfos)
+        public Task LaunchGame(LobbyGameInfo GameInfo, LobbyServerTeamInfo TeamInfo, Dictionary<int, LobbySessionInfo> sessionInfos)
         {
-            Send(new LaunchGameRequest()
+            return Send(new LaunchGameRequest()
             {
                 GameInfo = GameInfo,
                 TeamInfo = TeamInfo,
@@ -180,34 +199,14 @@ namespace CentralServer.BridgeServer
             });
         }
 
-        public bool Send(AllianceMessageBase msg, int originalCallbackId = 0)
+        public Task Shutdown()
         {
-            short messageType = BridgeMessageSerializer.GetMessageType(msg);
-            if (messageType >= 0)
-            {
-                Send(messageType, msg, originalCallbackId);
-                LogMessage(">", msg);
-                return true;
-            }
-            log.Error($"No sender for {msg.GetType().Name}");
-            LogMessage(">X", msg);
-
-            return false;
+            return Send(new ShutdownGameRequest());
         }
 
-        private void Send(short msgType, AllianceMessageBase msg, int originalCallbackId = 0)
+        public Task DisconnectPlayer(LobbyServerPlayerInfo playerInfo)
         {
-            Send(BridgeMessageSerializer.SerializeMessage(msgType, msg, originalCallbackId));
-        }
-
-        public void Shutdown()
-        {
-            Send(new ShutdownGameRequest());
-        }
-
-        public void DisconnectPlayer(LobbyServerPlayerInfo playerInfo)
-        {
-            Send(new DisconnectPlayerRequest
+            return Send(new DisconnectPlayerRequest
             {
                 SessionInfo = SessionManager.GetSessionInfo(playerInfo.AccountId),
                 PlayerInfo = playerInfo,

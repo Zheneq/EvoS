@@ -23,7 +23,7 @@ public class PvpGame: Game
     public async Task StartGameAsync(List<long> teamA, List<long> teamB, GameType gameType, GameSubType gameSubType)
     {
         // Fill Teams
-        if (!FillTeam(teamA, Team.TeamA) || !FillTeam(teamB, Team.TeamB))
+        if (!await FillTeam(teamA, Team.TeamA) || !await FillTeam(teamB, Team.TeamB))
         {
             return;
         }
@@ -35,10 +35,13 @@ public class PvpGame: Game
 
         // Assign players to game
         SetGameStatus(GameStatus.FreelancerSelecting);
-        GetClients().ForEach(client => SendGameAssignmentNotification(client));
+        foreach (var client in GetClients())
+        {
+            await SendGameAssignmentNotification(client);
+        }
 
         // Check for duplicated and WillFill characters
-        if (CheckDuplicatedAndFill())
+        if (await CheckDuplicatedAndFill())
         {
             // Wait for Freelancer selection time
             TimeSpan timeout = GameInfo.SelectTimeout;
@@ -65,12 +68,12 @@ public class PvpGame: Game
         // Check if all characters have selected a new freelancer; if not, force them to change
         CheckIfAllSelected();
 
-        if (!CheckIfAllParticipantsAreConnected())
+        if (!await CheckIfAllParticipantsAreConnected())
         {
             return;
         }
 
-        SendGameInfoNotifications();
+        await SendGameInfoNotifications();
 
         // Wait Loadout Selection time
         log.Info($"Waiting for {GameInfo.LoadoutSelectTimeout} to let players update their loadouts");
@@ -78,10 +81,10 @@ public class PvpGame: Game
 
         log.Info("Launching...");
         SetGameStatus(GameStatus.Launching);
-        SendGameInfoNotifications();
+        await SendGameInfoNotifications();
 
         // If game Server failed to start, we go back to the character select screen
-        if (!CheckIfAllParticipantsAreConnected())
+        if (!await CheckIfAllParticipantsAreConnected())
         {
             return;
         }
@@ -95,24 +98,27 @@ public class PvpGame: Game
             }
         }
 
-        StartGame();
+        await StartGame();
 
         foreach (LobbyServerProtocol client in GetClients())
         {
-            SendGameInfo(client);
+            await SendGameInfo(client);
         }
 
         SetGameStatus(GameStatus.Launched);
         // see AppState_CharacterSelect#Update (AppState_GroupCharacterSelect has HandleGameLaunched, it's much simpler)
         ForceReady();
 
-        SendGameInfoNotifications();
+        await SendGameInfoNotifications();
 
-        GetClients().ForEach(c => c.OnStartGame(this));
+        foreach (LobbyServerProtocol c in GetClients())
+        {
+            await c.OnStartGame(this);
+        }
 
         //send this to or stats break 11hour debuging later lol
         SetGameStatus(GameStatus.Started);
-        SendGameInfoNotifications();
+        await SendGameInfoNotifications();
 
         log.Info($"Game {gameType} started");
     }

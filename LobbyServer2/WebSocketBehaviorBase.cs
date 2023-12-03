@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading.Tasks;
 using EvoS.Framework.Misc;
-using EvoS.Framework.Network.WebSocket;
 using log4net;
 using WebSocketSharp;
 using WebSocketSharp.Server;
@@ -14,19 +14,39 @@ namespace CentralServer
     {
         private static readonly ILog log = LogManager.GetLogger("WebSocketBehaviorBase");
         
-        private readonly Dictionary<Type, Action<TMessage, int>> messageHandlers = new Dictionary<Type, Action<TMessage, int>>();
+        private readonly Dictionary<Type, Func<TMessage, int, Task>> messageHandlers = new Dictionary<Type, Func<TMessage, int, Task>>();
         private bool unregistered = false;
         public bool IsConnected { get; private set; } = true; // TODO default to false, set to true in OnOpen?
+        
+        protected void LogDebug(string msg)
+        {
+            Wrap(() => log.Debug(msg));
+        }
+        
+        protected void LogInfo(string msg)
+        {
+            Wrap(() => log.Info(msg));
+        }
+        
+        protected void LogWarn(string msg)
+        {
+            Wrap(() => log.Warn(msg));
+        }
+        
+        protected void LogError(string msg)
+        {
+            Wrap(() => log.Error(msg));
+        }
 
-        protected static void LogMessage(string prefix, object message)
+        protected void LogMessage(string prefix, object message)
         {
             try
             {
-                log.Debug($"{prefix} {message.GetType().Name} {DefaultJsonSerializer.Serialize(message)}");
+                LogDebug($"{prefix} {message.GetType().Name} {DefaultJsonSerializer.Serialize(message)}");
             }
             catch (Exception e)
             {
-                log.Debug($"{prefix} {message.GetType().Name} <failed to serialize message>");
+                LogDebug($"{prefix} {message.GetType().Name} <failed to serialize message>");
             }
         }
         
@@ -43,7 +63,7 @@ namespace CentralServer
         protected sealed override void OnClose(CloseEventArgs e)
         {
             IsConnected = false;
-            Wrap(x => log.Info($"Disconnect: code {x.Code}, reason '{x.Reason}', clean {x.WasClean}"), e);
+            LogInfo($"Disconnect: code {e.Code}, reason '{e.Reason}', clean {e.WasClean}");
             Wrap(HandleClose, e);
         }
 
@@ -53,7 +73,7 @@ namespace CentralServer
 
         public void CloseConnection()
         {
-            WebSocket.Close();
+            Close();
         }
 
         protected sealed override void OnError(ErrorEventArgs e)
@@ -89,10 +109,61 @@ namespace CentralServer
         {
             Wrap(HandleMessage, e);
         }
+        
+        public Task Send(TMessage message, int callbackId = 0)
+        {
+            var t = new TaskCompletionSource<bool>();
+            if (!IsConnected)
+            {
+                LogWarn($"Attempted to send {message.GetType()} to a disconnected socket");
+                t.TrySetResult(false);
+                return t.Task;
+            }
+            MemoryStream stream = new MemoryStream();
+            if (SerializeMessage(stream, message, callbackId))
+            {
+                SendAsync(stream.ToArray(), completed => Wrap(c =>
+                {
+                    LogMessage(c ? ">" : ">!", message);
+                    t.TrySetResult(c);
+                }, completed));
+            }
+            else
+            {
+                log.Error($"No sender for {message.GetType().Name}");
+                LogMessage(">X", message);
+                t.TrySetResult(false);
+            }
+            
+            return t.Task;
+        }
+
+        public Task Broadcast(TMessage message, int callbackId = 0)
+        {
+            var t = new TaskCompletionSource();
+            MemoryStream stream = new MemoryStream();
+            if (SerializeMessage(stream, message, callbackId))
+            {
+                Sessions.BroadcastAsync(stream.ToArray(), () =>
+                {
+                    LogMessage(">>", message);
+                    t.TrySetResult();
+                });
+            }
+            else
+            {
+                log.Error($"No sender for {message.GetType().Name}");
+                LogMessage(">>X", message);
+                t.TrySetResult();
+            }
+            return t.Task;
+        }
 
         protected abstract TMessage DeserializeMessage(byte[] data, out int callbackId);
+        
+        protected abstract bool SerializeMessage(MemoryStream stream, TMessage message, int callbackId);
 
-        protected virtual void HandleMessage(MessageEventArgs e)
+        protected async void HandleMessage(MessageEventArgs e)
         {
             TMessage deserialized = default(TMessage);
             int callbackId = 0;
@@ -112,13 +183,13 @@ namespace CentralServer
 
             if (deserialized != null)
             {
-                Action<TMessage, int> handler = GetHandler(deserialized.GetType());
+                Func<TMessage, int, Task> handler = GetHandler(deserialized.GetType());
                 if (handler != null)
                 {
                     LogMessage("<", deserialized);
                     try
                     {
-                        handler.Invoke(deserialized, callbackId);
+                        await handler.Invoke(deserialized, callbackId);
                     }
                     catch (Exception ex)
                     {
@@ -132,14 +203,32 @@ namespace CentralServer
             }
         }
 
-        protected void RegisterHandler<T>(Action<T, int> handler) where T : TMessage
-        {
-            messageHandlers.Add(typeof(T), (msg, callbackId) => { handler((T)msg, callbackId); });
-        }
+        // protected void RegisterHandler<T>(Action<T, int> handler) where T : TMessage
+        // {
+        //     messageHandlers.Add(typeof(T), (msg, callbackId) =>
+        //     {
+        //         handler((T)msg, callbackId);
+        //         return Task.CompletedTask;
+        //     });
+        // }
+        //
+        // protected void RegisterHandler<T>(Action<T> handler) where T : TMessage
+        // {
+        //     messageHandlers.Add(typeof(T), (msg, callbackId) =>
+        //     {
+        //         handler((T)msg);
+        //         return Task.CompletedTask;
+        //     });
+        // }
 
-        protected void RegisterHandler<T>(Action<T> handler) where T : TMessage
+        protected void RegisterHandler<T>(Func<T, Task> handler) where T : TMessage
         {
-            messageHandlers.Add(typeof(T), (msg, callbackId) => { handler((T)msg); });
+            messageHandlers.Add(typeof(T), async (msg, callbackId) => { await handler((T)msg); });
+        }
+        
+        protected void RegisterHandler<T>(Func<T, int, Task> handler) where T : TMessage
+        {
+            messageHandlers.Add(typeof(T), async (msg, callbackId) => { await handler((T)msg, callbackId); });
         }
 
         protected void UnregisterAllHandlers()
@@ -148,9 +237,9 @@ namespace CentralServer
             messageHandlers.Clear();
         }
 
-        private Action<TMessage, int> GetHandler(Type type)
+        private Func<TMessage, int, Task> GetHandler(Type type)
         {
-            messageHandlers.TryGetValue(type, out Action<TMessage, int> handler);
+            messageHandlers.TryGetValue(type, out var handler);
             if (handler == null && !unregistered)
             {
                 log.Error("No handler found for type " + type.Name);
@@ -182,12 +271,38 @@ namespace CentralServer
             }
         }
         
+        protected void Wrap(Action handler)
+        {
+            LogContextPush();
+            try
+            {
+                handler();
+            }
+            finally
+            {
+                LogContextPop();
+            }
+        }
+        
         protected void Wrap<T>(Action<T> handler, T param)
         {
             LogContextPush();
             try
             {
                 handler(param);
+            }
+            finally
+            {
+                LogContextPop();
+            }
+        }
+        
+        protected async Task Wrap<T>(Func<T, Task> handler, T param)
+        {
+            LogContextPush();
+            try
+            {
+                await handler(param);
             }
             finally
             {

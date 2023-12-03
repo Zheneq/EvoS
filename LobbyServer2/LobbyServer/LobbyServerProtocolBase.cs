@@ -4,7 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Text;
-using CentralServer.LobbyServer.Character;
+using System.Threading.Tasks;
 using CentralServer.LobbyServer.Chat;
 using CentralServer.LobbyServer.Friend;
 using CentralServer.LobbyServer.Gamemode;
@@ -46,56 +46,31 @@ namespace CentralServer.LobbyServer
             return (WebSocketMessage)EvosSerializer.Instance.Deserialize(new MemoryStream(data));
         }
 
-        public void Send(WebSocketMessage message)
+        protected override bool SerializeMessage(MemoryStream stream, WebSocketMessage message, int _)
         {
-            Wrap(SendImpl, message);
-        }
-
-        public void Broadcast(WebSocketMessage message)
-        {
-            Wrap(BroadcastImpl, message);
-        }
-
-        private void SendImpl(WebSocketMessage message)
-        {
-            if (!IsConnected)
-            {
-                log.Warn($"Attempted to send {message.GetType()} to a disconnected socket");
-                return;
-            }
-            MemoryStream stream = new MemoryStream();
             EvosSerializer.Instance.Serialize(stream, message);
-            Send(stream.ToArray());
-            LogMessage(">", message);
+            return true;
         }
 
-        private void BroadcastImpl(WebSocketMessage message)
-        {
-            MemoryStream stream = new MemoryStream();
-            EvosSerializer.Instance.Serialize(stream, message);
-            Sessions.Broadcast(stream.ToArray());
-            LogMessage(">>", message);
-        }
-        
-        public void SendErrorResponse(WebSocketResponseMessage response, int requestId, string message)
+        public async Task SendErrorResponse(WebSocketResponseMessage response, int requestId, string message)
         {
             response.Success = false;
             response.ErrorMessage = message;
             response.ResponseId = requestId;
             log.Info($"Sending error response: {message}");
-            Send(response);
+            await Send(response);
         }
 
-        public void SendErrorResponse(WebSocketResponseMessage response, int requestId, Exception error = null)
+        public async Task SendErrorResponse(WebSocketResponseMessage response, int requestId, Exception error = null)
         {
             response.Success = false;
             response.ErrorMessage = error?.Message;
             response.ResponseId = requestId;
             log.Info("Sending error response", error);
-            Send(response);
+            await Send(response);
         }
 
-        public void SendLobbyServerReadyNotification()
+        public async Task SendLobbyServerReadyNotification()
         {
             PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
             LobbyServerReadyNotification notification = new LobbyServerReadyNotification
@@ -113,7 +88,7 @@ namespace CentralServer.LobbyServer
                 Status = GetLobbyStatusNotification(account)
             };
 
-            Send(notification);
+            await Send(notification);
         }
 
         private ServerQueueConfigurationUpdateNotification GetServerQueueConfigurationUpdateNotification()

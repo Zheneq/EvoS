@@ -70,21 +70,24 @@ public class CustomGame : Game
 
         TeamInfo = teamInfo;
         GameInfo = lobbyGameInfo;
-
-        foreach (long groupAccountId in teamA.SelectMany(group => group.Members).ToList())
+    }
+    
+    public async Task InitGame()
+    {
+        foreach (long groupAccountId in TeamInfo.TeamPlayerInfo.Select(pi => pi.AccountId).ToList())
         {
             LobbyServerProtocol client = SessionManager.GetClientConnection(groupAccountId);
             if (client != null)
             {
-                SendGameAssignmentNotification(groupAccountId);
+                await SendGameAssignmentNotification(groupAccountId);
             }
         }
-        SendGameInfoNotifications();
+        await SendGameInfoNotifications();
     }
 
-    public override void Terminate()
+    public override async Task Terminate()
     {
-        base.Terminate();
+        await base.Terminate();
         foreach (LobbyServerPlayerInfo playerCheck in TeamInfo.TeamPlayerInfo)
         {
             if (playerCheck.AccountId == 0) continue;
@@ -92,13 +95,13 @@ public class CustomGame : Game
             LobbyServerProtocol playerConnection = SessionManager.GetClientConnection(playerCheck.AccountId);
             if (playerConnection?.CurrentGame == this)
             {
-                playerConnection.LeaveGame(this);
+                await playerConnection.LeaveGame(this);
             }
         }
     }
 
     // TODO merge with MatchOrchestrator
-    public override bool UpdateCharacterInfo(long accountId, LobbyCharacterInfo characterInfo, LobbyPlayerInfoUpdate update)
+    public override async Task<bool> UpdateCharacterInfo(long accountId, LobbyCharacterInfo characterInfo, LobbyPlayerInfoUpdate update)
     {
         LobbyServerPlayerInfo serverPlayerInfo = update.PlayerId == 0 ? GetPlayerInfo(accountId) : GetPlayerById(update.PlayerId);
         LobbyCharacterInfo serverCharacterInfo = serverPlayerInfo.CharacterInfo;
@@ -144,9 +147,9 @@ public class CustomGame : Game
             }
 
             CheckIfAllSelected();
-            SendGameInfoNotifications();
-            return true;
         }
+        await SendGameInfoNotifications();
+        return true;
     }
 
     // TODO merge with MatchOrchestrator
@@ -172,11 +175,11 @@ public class CustomGame : Game
             .ToLookup(p => p.CharacterInfo.CharacterType);
     }
 
-    public void BalanceTeams(List<BalanceTeamSlot> slots)
+    public async Task BalanceTeams(List<BalanceTeamSlot> slots)
     {
         TeamInfo = CreateBalancedTeamInfo(slots);
-        SendGameInfoNotifications();
-        CustomGameManager.NotifyUpdate();
+        await SendGameInfoNotifications();
+        await CustomGameManager.NotifyUpdate();
     }
 
     // TODO slots are not used
@@ -333,7 +336,7 @@ public class CustomGame : Game
         lobbyServerPlayerInfo.CharacterInfo = new LobbyCharacterInfo() { CharacterType = characterType };
     }
 
-    public bool Join(long accountId, bool asSpectator)
+    public async Task<bool> Join(long accountId, bool asSpectator)
     {
         Team teamToJoin = asSpectator
             ? Team.Spectator
@@ -349,13 +352,13 @@ public class CustomGame : Game
         newPlayerInfo.IsGameOwner = false;
         TeamInfo.TeamPlayerInfo.Add(newPlayerInfo);
 
-        SendGameAssignmentNotification(accountId);
-        SendGameInfoNotifications();
+        await SendGameAssignmentNotification(accountId);
+        await SendGameInfoNotifications();
 
         return true;
     }
 
-    public void UpdateGameInfo(LobbyGameInfo gameInfo, LobbyTeamInfo teamInfo)
+    public async Task UpdateGameInfo(LobbyGameInfo gameInfo, LobbyTeamInfo teamInfo)
     {
         // Check if player is kicked
         foreach (LobbyServerPlayerInfo player in TeamInfo.TeamPlayerInfo)
@@ -364,13 +367,16 @@ public class CustomGame : Game
             {
                 log.Info($"Player {player.AccountId} was kicked from the game {ProcessCode}");
                 LobbyServerProtocol playerConnection = SessionManager.GetClientConnection(player.AccountId);
-                playerConnection?.Send(new GameAssignmentNotification
+                if (playerConnection is not null)
                 {
-                    GameInfo = null,
-                    GameResult = GameResult.ClientKicked,
-                    Reconnection = false
-                });
-                playerConnection?.LeaveGame(this);
+                    await playerConnection.Send(new GameAssignmentNotification
+                    {
+                        GameInfo = null,
+                        GameResult = GameResult.ClientKicked,
+                        Reconnection = false
+                    });
+                    await playerConnection.LeaveGame(this);
+                }
             }
         }
         
@@ -379,13 +385,13 @@ public class CustomGame : Game
         GameInfo.GameConfig = gameInfo.GameConfig;
         ForceUnReady();
 
-        SendGameInfoNotifications();
-        CustomGameManager.NotifyUpdate();
+        await SendGameInfoNotifications();
+        await CustomGameManager.NotifyUpdate();
     }
 
-    public override void DisconnectPlayer(long accountId)
+    public override async Task DisconnectPlayer(long accountId)
     {
-        base.DisconnectPlayer(accountId);
+        await base.DisconnectPlayer(accountId);
         if (GameStatus > GameStatus.Launching)
         {
             return;
@@ -393,10 +399,10 @@ public class CustomGame : Game
         if (accountId == Owner)
         {
             log.Info($"Owner Left Game kicking all players");
-            DisperseCustomGame(GameResult.OwnerLeft, accountId);
+            await DisperseCustomGame(GameResult.OwnerLeft, accountId);
 
-            CustomGameManager.DeleteGame(Owner);
-            Terminate();
+            await CustomGameManager.DeleteGame(Owner);
+            await Terminate();
 
             return;
         }
@@ -405,59 +411,59 @@ public class CustomGame : Game
 
         if (TeamInfo.TeamPlayerInfo.Count > 0)
         {
-            SendGameInfoNotifications();
+            await SendGameInfoNotifications();
         }
         else
         {
             // No players left remove server
-            CustomGameManager.DeleteGame(Owner);
+            await CustomGameManager.DeleteGame(Owner);
         }
-        CustomGameManager.NotifyUpdate();
+        await CustomGameManager.NotifyUpdate();
     }
 
-    private void DisperseCustomGame(GameResult gameResult, long accountIdToIgnore = 0)
+    private async Task DisperseCustomGame(GameResult gameResult, long accountIdToIgnore = 0)
     {
         foreach (LobbyServerPlayerInfo playerCheck in TeamInfo.TeamPlayerInfo)
         {
             LobbyServerProtocol playerConnection = SessionManager.GetClientConnection(playerCheck.AccountId);
             if (accountIdToIgnore > 0 && playerCheck.AccountId != accountIdToIgnore)
             {
-                playerConnection.Send(new GameAssignmentNotification
+                await playerConnection.Send(new GameAssignmentNotification
                 {
                     GameInfo = null,
                     GameResult = gameResult,
                     Reconnection = false
                 });
             }
-            playerConnection.LeaveGame(this);
+            await playerConnection.LeaveGame(this);
         }
     }
 
-    public override void SetPlayerReady(long accountId)
+    public override async Task SetPlayerReady(long accountId)
     {
-        base.SetPlayerReady(accountId);
-        SendGameInfoNotifications();
-        CheckCustomGameStart();
+        await base.SetPlayerReady(accountId);
+        await SendGameInfoNotifications();
+        await CheckCustomGameStart();
     }
 
-    public override void SetPlayerUnReady(long accountId)
+    public override async Task SetPlayerUnReady(long accountId)
     {
-        base.SetPlayerUnReady(accountId);
-        SendGameInfoNotifications();
+        await base.SetPlayerUnReady(accountId);
+        await SendGameInfoNotifications();
     }
 
-    private void CheckCustomGameStart()
+    private async Task CheckCustomGameStart()
     {
         LobbyServerTeamInfo teamInfo = TeamInfo;
         bool allAreReady = !teamInfo.TeamPlayerInfo.Any(u => !u.IsReady && !u.IsSpectator);
 
         if (allAreReady && GameInfo.GameConfig.TotalHumanPlayers == (teamInfo.TeamAPlayerInfo.Count() + teamInfo.TeamBPlayerInfo.Count()))
         {
-            StartCustomGame();
+            await StartCustomGame();
         }
     }
 
-    private void StartCustomGame()
+    private async Task StartCustomGame()
     {
         log.Info($"Starting Custom game...");
 
@@ -467,21 +473,27 @@ public class CustomGame : Game
         {
             log.Info($"No available server for Custom game mode");
             LocalizationPayload msg = LocalizationPayload.Create("FailedStartGameServer@Frontend");
-            GetClients().ForEach(c => c?.SendSystemMessage(msg));
+            foreach (LobbyServerProtocol c in GetClients())
+            {
+                if (c is not null)
+                {
+                    await c.SendSystemMessage(msg);
+                }
+            }
             ForceUnReady();
-            SendGameInfoNotifications();
+            await SendGameInfoNotifications();
             return;
         }
         
         // Remove custom game server
-        CustomGameManager.DeleteGame(Owner);
+        await CustomGameManager.DeleteGame(Owner);
 
         AssignServer(server);
         BuildGameInfoCustomGame(GameInfo);
         if (!GameManager.RegisterGame(ProcessCode, this))
         {
             log.Info($"Failed to register custom game");
-            CancelMatch();
+            await CancelMatch();
             return;
         }
         _ = StartCustomGameAsync();
@@ -497,16 +509,19 @@ public class CustomGame : Game
 
         // Assign players to game
         SetGameStatus(GameStatus.FreelancerSelecting);
-        GetClients().ForEach(client => SendGameAssignmentNotification(client));
+        foreach (var client in GetClients())
+        {
+            await SendGameAssignmentNotification(client);
+        }
 
         SetGameStatus(GameStatus.LoadoutSelecting);
 
-        if (!CheckIfAllParticipantsAreConnected())
+        if (!await CheckIfAllParticipantsAreConnected())
         {
             return;
         }
 
-        SendGameInfoNotifications();
+        await SendGameInfoNotifications();
 
         // Wait Loadout Selection time
         log.Info($"Waiting for {GameInfo.LoadoutSelectTimeout} to let players update their loadouts");
@@ -515,24 +530,27 @@ public class CustomGame : Game
 
         log.Info("Launching...");
         SetGameStatus(GameStatus.Launching);
-        SendGameInfoNotifications();
+        await SendGameInfoNotifications();
 
         // If game server failed to start, we go back to the character select screen
-        if (!CheckIfAllParticipantsAreConnected())
+        if (!await CheckIfAllParticipantsAreConnected())
         {
             return;
         }
 
-        StartGame();
+        await StartGame();
 
         SetGameStatus(GameStatus.Launched);
-        SendGameInfoNotifications();
+        await SendGameInfoNotifications();
 
-        GetClients().ForEach(c => c.OnStartGame(this));
+        foreach (LobbyServerProtocol c in GetClients())
+        {
+            await c.OnStartGame(this);
+        }
 
         //send this to or stats break 11hour debuging later lol
         SetGameStatus(GameStatus.Started);
-        SendGameInfoNotifications();
+        await SendGameInfoNotifications();
 
         log.Info($"Game Custom started");
     }

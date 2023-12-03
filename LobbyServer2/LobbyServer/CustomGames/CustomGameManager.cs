@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using CentralServer.BridgeServer;
 using CentralServer.LobbyServer.Utils;
 using EvoS.Framework.Network.NetworkMessages;
@@ -18,12 +19,12 @@ namespace CentralServer.LobbyServer.CustomGames
         private static readonly Dictionary<string, CustomGame> GamesByCode = new Dictionary<string, CustomGame>();
         private static readonly Dictionary<long, LobbyServerProtocol> Subscribers = new Dictionary<long, LobbyServerProtocol>();
 
-        public static Game CreateGame(long accountId, LobbyGameConfig gameConfig)
+        public static async Task<Game> CreateGame(long accountId, LobbyGameConfig gameConfig)
         {
             CustomGame game;
             lock (Games)
             {
-                DeleteGame(accountId);
+                DeleteGame(accountId).Wait();
                 try
                 {
                     game = new CustomGame(accountId, gameConfig);
@@ -42,22 +43,28 @@ namespace CentralServer.LobbyServer.CustomGames
                 }
             }
             log.Info($"{LobbyServerUtils.GetHandle(accountId)} created a custom game {game.ProcessCode}");
-            NotifyUpdate();
+            await game.InitGame();
+            await NotifyUpdate();
             return game;
         }
 
-        public static void DeleteGame(long accountId)
+        public static async Task DeleteGame(long accountId)
         {
+            CustomGame oldGame = null;
             lock (Games)
             {
-                if (Games.Remove(accountId, out CustomGame oldGame))
+                if (Games.Remove(accountId, out oldGame))
                 {
                     GamesByCode.Remove(oldGame.ProcessCode);
                     log.Info($"Removing {oldGame.ProcessCode}");
-                    oldGame.Terminate();
                 }
             }
-            NotifyUpdate();
+
+            if (oldGame is not null)
+            {
+                await oldGame.Terminate();
+            }
+            await NotifyUpdate();
         }
 
         private static CustomGame GetGame(string processCode)
@@ -83,13 +90,13 @@ namespace CentralServer.LobbyServer.CustomGames
             return game;
         }
 
-        public static void Subscribe(LobbyServerProtocol client)
+        public static async Task Subscribe(LobbyServerProtocol client)
         {
             lock (Subscribers)
             {
                 Subscribers[client.AccountId] = client;
-                client.Send(MakeNotification());
             }
+            await client.Send(MakeNotification());
         }
 
         public static void Unsubscribe(LobbyServerProtocol client)
@@ -100,10 +107,11 @@ namespace CentralServer.LobbyServer.CustomGames
             }
         }
 
-        public static void NotifyUpdate()
+        public static async Task NotifyUpdate()
         {
             LobbyCustomGamesNotification notify = MakeNotification();
             List<long> toRemove = new List<long>();
+            List<LobbyServerProtocol> toSend = new List<LobbyServerProtocol>();
             lock (Subscribers)
             {
                 foreach ((long key, LobbyServerProtocol value) in Subscribers)
@@ -114,11 +122,15 @@ namespace CentralServer.LobbyServer.CustomGames
                     }
                     else
                     {
-                        value.Send(notify);
+                        toSend.Add(value);
                     }
                 }
                 
                 toRemove.ForEach(key => Subscribers.Remove(key));
+            }
+            foreach (LobbyServerProtocol conn in toSend)
+            {
+                await conn.Send(notify);
             }
         }
 
@@ -130,30 +142,30 @@ namespace CentralServer.LobbyServer.CustomGames
             };
         }
 
-        public static bool UpdateGameInfo(long accountId, LobbyGameInfo gameInfo, LobbyTeamInfo teamInfo)
+        public static async Task<bool> UpdateGameInfo(long accountId, LobbyGameInfo gameInfo, LobbyTeamInfo teamInfo)
         {
             CustomGame game = GetGame(accountId);
             if (game is null) return false;
             try
             {
-                game.UpdateGameInfo(gameInfo, teamInfo);
+                await game.UpdateGameInfo(gameInfo, teamInfo);
             }
             catch (Exception e)
             {
                 log.Error("Failed to update game info", e);
                 return false;
             }
-            NotifyUpdate();
+            await NotifyUpdate();
             return true;
         }
 
-        public static bool BalanceTeams(long accountId, List<BalanceTeamSlot> slots)
+        public static async Task<bool> BalanceTeams(long accountId, List<BalanceTeamSlot> slots)
         {
             CustomGame game = GetGame(accountId);
             if (game is null) return false;
             try
             {
-                game.BalanceTeams(slots);
+                await game.BalanceTeams(slots);
             }
             catch (Exception e)
             {
@@ -163,35 +175,30 @@ namespace CentralServer.LobbyServer.CustomGames
             return true;
         }
 
-        public static Game JoinGame(long accountId, string processCode, bool asSpectator, out LocalizationPayload localizedFailure)
+        public static async Task<(Game, LocalizationPayload)> JoinGame(long accountId, string processCode, bool asSpectator)
         {
             CustomGame game = GetGame(processCode);
             if (game == null)
             {
-                localizedFailure = LocalizationPayload.Create("UnknownErrorTryAgain@Frontend");
-                return null;
+                return (null, LocalizationPayload.Create("UnknownErrorTryAgain@Frontend"));
             }
             if (asSpectator && game.GameInfo.GameConfig.Spectators == game.TeamInfo.SpectatorInfo.Count())
             {
-                localizedFailure = LocalizationPayload.Create("GameCreatorNoLongerHasAGameForYou@Invite");
-                return null;
+                return (null, LocalizationPayload.Create("GameCreatorNoLongerHasAGameForYou@Invite"));
             }
             if (!asSpectator && game.GameInfo.GameConfig.TotalPlayers == (game.TeamInfo.TeamAPlayerInfo.Count() + game.TeamInfo.TeamBPlayerInfo.Count()))
             {
-                localizedFailure = LocalizationPayload.Create("GameCreatorNoLongerHasAGameForYou@Invite");
-                return null;
+                return (null, LocalizationPayload.Create("GameCreatorNoLongerHasAGameForYou@Invite"));
             }
 
-            if (game.Join(accountId, asSpectator))
+            if (await game.Join(accountId, asSpectator))
             {
-                localizedFailure = null;
-                NotifyUpdate();
-                return game;
+                await NotifyUpdate();
+                return (game, null);
             }
             else
             {
-                localizedFailure = LocalizationPayload.Create("UnknownErrorTryAgain@Frontend");
-                return null;
+                return (null, LocalizationPayload.Create("UnknownErrorTryAgain@Frontend"));
             }
         }
     }

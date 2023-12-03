@@ -453,7 +453,7 @@ namespace CentralServer.LobbyServer.Discord
             return eb.Build();
         }
         
-        public async void SendPlayerFeedback(long accountId, ClientFeedbackReport message)
+        public async Task SendPlayerFeedback(long accountId, ClientFeedbackReport message)
         {
             if (adminChannel == null || !conf.AdminEnableUserReports)
             {
