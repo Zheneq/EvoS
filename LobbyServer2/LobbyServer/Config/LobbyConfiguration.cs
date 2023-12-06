@@ -28,6 +28,9 @@ namespace EvoS.Framework
         public TimeSpan ServerGGTime = TimeSpan.FromSeconds(5);
         public TimeSpan ServerShutdownTime = TimeSpan.FromMinutes(1);
         public DiscordConfiguration Discord = new DiscordConfiguration();
+        public bool EnableTrustWar = true;
+        public int TrustWarGamePlayedPoints = 5;
+        public int TrustWarGameWonPoints = 10;
 
         private static LobbyConfiguration GetInstance()
         {
@@ -125,6 +128,21 @@ namespace EvoS.Framework
         public static bool GetMatchAbandoningPenalty()
         {
             return GetInstance().MatchAbandoningPenalty;
+        }
+
+        public static int GetTrustWarGamePlayedPoints()
+        {
+            return GetInstance().TrustWarGamePlayedPoints;
+        }
+
+        public static int GetTrustWarGameWonPoints()
+        {
+            return GetInstance().TrustWarGameWonPoints;
+        }
+
+        public static bool IsTrustWarEnabled()
+        {
+            return GetInstance().EnableTrustWar;
         }
     }
 }

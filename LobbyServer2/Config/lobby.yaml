@@ -1,6 +1,9 @@
 ﻿MOTDPopUpText: ""
 MOTDText: "Join the project Discord: https://discord.gg/yrZRHJaAUg"
 PatchNotesCommitsUrl: https://api.github.com/repos/Zheneq/EvoS/commits?per_page=10
+EnableTrustWar: true
+TrustWarGamePlayedPoints: 5
+TrustWarGameWonPoints: 10
 Discord:
   Enabled: false
   BotToken: "" # Enter the bots token leave empty to disable

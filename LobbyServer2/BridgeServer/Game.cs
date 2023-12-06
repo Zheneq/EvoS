@@ -7,6 +7,7 @@ using CentralServer.LobbyServer.Character;
 using CentralServer.LobbyServer.Discord;
 using CentralServer.LobbyServer.Matchmaking;
 using CentralServer.LobbyServer.Session;
+using CentralServer.LobbyServer.TrustWar;
 using CentralServer.LobbyServer.Utils;
 using EvoS.Framework;
 using EvoS.Framework.Constants.Enums;
@@ -449,6 +450,9 @@ public abstract class Game
             };
             client?.Send(response);
         }
+
+        // TrustWar
+        TrustWarManager.CalculateTrustWar(this, gameSummary);
 
         // SendGameInfoNotifications(); // moved down
         DiscordManager.Get().SendGameReport(GameInfo, Server?.Name, Server?.BuildVersion, gameSummary);

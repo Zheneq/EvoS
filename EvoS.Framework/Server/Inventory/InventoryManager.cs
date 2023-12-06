@@ -51,8 +51,12 @@ namespace EvoS.DirectoryServer.Inventory
 
         public static List<int> GetUnlockedRibbonIDs(long accountId)
         {
-            //TODO
-            return new List<int>();
+            // 1 = Omni
+            // 2 = Evos
+            // 3 = Warbotics
+            // 4 = Helio Corp
+            // 5 = Helio United
+            return new List<int>() { 1, 2, 3, /* 4, 5 */ };
         }
 
         public static InventoryComponent GetInventoryComponent(long accountId)

@@ -4,7 +4,6 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Text;
-using CentralServer.LobbyServer.Character;
 using CentralServer.LobbyServer.Chat;
 using CentralServer.LobbyServer.Friend;
 using CentralServer.LobbyServer.Gamemode;
@@ -20,6 +19,7 @@ using EvoS.Framework.Network.Static;
 using EvoS.Framework.Network.WebSocket;
 using log4net;
 using Newtonsoft.Json.Linq;
+using static EvoS.Framework.DataAccess.Daos.TrustWarDao;
 
 namespace CentralServer.LobbyServer
 {
@@ -98,6 +98,24 @@ namespace CentralServer.LobbyServer
         public void SendLobbyServerReadyNotification()
         {
             PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
+
+            FactionCompetitionNotification factionCompetitionNotification = new();
+
+            if (LobbyConfiguration.IsTrustWarEnabled())
+            {
+                TrustWarDaoEntry trustWar = DB.Get().TrustWarDao.Find();
+                factionCompetitionNotification = new FactionCompetitionNotification()
+                {
+                    ActiveIndex = 1,
+                    Scores = new Dictionary<int, long>() {
+                        { 0, trustWar.Omni },
+                        { 1, trustWar.Evos },
+                        { 2, trustWar.Warbotics }
+                    }
+                };
+            }
+            
+
             LobbyServerReadyNotification notification = new LobbyServerReadyNotification
             {
                 AccountData = account.CloneForClient(),
@@ -105,7 +123,7 @@ namespace CentralServer.LobbyServer
                 CharacterDataList = account.CharacterData.Values.ToList(),
                 CommerceURL = "http://127.0.0.1/AtlasCommerce",
                 EnvironmentType = EnvironmentType.External,
-                FactionCompetitionStatus = new FactionCompetitionNotification(),
+                FactionCompetitionStatus = factionCompetitionNotification,
                 FriendStatus = FriendManager.GetFriendStatusNotification(AccountId),
                 GroupInfo = GroupManager.GetGroupInfo(AccountId),
                 SeasonChapterQuests = QuestManager.GetSeasonQuestDataNotification(),

@@ -15,7 +15,7 @@ namespace EvoS.Framework
         public bool FreeLoadingScreenBackground = true;
         public bool FreeOvercons = true;
         public bool FreeAllCharacters = true;
-        public int StartingCharactersLevel = 20;
+        public int StartingCharactersLevel = 100;
 
         private static EvosStoreConfiguration GetInstance()
         {

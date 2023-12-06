@@ -100,6 +100,7 @@ namespace CentralServer.LobbyServer
             RegisterHandler<JoinGameRequest>(HandleJoinGameRequest);
             RegisterHandler<BalancedTeamRequest>(HandleBalancedTeamRequest);
             RegisterHandler<SetDevTagRequest>(HandleSetDevTagRequest);
+            RegisterHandler<SelectRibbonRequest>(HandleSelectRibbonRequest);
 
             RegisterHandler<PurchaseModRequest>(HandlePurchaseModRequest);
             RegisterHandler<PurchaseTauntRequest>(HandlePurchaseTauntRequest);
@@ -129,6 +130,28 @@ namespace CentralServer.LobbyServer
 
 
             RegisterHandler<FriendUpdateRequest>(HandleFriendUpdate);
+        }
+
+        private void HandleSelectRibbonRequest(SelectRibbonRequest request)
+        {
+            PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
+            if (account == null)
+            {
+                return;
+            }
+
+            account.AccountComponent.SelectedRibbonID = request.RibbonID;
+            // Update the account
+            DB.Get().AccountDao.UpdateAccount(account);
+
+            OnAccountVisualsUpdated();
+
+            Send(new SelectRibbonResponse()
+            {
+                CurrentRibbonID = request.RibbonID,
+                Success = true,
+                ResponseId = request.RequestId,
+            });
         }
 
         private void HandleSetDevTagRequest(SetDevTagRequest request)
@@ -637,6 +660,13 @@ namespace CentralServer.LobbyServer
             BroadcastRefreshGroup();
         }
 
+        public static int GetTotalXPByFactionID(PersistedAccountData account, int factionID)
+        {
+            Dictionary<int, FactionPlayerData> factionData = account.AccountComponent.FactionCompetitionData[0].Factions;
+
+            return factionData[factionID]?.TotalXP ?? 0;
+        }
+
         public void HandleCheckAccountStatusRequest(CheckAccountStatusRequest request)
         {
             CheckAccountStatusResponse response = new CheckAccountStatusResponse()
@@ -645,6 +675,40 @@ namespace CentralServer.LobbyServer
                 ResponseId = request.RequestId
             };
             Send(response);
+            
+            if (LobbyConfiguration.IsTrustWarEnabled())
+            {
+                PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
+
+                int omni = GetTotalXPByFactionID(account, 0);
+                int evos = GetTotalXPByFactionID(account, 1);
+                int warbotics = GetTotalXPByFactionID(account, 2);
+
+                Send(new PlayerFactionContributionChangeNotification()
+                {
+                    CompetitionId = 1,
+                    FactionId = 0,
+                    AmountChanged = 0,
+                    TotalXP = omni,
+                    AccountID = account.AccountId,
+                });
+                Send(new PlayerFactionContributionChangeNotification()
+                {
+                    CompetitionId = 1,
+                    FactionId = 1,
+                    AmountChanged = 0,
+                    TotalXP = evos,
+                    AccountID = account.AccountId,
+                });
+                Send(new PlayerFactionContributionChangeNotification()
+                {
+                    CompetitionId = 1,
+                    FactionId = 2,
+                    AmountChanged = 0,
+                    TotalXP = warbotics,
+                    AccountID = account.AccountId,
+                });
+            }
         }
 
         public void HandleCheckRAFStatusRequest(CheckRAFStatusRequest request)

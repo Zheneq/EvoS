@@ -371,6 +371,26 @@ namespace EvoS.DirectoryServer
             if (EvosStoreConfiguration.AreTitlesFree()) account.AccountComponent.UnlockedTitleIDs = InventoryManager.GetUnlockedTitleIDs(account.AccountId);
             if (EvosStoreConfiguration.AreBannersFree()) account.AccountComponent.UnlockedBannerIDs = InventoryManager.GetUnlockedBannerIDs(account.AccountId);
 
+            if (LobbyConfiguration.IsTrustWarEnabled())
+            {
+                account.AccountComponent.UnlockedRibbonIDs = InventoryManager.GetUnlockedRibbonIDs(account.AccountId);
+                // initialize faction competition data with id 0
+                account.AccountComponent.FactionCompetitionData.TryAdd(0, new PlayerFactionCompetitionData()
+                {
+                    CompetitionID = 1,
+                    Factions = new Dictionary<int, FactionPlayerData>()
+                                {
+                                    { 0, new FactionPlayerData() { FactionID = 1, TotalXP = 0 } },
+                                    { 1, new FactionPlayerData() { FactionID = 2, TotalXP = 0 } },
+                                    { 2, new FactionPlayerData() { FactionID = 3, TotalXP = 0 } }
+                                }
+                }
+);
+            } else
+            {
+                account.AccountComponent.UnlockedRibbonIDs = new List<int>();
+            }
+
             if (account.AccountComponent.AppliedEntitlements.ContainsKey("DEVELOPER_ACCESS"))
             {
                 //Give developers access to the Developer title
