@@ -162,6 +162,9 @@ namespace CentralServer.LobbyServer
                             // End the game with a tie result for other specified commands
                             game.Server.AdminShutdown(GameResult.TieGame);
                             break;
+                        case "Cooldowns":
+                            game.Server.AdminClearCooldown();
+                            break;
                     }
                 }
             }

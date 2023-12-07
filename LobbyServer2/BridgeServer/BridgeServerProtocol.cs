@@ -213,6 +213,11 @@ namespace CentralServer.BridgeServer
             });
         }
 
+        public void AdminClearCooldown()
+        {
+            Send(new AdminClearCooldownsRequest());
+        }
+
         public void DisconnectPlayer(LobbyServerPlayerInfo playerInfo)
         {
             Send(new DisconnectPlayerRequest

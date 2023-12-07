@@ -19,6 +19,7 @@ namespace CentralServer.BridgeServer
             null, // typeof(JoinGameAsObserverRequest),
             typeof(ShutdownGameRequest),
             typeof(AdminShutdownGameRequest), // Custom AdminShutdownGame
+            typeof(AdminClearCooldownsRequest), // Custom AdminClearCooldowns
             typeof(DisconnectPlayerRequest),
             typeof(ReconnectPlayerRequest),
             null, // typeof(MonitorHeartbeatResponse),
