@@ -19,6 +19,7 @@ using EvoS.Framework.DataAccess;
 using EvoS.Framework.Exceptions;
 using EvoS.Framework.Network.NetworkMessages;
 using EvoS.Framework.Network.Static;
+using LobbyGameClientMessages;
 using log4net;
 using Newtonsoft.Json;
 using WebSocketSharp;
@@ -100,6 +101,7 @@ namespace CentralServer.LobbyServer
             RegisterHandler<JoinGameRequest>(HandleJoinGameRequest);
             RegisterHandler<BalancedTeamRequest>(HandleBalancedTeamRequest);
             RegisterHandler<SetDevTagRequest>(HandleSetDevTagRequest);
+            RegisterHandler<DEBUG_AdminSlashCommandNotification>(HandleDEBUG_AdminSlashCommandNotification);
 
             RegisterHandler<PurchaseModRequest>(HandlePurchaseModRequest);
             RegisterHandler<PurchaseTauntRequest>(HandlePurchaseTauntRequest);
@@ -130,6 +132,41 @@ namespace CentralServer.LobbyServer
 
             RegisterHandler<FriendUpdateRequest>(HandleFriendUpdate);
         }
+
+        private void HandleDEBUG_AdminSlashCommandNotification(DEBUG_AdminSlashCommandNotification notification)
+        {
+            log.Info($"DEBUG_AdminSlashCommandNotification: {notification.Command}");
+            PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
+            if (account == null)
+            {
+                return;
+            }
+            if (account.AccountComponent.AppliedEntitlements.ContainsKey("DEVELOPER_ACCESS"))
+            {
+                Game game = GameManager.GetGameWithPlayer(AccountId);
+                if (game != null)
+                {
+                    Team team = game.TeamInfo.TeamPlayerInfo.Find(x => x.AccountId == AccountId).TeamId;
+                    switch (notification.Command)
+                    {
+                        case "End Game (Win)":
+                            
+                            game.Server.AdminShutdown(team == Team.TeamA ? GameResult.TeamAWon : GameResult.TeamBWon);
+                            break;
+                        case "End Game (Loss)":
+                            game.Server.AdminShutdown(team == Team.TeamA ? GameResult.TeamBWon : GameResult.TeamAWon);
+                            break;
+                        case "End Game (No Result)":
+                        case "End Game (With Parameters)":
+                        case "End Game (Tie)":
+                            // End the game with a tie result for other specified commands
+                            game.Server.AdminShutdown(GameResult.TieGame);
+                            break;
+                    }
+                }
+            }
+        }
+
 
         private void HandleSetDevTagRequest(SetDevTagRequest request)
         {

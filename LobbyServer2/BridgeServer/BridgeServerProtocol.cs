@@ -205,6 +205,14 @@ namespace CentralServer.BridgeServer
             Send(new ShutdownGameRequest());
         }
 
+        public void AdminShutdown(GameResult gameResult)
+        {
+            Send(new AdminShutdownGameRequest()
+            {
+                GameResult = gameResult
+            });
+        }
+
         public void DisconnectPlayer(LobbyServerPlayerInfo playerInfo)
         {
             Send(new DisconnectPlayerRequest
