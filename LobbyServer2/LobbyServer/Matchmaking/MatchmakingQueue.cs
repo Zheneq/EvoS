@@ -8,6 +8,8 @@ using CentralServer.LobbyServer.Gamemode;
 using CentralServer.LobbyServer.Group;
 using EvoS.Framework;
 using EvoS.Framework.Constants.Enums;
+using EvoS.Framework.DataAccess;
+using EvoS.Framework.DataAccess.Daos;
 using EvoS.Framework.Network.Static;
 using log4net;
 using WebSocketSharp;
@@ -17,6 +19,8 @@ namespace CentralServer.LobbyServer.Matchmaking
     public class MatchmakingQueue
     {
         private static readonly ILog log = LogManager.GetLogger(typeof(MatchmakingQueue));
+
+        private readonly string EloKey;
         
         Dictionary<string, LobbyGameInfo> Games = new Dictionary<string, LobbyGameInfo>();
         private readonly ConcurrentDictionary<long, DateTime> QueuedGroups = new ConcurrentDictionary<long, DateTime>();
@@ -36,6 +40,7 @@ namespace CentralServer.LobbyServer.Matchmaking
 
         public MatchmakingQueue(GameType gameType)
         {
+            EloKey = gameType.ToString();
             MatchmakingQueueInfo = new LobbyMatchmakingQueueInfo()
             {
                 QueueStatus = QueueStatus.Idle,
@@ -109,7 +114,204 @@ namespace CentralServer.LobbyServer.Matchmaking
                 TryMatch();
             }
         }
-        
+
+        class MatchScratch
+        {
+            class Team
+            {
+                private readonly int _capacity;
+                
+                private readonly List<MatchmakingGroupInfo> _groups = new(5);
+                private int _size = 0;
+
+                public Team(int capacity)
+                {
+                    _capacity = capacity;
+                }
+
+                public Team(Team other) : this(other._capacity)
+                {
+                    _groups = other._groups.ToList();
+                    _size = other._size;
+                }
+
+                public bool IsFull => _size == _capacity;
+                public List<MatchmakingGroupInfo> Groups => _groups;
+
+                public int GetHash()
+                {
+                    return _groups
+                        .SelectMany(g => g.Members)
+                        .Select(accountId => accountId.GetHashCode())
+                        .Aggregate(1, (a, b) => a * b);
+                }
+
+                public bool Push(MatchmakingGroupInfo groupInfo)
+                {
+                    if (_capacity <= _size || _capacity - _size >= groupInfo.Players)
+                    {
+                        return false;
+                    }
+                    _size += groupInfo.Players;
+                    _groups.Add(groupInfo);
+                    return true;
+                }
+
+                public bool Pop(out long groupId)
+                {
+                    groupId = -1;
+                    if (_groups.Count <= 0)
+                    {
+                        return false;
+                    }
+                    MatchmakingGroupInfo groupInfo = _groups[^1];
+                    _size -= groupInfo.Players;
+                    _groups.RemoveAt(_groups.Count - 1);
+                    groupId = groupInfo.GroupID;
+                    return true;
+                }
+            }
+            
+            private readonly Team _teamA;
+            private readonly Team _teamB;
+            private readonly HashSet<long> _usedGroupIds = new(10);
+
+            public MatchScratch(GameSubType subType)
+            {
+                _teamA = new Team(subType.TeamAPlayers);
+                _teamB = new Team(subType.TeamBPlayers);
+            }
+
+            private MatchScratch(Team teamA, Team teamB, HashSet<long> usedGroupIds)
+            {
+                _teamA = teamA;
+                _teamB = teamB;
+                _usedGroupIds = usedGroupIds;
+            }
+
+            public Match ToMatch(string eloKey)
+            {
+                return new Match(_teamA.Groups, _teamB.Groups, eloKey);
+            }
+
+            public long GetHash()
+            {
+                int a = _teamA.GetHash();
+                int b = _teamB.GetHash();
+                return (long)Math.Min(a, b) << 32 | (uint)Math.Max(a, b);
+            }
+
+            public bool Push(long groupId)
+            {
+                if (_usedGroupIds.Contains(groupId))
+                {
+                    return false;
+                }
+                MatchmakingGroupInfo groupInfo = new MatchmakingGroupInfo(groupId);
+                if (_teamA.Push(groupInfo) || _teamB.Push(groupInfo))
+                {
+                    _usedGroupIds.Add(groupId);
+                    return true;
+                }
+                return false;
+            }
+
+            public void Pop()
+            {
+                if (_teamA.Pop(out long groupId) || _teamB.Pop(out groupId))
+                {
+                    _usedGroupIds.Remove(groupId);
+                    return;
+                }
+                
+                throw new Exception("Matchmaking failure");
+            }
+
+            public bool IsMatch()
+            {
+                return _teamA.IsFull && _teamB.IsFull;
+            }
+        }
+
+        class Match
+        {
+            class Team
+            {
+                private readonly List<MatchmakingGroupInfo> _groups;
+                private readonly List<PersistedAccountData> _accounts;
+                private readonly float _elo;
+
+                public Team(List<MatchmakingGroupInfo> groups, string eloKey)
+                {
+                    AccountDao dao = DB.Get().AccountDao;
+                    _groups = groups;
+                    _accounts = _groups
+                        .SelectMany(g => g.Members)
+                        .Select(accountId => dao.GetAccount(accountId))
+                        .ToList();
+                    _elo = _accounts.Select(acc =>
+                    {
+                        acc.ExperienceComponent.EloValues.GetElo(eloKey, out float elo, out _);
+                        return elo;
+                    }).Sum() / _accounts.Count;
+                }
+            }
+
+            private readonly Team _teamA;
+            private readonly Team _teamB;
+
+            public Match(List<MatchmakingGroupInfo> teamA, List<MatchmakingGroupInfo> teamB, string eloKey)
+            {
+                _teamA = new Team(teamA, eloKey);
+                _teamB = new Team(teamB, eloKey);
+            }
+        }
+
+        private void TryMatch2()
+        {
+            foreach (GameSubType subType in MatchmakingQueueInfo.GameConfig.SubTypes)
+            {
+                List<MatchmakingGroupInfo> groups = new List<MatchmakingGroupInfo>();
+
+                lock (GroupManager.Lock)
+                {
+                    List<long> queuedGroups = GetQueuedGroups();
+
+                    MatchScratch matchScratch = new MatchScratch(subType);
+                    Dictionary<long, Match> possibleMatches = new Dictionary<long, Match>();
+                    FindMatches(matchScratch, queuedGroups, EloKey, possibleMatches);
+                    
+                }
+            }
+        }
+
+        private static void FindMatches(
+            MatchScratch matchScratch,
+            List<long> queuedGroups,
+            string eloKey,
+            Dictionary<long, Match> possibleMatches)
+        {
+            foreach (long groupId in queuedGroups)
+            {
+                if (matchScratch.Push(groupId))
+                {
+                    if (matchScratch.IsMatch())
+                    {
+                        long hash = matchScratch.GetHash();
+                        if (!possibleMatches.ContainsKey(hash))
+                        {
+                            possibleMatches.Add(hash, matchScratch.ToMatch(eloKey));
+                        }
+                    }
+                    else
+                    {
+                        FindMatches(matchScratch, queuedGroups, eloKey, possibleMatches);
+                    }
+                    matchScratch.Pop();
+                }
+            }
+        }
+
         private void TryMatch()
         {
             foreach (GameSubType subType in MatchmakingQueueInfo.GameConfig.SubTypes)

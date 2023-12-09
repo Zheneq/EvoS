@@ -1,9 +1,6 @@
-﻿using CentralServer.LobbyServer.Group;
+﻿using System.Collections.Generic;
+using CentralServer.LobbyServer.Group;
 using EvoS.Framework.Constants.Enums;
-using EvoS.Framework.Misc;
-using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace CentralServer.LobbyServer.Matchmaking
 {
@@ -19,5 +16,7 @@ namespace CentralServer.LobbyServer.Matchmaking
             Players = GroupManager.GetGroup(groupID).Members.Count;
             Team = Team.Invalid;
         }
+
+        public List<long> Members => GroupManager.GetGroup(GroupID).Members;
     }
 }
