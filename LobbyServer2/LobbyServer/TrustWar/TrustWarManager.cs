@@ -14,6 +14,13 @@ namespace CentralServer.LobbyServer.TrustWar
 {
     public class TrustWarManager
     {
+        public static int GetTotalXPByFactionID(PersistedAccountData account, int factionID)
+        {
+            Dictionary<int, FactionPlayerData> factionData = account.AccountComponent.FactionCompetitionData[0].Factions;
+
+            return factionData[factionID]?.TotalXP ?? 0;
+        }
+
         public static void CalculateTrustWar(Game game, LobbyGameSummary gameSummary)
         {
             if (LobbyConfiguration.IsTrustWarEnabled())

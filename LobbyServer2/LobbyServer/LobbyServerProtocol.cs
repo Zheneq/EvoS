@@ -11,6 +11,7 @@ using CentralServer.LobbyServer.Group;
 using CentralServer.LobbyServer.Matchmaking;
 using CentralServer.LobbyServer.Session;
 using CentralServer.LobbyServer.Store;
+using CentralServer.LobbyServer.TrustWar;
 using CentralServer.LobbyServer.Utils;
 using EvoS.DirectoryServer.Inventory;
 using EvoS.Framework;
@@ -102,6 +103,8 @@ namespace CentralServer.LobbyServer
             RegisterHandler<BalancedTeamRequest>(HandleBalancedTeamRequest);
             RegisterHandler<SetDevTagRequest>(HandleSetDevTagRequest);
             RegisterHandler<DEBUG_AdminSlashCommandNotification>(HandleDEBUG_AdminSlashCommandNotification);
+            RegisterHandler<SelectRibbonRequest>(HandleSelectRibbonRequest);
+
             RegisterHandler<PurchaseModRequest>(HandlePurchaseModRequest);
             RegisterHandler<PurchaseTauntRequest>(HandlePurchaseTauntRequest);
             RegisterHandler<PurchaseChatEmojiRequest>(HandlePurchaseChatEmojiRequest);
@@ -130,6 +133,28 @@ namespace CentralServer.LobbyServer
 
 
             RegisterHandler<FriendUpdateRequest>(HandleFriendUpdate);
+        }
+
+        private void HandleSelectRibbonRequest(SelectRibbonRequest request)
+        {
+            PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
+            if (account == null)
+            {
+                return;
+            }
+
+            account.AccountComponent.SelectedRibbonID = request.RibbonID;
+            // Update the account
+            DB.Get().AccountDao.UpdateAccount(account);
+
+            OnAccountVisualsUpdated();
+
+            Send(new SelectRibbonResponse()
+            {
+                CurrentRibbonID = request.RibbonID,
+                Success = true,
+                ResponseId = request.RequestId,
+            });
         }
 
         private void HandleDEBUG_AdminSlashCommandNotification(DEBUG_AdminSlashCommandNotification notification)
@@ -675,13 +700,6 @@ namespace CentralServer.LobbyServer
             BroadcastRefreshGroup();
         }
 
-        public static int GetTotalXPByFactionID(PersistedAccountData account, int factionID)
-        {
-            Dictionary<int, FactionPlayerData> factionData = account.AccountComponent.FactionCompetitionData[0].Factions;
-
-            return factionData[factionID]?.TotalXP ?? 0;
-        }
-
         public void HandleCheckAccountStatusRequest(CheckAccountStatusRequest request)
         {
             CheckAccountStatusResponse response = new CheckAccountStatusResponse()
@@ -695,9 +713,9 @@ namespace CentralServer.LobbyServer
             {
                 PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
 
-                int omni = GetTotalXPByFactionID(account, 0);
-                int evos = GetTotalXPByFactionID(account, 1);
-                int warbotics = GetTotalXPByFactionID(account, 2);
+                int omni = TrustWarManager.GetTotalXPByFactionID(account, 0);
+                int evos = TrustWarManager.GetTotalXPByFactionID(account, 1);
+                int warbotics = TrustWarManager.GetTotalXPByFactionID(account, 2);
 
                 Send(new PlayerFactionContributionChangeNotification()
                 {
