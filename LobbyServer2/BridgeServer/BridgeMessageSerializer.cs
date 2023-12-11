@@ -18,8 +18,6 @@ namespace CentralServer.BridgeServer
             typeof(JoinGameServerRequest),
             null, // typeof(JoinGameAsObserverRequest),
             typeof(ShutdownGameRequest),
-            typeof(AdminShutdownGameRequest), // Custom AdminShutdownGame
-            typeof(AdminClearCooldownsRequest), // Custom AdminClearCooldowns
             typeof(DisconnectPlayerRequest),
             typeof(ReconnectPlayerRequest),
             null, // typeof(MonitorHeartbeatResponse),
@@ -32,6 +30,8 @@ namespace CentralServer.BridgeServer
             typeof(JoinGameServerResponse),
             null, // typeof(JoinGameAsObserverResponse),
             typeof(ReconnectPlayerResponse),
+            typeof(AdminShutdownGameRequest),
+            typeof(AdminClearCooldownsRequest),
         };
 
         private static List<Type> GetMessageTypes()

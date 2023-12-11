@@ -12,6 +12,6 @@ public class AdminShutdownGameRequest : AllianceMessageBase
     public override void Serialize(NetworkWriter writer)
     {
         base.Serialize(writer);
-        writer.Write((int)GameResult);
+        writer.Write((byte)GameResult);
     }
 }
