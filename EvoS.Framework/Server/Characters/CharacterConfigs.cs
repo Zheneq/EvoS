@@ -232,8 +232,8 @@ namespace CentralServer.LobbyServer.Character
                 CharacterType.Neko,
                 new CharacterConfig()
                 {
-                    AllowForBots = false,
-                    AllowForPlayers = false,
+                    AllowForBots = true,
+                    AllowForPlayers = true,
                     CharacterRole = CharacterRole.Assassin,
                     CharacterType = CharacterType.Neko,
                     Difficulty = 1,
