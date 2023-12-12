@@ -9,6 +9,7 @@ using CentralServer.LobbyServer.Friend;
 using CentralServer.LobbyServer.Gamemode;
 using CentralServer.LobbyServer.Group;
 using CentralServer.LobbyServer.Quest;
+using CentralServer.LobbyServer.TrustWar;
 using CentralServer.LobbyServer.Utils;
 using EvoS.Framework;
 using EvoS.Framework.Constants.Enums;
@@ -19,7 +20,7 @@ using EvoS.Framework.Network.Static;
 using EvoS.Framework.Network.WebSocket;
 using log4net;
 using Newtonsoft.Json.Linq;
-using static EvoS.Framework.DataAccess.Daos.TrustWarDao;
+using static EvoS.Framework.DataAccess.Daos.MiscDao;
 
 namespace CentralServer.LobbyServer
 {
@@ -103,14 +104,14 @@ namespace CentralServer.LobbyServer
 
             if (LobbyConfiguration.IsTrustWarEnabled())
             {
-                TrustWarDaoEntry trustWar = DB.Get().TrustWarDao.Find();
+                TrustWarEntry trustWar = TrustWarManager.getTrustWarEntry();
                 factionCompetitionNotification = new FactionCompetitionNotification()
                 {
                     ActiveIndex = 1,
                     Scores = new Dictionary<int, long>() {
-                        { 0, trustWar.Omni },
-                        { 1, trustWar.Evos },
-                        { 2, trustWar.Warbotics }
+                        { 0, trustWar.Points[0] },
+                        { 1, trustWar.Points[1] },
+                        { 2, trustWar.Points[2] }
                     }
                 };
             }

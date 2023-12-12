@@ -5,15 +5,15 @@ using EvoS.Framework.Network.NetworkMessages;
 using EvoS.Framework.Network.Static;
 using EvoS.Framework;
 using System.Collections.Generic;
-using static EvoS.Framework.DataAccess.Daos.TrustWarDao;
 using CentralServer.BridgeServer;
-using System.Linq;
-using System;
+using static EvoS.Framework.DataAccess.Daos.MiscDao;
 
 namespace CentralServer.LobbyServer.TrustWar
 {
     public class TrustWarManager
     {
+        private static readonly object _lock = new object();
+
         public static int GetTotalXPByFactionID(PersistedAccountData account, int factionID)
         {
             Dictionary<int, FactionPlayerData> factionData = account.AccountComponent.FactionCompetitionData[0].Factions;
@@ -21,49 +21,54 @@ namespace CentralServer.LobbyServer.TrustWar
             return factionData[factionID]?.TotalXP ?? 0;
         }
 
+        public static TrustWarEntry getTrustWarEntry()
+        {
+            TrustWarEntry trustWar = DB.Get().MiscDao.GetEntry("TrustWars-Season1") as TrustWarEntry;
+
+            if (trustWar is not null)
+            {
+                return trustWar;
+            }
+
+            return new TrustWarEntry()
+            {
+                _id = "TrustWars-Season1",
+                Points = new long[] { 0, 0, 0 }
+            };
+        }
+
+
         public static void CalculateTrustWar(Game game, LobbyGameSummary gameSummary)
         {
-            if (LobbyConfiguration.IsTrustWarEnabled())
+            if (!LobbyConfiguration.IsTrustWarEnabled()) return;
+
+            Dictionary<int, long> factionScores = new();
+            List<PlayerFactionContributionChangeNotification> notificationsToSend = new();
+
+            lock (_lock)
             {
-                TrustWarDaoEntry trustWar = DB.Get().TrustWarDao.Find();
+                TrustWarEntry trustWar = getTrustWarEntry();
+
                 foreach (long accountId in game.GetPlayers())
                 {
                     PersistedAccountData account = DB.Get().AccountDao.GetAccount(accountId);
-                    if (account.AccountComponent.SelectedRibbonID != -1) { 
+                    if (account.AccountComponent.SelectedRibbonID >= 1 && account.AccountComponent.SelectedRibbonID <= 3)
+                    {
                         LobbyServerPlayerInfo player = game.GetPlayerInfo(accountId);
 
                         bool isTeamAWinner = (gameSummary.GameResult == GameResult.TeamAWon && player.TeamId == Team.TeamA);
                         bool isTeamBWinner = (gameSummary.GameResult == GameResult.TeamBWon && player.TeamId == Team.TeamB);
 
-                        int trustWarPoints = isTeamAWinner || isTeamBWinner ? LobbyConfiguration.GetTrustWarGameWonPoints() : LobbyConfiguration.GetTrustWarGamePlayedPoints();
-
-                        switch (account.AccountComponent.SelectedRibbonID)
-                        {
-                            case 1:
-                                trustWar.Warbotics += trustWarPoints;
-                                break;
-                            case 2:
-                                trustWar.Omni += trustWarPoints;
-                                break;
-                            case 3:
-                                trustWar.Evos += trustWarPoints;
-                                break;
-                        }
-
-                        // factionId
-                        // 0 = Omni, SelectedRibbonID: 1
-                        // 1 = Evos, SelectedRibbonID: 2
-                        // 2 = Warbotics, SelectedRibbonID: 3
-
+                        int trustWarPoints = isTeamAWinner || isTeamBWinner ? LobbyConfiguration.GetTrustWarGameWonPoints() : LobbyConfiguration.GetTrustWarGamePlayedPoints();                        
                         int factionId = account.AccountComponent.SelectedRibbonID - 1;
-                        int xp = LobbyServerProtocol.GetTotalXPByFactionID(account, factionId);
 
-                        // FactionCompetitionData[0] exists because added in PatchAccountData
+                        trustWar.Points[factionId] += trustWarPoints;
+
+                        int xp = GetTotalXPByFactionID(account, factionId);
+
                         account.AccountComponent.FactionCompetitionData[0].Factions[factionId].TotalXP = xp + trustWarPoints;
 
-                        LobbyServerProtocol session = SessionManager.GetClientConnection(accountId);
-
-                        session.Send(new PlayerFactionContributionChangeNotification()
+                        notificationsToSend.Add(new PlayerFactionContributionChangeNotification()
                         {
                             CompetitionId = 1,
                             FactionId = factionId,
@@ -75,20 +80,27 @@ namespace CentralServer.LobbyServer.TrustWar
                         DB.Get().AccountDao.UpdateAccount(account);
                     }
                 }
-                DB.Get().TrustWarDao.Save(trustWar);
 
-                Dictionary<int, long> factionScores = new()
-                    {
-                        { 0, trustWar.Omni },
-                        { 1, trustWar.Evos },
-                        { 2, trustWar.Warbotics }
-                    };
+                DB.Get().MiscDao.SaveEntry(trustWar);
 
-                foreach (long playerAccountId in SessionManager.GetOnlinePlayers())
+                factionScores = new()
                 {
-                    LobbyServerProtocol player = SessionManager.GetClientConnection(playerAccountId);
-                    player?.Send(new FactionCompetitionNotification { ActiveIndex = 1, Scores = factionScores });
-                }
+                    { 0, trustWar.Points[0] },
+                    { 1, trustWar.Points[1] },
+                    { 2, trustWar.Points[2] }
+                };
+            }
+
+            foreach (PlayerFactionContributionChangeNotification notification in notificationsToSend)
+            {
+                LobbyServerProtocol session = SessionManager.GetClientConnection(notification.AccountID);
+                session?.Send(notification);
+            }
+
+            foreach (long playerAccountId in SessionManager.GetOnlinePlayers())
+            {
+                LobbyServerProtocol player = SessionManager.GetClientConnection(playerAccountId);
+                player?.Send(new FactionCompetitionNotification { ActiveIndex = 1, Scores = factionScores });
             }
         }
     }

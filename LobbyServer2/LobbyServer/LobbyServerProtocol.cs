@@ -143,8 +143,9 @@ namespace CentralServer.LobbyServer
                 return;
             }
 
+            if (!(account.AccountComponent.UnlockedRibbonIDs.Contains(request.RibbonID) || request.RibbonID == -1)) return;
+
             account.AccountComponent.SelectedRibbonID = request.RibbonID;
-            // Update the account
             DB.Get().AccountDao.UpdateAccount(account);
 
             OnAccountVisualsUpdated();
