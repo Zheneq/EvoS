@@ -718,34 +718,17 @@ namespace CentralServer.LobbyServer
             {
                 PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
 
-                int omni = TrustWarManager.GetTotalXPByFactionID(account, 0);
-                int evos = TrustWarManager.GetTotalXPByFactionID(account, 1);
-                int warbotics = TrustWarManager.GetTotalXPByFactionID(account, 2);
-
-                Send(new PlayerFactionContributionChangeNotification()
+                for (int i = 0; i < 3; i++)
                 {
-                    CompetitionId = 1,
-                    FactionId = 0,
-                    AmountChanged = 0,
-                    TotalXP = omni,
-                    AccountID = account.AccountId,
-                });
-                Send(new PlayerFactionContributionChangeNotification()
-                {
-                    CompetitionId = 1,
-                    FactionId = 1,
-                    AmountChanged = 0,
-                    TotalXP = evos,
-                    AccountID = account.AccountId,
-                });
-                Send(new PlayerFactionContributionChangeNotification()
-                {
-                    CompetitionId = 1,
-                    FactionId = 2,
-                    AmountChanged = 0,
-                    TotalXP = warbotics,
-                    AccountID = account.AccountId,
-                });
+                    Send(new PlayerFactionContributionChangeNotification()
+                    {
+                        CompetitionId = 1,
+                        FactionId = i,
+                        AmountChanged = 0,
+                        TotalXP = TrustWarManager.GetTotalXPByFactionID(account, i),
+                        AccountID = account.AccountId,
+                    });
+                }
             }
         }
 
