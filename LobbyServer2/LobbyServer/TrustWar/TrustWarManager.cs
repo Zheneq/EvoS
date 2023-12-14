@@ -42,6 +42,8 @@ namespace CentralServer.LobbyServer.TrustWar
         {
             if (!LobbyConfiguration.IsTrustWarEnabled()) return;
 
+            if (game.GameInfo.GameConfig.GameType != GameType.PvP) return;
+
             Dictionary<int, long> factionScores = new();
             List<PlayerFactionContributionChangeNotification> notificationsToSend = new();
 

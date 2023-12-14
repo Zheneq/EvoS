@@ -138,12 +138,16 @@ namespace CentralServer.LobbyServer
         private void HandleSelectRibbonRequest(SelectRibbonRequest request)
         {
             PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
-            if (account == null)
-            {
+
+            if (account == null || !(account.AccountComponent.UnlockedRibbonIDs.Contains(request.RibbonID) || request.RibbonID == -1))
+            { 
+                Send(new SelectRibbonResponse()
+                {
+                    Success = false,
+                    ResponseId = request.RequestId,
+                });
                 return;
             }
-
-            if (!(account.AccountComponent.UnlockedRibbonIDs.Contains(request.RibbonID) || request.RibbonID == -1)) return;
 
             account.AccountComponent.SelectedRibbonID = request.RibbonID;
             DB.Get().AccountDao.UpdateAccount(account);
