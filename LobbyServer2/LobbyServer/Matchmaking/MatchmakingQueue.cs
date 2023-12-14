@@ -21,6 +21,7 @@ namespace CentralServer.LobbyServer.Matchmaking
         private static readonly ILog log = LogManager.GetLogger(typeof(MatchmakingQueue));
 
         private readonly string EloKey;
+        private readonly MatchmakingConfiguration Conf;
         
         Dictionary<string, LobbyGameInfo> Games = new Dictionary<string, LobbyGameInfo>();
         private readonly ConcurrentDictionary<long, DateTime> QueuedGroups = new ConcurrentDictionary<long, DateTime>();
@@ -35,12 +36,22 @@ namespace CentralServer.LobbyServer.Matchmaking
         {
             return QueuedGroups.Keys.SelectMany(g => GroupManager.GetGroup(g).Members).ToList();
         }
+        public bool GetQueueTime(long groupId, out DateTime time)
+        {
+            return QueuedGroups.TryGetValue(groupId, out time);
+        }
         
         private static int GameID = 0;
 
         public MatchmakingQueue(GameType gameType)
         {
             EloKey = gameType.ToString();
+            // TODO reload config
+            Conf = gameType switch
+            {
+                GameType.PvP => LobbyConfiguration.GetPvpConfiguration(),
+                _ => new MatchmakingConfiguration()
+            };
             MatchmakingQueueInfo = new LobbyMatchmakingQueueInfo()
             {
                 QueueStatus = QueueStatus.Idle,
@@ -201,16 +212,15 @@ namespace CentralServer.LobbyServer.Matchmaking
                 return (long)Math.Min(a, b) << 32 | (uint)Math.Max(a, b);
             }
 
-            public bool Push(long groupId)
+            public bool Push(MatchmakingGroupInfo groupInfo)
             {
-                if (_usedGroupIds.Contains(groupId))
+                if (_usedGroupIds.Contains(groupInfo.GroupID))
                 {
                     return false;
                 }
-                MatchmakingGroupInfo groupInfo = new MatchmakingGroupInfo(groupId);
                 if (_teamA.Push(groupInfo) || _teamB.Push(groupInfo))
                 {
-                    _usedGroupIds.Add(groupId);
+                    _usedGroupIds.Add(groupInfo.GroupID);
                     return true;
                 }
                 return false;
@@ -235,35 +245,43 @@ namespace CentralServer.LobbyServer.Matchmaking
 
         class Match
         {
-            class Team
+            public class Team
             {
-                private readonly List<MatchmakingGroupInfo> _groups;
-                private readonly List<PersistedAccountData> _accounts;
-                private readonly float _elo;
+                private readonly string _eloKey;
+                public List<MatchmakingGroupInfo> Groups { get; }
+                public List<PersistedAccountData> Accounts { get; }
+                public List<long> AccountIds => Accounts.Select(acc => acc.AccountId).ToList();
+                public float Elo { get; }
+                public float MinElo => Accounts.Select(GetElo).Min();
+                public float MaxElo => Accounts.Select(GetElo).Max();
 
                 public Team(List<MatchmakingGroupInfo> groups, string eloKey)
                 {
+                    _eloKey = eloKey;
                     AccountDao dao = DB.Get().AccountDao;
-                    _groups = groups;
-                    _accounts = _groups
+                    Groups = groups;
+                    Accounts = Groups
                         .SelectMany(g => g.Members)
                         .Select(accountId => dao.GetAccount(accountId))
                         .ToList();
-                    _elo = _accounts.Select(acc =>
-                    {
-                        acc.ExperienceComponent.EloValues.GetElo(eloKey, out float elo, out _);
-                        return elo;
-                    }).Sum() / _accounts.Count;
+                    Elo = Accounts.Select(GetElo).Sum() / Accounts.Count;
+                }
+
+                private float GetElo(PersistedAccountData acc)
+                {
+                    acc.ExperienceComponent.EloValues.GetElo(_eloKey, out float elo, out _);
+                    return elo;
                 }
             }
 
-            private readonly Team _teamA;
-            private readonly Team _teamB;
+            public Team TeamA { get; }
+            public Team TeamB { get; }
+            public IEnumerable<MatchmakingGroupInfo> Groups => TeamA.Groups.Concat(TeamB.Groups);
 
             public Match(List<MatchmakingGroupInfo> teamA, List<MatchmakingGroupInfo> teamB, string eloKey)
             {
-                _teamA = new Team(teamA, eloKey);
-                _teamB = new Team(teamB, eloKey);
+                TeamA = new Team(teamA, eloKey);
+                TeamB = new Team(teamB, eloKey);
             }
         }
 
@@ -271,45 +289,130 @@ namespace CentralServer.LobbyServer.Matchmaking
         {
             foreach (GameSubType subType in MatchmakingQueueInfo.GameConfig.SubTypes)
             {
-                List<MatchmakingGroupInfo> groups = new List<MatchmakingGroupInfo>();
-
                 lock (GroupManager.Lock)
                 {
-                    List<long> queuedGroups = GetQueuedGroups();
+                    List<MatchmakingGroupInfo> queuedGroups = GetQueuedGroups()
+                        .Select(groupId =>
+                        {
+                            if (!GetQueueTime(groupId, out DateTime queueTime))
+                            {
+                                log.Error($"Cannon fetch queue time for group {groupId}");
+                            }
+                            return new MatchmakingGroupInfo(groupId, queueTime);
+                        })
+                        .ToList();
 
                     MatchScratch matchScratch = new MatchScratch(subType);
                     Dictionary<long, Match> possibleMatches = new Dictionary<long, Match>();
-                    FindMatches(matchScratch, queuedGroups, EloKey, possibleMatches);
-                    
+                    FindMatches(matchScratch, queuedGroups, possibleMatches); // TODO save possible matches between runs, update it iteratively
+                    log.Info($"Found {possibleMatches.Count} possible matches in " +
+                             $"{GameType}#{subType.LocalizedName}: " +
+                             $"({string.Join(",", queuedGroups.Select(g => g.Players.ToString()))}");
+                    if (possibleMatches.Count > 0)
+                    {
+                        List<Match> matches = RankMatches(FilterMatches(possibleMatches));
+                        StartMatch(matches[0]);
+                    }
                 }
             }
         }
 
-        private static void FindMatches(
+        private void StartMatch(Match match)
+        {
+            if (!CheckGameServerAvailable())
+            {
+                log.Warn("No available game server to start a match");
+                return;
+            }
+            foreach (MatchmakingGroupInfo groupInfo in match.Groups)
+            {
+                RemoveGroup(groupInfo.GroupID);
+            }
+            _ = MatchmakingManager.StartGameAsync(
+                match.TeamA.AccountIds, 
+                match.TeamB.AccountIds, 
+                GameType,
+                MatchmakingQueueInfo.GameConfig.SubTypes[0]);
+        }
+
+        private void FindMatches(
             MatchScratch matchScratch,
-            List<long> queuedGroups,
-            string eloKey,
+            List<MatchmakingGroupInfo> queuedGroups,
             Dictionary<long, Match> possibleMatches)
         {
-            foreach (long groupId in queuedGroups)
+            foreach (MatchmakingGroupInfo groupInfo in queuedGroups)
             {
-                if (matchScratch.Push(groupId))
+                if (matchScratch.Push(groupInfo))
                 {
                     if (matchScratch.IsMatch())
                     {
                         long hash = matchScratch.GetHash();
                         if (!possibleMatches.ContainsKey(hash))
                         {
-                            possibleMatches.Add(hash, matchScratch.ToMatch(eloKey));
+                            possibleMatches.Add(hash, matchScratch.ToMatch(EloKey));
                         }
                     }
                     else
                     {
-                        FindMatches(matchScratch, queuedGroups, eloKey, possibleMatches);
+                        FindMatches(matchScratch, queuedGroups, possibleMatches);
                     }
                     matchScratch.Pop();
                 }
             }
+        }
+
+        private List<Match> FilterMatches(Dictionary<long, Match> possibleMatches)
+        {
+            return possibleMatches.Values
+                .Where(FilterMatch)
+                .ToList();
+        }
+
+        private bool FilterMatch(Match match)
+        {
+            DateTime now = DateTime.UtcNow;
+            int cutoff = Convert.ToInt32(MathF.Floor(2.0f * match.Groups.Count() / 3)); // don't want to keep the first ones to queue waiting for too long
+            double waitingTime = match.Groups
+                .Select(g => (now - g.QueueTime).TotalSeconds)
+                .Order()
+                .TakeLast(cutoff)
+                .Average();
+            int maxEloDiff = Conf.MaxTeamEloDifferenceStart +
+                             Convert.ToInt32((Conf.MaxTeamEloDifference - Conf.MaxTeamEloDifferenceStart)
+                                             * Math.Clamp(waitingTime / Conf.MaxTeamEloDifferenceWaitTime.TotalSeconds, 0, 1));
+            
+            return Math.Abs(match.TeamA.Elo - match.TeamB.Elo) <= maxEloDiff;
+        }
+
+        private List<Match> RankMatches(List<Match> matches)
+        {
+            return matches
+                .OrderByDescending(RankMatch)
+                .ToList();
+        }
+
+        private float RankMatch(Match match)
+        {
+            float teamEloDifferenceFactor = 1 - Cap(Math.Abs(match.TeamA.Elo - match.TeamB.Elo) / Conf.MaxTeamEloDifference);
+            float teammateEloDifferenceAFactor = 1 - Cap((match.TeamA.MaxElo - match.TeamA.MinElo) / Conf.TeammateEloDifferenceWeightCap);
+            float teammateEloDifferenceBFactor = 1 - Cap((match.TeamB.MaxElo - match.TeamB.MinElo) / Conf.TeammateEloDifferenceWeightCap);
+            DateTime now = DateTime.UtcNow;
+            double waitTime = match.Groups.Select(g => (now - g.QueueTime).TotalSeconds).Max();
+            float waitTimeFactor = Cap((float)(waitTime / Conf.WaitingTimeWeightCap.TotalSeconds));
+            
+            // TODO recently canceled matches factor
+            // TODO non-linearity?
+
+            return
+                teamEloDifferenceFactor * Conf.TeamEloDifferenceWeight
+                + teammateEloDifferenceAFactor * Conf.TeammateEloDifferenceWeight * 0.5f
+                + teammateEloDifferenceBFactor * Conf.TeammateEloDifferenceWeight * 0.5f
+                + waitTimeFactor * Conf.WaitingTimeWeight;
+        }
+
+        private static float Cap(float factor)
+        {
+            return Math.Min(factor, 1);
         }
 
         private void TryMatch()

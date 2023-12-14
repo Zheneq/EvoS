@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using CentralServer.LobbyServer.Discord;
+using CentralServer.LobbyServer.Matchmaking;
 using YamlDotNet.Serialization;
 
 namespace EvoS.Framework
@@ -32,6 +33,7 @@ namespace EvoS.Framework
         public bool EnableTrustWar = true;
         public int TrustWarGamePlayedPoints = 5;
         public int TrustWarGameWonPoints = 10;
+        public MatchmakingConfiguration MatchmakingPvp = new MatchmakingConfiguration();
 
         private static LobbyConfiguration GetInstance()
         {
@@ -149,6 +151,11 @@ namespace EvoS.Framework
         public static bool IsTrustWarEnabled()
         {
             return GetInstance().EnableTrustWar;
+        }
+
+        public static MatchmakingConfiguration GetPvpConfiguration()
+        {
+            return GetInstance().MatchmakingPvp;
         }
     }
 }
