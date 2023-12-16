@@ -2,11 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.Security.Claims;
 using CentralServer.LobbyServer.Session;
+using CentralServer.LobbyServer.TrustWar;
 using EvoS.DirectoryServer;
 using EvoS.DirectoryServer.Account;
 using EvoS.Framework;
 using EvoS.Framework.Auth;
 using EvoS.Framework.DataAccess;
+using EvoS.Framework.DataAccess.Daos;
 using EvoS.Framework.Network.Static;
 using log4net;
 using Microsoft.AspNetCore.Builder;
@@ -36,10 +38,61 @@ public class UserApiServer : ApiServer
         // app.MapGet("/api/account/unlinkAccount", UnlinkAccount).RequireAuthorization();
         app.MapPut("/api/account/changePassword", ChangePassword).RequireAuthorization();
         app.MapGet("/api/ticket", GetTicket).RequireAuthorization();
+        app.MapGet("/api/trustwar", GetTrustWar).RequireAuthorization();
         app.MapGet("/api/logout", LogOutEverywhere).RequireAuthorization();
         app.UseAuthorization();
     }
-    
+
+    protected IResult GetTrustWar(long? accountId, string handle)
+    {
+        if (accountId.HasValue && handle != null)
+        {
+            return Results.BadRequest();
+        }
+
+        if (handle != null)
+        {
+            handle = handle.ToLower();
+
+            int delimiter = handle.IndexOf('#');
+            if (delimiter >= 0)
+            {
+                handle = handle.Substring(0, delimiter);
+            }
+
+            LoginDao.LoginEntry loginEntry = DB.Get().LoginDao.Find(handle);
+            if (loginEntry == null)
+            {
+                return Results.NotFound();
+            }
+
+            PersistedAccountData acc = DB.Get().AccountDao.GetAccount(loginEntry.AccountId);
+            if (acc == null)
+            {
+                return Results.NotFound();
+            }
+
+            return Results.Json(TrustWarManager.PlayerTrustWarDetails.Of(acc));
+        }
+
+        if (!accountId.HasValue)
+        {
+            long[] points = TrustWarManager.getTrustWarEntry().Points;
+            object result = new { factions = points };
+            return Results.Json(result);
+        }
+
+        PersistedAccountData account = DB.Get().AccountDao.GetAccount(accountId.Value);
+        if (account == null)
+        {
+            return Results.NotFound();
+        }
+
+        return Results.Json(TrustWarManager.PlayerTrustWarDetails.Of(account));
+    }
+
+
+
     protected IResult Register(HttpContext httpContext, [FromBody] LoginModel authInfo)
     {
         log.Info($"Registering via api: {authInfo.UserName}");

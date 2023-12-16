@@ -6,6 +6,7 @@ using CentralServer.LobbyServer.Friend;
 using CentralServer.LobbyServer.Group;
 using CentralServer.LobbyServer.Matchmaking;
 using CentralServer.LobbyServer.Session;
+using CentralServer.LobbyServer.TrustWar;
 using EvoS.Framework.Constants.Enums;
 using EvoS.Framework.DataAccess;
 using EvoS.Framework.Network.Static;
@@ -101,6 +102,7 @@ namespace CentralServer.ApiServer
             public int bannerBg { get; set; }
             public int bannerFg { get; set; }
             public string status { get; set; }
+            public TrustWarManager.PlayerTrustWarDetails factionData { get; set; }
 
             public static Player Of(PersistedAccountData acc)
             {
@@ -111,6 +113,7 @@ namespace CentralServer.ApiServer
                     bannerBg = acc.AccountComponent.SelectedBackgroundBannerID == -1  ? 95 : acc.AccountComponent.SelectedBackgroundBannerID, // if no Banner is set default to 95
                     bannerFg = acc.AccountComponent.SelectedForegroundBannerID == -1  ? 65 : acc.AccountComponent.SelectedForegroundBannerID, // if no Foreground Banner is set default to 65
                     status = FriendManager.GetStatusString(SessionManager.GetClientConnection(acc.AccountId)),
+                    factionData = TrustWarManager.PlayerTrustWarDetails.Of(acc)
                 };
             }
         }

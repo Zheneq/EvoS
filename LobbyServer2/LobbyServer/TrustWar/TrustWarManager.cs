@@ -7,11 +7,33 @@ using EvoS.Framework;
 using System.Collections.Generic;
 using CentralServer.BridgeServer;
 using static EvoS.Framework.DataAccess.Daos.MiscDao;
+using System.Linq;
 
 namespace CentralServer.LobbyServer.TrustWar
 {
     public class TrustWarManager
     {
+        public struct PlayerTrustWarDetails
+        {
+            public List<int> factions { get; set; }
+            public int selectedRibbonID { get; set; }
+
+            private static List<int> GetTotalXPByFactions(PersistedAccountData accountData)
+            {
+                List<int> factionIds = new() { 0, 1, 2 };
+                return factionIds.Select(id => GetTotalXPByFactionID(accountData, id)).ToList();
+            }
+
+            public static PlayerTrustWarDetails Of(PersistedAccountData account)
+            {
+                return new PlayerTrustWarDetails
+                {
+                    factions = GetTotalXPByFactions(account),
+                    selectedRibbonID = account.AccountComponent.SelectedRibbonID,
+                };
+            }
+        }
+
         private static readonly Dictionary<int, int> RibbonToFaction = new()
         {
             {1, 1},
@@ -23,6 +45,8 @@ namespace CentralServer.LobbyServer.TrustWar
 
         public static int GetTotalXPByFactionID(PersistedAccountData account, int factionID)
         {
+            if (account.AccountComponent.FactionCompetitionData.Count == 0) return 0;
+
             Dictionary<int, FactionPlayerData> factionData = account.AccountComponent.FactionCompetitionData[0].Factions;
 
             return factionData[factionID]?.TotalXP ?? 0;
