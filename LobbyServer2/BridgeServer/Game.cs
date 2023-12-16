@@ -90,6 +90,14 @@ public abstract class Game
         {
             log.Info($"Game {GameInfo?.Name} at {server.Name} ({server.URI}) finished abruptly");
         }
+        try
+        {
+            MatchmakingManager.OnGameEnded(GameInfo, GameSummary);
+        }
+        catch (Exception e)
+        {
+            log.Error("Failed to update elo", e);
+        }
 
         GameInfo.GameStatus = GameStatus.Stopped;
         StopTime = DateTime.UtcNow.Add(TimeSpan.FromSeconds(8));

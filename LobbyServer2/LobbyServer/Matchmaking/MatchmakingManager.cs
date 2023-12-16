@@ -259,5 +259,13 @@ namespace CentralServer.LobbyServer.Matchmaking
                 Reason = "MatchFound@NewFrontEndScene"
             });
         }
+
+        public static void OnGameEnded(LobbyGameInfo gameInfo, LobbyGameSummary gameSummary)
+        {
+            if (Queues.TryGetValue(gameInfo.GameConfig.GameType, out var queue))
+            {
+                queue.OnGameEnded(gameInfo, gameSummary);
+            }
+        }
     }
 }

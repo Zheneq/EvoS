@@ -400,7 +400,9 @@ namespace CentralServer.LobbyServer.Matchmaking
             double waitTime = match.Groups.Select(g => (now - g.QueueTime).TotalSeconds).Max();
             float waitTimeFactor = Cap((float)(waitTime / Conf.WaitingTimeWeightCap.TotalSeconds));
             
+            // TODO team composition factor
             // TODO recently canceled matches factor
+            // TODO mutual blocks factor
             // TODO non-linearity?
 
             return
@@ -615,5 +617,139 @@ namespace CentralServer.LobbyServer.Matchmaking
             Games[roomName].GameStatus = gameStatus;
         }
 
+        private static readonly object EloLock = new();
+        public void OnGameEnded(LobbyGameInfo gameInfo, LobbyGameSummary gameSummary)
+        {
+            if (gameSummary.GameResult != GameResult.TeamAWon && gameSummary.GameResult != GameResult.TeamBWon)
+            {
+                return;
+            }
+            
+            AccountDao accountDao = DB.Get().AccountDao;
+            List<PersistedAccountData> teamA = gameSummary.PlayerGameSummaryList
+                .Where(pgs => pgs.IsInTeamA())
+                .Select(pgs => accountDao.GetAccount(pgs.AccountId))
+                .ToList();
+            List<PersistedAccountData> teamB = gameSummary.PlayerGameSummaryList
+                .Where(pgs => pgs.IsInTeamB())
+                .Select(pgs => accountDao.GetAccount(pgs.AccountId))
+                .ToList();
+            
+            lock (EloLock)
+            {
+                foreach (PersistedAccountData acc in teamA.Concat(teamB))
+                {
+                    UpdateConfidence(acc);
+                }
+                float eloChange = GetEloChange(teamA, teamB, gameSummary.GameResult == GameResult.TeamAWon ? 1 : 0);
+                AwardEloTeam(teamA, eloChange);
+                AwardEloTeam(teamB, -eloChange);
+            }
+        }
+
+        private static readonly List<TimeSpan> ConfidenceRetention = new()
+        {
+            TimeSpan.FromDays(30),
+            TimeSpan.FromDays(90),
+            TimeSpan.FromDays(180),
+        };
+        private static readonly List<int> ConfidenceUpgrade = new()
+        {
+            10,
+            25,
+        };
+
+        private void UpdateConfidence(PersistedAccountData player)
+        {
+            List<PersistedCharacterMatchData> matches = DB.Get().MatchHistoryDao.Find(player.AccountId);
+            PersistedCharacterMatchData lastMatch = matches
+                .FirstOrDefault(m => m.MatchComponent.GameType == GameType);
+
+            int confidenceLevelDelta = -100;
+            if (lastMatch is not null)
+            {
+                DateTime now = DateTime.UtcNow;
+                TimeSpan timeSinceLastMatch = now - lastMatch.MatchComponent.MatchTime;
+                for (int i = ConfidenceRetention.Count - 1; i >= 0; i--)
+                {
+                    if (timeSinceLastMatch > ConfidenceRetention[i])
+                    {
+                        confidenceLevelDelta = -i;
+                        break;
+                    }
+                }
+
+                int eloConfidenceLevel = GetEloConfidenceLevel(player);
+                if (eloConfidenceLevel < ConfidenceUpgrade.Count)
+                {
+                    int num = matches
+                        .Count(m => m.MatchComponent.GameType == GameType
+                                    && now - lastMatch.MatchComponent.MatchTime < ConfidenceRetention[0]);
+                    if (num >= ConfidenceUpgrade[eloConfidenceLevel])
+                    {
+                        confidenceLevelDelta = 1;
+                    }
+                }
+            }
+            
+            player.ExperienceComponent.EloValues.ApplyDelta(EloKey, 0, confidenceLevelDelta);
+        }
+
+        private float GetTeamElo(List<PersistedAccountData> team)
+        {
+            return team.Select(GetElo).Sum() / team.Count;
+        }
+
+        private const float ELO_BASE_POT = 64.0f;
+        private float GetEloChange(List<PersistedAccountData> teamA, List<PersistedAccountData> teamB, int result)
+        {
+
+            float k = ELO_BASE_POT * ((float)teamA.Select(GetEloConfidenceFactor).Sum() / (2 * teamA.Count) +
+                                      (float)teamB.Select(GetEloConfidenceFactor).Sum() / (2 * teamB.Count));
+            return k * (result - GetPrediction(teamA, teamB));
+        }
+
+        private float GetPrediction(List<PersistedAccountData> teamA, List<PersistedAccountData> teamB)
+        {
+            return GetPrediction(GetTeamElo(teamA), GetTeamElo(teamB));
+        }
+
+        private static float GetPrediction(float teamAElo, float teamBElo)
+        {
+            return 1.0f / (1 + MathF.Pow(10, (teamBElo - teamAElo) / 400.0f));
+        }
+        
+        private float GetElo(PersistedAccountData acc)
+        {
+            acc.ExperienceComponent.EloValues.GetElo(EloKey, out float elo, out _);
+            return elo;
+        }
+        
+        private static readonly List<float> EloConfidenceFactor = new() { 1.0f, 0.75f, 0.5f };
+        private float GetEloConfidenceFactor(PersistedAccountData acc)
+        {
+            int cf = GetEloConfidenceLevel(acc);
+            return EloConfidenceFactor[Math.Clamp(cf, 0, EloConfidenceFactor.Count-1)];
+        }
+
+        private int GetEloConfidenceLevel(PersistedAccountData acc)
+        {
+            acc.ExperienceComponent.EloValues.GetElo(EloKey, out _, out int cf);
+            return Math.Max(cf, 0);
+        }
+
+        private void AwardElo(PersistedAccountData acc, float delta)
+        {
+            acc.ExperienceComponent.EloValues.ApplyDelta(EloKey, delta, 0);
+        }
+
+        private void AwardEloTeam(List<PersistedAccountData> team, float eloDelta)
+        {
+            float avgConf = team.Select(GetEloConfidenceFactor).Sum() / team.Count;
+            foreach (PersistedAccountData acc in team)
+            {
+                AwardElo(acc, eloDelta * GetEloConfidenceFactor(acc) / avgConf);
+            }
+        }
     }
 }
