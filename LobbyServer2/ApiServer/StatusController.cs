@@ -7,6 +7,7 @@ using CentralServer.LobbyServer.Group;
 using CentralServer.LobbyServer.Matchmaking;
 using CentralServer.LobbyServer.Session;
 using CentralServer.LobbyServer.TrustWar;
+using EvoS.Framework;
 using EvoS.Framework.Constants.Enums;
 using EvoS.Framework.DataAccess;
 using EvoS.Framework.Network.Static;
@@ -58,6 +59,12 @@ namespace CentralServer.ApiServer
             List<BridgeServerProtocol> servers = ServerManager.GetServers();
             List<BridgeServer.Game> games = GameManager.GetGames();
             HashSet<long> players = SessionManager.GetOnlinePlayers();
+            long[] factionsData = Array.Empty<long>();
+            if (LobbyConfiguration.IsTrustWarEnabled())
+            {
+                factionsData = TrustWarManager.getTrustWarEntry().Points;
+            }
+
             Status status = new Status
             {
                 players = players
@@ -81,7 +88,9 @@ namespace CentralServer.ApiServer
                     .ToList(),
                 games = games
                     .Select(g => Game.Of(g, true))
-                    .ToList()
+                    .ToList(),
+                factionsEnabled = LobbyConfiguration.IsTrustWarEnabled(),
+                factionsData = factionsData
             };
             return Results.Json(status);
         }
@@ -93,6 +102,8 @@ namespace CentralServer.ApiServer
             public List<Queue> queues { get; set; }
             public List<Server> servers { get; set; }
             public List<Game> games { get; set; }
+            public bool factionsEnabled { get; set; }
+            public long[] factionsData { get; set; }
         }
 
         public struct Player

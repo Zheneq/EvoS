@@ -33,65 +33,40 @@ public class UserApiServer : ApiServer
         app.MapPost("/api/login", Login).AllowAnonymous();
         app.MapPost("/api/register", Register).AllowAnonymous();
         app.MapGet("/api/lobby/status", StatusController.GetSimpleStatus).AllowAnonymous();
+        app.MapGet("/api/lobby/getPlayerInfo", GetPlayerInfo).RequireAuthorization();
         // app.MapGet("/api/account/linkedAccountSupport", GetThirdPartyAccountTypes).RequireAuthorization();
         // app.MapGet("/api/account/linkAccount", LinkAccount).RequireAuthorization();
         // app.MapGet("/api/account/unlinkAccount", UnlinkAccount).RequireAuthorization();
         app.MapPut("/api/account/changePassword", ChangePassword).RequireAuthorization();
         app.MapGet("/api/ticket", GetTicket).RequireAuthorization();
-        app.MapGet("/api/trustwar", GetTrustWar).RequireAuthorization();
         app.MapGet("/api/logout", LogOutEverywhere).RequireAuthorization();
         app.UseAuthorization();
     }
 
-    protected IResult GetTrustWar(long? accountId, string handle)
+    protected IResult GetPlayerInfo(string handle)
     {
-        if (accountId.HasValue && handle != null)
+        handle = handle.ToLower();
+
+        int delimiter = handle.IndexOf('#');
+        if (delimiter >= 0)
         {
-            return Results.BadRequest();
+            handle = handle.Substring(0, delimiter);
         }
 
-        if (handle != null)
+        LoginDao.LoginEntry loginEntry = DB.Get().LoginDao.Find(handle);
+        if (loginEntry == null)
         {
-            handle = handle.ToLower();
-
-            int delimiter = handle.IndexOf('#');
-            if (delimiter >= 0)
-            {
-                handle = handle.Substring(0, delimiter);
-            }
-
-            LoginDao.LoginEntry loginEntry = DB.Get().LoginDao.Find(handle);
-            if (loginEntry == null)
-            {
-                return Results.NotFound();
-            }
-
-            PersistedAccountData acc = DB.Get().AccountDao.GetAccount(loginEntry.AccountId);
-            if (acc == null)
-            {
-                return Results.NotFound();
-            }
-
-            return Results.Json(TrustWarManager.PlayerTrustWarDetails.Of(acc));
+            return Results.NotFound();
         }
 
-        if (!accountId.HasValue)
-        {
-            long[] points = TrustWarManager.getTrustWarEntry().Points;
-            object result = new { factions = points };
-            return Results.Json(result);
-        }
-
-        PersistedAccountData account = DB.Get().AccountDao.GetAccount(accountId.Value);
+        PersistedAccountData account = DB.Get().AccountDao.GetAccount(loginEntry.AccountId);
         if (account == null)
         {
             return Results.NotFound();
         }
 
-        return Results.Json(TrustWarManager.PlayerTrustWarDetails.Of(account));
+        return Results.Json(StatusController.Player.Of(account));
     }
-
-
 
     protected IResult Register(HttpContext httpContext, [FromBody] LoginModel authInfo)
     {
