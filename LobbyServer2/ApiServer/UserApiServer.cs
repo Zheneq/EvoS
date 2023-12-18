@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Security.Claims;
 using CentralServer.LobbyServer.Session;
-using CentralServer.LobbyServer.TrustWar;
+using CentralServer.LobbyServer.Utils;
 using EvoS.DirectoryServer;
 using EvoS.DirectoryServer.Account;
 using EvoS.Framework;
@@ -33,7 +33,7 @@ public class UserApiServer : ApiServer
         app.MapPost("/api/login", Login).AllowAnonymous();
         app.MapPost("/api/register", Register).AllowAnonymous();
         app.MapGet("/api/lobby/status", StatusController.GetSimpleStatus).AllowAnonymous();
-        app.MapGet("/api/lobby/getPlayerInfo", GetPlayerInfo).RequireAuthorization();
+        app.MapGet("/api/lobby/playerInfo", PlayerInfo).RequireAuthorization();
         // app.MapGet("/api/account/linkedAccountSupport", GetThirdPartyAccountTypes).RequireAuthorization();
         // app.MapGet("/api/account/linkAccount", LinkAccount).RequireAuthorization();
         // app.MapGet("/api/account/unlinkAccount", UnlinkAccount).RequireAuthorization();
@@ -43,23 +43,10 @@ public class UserApiServer : ApiServer
         app.UseAuthorization();
     }
 
-    protected IResult GetPlayerInfo(string handle)
+    protected IResult PlayerInfo(string handle)
     {
-        handle = handle.ToLower();
-
-        int delimiter = handle.IndexOf('#');
-        if (delimiter >= 0)
-        {
-            handle = handle.Substring(0, delimiter);
-        }
-
-        LoginDao.LoginEntry loginEntry = DB.Get().LoginDao.Find(handle);
-        if (loginEntry == null)
-        {
-            return Results.NotFound();
-        }
-
-        PersistedAccountData account = DB.Get().AccountDao.GetAccount(loginEntry.AccountId);
+        long AccountId = LobbyServerUtils.ResolveAccountId(0, handle);
+        PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
         if (account == null)
         {
             return Results.NotFound();
