@@ -205,11 +205,11 @@ public class Matchmaker
         {
             private readonly string _eloKey;
             public List<MatchmakingGroup> Groups { get; }
-            public List<PersistedAccountData> Accounts { get; }
-            public List<long> AccountIds => Accounts.Select(acc => acc.AccountId).ToList();
+            public Dictionary<long, PersistedAccountData> Accounts { get; }
+            public List<long> AccountIds => Accounts.Values.Select(acc => acc.AccountId).ToList();
             public float Elo { get; }
-            public float MinElo => Accounts.Select(GetElo).Min();
-            public float MaxElo => Accounts.Select(GetElo).Max();
+            public float MinElo => Accounts.Values.Select(GetElo).Min();
+            public float MaxElo => Accounts.Values.Select(GetElo).Max();
 
             public Team(AccountDao dao, List<MatchmakingGroup> groups, string eloKey)
             {
@@ -218,14 +218,36 @@ public class Matchmaker
                 Accounts = Groups
                     .SelectMany(g => g.Members)
                     .Select(dao.GetAccount)
-                    .ToList();
-                Elo = Accounts.Select(GetElo).Sum() / Accounts.Count;
+                    .ToDictionary(acc => acc.AccountId);
+                Elo = Accounts.Values.Select(GetElo).Sum() / Accounts.Count;
             }
 
             private float GetElo(PersistedAccountData acc)
             {
                 acc.ExperienceComponent.EloValues.GetElo(_eloKey, out float elo, out _);
                 return elo;
+            }
+
+            private int GetEloConfidenceLevel(PersistedAccountData acc)
+            {
+                acc.ExperienceComponent.EloValues.GetElo(_eloKey, out _, out int eloConfLevel);
+                return eloConfLevel;
+            }
+
+            public override string ToString()
+            {
+                return $"{string.Join(", ", Groups.Select(g =>
+                    '[' + string.Join(", ", g.Members.Select(FormatAccount)) + ']'))} <{{{Elo}}}>";
+            }
+
+            private string FormatAccount(long accId)
+            {
+                if (!Accounts.TryGetValue(accId, out var acc))
+                {
+                    return "#{accId}";
+                }
+
+                return $"{acc.Handle} <{GetElo(acc):0}|{GetEloConfidenceLevel(acc)}>";
             }
         }
 
@@ -237,6 +259,24 @@ public class Matchmaker
         {
             TeamA = new Team(accountDao, teamA, eloKey);
             TeamB = new Team(accountDao, teamB, eloKey);
+        }
+
+        public override string ToString()
+        {
+            Team team1;
+            Team team2;
+            if (TeamA.Elo > TeamB.Elo)
+            {
+                team1 = TeamA;
+                team2 = TeamB;
+            }
+            else
+            {
+                team1 = TeamB;
+                team2 = TeamA;
+            }
+            float prediction = GetPrediction(team1.Elo, team2.Elo);
+            return $"{team1} [{prediction * 100:0}%] vs {team2} [{(1 - prediction) * 100:0}%]";
         }
     }
         
@@ -250,7 +290,10 @@ public class Matchmaker
                  $"({string.Join(",", queuedGroups.Select(g => g.Players.ToString()))})");
         if (possibleMatches.Count > 0)
         {
-            List<Match> matches = RankMatches(FilterMatches(possibleMatches, now), now);
+            List<Match> filteredMatches = FilterMatches(possibleMatches, now);
+            log.Info($"Found {filteredMatches.Count} allowed matches in " +
+                     $"{_gameType}#{_subType.LocalizedName} after filtering");
+            List<Match> matches = RankMatches(filteredMatches, now);
             return matches;
         }
 
@@ -302,8 +345,13 @@ public class Matchmaker
         int maxEloDiff = Conf.MaxTeamEloDifferenceStart +
                          Convert.ToInt32((Conf.MaxTeamEloDifference - Conf.MaxTeamEloDifferenceStart)
                                          * Math.Clamp(waitingTime / Conf.MaxTeamEloDifferenceWaitTime.TotalSeconds, 0, 1));
-        
-        return Math.Abs(match.TeamA.Elo - match.TeamB.Elo) <= maxEloDiff;
+
+        bool result = Math.Abs(match.TeamA.Elo - match.TeamB.Elo) <= maxEloDiff;
+        if (!result)
+        {
+            log.Debug($"Disallowed {match}");
+        }
+        return result;
     }
 
     private List<Match> RankMatches(List<Match> matches, DateTime now)

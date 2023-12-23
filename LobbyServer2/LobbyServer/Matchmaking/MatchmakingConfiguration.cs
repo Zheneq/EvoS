@@ -5,7 +5,7 @@ namespace CentralServer.LobbyServer.Matchmaking;
 public class MatchmakingConfiguration
 {
     public int MaxTeamEloDifferenceStart = 30;
-    public int MaxTeamEloDifference = 60;
+    public int MaxTeamEloDifference = 70;  // 70 elo diff = 60%/40%
     public TimeSpan MaxTeamEloDifferenceWaitTime = TimeSpan.FromMinutes(3);
     public int MaxTeammateEloDifference = 400; // TODO allow it to be broken in groups? Or is it even a good thing with our playerbase size?
 

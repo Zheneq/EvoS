@@ -17,28 +17,28 @@ public class MatchmakerTest : EvosTest
 
     private static readonly Dictionary<long, PersistedAccountData> Accounts = new()
     {
-        { 1, MakeAccount(1, "Psycho", 2250, 2) },
-        { 2, MakeAccount(2, "Donut", 2150, 2) },
-        { 3, MakeAccount(3, "Kid", 2050, 2) },
-        { 4, MakeAccount(4, "Joke", 2050, 2) },
-        { 5, MakeAccount(5, "Goose", 2050, 2) },
-        { 6, MakeAccount(6, "Dozen", 2050, 2) },
-        { 7, MakeAccount(7, "Script", 2000, 2) },
-        { 8, MakeAccount(8, "Dream", 1950, 2) },
-        { 9, MakeAccount(9, "Dolly", 1900, 2) },
-        { 10, MakeAccount(10, "Darkness", 1850, 2) },
-        { 11, MakeAccount(11, "Assault", 1550, 2) },
+        { 1, MakeAccount(1, "Psycho", 2260, 2) },
+        { 2, MakeAccount(2, "Donut", 2180, 2) },
+        { 3, MakeAccount(3, "Kid", 2070, 2) },
+        { 4, MakeAccount(4, "Goose", 2050, 2) },
+        { 5, MakeAccount(5, "Joke", 2050, 2) },
+        { 6, MakeAccount(6, "Dozen", 2040, 2) },
+        { 7, MakeAccount(7, "Script", 1990, 2) },
+        { 8, MakeAccount(8, "Dream", 1960, 2) },
+        { 9, MakeAccount(9, "Dolly", 1910, 2) },
+        { 10, MakeAccount(10, "Darkness", 1860, 2) },
+        { 11, MakeAccount(11, "Assault", 1560, 2) },
         { 12, MakeAccount(12, "Grounded", 1550, 2) },
         { 13, MakeAccount(13, "Crossbow", 1500, 2) },
         { 14, MakeAccount(14, "Hammer", 1500, 1) },
         { 15, MakeAccount(15, "Everyone", 1500, 1) },
         { 16, MakeAccount(16, "Cater", 1500, 0) },
         { 17, MakeAccount(17, "Crackle", 1500, 0) },
-        { 18, MakeAccount(18, "Doe", 1450, 2) },
+        { 18, MakeAccount(18, "Doe", 1460, 2) },
         { 19, MakeAccount(19, "Adult", 1450, 2) },
-        { 20, MakeAccount(20, "Geek", 1350, 2) },
-        { 21, MakeAccount(21, "Pie", 1250, 2) },
-        { 22, MakeAccount(22, "Medic", 1050, 2) },
+        { 20, MakeAccount(20, "Geek", 1340, 2) },
+        { 21, MakeAccount(21, "Pie", 1230, 2) },
+        { 22, MakeAccount(22, "Medic", 1060, 2) },
     };
 
     public MatchmakerTest(ITestOutputHelper testOutputHelper) : base(testOutputHelper)
@@ -70,7 +70,7 @@ public class MatchmakerTest : EvosTest
         List<Matchmaker.MatchmakingGroup> queuedGroups = new List<Matchmaker.MatchmakingGroup>()
         {
             new(i++, Team.Invalid, new List<long> {1, 2}, Now - TimeSpan.FromMinutes(5)),
-            new(i++, Team.Invalid, new List<long> {3, 4, 5, 6}, Now - TimeSpan.FromMinutes(5)),
+            new(i++, Team.Invalid, new List<long> {3, 4, 5, 6}, Now - TimeSpan.FromMinutes(1)),
             new(i++, Team.Invalid, new List<long> {7}, Now - TimeSpan.FromMinutes(5)),
             new(i++, Team.Invalid, new List<long> {8}, Now - TimeSpan.FromMinutes(5)),
             new(i++, Team.Invalid, new List<long> {9}, Now - TimeSpan.FromMinutes(5)),
@@ -83,27 +83,10 @@ public class MatchmakerTest : EvosTest
 
         foreach (Matchmaker.Match match in matchesRanked)
         {
-            log.Info(Format(match));
+            log.Info($"{match}");
         }
     }
-
-    private static string Format(Matchmaker.Match match)
-    {
-        return $"{Format(match.TeamA)} vs {Format(match.TeamB)}";
-    }
-
-    private static string Format(Matchmaker.Match.Team team)
-    {
-        return string.Join(" + ", team.AccountIds.Select(Format));
-    }
-
-    private static string Format(long accId)
-    {
-        var acc = Accounts[accId];
-        acc.ExperienceComponent.EloValues.GetElo(EloKey, out float elo, out int eloConfLevel);
-        return $"{acc.Handle}#{accId} <{elo:0}|{eloConfLevel}>";
-    }
-
+    
     private static AccountDao MockAccountDao(Dictionary<long, PersistedAccountData> accounts)
     {
         var mock = new Mock<AccountDao>();
