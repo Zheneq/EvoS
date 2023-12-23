@@ -8,8 +8,6 @@ using CentralServer.LobbyServer.Gamemode;
 using CentralServer.LobbyServer.Group;
 using EvoS.Framework;
 using EvoS.Framework.Constants.Enums;
-using EvoS.Framework.DataAccess;
-using EvoS.Framework.DataAccess.Daos;
 using EvoS.Framework.Network.Static;
 using log4net;
 using WebSocketSharp;
@@ -150,7 +148,7 @@ namespace CentralServer.LobbyServer.Matchmaking
                         })
                         .ToList();
 
-                    List<Matchmaker.Match> matches = Matchmakers[subType].GetMatchesRanked(queuedGroups);
+                    List<Matchmaker.Match> matches = Matchmakers[subType].GetMatchesRanked(queuedGroups, DateTime.UtcNow);
                     if (matches.Count > 0)
                     {
                         StartMatch(matches[0]);
@@ -380,7 +378,7 @@ namespace CentralServer.LobbyServer.Matchmaking
         public void OnGameEnded(LobbyGameInfo gameInfo, LobbyGameSummary gameSummary)
         {
             // TODO!!
-            Matchmakers[gameInfo.GameConfig.SubTypes[0]].OnGameEnded(gameInfo, gameSummary);
+            Matchmakers[gameInfo.GameConfig.SubTypes[0]].OnGameEnded(gameInfo, gameSummary, DateTime.UtcNow);
         }
     }
 }
