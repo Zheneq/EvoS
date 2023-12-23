@@ -52,7 +52,6 @@ public class MatchmakerTest : EvosTest
         
         Matchmaker matchmaker = new Matchmaker(
             dao,
-            null, // TODO match history dao
             GameType.PvP,
             new GameSubType
             {

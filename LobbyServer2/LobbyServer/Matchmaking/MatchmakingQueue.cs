@@ -8,6 +8,7 @@ using CentralServer.LobbyServer.Gamemode;
 using CentralServer.LobbyServer.Group;
 using EvoS.Framework;
 using EvoS.Framework.Constants.Enums;
+using EvoS.Framework.DataAccess;
 using EvoS.Framework.Network.Static;
 using log4net;
 using WebSocketSharp;
@@ -377,8 +378,13 @@ namespace CentralServer.LobbyServer.Matchmaking
 
         public void OnGameEnded(LobbyGameInfo gameInfo, LobbyGameSummary gameSummary)
         {
-            // TODO!!
-            Matchmakers[gameInfo.GameConfig.SubTypes[0]].OnGameEnded(gameInfo, gameSummary, DateTime.UtcNow);
+            Elo.OnGameEnded(
+                gameInfo,
+                gameSummary,
+                EloKey,
+                DateTime.UtcNow,
+                DB.Get().AccountDao.GetAccount,
+                DB.Get().MatchHistoryDao.Find);
         }
     }
 }
