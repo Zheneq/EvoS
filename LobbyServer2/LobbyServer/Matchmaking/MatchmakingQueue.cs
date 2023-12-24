@@ -131,7 +131,7 @@ namespace CentralServer.LobbyServer.Matchmaking
 
         public void Update()
         {
-            log.Info($"{GetPlayerCount()} players in {GameType} queue ({QueuedGroups.Count} groups)");
+            log.Debug($"{GetPlayerCount()} players in {GameType} queue ({QueuedGroups.Count} groups)");
 
             // TODO UpdateSettings when file changes (and only then)
             ReloadConfig();

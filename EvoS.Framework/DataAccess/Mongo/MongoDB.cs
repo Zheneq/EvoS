@@ -25,6 +25,10 @@ namespace EvoS.Framework.DataAccess.Mongo
                 new ConventionPack {new DictionaryRepresentationConvention(DictionaryRepresentation.ArrayOfArrays)},
                 _ => true);
             BsonSerializer.RegisterSerializationProvider(new StructSerializationProvider());
+            BsonSerializer.RegisterSerializer(
+                typeof(float),
+                new SingleSerializer(BsonType.Double, new RepresentationConverter(true, true))
+            );
             
             EvosConfiguration.DBConfig dbConfig = EvosConfiguration.GetDBConfig();
             string credentials = dbConfig.UseCredentials ? $"{dbConfig.User}:{dbConfig.Password}@" : "";
