@@ -11,6 +11,7 @@ using EvoS.Framework.Constants.Enums;
 using EvoS.Framework.DataAccess;
 using EvoS.Framework.Network.Static;
 using log4net;
+using Newtonsoft.Json;
 using WebSocketSharp;
 
 namespace CentralServer.LobbyServer.Matchmaking
@@ -18,10 +19,11 @@ namespace CentralServer.LobbyServer.Matchmaking
     public class MatchmakingQueue
     {
         private static readonly ILog log = LogManager.GetLogger(typeof(MatchmakingQueue));
+        private const string ConfigPath = @"Config/Matchmaking/";
 
         private readonly string EloKey;
-        private readonly MatchmakingConfiguration Conf;
-        private readonly Dictionary<GameSubType, Matchmaker> Matchmakers;
+        private MatchmakingConfiguration Conf = new MatchmakingConfiguration();
+        private readonly Dictionary<string, Matchmaker> Matchmakers;
         
         Dictionary<string, LobbyGameInfo> Games = new Dictionary<string, LobbyGameInfo>();
         private readonly ConcurrentDictionary<long, DateTime> QueuedGroups = new ConcurrentDictionary<long, DateTime>();
@@ -46,12 +48,6 @@ namespace CentralServer.LobbyServer.Matchmaking
         public MatchmakingQueue(GameType gameType)
         {
             EloKey = gameType.ToString();
-            // TODO reload config
-            Conf = gameType switch
-            {
-                GameType.PvP => LobbyConfiguration.GetPvpConfiguration(),
-                _ => new MatchmakingConfiguration()
-            };
             MatchmakingQueueInfo = new LobbyMatchmakingQueueInfo()
             {
                 QueueStatus = QueueStatus.Idle,
@@ -65,10 +61,10 @@ namespace CentralServer.LobbyServer.Matchmaking
             };
             ReloadConfig();
 
-            // TODO subtypes can change and aren't hashable
+            // TODO handle matchmakers more carefully
             Matchmakers = MatchmakingQueueInfo.GameConfig.SubTypes
                 .ToDictionary(
-                    st => st,
+                    st => st.LocalizedName,
                     st => new Matchmaker(GameType, st, EloKey, Conf));
         }
 
@@ -76,12 +72,26 @@ namespace CentralServer.LobbyServer.Matchmaking
         {
             GameType gameType = MatchmakingQueueInfo.GameConfig.GameType;
             MatchmakingQueueInfo.GameConfig.SubTypes = GameModeManager.GetGameTypeAvailabilities()[gameType].SubTypes;
+
+            ReloadMatchmakingConfig(gameType);
         }
 
-        public void UpdateSettings()
+        private void ReloadMatchmakingConfig(GameType gameType)
         {
-            ReloadConfig();
-            Update();
+            JsonReader reader = null;
+            try
+            {
+                reader = new JsonTextReader(new System.IO.StreamReader(ConfigPath + gameType + ".json"));
+                Conf = new JsonSerializer().Deserialize<MatchmakingConfiguration>(reader);
+            }
+            catch (Exception e)
+            {
+                log.Error($"Failed to reload matchmaking config", e);
+            }
+            finally
+            {
+                reader?.Close();
+            }
         }
 
         public LobbyMatchmakingQueueInfo AddGroup(long groupId, out bool added)
@@ -132,7 +142,7 @@ namespace CentralServer.LobbyServer.Matchmaking
             }
         }
 
-        private void TryMatch2()
+        private void TryMatch()
         {
             foreach (GameSubType subType in MatchmakingQueueInfo.GameConfig.SubTypes)
             {
@@ -149,7 +159,7 @@ namespace CentralServer.LobbyServer.Matchmaking
                         })
                         .ToList();
 
-                    List<Matchmaker.Match> matches = Matchmakers[subType].GetMatchesRanked(queuedGroups, DateTime.UtcNow);
+                    List<Matchmaker.Match> matches = Matchmakers[subType.LocalizedName].GetMatchesRanked(queuedGroups, DateTime.UtcNow);
                     if (matches.Count > 0)
                     {
                         StartMatch(matches[0]);
@@ -175,128 +185,7 @@ namespace CentralServer.LobbyServer.Matchmaking
                 GameType,
                 MatchmakingQueueInfo.GameConfig.SubTypes[0]);
         }
-
-        private void TryMatch()
-        {
-            foreach (GameSubType subType in MatchmakingQueueInfo.GameConfig.SubTypes)
-            {
-                List<MatchmakingGroupInfo> groups = new List<MatchmakingGroupInfo>();
-
-                lock (GroupManager.Lock)
-                {
-                    bool success = false;
-                    foreach (long groupId in GetQueuedGroups())
-                    {
-                        // Add new groups secuentially
-                        MatchmakingGroupInfo currentGroup = new MatchmakingGroupInfo(groupId);
-                        groups.Add(currentGroup);
-                        success = TryFormTeams(subType, ref groups);
-                        if (success) break;
-                    }
-
-                    if (success)
-                    {
-                        List<GroupInfo> teamA = new List<GroupInfo>();
-                        List<GroupInfo> teamB = new List<GroupInfo>();
-
-                        foreach (MatchmakingGroupInfo group in groups)
-                        {
-                            if (group.Team == Team.TeamA)
-                            {
-                                teamA.Add(GroupManager.GetGroup(group.GroupID));
-                            }
-                            else if (group.Team == Team.TeamB)
-                            {
-                                teamB.Add(GroupManager.GetGroup(group.GroupID));
-                            }
-                        }
-
-                        if (!CheckGameServerAvailable())
-                        {
-                            log.Warn("No available game server to start a match");
-                            return;
-                        }
-                        foreach (GroupInfo group in teamA)
-                        {
-                            RemoveGroup(group.GroupId);
-                        }
-                        foreach (GroupInfo group in teamB)
-                        {
-                            RemoveGroup(group.GroupId);
-                        }
-                        _ = MatchmakingManager.StartGameAsync(
-                            teamA.SelectMany(group => group.Members).ToList(), 
-                            teamB.SelectMany(group => group.Members).ToList(), 
-                            GameType,
-                            MatchmakingQueueInfo.GameConfig.SubTypes[0]);
-                    }
-                }
-            }
-        }
-
-        /// <summary>
-        /// Tries to form a team with the list of groups specified. The teams are not balanced at all. it just looks for group size
-        /// </summary>
-        /// <param name="subType">GameSubtype of the game we are trying to make</param>
-        /// <param name="matchmakingGroups">available groups to form a team</param>
-        /// <returns>true if a team was formed, otherwise returns false</returns>
-        private static bool TryFormTeams(GameSubType subType, ref List<MatchmakingGroupInfo> matchmakingGroups)
-        {
-            bool success = false;
-            int teamANum = GetPlayersInTeam(Team.TeamA, matchmakingGroups);
-            int teamBNum = GetPlayersInTeam(Team.TeamB, matchmakingGroups);
-
-            // Full team? Success!
-            if (teamANum == subType.TeamAPlayers && teamBNum == subType.TeamBPlayers) return true;
-
-            foreach (MatchmakingGroupInfo group in matchmakingGroups)
-            {
-                // Team Invalid is used as "no team asigned"
-                if (group.Team != Team.Invalid) continue;
-
-                // Try to place the team either in Team A or B
-                if (teamANum + group.Players <= subType.TeamAPlayers)
-                {
-                    group.Team = Team.TeamA;
-                }
-                else if (teamBNum + group.Players <= subType.TeamBPlayers)
-                {
-                    group.Team = Team.TeamB;
-                }
-
-                // If a team was assigned for this group, we try recursion to assign a new group
-                if(group.Team != Team.Invalid)
-                {
-                    success = TryFormTeams(subType, ref matchmakingGroups);
-                    if (success) return true;
-
-                    // If we couln't form a match, this team is assigned as invalid for next iteration
-                    group.Team = Team.Invalid;
-                }
-            }
-            return success;
-        }
-
-        /// <summary>
-        /// Counts how many players are in the groups list that are assigned to the specified team
-        /// </summary>
-        /// <param name="team"></param>
-        /// <param name="groups"></param>
-        /// <returns>number of player in team</returns>
-        private static int GetPlayersInTeam(Team team, List<MatchmakingGroupInfo> groups)
-        {
-            int count = 0;
-            foreach (MatchmakingGroupInfo groupInfo in groups)
-            {
-                if (groupInfo.Team == team)
-                {
-                    count += groupInfo.Players;
-                }
-            }
-
-            return count;
-        }
-
+        
         public bool CheckGameServerAvailable()
         {
             if (ServerManager.IsAnyServerAvailable()) return true;

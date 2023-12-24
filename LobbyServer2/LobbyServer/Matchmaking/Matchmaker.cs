@@ -277,6 +277,10 @@ public class Matchmaker
         
     public List<Match> GetMatchesRanked(List<MatchmakingGroup> queuedGroups, DateTime now)
     {
+        if (queuedGroups.Count == 0)
+        {
+            return new();
+        }
         MatchScratch matchScratch = new MatchScratch(_subType);
         Dictionary<long, Match> possibleMatches = new Dictionary<long, Match>();
         FindMatches(matchScratch, queuedGroups, possibleMatches, _eloKey); // TODO save possible matches between runs, update it iteratively

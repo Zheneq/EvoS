@@ -46,11 +46,6 @@ namespace CentralServer.LobbyServer.Matchmaking
                 }
 
                 _enabled = value;
-
-                if (_enabled)
-                {
-                    Update();
-                }
             }
         }
 
@@ -91,9 +86,6 @@ namespace CentralServer.LobbyServer.Matchmaking
                     GameType = gameType,
                     MessageToSend = MatchmakingQueueToPlayersNotification.MatchmakingQueueMessage.QueueConfirmed,    
                 });
-
-                // Update the queue
-                queue.Update();
 
                 foreach (long member in group.Members)
                 {

@@ -72,6 +72,9 @@ namespace CentralServer
 
             FriendsTask friendsTask = new FriendsTask(CancellationToken.None);
             _ = Task.Run(friendsTask.Run, CancellationToken.None);
+
+            MatchmakingTask matchmakingTask = new MatchmakingTask(CancellationToken.None);
+            _ = Task.Run(matchmakingTask.Run, CancellationToken.None);
             
             _server.Start();
             log.Info($"Started lobby server on port {port}");

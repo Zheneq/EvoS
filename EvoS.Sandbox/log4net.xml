@@ -16,6 +16,33 @@
         <layout type="log4net.Layout.PatternLayout">
             <conversionPattern value="%date %-5level %-25.25logger{1} [%-23.23property{conn}] - %message%newline" />
         </layout>
+        <filter type="log4net.Filter.LoggerMatchFilter">
+            <loggerToMatch value="CentralServer.LobbyServer.Matchmaking.Matchmaker" />
+            <acceptOnMatch value="false" />
+        </filter>
+        <filter type="log4net.Filter.LoggerMatchFilter">
+            <loggerToMatch value="CentralServer.LobbyServer.Matchmaking.Elo" />
+            <acceptOnMatch value="false" />
+        </filter>
+    </appender>
+    <appender name="MatchmakingFile" type="log4net.Appender.RollingFileAppender">
+        <file value="matchmaking.log" />
+        <appendToFile value="false" />
+        <maximumFileSize value="100MB" />
+        <maxSizeRollBackups value="2" />
+        <layout type="log4net.Layout.PatternLayout">
+            <conversionPattern value="%date %-5level %-25.25logger{1} [%-23.23property{conn}] - %message%newline" />
+        </layout>
+        <filter type="log4net.Filter.LoggerMatchFilter">
+            <loggerToMatch value="CentralServer.LobbyServer.Matchmaking.Matchmaker" />
+            <acceptOnMatch value="true" />
+        </filter>
+        <filter type="log4net.Filter.LoggerMatchFilter">
+            <loggerToMatch value="CentralServer.LobbyServer.Matchmaking.Elo" />
+            <acceptOnMatch value="true" />
+        </filter>
+        <filter type="log4net.Filter.DenyAllFilter">
+        </filter>
     </appender>
     <appender name="Discord" type="CentralServer.LobbyServer.Discord.DiscordLogAppender,CentralServer">
         <layout type="log4net.Layout.PatternLayout">
@@ -29,5 +56,6 @@
         <level value="DEBUG" />
         <appender-ref ref="ConsoleAppender" />
         <appender-ref ref="RollingFile" />
+        <appender-ref ref="MatchmakingFile" />
     </root>
 </log4net>

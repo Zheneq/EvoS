@@ -1,0 +1,14 @@
+{
+  "MaxTeamEloDifferenceStart": 20,
+  "MaxTeamEloDifference": 70,
+  "MaxTeamEloDifferenceWaitTime": "00:05:00",
+  "MaxTeammateEloDifference": 400,
+  "TeamEloDifferenceWeight": 3,
+  "TeammateEloDifferenceWeight": 1,
+  "TeamCompositionWeight": 2,
+  "TeamBlockWeight": 2,
+  "WaitingTimeWeight": 5,
+  "WaitingTimeWeightCap": "00:15:00",
+  "TeammateEloDifferenceWeightCap": 250
+}
+        

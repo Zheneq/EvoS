@@ -29,10 +29,6 @@ namespace CentralServer.BridgeServer
                 {
                     GameManager.ReconnectServer(gameServer);
                 }
-                else
-                {
-                    MatchmakingManager.Update();
-                }
             }
         }
 

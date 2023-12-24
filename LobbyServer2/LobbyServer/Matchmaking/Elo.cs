@@ -4,11 +4,13 @@ using System.Linq;
 using EvoS.Framework.Constants.Enums;
 using EvoS.Framework.DataAccess;
 using EvoS.Framework.Network.Static;
+using log4net;
 
 namespace CentralServer.LobbyServer.Matchmaking;
 
 public static class Elo
 {
+    private static readonly ILog log = LogManager.GetLogger(typeof(Elo));
     private static readonly object EloLock = new();
     
     public static void OnGameEnded(
@@ -19,7 +21,8 @@ public static class Elo
         IAccountProvider accountProvider,
         IMatchHistoryProvider matchHistoryProvider)
     {
-        if (gameSummary.GameResult != GameResult.TeamAWon && gameSummary.GameResult != GameResult.TeamBWon)
+        if (gameSummary is null
+            || gameSummary.GameResult != GameResult.TeamAWon && gameSummary.GameResult != GameResult.TeamBWon)
         {
             return;
         }
@@ -32,6 +35,10 @@ public static class Elo
             .Where(pgs => pgs.IsInTeamB())
             .Select(pgs => accountProvider(pgs.AccountId))
             .ToList();
+        
+        log.Info($"Game {gameInfo.Name} ended, " +
+                 $"{string.Join(", ", teamA.Select(acc => acc.Handle))} {(gameSummary.GameResult == GameResult.TeamAWon ? "won" : "lost")}, " +
+                 $"{string.Join(", ", teamB.Select(acc => acc.Handle))} {(gameSummary.GameResult == GameResult.TeamBWon ? "won" : "lost")}");
         
         lock (EloLock)
         {
@@ -71,6 +78,7 @@ public static class Elo
         int confidenceLevelDelta = -100;
         if (lastMatch is not null)
         {
+            confidenceLevelDelta = 0;
             TimeSpan timeSinceLastMatch = now - lastMatch.MatchComponent.MatchTime;
             for (int i = ConfidenceRetention.Count - 1; i >= 0; i--)
             {
@@ -93,6 +101,10 @@ public static class Elo
                 }
             }
         }
+
+        int currentConfLevel = GetEloConfidenceLevel(player, eloKey);
+        log.Info($"Updating {player.Handle}'s {eloKey} elo confidence level " +
+                 $"{currentConfLevel} -> {Math.Max(0, currentConfLevel + confidenceLevelDelta)}");
         
         player.ExperienceComponent.EloValues.ApplyDelta(eloKey, 0, confidenceLevelDelta);
     }
@@ -142,6 +154,8 @@ public static class Elo
 
     private static void AwardElo(PersistedAccountData acc, string eloKey, float delta)
     {
+        float currentElo = GetElo(acc, eloKey);
+        log.Info($"Updating {acc.Handle}'s {eloKey} elo {currentElo} -> {currentElo + delta}");
         acc.ExperienceComponent.EloValues.ApplyDelta(eloKey, delta, 0);
     }
 
