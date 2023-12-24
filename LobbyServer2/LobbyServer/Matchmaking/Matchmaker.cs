@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using CentralServer.LobbyServer.Character;
 using CentralServer.LobbyServer.Group;
-using EvoS.Framework.Constants.Enums;
 using EvoS.Framework.DataAccess;
 using EvoS.Framework.DataAccess.Daos;
 using EvoS.Framework.Network.Static;
@@ -176,20 +176,18 @@ public class Matchmaker
     public class MatchmakingGroup
     {
         public long GroupID;
-        public Team Team;
         public DateTime QueueTime;
         public List<long> Members;
         
-        public MatchmakingGroup(long groupId, Team team, List<long> members, DateTime queueTime)
+        public MatchmakingGroup(long groupId, List<long> members, DateTime queueTime)
         {
             GroupID = groupId;
-            Team = team;
             Members = members;
             QueueTime = queueTime;
         }
 
         public MatchmakingGroup(long groupID, DateTime queueTime = default)
-            : this(groupID, Team.Invalid, GroupManager.GetGroup(groupID).Members, queueTime)
+            : this(groupID, GroupManager.GetGroup(groupID).Members, queueTime)
         {
         }
         
@@ -343,11 +341,9 @@ public class Matchmaker
                          Convert.ToInt32((Conf.MaxTeamEloDifference - Conf.MaxTeamEloDifferenceStart)
                                          * Math.Clamp(waitingTime / Conf.MaxTeamEloDifferenceWaitTime.TotalSeconds, 0, 1));
 
-        bool result = Math.Abs(match.TeamA.Elo - match.TeamB.Elo) <= maxEloDiff;
-        if (!result)
-        {
-            log.Debug($"Disallowed {match}");
-        }
+        float eloDiff = Math.Abs(match.TeamA.Elo - match.TeamB.Elo);
+        bool result = eloDiff <= maxEloDiff;
+        log.Debug($"{(result ? "A": "Disa")}llowed {match}, elo diff {eloDiff}/{maxEloDiff}, reference queue time {TimeSpan.FromSeconds(waitingTime)}");
         return result;
     }
 
@@ -363,24 +359,84 @@ public class Matchmaker
         float teamEloDifferenceFactor = 1 - Cap(Math.Abs(match.TeamA.Elo - match.TeamB.Elo) / Conf.MaxTeamEloDifference);
         float teammateEloDifferenceAFactor = 1 - Cap((match.TeamA.MaxElo - match.TeamA.MinElo) / Conf.TeammateEloDifferenceWeightCap);
         float teammateEloDifferenceBFactor = 1 - Cap((match.TeamB.MaxElo - match.TeamB.MinElo) / Conf.TeammateEloDifferenceWeightCap);
+        float teammateEloDifferenceFactor = (teammateEloDifferenceAFactor + teammateEloDifferenceBFactor) * 0.5f;
         double waitTime = match.Groups.Select(g => (now - g.QueueTime).TotalSeconds).Max();
         float waitTimeFactor = Cap((float)(waitTime / Conf.WaitingTimeWeightCap.TotalSeconds));
+        float teamCompositionFactor = (GetTeamCompositionFactor(match.TeamA) + GetTeamCompositionFactor(match.TeamB)) * 0.5f;
+        float teamBlockFactor = (GetBlocksFactor(match.TeamA) + GetBlocksFactor(match.TeamB)) * 0.5f;
         
-        // TODO team composition factor
         // TODO recently canceled matches factor
-        // TODO mutual blocks factor
-        // TODO non-linearity?
         // TODO win history factor (too many losses - try not to put into a disadvantaged team)
+        // TODO non-linearity?
 
-        return
+        float score =
             teamEloDifferenceFactor * Conf.TeamEloDifferenceWeight
-            + teammateEloDifferenceAFactor * Conf.TeammateEloDifferenceWeight * 0.5f
-            + teammateEloDifferenceBFactor * Conf.TeammateEloDifferenceWeight * 0.5f
-            + waitTimeFactor * Conf.WaitingTimeWeight;
+            + teammateEloDifferenceFactor * Conf.TeammateEloDifferenceWeight
+            + waitTimeFactor * Conf.WaitingTimeWeight
+            + teamCompositionFactor * Conf.TeamCompositionWeight
+            + teamBlockFactor * Conf.TeamBlockWeight;
+        
+        log.Debug($"Score {score:0.00} " +
+                  $"(tElo:{teamEloDifferenceFactor:0.00}, " +
+                  $"tmElo:{teammateEloDifferenceFactor:0.00}, " +
+                  $"q:{waitTimeFactor:0.00}, " +
+                  $"tComp:{teamCompositionFactor:0.00}, " +
+                  $"blocks:{teamBlockFactor:0.00}" +
+                  $") {match}");
+
+        return score;
     }
 
     private static float Cap(float factor)
     {
         return Math.Min(factor, 1);
+    }
+
+    private static float GetTeamCompositionFactor(Match.Team team)
+    {
+        if (team.Groups.Count == 1)
+        {
+            return 1;
+        }
+        
+        float score = 0;
+        Dictionary<CharacterRole,int> roles = team.Accounts.Values
+            .Select(acc => acc.AccountComponent.LastCharacter)
+            .Select(ch => CharacterConfigs.Characters[ch].CharacterRole)
+            .GroupBy(role => role)
+            .ToDictionary(el => el.Key, el => el.Count());
+        
+        if (roles.ContainsKey(CharacterRole.Tank))
+        {
+            score += 0.3f;
+        }
+        if (roles.ContainsKey(CharacterRole.Support))
+        {
+            score += 0.3f;
+        }
+        if (roles.TryGetValue(CharacterRole.Assassin, out int flNum))
+        {
+            score += 0.2f * Math.Min(flNum, 2);
+        }
+        if (roles.TryGetValue(CharacterRole.None, out int fillNum))
+        {
+            score += 0.27f * Math.Min(fillNum, 4);
+        }
+
+        return Math.Min(score, 1);
+    }
+
+    private static float GetBlocksFactor(Match.Team team)
+    {
+        if (team.Groups.Count == 1)
+        {
+            return 1;
+        }
+        
+        int totalBlocks = team.Accounts.Values
+            .Select(acc => team.AccountIds.Count(accId => acc.SocialComponent.BlockedAccounts.Contains(accId)))
+            .Sum();
+
+        return 1 - Math.Min(totalBlocks * 0.125f, 1);
     }
 }

@@ -1,6 +1,6 @@
 using CentralServer.LobbyServer.Matchmaking;
-using EvoS.Framework.Constants.Enums;
 using EvoS.Framework.DataAccess.Daos;
+using EvoS.Framework.Network.NetworkMessages;
 using EvoS.Framework.Network.Static;
 using log4net;
 using Moq;
@@ -13,7 +13,6 @@ public class MatchmakerTest : EvosTest
 {
     private static readonly ILog log = LogManager.GetLogger(typeof(MatchmakerTest));
     private const string EloKey = "elo_key";
-    private static readonly DateTime Now = new DateTime(2023, 12, 25);
 
     private static readonly Dictionary<long, PersistedAccountData> Accounts = new()
     {
@@ -48,8 +47,94 @@ public class MatchmakerTest : EvosTest
     [Fact]
     public void Test()
     {
-        AccountDao dao = MockAccountDao(Accounts);
+        Matchmaker matchmaker = MakeMatchmaker(new MatchmakingConfiguration
+        {
+            MaxTeamEloDifferenceStart = 20,
+            MaxTeamEloDifference = 70,
+            MaxTeamEloDifferenceWaitTime = TimeSpan.FromMinutes(5),
+
+            TeamEloDifferenceWeight = 3,
+            TeammateEloDifferenceWeight = 1,
+            WaitingTimeWeight = 5,
+            WaitingTimeWeightCap = TimeSpan.FromMinutes(15),
+            TeammateEloDifferenceWeightCap = 250,
+        });
+
+        DateTime now = DateTime.UtcNow;
+        int i = 0;
+        List<Matchmaker.MatchmakingGroup> queuedGroups = new List<Matchmaker.MatchmakingGroup>
+        {
+            new(i++, new List<long> {1, 2}, now - TimeSpan.FromMinutes(2)),
+            new(i++, new List<long> {3, 4, 5, 6}, now - TimeSpan.FromMinutes(1)),
+            new(i++, new List<long> {7}, now - TimeSpan.FromMinutes(2)),
+            new(i++, new List<long> {8}, now - TimeSpan.FromMinutes(2)),
+            new(i++, new List<long> {9}, now - TimeSpan.FromMinutes(3)),
+            new(i++, new List<long> {10}, now - TimeSpan.FromMinutes(3)),
+            new(i++, new List<long> {11}, now - TimeSpan.FromMinutes(4)),
+            new(i++, new List<long> {12}, now - TimeSpan.FromMinutes(8)),
+        };
         
+        List<Matchmaker.Match> matchesRanked = matchmaker.GetMatchesRanked(queuedGroups, now);
+
+        foreach (Matchmaker.Match match in matchesRanked)
+        {
+            log.Info($"{match}");
+        }
+    }
+
+    [Fact]
+    public void TestTryToWaitIfUnbalanced()
+    {
+        Matchmaker matchmaker = MakeMatchmaker(new MatchmakingConfiguration
+        {
+            MaxTeamEloDifferenceStart = 20,
+            MaxTeamEloDifference = 30,
+            MaxTeamEloDifferenceWaitTime = TimeSpan.FromMinutes(10),
+        });
+
+        DateTime now = DateTime.UtcNow;
+        int i = 0;
+        List<Matchmaker.MatchmakingGroup> queuedGroups = new List<Matchmaker.MatchmakingGroup>
+        {
+            new(i++, new List<long> {1, 2}, now - TimeSpan.FromSeconds(30)),
+            new(i++, new List<long> {3, 4, 5, 6}, now - TimeSpan.FromSeconds(1)),
+            new(i++, new List<long> {8}, now - TimeSpan.FromSeconds(50)),
+            new(i++, new List<long> {9}, now - TimeSpan.FromSeconds(50)),
+        };
+        
+        List<Matchmaker.Match> matchesRanked = matchmaker.GetMatchesRanked(queuedGroups, now);
+        Assert.Empty(matchesRanked);
+        matchesRanked = matchmaker.GetMatchesRanked(queuedGroups,  now + TimeSpan.FromMinutes(10));
+        Assert.Single(matchesRanked);
+    }
+
+    [Fact]
+    public void TestDoNotMatchUnbalanced()
+    {
+        Matchmaker matchmaker = MakeMatchmaker(new MatchmakingConfiguration
+        {
+            MaxTeamEloDifferenceStart = 20,
+            MaxTeamEloDifference = 20,
+            MaxTeamEloDifferenceWaitTime = TimeSpan.FromMinutes(10),
+        });
+
+        DateTime now = DateTime.UtcNow;
+        int i = 0;
+        List<Matchmaker.MatchmakingGroup> queuedGroups = new List<Matchmaker.MatchmakingGroup>
+        {
+            new(i++, new List<long> {1, 2}, now - TimeSpan.FromMinutes(30)),
+            new(i++, new List<long> {3, 4, 5, 6}, now - TimeSpan.FromMinutes(30)),
+            new(i++, new List<long> {8}, now - TimeSpan.FromMinutes(50)),
+            new(i++, new List<long> {9}, now - TimeSpan.FromMinutes(50)),
+        };
+        
+        List<Matchmaker.Match> matchesRanked = matchmaker.GetMatchesRanked(queuedGroups, now);
+        Assert.Empty(matchesRanked);
+    }
+
+    private static Matchmaker MakeMatchmaker(MatchmakingConfiguration conf)
+    {
+        AccountDao dao = MockAccountDao(Accounts);
         Matchmaker matchmaker = new Matchmaker(
             dao,
             GameType.PvP,
@@ -60,32 +145,10 @@ public class MatchmakerTest : EvosTest
                 TeamBPlayers = 4
             },
             EloKey,
-            new MatchmakingConfiguration
-            {
-                
-            });
-        
-        int i = 0;
-        List<Matchmaker.MatchmakingGroup> queuedGroups = new List<Matchmaker.MatchmakingGroup>()
-        {
-            new(i++, Team.Invalid, new List<long> {1, 2}, Now - TimeSpan.FromMinutes(5)),
-            new(i++, Team.Invalid, new List<long> {3, 4, 5, 6}, Now - TimeSpan.FromMinutes(1)),
-            new(i++, Team.Invalid, new List<long> {7}, Now - TimeSpan.FromMinutes(5)),
-            new(i++, Team.Invalid, new List<long> {8}, Now - TimeSpan.FromMinutes(5)),
-            new(i++, Team.Invalid, new List<long> {9}, Now - TimeSpan.FromMinutes(5)),
-            new(i++, Team.Invalid, new List<long> {10}, Now - TimeSpan.FromMinutes(5)),
-            new(i++, Team.Invalid, new List<long> {11}, Now - TimeSpan.FromMinutes(5)),
-            new(i++, Team.Invalid, new List<long> {12}, Now - TimeSpan.FromMinutes(5)),
-        };
-        
-        List<Matchmaker.Match> matchesRanked = matchmaker.GetMatchesRanked(queuedGroups, Now);
-
-        foreach (Matchmaker.Match match in matchesRanked)
-        {
-            log.Info($"{match}");
-        }
+            conf);
+        return matchmaker;
     }
-    
+
     private static AccountDao MockAccountDao(Dictionary<long, PersistedAccountData> accounts)
     {
         var mock = new Mock<AccountDao>();
@@ -95,17 +158,25 @@ public class MatchmakerTest : EvosTest
         return mock.Object;
     }
 
-    private static PersistedAccountData MakeAccount(long accId, string handle, float elo, int eloConfidenceLevel)
+    private static PersistedAccountData MakeAccount(long accId, string username, float elo, int eloConfidenceLevel)
     {
         var acc = new PersistedAccountData
         {
             AccountId = accId,
-            UserName = handle,
-            Handle = handle,
+            UserName = username,
+            Handle = $"{username}#{accId}",
             ExperienceComponent = new ExperienceComponent
             {
                 EloValues = new EloValues()
-            }
+            },
+            AccountComponent = new AccountComponent
+            {
+                LastCharacter = CharacterType.PendingWillFill
+            },
+            SocialComponent = new SocialComponent
+            {
+                BlockedAccounts = new HashSet<long>()
+            },
         };
         
         acc.ExperienceComponent.EloValues.UpdateElo(EloKey, elo, eloConfidenceLevel);
