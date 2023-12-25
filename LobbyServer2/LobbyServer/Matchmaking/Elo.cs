@@ -16,7 +16,8 @@ public static class Elo
     public static void OnGameEnded(
         LobbyGameInfo gameInfo,
         LobbyGameSummary gameSummary,
-        string eloKey,
+        string eloKey, // TODO move eloKey into conf
+        MatchmakingConfiguration conf,
         DateTime now,
         IAccountProvider accountProvider,
         IMatchHistoryProvider matchHistoryProvider)
@@ -44,30 +45,19 @@ public static class Elo
         {
             foreach (PersistedAccountData acc in teamA.Concat(teamB))
             {
-                UpdateConfidence(acc, gameInfo.GameConfig.GameType, eloKey, now, matchHistoryProvider);
+                UpdateConfidence(acc, gameInfo.GameConfig.GameType, eloKey, conf, now, matchHistoryProvider);
             }
-            float eloChange = GetEloChange(teamA, teamB, eloKey, gameSummary.GameResult == GameResult.TeamAWon ? 1 : 0);
-            AwardEloTeam(teamA, eloKey, eloChange);
-            AwardEloTeam(teamB, eloKey, -eloChange);
+            float eloChange = GetEloChange(teamA, teamB, eloKey, conf, gameSummary.GameResult == GameResult.TeamAWon ? 1 : 0);
+            AwardEloTeam(teamA, eloKey, conf, eloChange);
+            AwardEloTeam(teamB, eloKey, conf, -eloChange);
         }
     }
-
-    private static readonly List<TimeSpan> ConfidenceRetention = new()
-    {
-        TimeSpan.FromDays(30),
-        TimeSpan.FromDays(90),
-        TimeSpan.FromDays(180),
-    };
-    private static readonly List<int> ConfidenceUpgrade = new()
-    {
-        10,
-        25,
-    };
 
     private static void UpdateConfidence(
         PersistedAccountData player,
         GameType gameType,
         string eloKey,
+        MatchmakingConfiguration conf,
         DateTime now,
         IMatchHistoryProvider matchHistoryProvider)
     {
@@ -80,9 +70,9 @@ public static class Elo
         {
             confidenceLevelDelta = 0;
             TimeSpan timeSinceLastMatch = now - lastMatch.MatchComponent.MatchTime;
-            for (int i = ConfidenceRetention.Count - 1; i >= 0; i--)
+            for (int i = conf.EloConfidenceRetention.Count - 1; i >= 0; i--)
             {
-                if (timeSinceLastMatch > ConfidenceRetention[i])
+                if (timeSinceLastMatch > conf.EloConfidenceRetention[i])
                 {
                     confidenceLevelDelta = -i;
                     break;
@@ -90,12 +80,12 @@ public static class Elo
             }
 
             int eloConfidenceLevel = GetEloConfidenceLevel(player, eloKey);
-            if (eloConfidenceLevel < ConfidenceUpgrade.Count)
+            if (eloConfidenceLevel < conf.EloConfidenceUpgrade.Count)
             {
                 int num = matches
                     .Count(m => m.MatchComponent.GameType == gameType
-                                && now - lastMatch.MatchComponent.MatchTime < ConfidenceRetention[0]);
-                if (num >= ConfidenceUpgrade[eloConfidenceLevel])
+                                && now - lastMatch.MatchComponent.MatchTime < conf.EloConfidenceRetention[0]);
+                if (num >= conf.EloConfidenceUpgrade[eloConfidenceLevel])
                 {
                     confidenceLevelDelta = 1;
                 }
@@ -114,12 +104,16 @@ public static class Elo
         return team.Select(p => GetElo(p, eloKey)).Sum() / team.Count;
     }
 
-    private const float ELO_BASE_POT = 64.0f;
-    private static float GetEloChange(List<PersistedAccountData> teamA, List<PersistedAccountData> teamB, string eloKey, int result)
+    private static float GetEloChange(
+        List<PersistedAccountData> teamA,
+        List<PersistedAccountData> teamB,
+        string eloKey,
+        MatchmakingConfiguration conf,
+        int result)
     {
 
-        float k = ELO_BASE_POT * (teamA.Select(p => GetEloConfidenceFactor(p, eloKey)).Sum() / (2 * teamA.Count) +
-                                  teamB.Select(p => GetEloConfidenceFactor(p, eloKey)).Sum() / (2 * teamB.Count));
+        float k = conf.EloBasePot * (teamA.Select(p => GetEloConfidenceFactor(p, eloKey, conf)).Sum() / (2 * teamA.Count) +
+                                  teamB.Select(p => GetEloConfidenceFactor(p, eloKey, conf)).Sum() / (2 * teamB.Count));
         return k * (result - GetPrediction(eloKey, teamA, teamB));
     }
 
@@ -139,11 +133,10 @@ public static class Elo
         return elo;
     }
     
-    private static readonly List<float> EloConfidenceFactor = new() { 1.0f, 0.75f, 0.5f };
-    private static float GetEloConfidenceFactor(PersistedAccountData acc, string eloKey)
+    private static float GetEloConfidenceFactor(PersistedAccountData acc, string eloKey, MatchmakingConfiguration conf)
     {
         int cf = GetEloConfidenceLevel(acc, eloKey);
-        return EloConfidenceFactor[Math.Clamp(cf, 0, EloConfidenceFactor.Count-1)];
+        return conf.EloConfidenceFactor[Math.Clamp(cf, 0, conf.EloConfidenceFactor.Count-1)];
     }
 
     private static int GetEloConfidenceLevel(PersistedAccountData acc, string eloKey)
@@ -159,12 +152,12 @@ public static class Elo
         acc.ExperienceComponent.EloValues.ApplyDelta(eloKey, delta, 0);
     }
 
-    private static void AwardEloTeam(List<PersistedAccountData> team, string eloKey, float eloDelta)
+    private static void AwardEloTeam(List<PersistedAccountData> team, string eloKey, MatchmakingConfiguration conf, float eloDelta)
     {
-        float avgConf = team.Select(p => GetEloConfidenceFactor(p, eloKey)).Sum() / team.Count;
+        float avgConf = team.Select(p => GetEloConfidenceFactor(p, eloKey, conf)).Sum() / team.Count;
         foreach (PersistedAccountData acc in team)
         {
-            AwardElo(acc, eloKey, eloDelta * GetEloConfidenceFactor(acc, eloKey) / avgConf);
+            AwardElo(acc, eloKey, eloDelta * GetEloConfidenceFactor(acc, eloKey, conf) / avgConf);
         }
     }
 }

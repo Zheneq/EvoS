@@ -292,8 +292,13 @@ public class Matchmaker
             List<Match> filteredMatches = FilterMatches(possibleMatches, now);
             log.Info($"Found {filteredMatches.Count} allowed matches in " +
                      $"{_gameType}#{_subType.LocalizedName} after filtering");
-            List<Match> matches = RankMatches(filteredMatches, now);
-            return matches;
+            if (filteredMatches.Count > 0)
+            {
+                List<Match> matches = RankMatches(filteredMatches, now);
+                log.Info($"Best match: {matches[0]}");
+                RankMatch(matches[0], now, true);
+                return matches;
+            }
         }
 
         return new();
@@ -335,7 +340,7 @@ public class Matchmaker
 
     private bool FilterMatch(Match match, DateTime now)
     {
-        int cutoff = Convert.ToInt32(MathF.Floor(2.0f * match.Groups.Count() / 3)); // don't want to keep the first ones to queue waiting for too long
+        int cutoff = int.Max(1, Convert.ToInt32(MathF.Floor(match.Groups.Count() / 2.0f))); // don't want to keep the first ones to queue waiting for too long
         double waitingTime = match.Groups
             .Select(g => (now - g.QueueTime).TotalSeconds)
             .Order()
@@ -358,19 +363,23 @@ public class Matchmaker
             .ToList();
     }
 
-    private float RankMatch(Match match, DateTime now)
+    private float RankMatch(Match match, DateTime now, bool infoLog = false)
     {
         float teamEloDifferenceFactor = 1 - Cap(Math.Abs(match.TeamA.Elo - match.TeamB.Elo) / Conf.MaxTeamEloDifference);
         float teammateEloDifferenceAFactor = 1 - Cap((match.TeamA.MaxElo - match.TeamA.MinElo) / Conf.TeammateEloDifferenceWeightCap);
         float teammateEloDifferenceBFactor = 1 - Cap((match.TeamB.MaxElo - match.TeamB.MinElo) / Conf.TeammateEloDifferenceWeightCap);
         float teammateEloDifferenceFactor = (teammateEloDifferenceAFactor + teammateEloDifferenceBFactor) * 0.5f;
-        double waitTime = match.Groups.Select(g => (now - g.QueueTime).TotalSeconds).Max();
+        double waitTime = Math.Sqrt(match.Groups.Select(g => Math.Pow((now - g.QueueTime).TotalSeconds, 2)).Average());
         float waitTimeFactor = Cap((float)(waitTime / Conf.WaitingTimeWeightCap.TotalSeconds));
         float teamCompositionFactor = (GetTeamCompositionFactor(match.TeamA) + GetTeamCompositionFactor(match.TeamB)) * 0.5f;
         float teamBlockFactor = (GetBlocksFactor(match.TeamA) + GetBlocksFactor(match.TeamB)) * 0.5f;
+        float teamConfidenceBalanceFactor = GetTeamConfidenceBalanceFactor(match);
         
+        // TODO if you are waiting for 20 minutes, you must be in the next game
         // TODO recently canceled matches factor
-        // TODO win history factor (too many losses - try not to put into a disadvantaged team)
+        // TODO match-to-match variance factor
+        // TODO accumulated wait time (time spent in queue for the last hour?)
+        // TODO win history factor (too many losses - try not to put into a disadvantaged team)?
         // TODO non-linearity?
 
         float score =
@@ -378,22 +387,32 @@ public class Matchmaker
             + teammateEloDifferenceFactor * Conf.TeammateEloDifferenceWeight
             + waitTimeFactor * Conf.WaitingTimeWeight
             + teamCompositionFactor * Conf.TeamCompositionWeight
-            + teamBlockFactor * Conf.TeamBlockWeight;
+            + teamBlockFactor * Conf.TeamBlockWeight
+            + teamConfidenceBalanceFactor * Conf.TeamConfidenceBalanceWeight;
         
-        log.Debug($"Score {score:0.00} " +
+        string msg = $"Score {score:0.00} " +
                   $"(tElo:{teamEloDifferenceFactor:0.00}, " +
                   $"tmElo:{teammateEloDifferenceFactor:0.00}, " +
                   $"q:{waitTimeFactor:0.00}, " +
                   $"tComp:{teamCompositionFactor:0.00}, " +
                   $"blocks:{teamBlockFactor:0.00}" +
-                  $") {match}");
+                  $"tConf:{teamConfidenceBalanceFactor:0.00}" +
+                  $") {match}";
+        if (infoLog)
+        {
+            log.Info(msg);
+        }
+        else
+        {
+            log.Debug(msg);
+        }
 
         return score;
     }
 
     private static float Cap(float factor)
     {
-        return Math.Min(factor, 1);
+        return Math.Clamp(factor, 0, 1);
     }
 
     private static float GetTeamCompositionFactor(Match.Team team)
@@ -442,5 +461,18 @@ public class Matchmaker
             .Sum();
 
         return 1 - Math.Min(totalBlocks * 0.125f, 1);
+    }
+
+    private float GetTeamConfidenceBalanceFactor(Match match)
+    {
+        int diff = Math.Abs(match.TeamA.Accounts.Values.Select(GetEloConfidenceLevel).Sum()
+                            - match.TeamB.Accounts.Values.Select(GetEloConfidenceLevel).Sum());
+        return 1 - Cap(diff * 0.33f);
+    }
+
+    private int GetEloConfidenceLevel(PersistedAccountData acc)
+    {
+        acc.ExperienceComponent.EloValues.GetElo(_eloKey, out _, out int eloConfLevel);
+        return eloConfLevel;
     }
 }

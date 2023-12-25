@@ -271,6 +271,7 @@ namespace CentralServer.LobbyServer.Matchmaking
                 gameInfo,
                 gameSummary,
                 EloKey,
+                Conf,
                 DateTime.UtcNow,
                 DB.Get().AccountDao.GetAccount,
                 DB.Get().MatchHistoryDao.Find);
