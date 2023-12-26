@@ -5,6 +5,8 @@ namespace CentralServer.LobbyServer.Matchmaking;
 
 public class MatchmakingConfiguration
 {
+    public TimeSpan FallbackTime = TimeSpan.FromMinutes(10);
+    
     public int MaxTeamEloDifferenceStart = 20;  // 20 elo diff = 53%/47%
     public int MaxTeamEloDifference = 70;  // 70 elo diff = 60%/40%
     public TimeSpan MaxTeamEloDifferenceWaitTime = TimeSpan.FromMinutes(5);

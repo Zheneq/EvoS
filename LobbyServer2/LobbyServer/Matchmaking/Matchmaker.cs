@@ -292,6 +292,15 @@ public class Matchmaker
             List<Match> filteredMatches = FilterMatches(possibleMatches, now);
             log.Info($"Found {filteredMatches.Count} allowed matches in " +
                      $"{_gameType}#{_subType.LocalizedName} after filtering");
+            if (filteredMatches.Count == 0 && possibleMatches.Count > 0)
+            {
+                double waitTime = Math.Sqrt(queuedGroups.Select(g => Math.Pow((now - g.QueueTime).TotalSeconds, 2)).Average());
+                if (waitTime > Conf.FallbackTime.TotalSeconds)
+                {
+                    log.Info("Ignoring filtering");
+                    filteredMatches = possibleMatches.Values.ToList();
+                }
+            }
             if (filteredMatches.Count > 0)
             {
                 List<Match> matches = RankMatches(filteredMatches, now);
@@ -375,6 +384,7 @@ public class Matchmaker
         float teamBlockFactor = (GetBlocksFactor(match.TeamA) + GetBlocksFactor(match.TeamB)) * 0.5f;
         float teamConfidenceBalanceFactor = GetTeamConfidenceBalanceFactor(match);
         
+        // TODO balance max - min elo in the team
         // TODO if you are waiting for 20 minutes, you must be in the next game
         // TODO recently canceled matches factor
         // TODO match-to-match variance factor
@@ -395,7 +405,7 @@ public class Matchmaker
                   $"tmElo:{teammateEloDifferenceFactor:0.00}, " +
                   $"q:{waitTimeFactor:0.00}, " +
                   $"tComp:{teamCompositionFactor:0.00}, " +
-                  $"blocks:{teamBlockFactor:0.00}" +
+                  $"blocks:{teamBlockFactor:0.00}, " +
                   $"tConf:{teamConfidenceBalanceFactor:0.00}" +
                   $") {match}";
         if (infoLog)
