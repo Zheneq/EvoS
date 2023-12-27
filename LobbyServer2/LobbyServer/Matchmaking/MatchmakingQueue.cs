@@ -42,6 +42,11 @@ namespace CentralServer.LobbyServer.Matchmaking
         {
             return QueuedGroups.TryGetValue(groupId, out time);
         }
+
+        public MatchmakingConfiguration GetConf()
+        {
+            return Conf;
+        }
         
         private static int GameID = 0;
 
@@ -65,7 +70,7 @@ namespace CentralServer.LobbyServer.Matchmaking
             Matchmakers = MatchmakingQueueInfo.GameConfig.SubTypes
                 .ToDictionary(
                     st => st.LocalizedName,
-                    st => new Matchmaker(GameType, st, EloKey, Conf));
+                    st => new Matchmaker(GameType, st, EloKey, GetConf));
         }
 
         private void ReloadConfig()

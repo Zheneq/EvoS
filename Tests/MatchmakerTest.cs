@@ -145,7 +145,7 @@ public class MatchmakerTest : EvosTest
                 TeamBPlayers = 4
             },
             EloKey,
-            conf);
+            () => conf);
         return matchmaker;
     }
 

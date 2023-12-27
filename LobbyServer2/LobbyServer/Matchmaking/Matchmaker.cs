@@ -18,31 +18,33 @@ public class Matchmaker
     private readonly GameType _gameType;
     private readonly GameSubType _subType;
     private readonly string _eloKey;
-    private MatchmakingConfiguration Conf;
+    private readonly Func<MatchmakingConfiguration> _conf;
 
     public Matchmaker(
         AccountDao accountDao,
         GameType gameType,
         GameSubType subType,
         string eloKey,
-        MatchmakingConfiguration conf)
+        Func<MatchmakingConfiguration> conf)
     {
         _accountDao = accountDao;
         _gameType = gameType;
         _subType = subType;
         _eloKey = eloKey;
-        Conf = conf;
+        _conf = conf;
     }
     
     public Matchmaker(
         GameType gameType,
         GameSubType subType,
         string eloKey,
-        MatchmakingConfiguration conf)
+        Func<MatchmakingConfiguration> conf)
         :this(DB.Get().AccountDao, gameType, subType, eloKey, conf)
     {
     }
-
+    
+    private MatchmakingConfiguration Conf => _conf();
+    
     class MatchScratch
     {
         class Team
@@ -289,6 +291,7 @@ public class Matchmaker
                  $"({string.Join(",", queuedGroups.Select(g => g.Players.ToString()))})");
         if (possibleMatches.Count > 0)
         {
+            // TODO log queue with order & wait time
             List<Match> filteredMatches = FilterMatches(possibleMatches, now);
             log.Info($"Found {filteredMatches.Count} allowed matches in " +
                      $"{_gameType}#{_subType.LocalizedName} after filtering");
@@ -385,12 +388,14 @@ public class Matchmaker
         float teamConfidenceBalanceFactor = GetTeamConfidenceBalanceFactor(match);
         
         // TODO balance max - min elo in the team
-        // TODO if you are waiting for 20 minutes, you must be in the next game
         // TODO recently canceled matches factor
         // TODO match-to-match variance factor
         // TODO accumulated wait time (time spent in queue for the last hour?)
         // TODO win history factor (too many losses - try not to put into a disadvantaged team)?
         // TODO non-linearity?
+        
+        // TODO if you are waiting for 20 minutes, you must be in the next game
+        // TODO overrides line "we must have this player in the next match" & "we must start next match by specific time"
 
         float score =
             teamEloDifferenceFactor * Conf.TeamEloDifferenceWeight
