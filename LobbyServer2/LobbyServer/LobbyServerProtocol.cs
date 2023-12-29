@@ -442,7 +442,17 @@ namespace CentralServer.LobbyServer
             GroupInfo group = GroupManager.GetPlayerGroup(AccountId);
             //Sadly message.AccountId returns 0 so look it up by name/handle
             long? accountId = SessionManager.GetOnlinePlayerByHandle(message.Name);
-            if (accountId.HasValue)
+
+            if (!group.IsLeader(AccountId))
+            {
+                Send(new GroupPromoteResponse()
+                {
+                    LocalizedFailure = LocalizationPayload.Create("NotTheLeader@GroupManager"),
+                    Success = false
+                });
+                return;
+            }
+            else if (accountId.HasValue)
             {
                 group.SetLeader((long)accountId);
                 BroadcastRefreshGroup();
@@ -458,7 +468,6 @@ namespace CentralServer.LobbyServer
                 {
                     Send(new GroupPromoteResponse()
                     {
-                        //To send more need LocalizedFailure to be added
                         Success = false
                     });
                 }
