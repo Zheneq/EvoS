@@ -352,12 +352,7 @@ public class Matchmaker
 
     private bool FilterMatch(Match match, DateTime now)
     {
-        int cutoff = int.Max(1, Convert.ToInt32(MathF.Floor(match.Groups.Count() / 2.0f))); // don't want to keep the first ones to queue waiting for too long
-        double waitingTime = match.Groups
-            .Select(g => (now - g.QueueTime).TotalSeconds)
-            .Order()
-            .TakeLast(cutoff)
-            .Average();
+        double waitingTime = GetReferenceTime(match, now);
         int maxEloDiff = Conf.MaxTeamEloDifferenceStart +
                          Convert.ToInt32((Conf.MaxTeamEloDifference - Conf.MaxTeamEloDifferenceStart)
                                          * Math.Clamp(waitingTime / Conf.MaxTeamEloDifferenceWaitTime.TotalSeconds, 0, 1));
@@ -366,6 +361,17 @@ public class Matchmaker
         bool result = eloDiff <= maxEloDiff;
         log.Debug($"{(result ? "A": "Disa")}llowed {match}, elo diff {eloDiff}/{maxEloDiff}, reference queue time {TimeSpan.FromSeconds(waitingTime)}");
         return result;
+    }
+
+    private static double GetReferenceTime(Match match, DateTime now)
+    {
+        int cutoff = int.Max(1, Convert.ToInt32(MathF.Floor(match.Groups.Count() / 2.0f))); // don't want to keep the first ones to queue waiting for too long
+        double waitingTime = match.Groups
+            .Select(g => (now - g.QueueTime).TotalSeconds)
+            .Order()
+            .TakeLast(cutoff)
+            .Average();
+        return waitingTime;
     }
 
     private List<Match> RankMatches(List<Match> matches, DateTime now)
