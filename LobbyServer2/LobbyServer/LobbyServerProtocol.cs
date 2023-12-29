@@ -450,7 +450,6 @@ namespace CentralServer.LobbyServer
                     LocalizedFailure = LocalizationPayload.Create("NotTheLeader@GroupManager"),
                     Success = false
                 });
-                return;
             }
             else if (accountId.HasValue)
             {
