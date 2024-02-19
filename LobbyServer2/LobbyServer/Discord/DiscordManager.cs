@@ -24,13 +24,13 @@ namespace CentralServer.LobbyServer.Discord
     {
         private static DiscordManager _instance;
         private static readonly ILog log = LogManager.GetLogger(typeof(DiscordManager));
-        
-        
+
+
         private static readonly string LINE = "\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_";
         private static readonly string LINE_LONG = LINE + "\\_\\_\\_\\_\\_\\_\\_" + LINE;
 
         private readonly DiscordConfiguration conf;
-        
+
         private readonly DiscordClientWrapper gameLogChannel;
         private readonly DiscordClientWrapper adminChannel;
         private readonly DiscordClientWrapper lobbyChannel;
@@ -45,8 +45,8 @@ namespace CentralServer.LobbyServer.Discord
 
         private static readonly DiscordLobbyUtils.Status NO_STATUS = new DiscordLobbyUtils.Status { totalPlayers = -1, inGame = -1, inQueue = -1 };
         private DiscordLobbyUtils.Status lastStatus = NO_STATUS;
-        
-        
+
+
         public DiscordManager()
         {
             conf = LobbyConfiguration.GetDiscordConfiguration();
@@ -117,7 +117,7 @@ namespace CentralServer.LobbyServer.Discord
             {
                 adminErrorLogChannel = adminChannel;
             }
-            
+
             if (conf.LobbyChannel.IsChannel())
             {
                 log.Info("Discord lobby is enabled");
@@ -137,7 +137,7 @@ namespace CentralServer.LobbyServer.Discord
                 _ = SendServerStatusLoop(cancelTokenSource.Token);
                 ChatManager.Get().OnGlobalChatMessage += SendGlobalChatMessageAsync;
             }
-            
+
             if (adminChatLogChannel is not null)
             {
                 ChatManager.Get().OnChatMessage += SendChatMessageAuditAsync;
@@ -175,8 +175,8 @@ namespace CentralServer.LobbyServer.Discord
             {
                 log.Error("Discord bot token is invalid");
                 return;
-            } 
-            
+            }
+
             // Init bot but we dont use it for anything not yet anyway we just want chat from discord to atlas and commands
             discordBot = new DiscordBotWrapper(conf);
             await discordBot.Login(conf);
@@ -188,7 +188,7 @@ namespace CentralServer.LobbyServer.Discord
             {
                 ChatManager.Get().OnGlobalChatMessage -= SendGlobalChatMessageAsync;
             }
-            
+
             if (adminChatLogChannel is not null)
             {
                 ChatManager.Get().OnChatMessage -= SendChatMessageAuditAsync;
@@ -260,7 +260,7 @@ namespace CentralServer.LobbyServer.Discord
             try
             {
                 await lobbyChannel.SendMessageAsync(
-                        embeds: new []
+                        embeds: new[]
                         {
                             new EmbedBuilder
                             {
@@ -452,7 +452,7 @@ namespace CentralServer.LobbyServer.Discord
             {
                 return;
             }
-            
+
             try
             {
                 if (gameSummary.GameResult == GameResult.TeamAWon
@@ -548,7 +548,7 @@ namespace CentralServer.LobbyServer.Discord
 
             EmbedFooterBuilder footer = new EmbedFooterBuilder
             {
-                Text = $"{serverName} - {serverVersion} - {LobbyServerUtils.GameIdString(gameInfo)}"
+                Text = $"{serverName} - {serverVersion} - {LobbyServerUtils.GameIdString(gameInfo)} - {gameInfo.GameServerProcessCode}"
             };
             eb.Footer = footer;
             return eb.Build();
@@ -611,7 +611,7 @@ namespace CentralServer.LobbyServer.Discord
                 eb.AddField("-", "-", true);
                 return;
             }
-            
+
             PersistedAccountData account = DB.Get().AccountDao.GetAccount(player.AccountId);
             eb.AddField(
                 $"{account.Handle} ({player.CharacterName})",
