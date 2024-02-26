@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using CentralServer.BridgeServer;
+using CentralServer.LobbyServer.Chat;
 using CentralServer.LobbyServer.Friend;
 using CentralServer.LobbyServer.Group;
 using CentralServer.LobbyServer.Matchmaking;
@@ -13,6 +14,7 @@ using EvoS.Framework.DataAccess;
 using EvoS.Framework.Network.Static;
 using log4net;
 using Microsoft.AspNetCore.Http;
+using static EvoS.Framework.DataAccess.Daos.AdminMessageDao;
 using static EvoS.Framework.Network.Static.AdminComponent;
 
 namespace CentralServer.ApiServer
@@ -144,9 +146,18 @@ namespace CentralServer.ApiServer
             public bool locked { get; set; }
             public DateTime lockedUntil { get; set; }
             public string lockedReason { get; set; }
+            public string adminMessage { get; set; }
 
             public static ActivePlayer Of(PersistedAccountData acc)
             {
+                List<AdminMessage> adminMessages = AdminMessageManager.GetAdminMessages(acc.AccountId);
+                // Only show the last admin message if it hasn't been viewed yet, to be viewed they need to launch the game as it pops there to.
+                string adminMessage = "";
+                if (adminMessages.Count > 0 && adminMessages[0] != null && adminMessages[0].viewed == false) // 0 is the last message send by admin
+                {
+                    adminMessage = adminMessages[0].message;
+                }
+
                 return new ActivePlayer
                 {
                     accountId = acc.AccountId,
@@ -158,7 +169,8 @@ namespace CentralServer.ApiServer
                     factionData = TrustWarManager.PlayerTrustWarDetails.Of(acc),
                     locked = acc.AdminComponent.Locked,
                     lockedUntil = acc.AdminComponent.LockedUntil.ToUniversalTime(),
-                    lockedReason = acc.AdminComponent.AdminActions?.FindLast(x => x.ActionType == AdminActionType.Lock)?.Description ?? ""
+                    lockedReason = acc.AdminComponent.AdminActions?.FindLast(x => x.ActionType == AdminActionType.Lock)?.Description ?? "",
+                    adminMessage = adminMessage
                 };
             }
         }
