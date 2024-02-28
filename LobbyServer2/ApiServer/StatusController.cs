@@ -162,7 +162,7 @@ namespace CentralServer.ApiServer
                     locked = acc.AdminComponent.Locked,
                     lockedUntil = acc.AdminComponent.LockedUntil.ToUniversalTime(),
                     lockedReason = acc.AdminComponent.AdminActions?.FindLast(x => x.ActionType == AdminComponent.AdminActionType.Lock)?.Description ?? "",
-                    adminMessage = adminMessage.message
+                    adminMessage = adminMessage?.message
                 };
             }
         }
