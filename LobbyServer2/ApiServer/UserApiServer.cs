@@ -37,7 +37,7 @@ public class UserApiServer : ApiServer
         app.MapGet("/api/lobby/status", StatusController.GetSimpleStatus).AllowAnonymous();
         app.MapGet("/api/lobby/motd/{type}/{language}", GetMotd).AllowAnonymous();
         app.MapGet("/api/lobby/playerInfo", PlayerInfo).RequireAuthorization();
-        app.MapGet("/api/account", ActivePlayer).RequireAuthorization();
+        app.MapGet("/api/account/me", ActivePlayer).RequireAuthorization();
         // app.MapGet("/api/account/linkedAccountSupport", GetThirdPartyAccountTypes).RequireAuthorization();
         // app.MapGet("/api/account/linkAccount", LinkAccount).RequireAuthorization();
         // app.MapGet("/api/account/unlinkAccount", UnlinkAccount).RequireAuthorization();
