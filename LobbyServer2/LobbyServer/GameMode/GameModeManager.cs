@@ -11,10 +11,10 @@ namespace CentralServer.LobbyServer.Gamemode
     class GameModeManager
     {
         private const string ConfigPath = @"Config/GameSubTypes/";
-        private static readonly Dictionary<GameType, string> ConfigFiles = new Dictionary<GameType, string>()
+        private static readonly Dictionary<GameType, List<string>> ConfigFiles = new Dictionary<GameType, List<string>>()
         {
-            { GameType.PvP, "DeathMatch.json" },
-            { GameType.Custom, "Custom.json" }
+            { GameType.PvP, new List<string> { "DeathMatch.json" } },
+            { GameType.Custom, new List<string> { "Custom.json", "CustomTournament.json" } }
         };
 
         public static Dictionary<GameType, GameTypeAvailability> GetGameTypeAvailabilities()
@@ -108,10 +108,14 @@ namespace CentralServer.LobbyServer.Gamemode
             GameTypeAvailability type = new GameTypeAvailability();
             type.IsActive = LobbyConfiguration.GetGameTypePvPAvailable();
             type.MaxWillFillPerTeam = 4;
-            type.SubTypes = new List<GameSubType>()
+            List<GameSubType> subTypes = new List<GameSubType>();
+
+            foreach (string file in ConfigFiles[GameType.PvP])
             {
-                LoadGameSubType(ConfigFiles[GameType.PvP])
-            };
+                subTypes.Add(LoadGameSubType(file));
+            }
+
+            type.SubTypes = subTypes;
             return type;
         }
 
@@ -145,10 +149,14 @@ namespace CentralServer.LobbyServer.Gamemode
             GameTypeAvailability type = new GameTypeAvailability();
             type.IsActive = LobbyConfiguration.GetGameTypeCustomAvailable();
             type.MaxWillFillPerTeam = 5;
-            type.SubTypes = new List<GameSubType>()
+            List<GameSubType> subTypes = new List<GameSubType>();
+
+            foreach (string file in ConfigFiles[GameType.Custom])
             {
-                LoadGameSubType(ConfigFiles[GameType.Custom])
-            };
+                subTypes.Add(LoadGameSubType(file));
+            }
+
+            type.SubTypes = subTypes;
             return type;
         }
 

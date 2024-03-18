@@ -523,9 +523,15 @@ namespace CentralServer.LobbyServer.Discord
             LobbyGameSummary gameSummary)
         {
             string map = Maps.GetMapName[gameInfo.GameConfig.Map];
+            string gameType = gameInfo.GameConfig.GameType.ToString();
+
+            if (gameInfo.GameServerProcessCode.Contains("TournamentGame")) {
+                gameType = "Tournament";
+            }
+
             EmbedBuilder eb = new EmbedBuilder
             {
-                Title = $"Game Result for {gameInfo.GameConfig.GameType} {map ?? gameInfo.GameConfig.Map}",
+                Title = $"Game Result for {gameType} {map ?? gameInfo.GameConfig.Map}",
                 Description =
                     $"{RenderGameResult(gameSummary.GameResult)} " +
                     $"{gameSummary.TeamAPoints}-{gameSummary.TeamBPoints} ({gameSummary.NumOfTurns} turns)",

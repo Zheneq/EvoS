@@ -1,0 +1,65 @@
+{
+  "LocalizedName": "PlayerTitle_47_Unlock_1_Condition@GameWideData",
+  "GameMapConfigs": [
+    {
+      "Map": "Skyway_Deathmatch",
+      "IsActive": true
+    },
+    {
+      "Map": "CargoShip_Deathmatch",
+      "IsActive": true
+    },
+    {
+      "Map": "Casino01_Deathmatch",
+      "IsActive": true
+    },
+    {
+      "Map": "EvosLab_Deathmatch",
+      "IsActive": true
+    },
+    {
+      "Map": "Oblivion_Deathmatch",
+      "IsActive": true
+    },
+    {
+      "Map": "Reactor_Deathmatch",
+      "IsActive": true
+    },
+    {
+      "Map": "RobotFactory_Deathmatch",
+      "IsActive": true
+    }
+  ],
+  "TeamAPlayers": 1,
+  "TeamBPlayers": 1,
+  "TeamABots": 0,
+  "TeamBBots": 0,
+  "TeamComposition": {
+    "Rules": {
+      "A1": {
+        "Roles": [
+          "Tank",
+          "Assassin",
+          "Support"
+        ]
+      },
+      "B1": {
+        "Roles": [
+          "Tank",
+          "Assassin",
+          "Support"
+        ]
+      }
+    }
+  },
+  "RewardBucket": "NoRewards",
+  "PersistedStatBucket": "DoNotPersist",
+  "Mods": [
+    "AllowPlayingLockedCharacters",
+    "HumansHaveFirstSlots",
+    "RankedFreelancerSelection"
+  ],
+  "GameOverrides": {
+    "TurnTimeSpan": "00:00:20"
+  }
+}
