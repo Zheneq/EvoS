@@ -1,3 +1,6 @@
+using System;
+using EvoS.Framework.Network.NetworkMessages;
+
 namespace CentralServer.LobbyServer.Group
 {
     public class GroupRequestInfo
@@ -6,14 +9,25 @@ namespace CentralServer.LobbyServer.Group
         public readonly long RequesterAccountId;
         public readonly long RequesteeAccountId;
         public readonly long GroupId;
-        // TODO expiration
+        public readonly GroupConfirmationRequest.JoinType JoinType;
+        public readonly DateTime Expiration;
 
-        public GroupRequestInfo(long requestId, long requesterAccountId, long requesteeAccountId, long groupId)
+        public GroupRequestInfo(
+            long requestId,
+            long requesterAccountId,
+            long requesteeAccountId,
+            long groupId,
+            GroupConfirmationRequest.JoinType joinType,
+            DateTime expiration)
         {
             RequestId = requestId;
             RequesterAccountId = requesterAccountId;
             RequesteeAccountId = requesteeAccountId;
             GroupId = groupId;
+            JoinType = joinType;
+            Expiration = expiration;
         }
+
+        public bool IsInvitation => JoinType == GroupConfirmationRequest.JoinType.InviteToFormGroup;
     }
 }

@@ -10,13 +10,12 @@ namespace EvoS.Framework.Network.NetworkMessages
 		[EvosMessage(370)]
 		public enum Status
 		{
-			Online,
-			Away,
-			Busy
+			Denied,
+			Error,
+			Success
 		}
 
 		public Status SuggestionStatus;
-
 		public long SuggesterAccountId;
 	}
 }

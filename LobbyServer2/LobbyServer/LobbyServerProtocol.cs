@@ -64,6 +64,8 @@ namespace CentralServer.LobbyServer
 
         public LobbyServerPlayerInfo PlayerInfo => CurrentGame?.GetPlayerInfo(AccountId);
 
+        public string Handle => LobbyServerUtils.GetHandle(AccountId);
+
         public event Action<LobbyServerProtocol, ChatNotification> OnChatNotification = delegate { };
         public event Action<LobbyServerProtocol, GroupChatRequest> OnGroupChatRequest = delegate { };
 
@@ -89,6 +91,7 @@ namespace CentralServer.LobbyServer
             RegisterHandler<LeaveMatchmakingQueueRequest>(HandleLeaveMatchmakingQueueRequest);
             RegisterHandler<ChatNotification>(HandleChatNotification);
             RegisterHandler<GroupInviteRequest>(HandleGroupInviteRequest);
+            RegisterHandler<GroupJoinRequest>(HandleGroupJoinRequest);
             RegisterHandler<GroupConfirmationResponse>(HandleGroupConfirmationResponse);
             RegisterHandler<GroupSuggestionResponse>(HandleGroupSuggestionResponse);
             RegisterHandler<GroupLeaveRequest>(HandleGroupLeaveRequest);
@@ -1053,189 +1056,445 @@ namespace CentralServer.LobbyServer
 
         public void HandleGroupInviteRequest(GroupInviteRequest request)
         {
-            long? friendAccountId = SessionManager.GetOnlinePlayerByHandle(request.FriendHandle);
-            if (!friendAccountId.HasValue)
+            var response = new GroupInviteResponse
             {
-                log.Warn($"Failed to find player {request.FriendHandle} invited to group by {AccountId}");
-                Send(new GroupInviteResponse
-                {
-                    FriendHandle = request.FriendHandle,
-                    ResponseId = request.RequestId,
-                    Success = false
-                });
+                FriendHandle = request.FriendHandle,
+                ResponseId = request.RequestId,
+                Success = false
+            };
+            
+            long friendAccountId = SessionManager.GetOnlinePlayerByHandle(request.FriendHandle) ?? 0;
+            if (friendAccountId == 0)
+            {
+                log.Info($"Failed to find player {request.FriendHandle} to invite to a group");
+                response.LocalizedFailure = GroupMessages.PlayerNotFound(request.FriendHandle);
+                Send(response);
                 return;
             }
 
-            SocialComponent socialComponent = DB.Get().AccountDao.GetAccount((long)friendAccountId)?.SocialComponent;
-            if (socialComponent?.IsBlocked(AccountId) == true)
+            if (friendAccountId == AccountId)
             {
-                log.Warn($"{AccountId} attempted to invite {request.FriendHandle} who blocked them");
-                Send(new GroupInviteResponse
-                {
-                    FriendHandle = request.FriendHandle,
-                    ResponseId = request.RequestId,
-                    Success = true // shadow ban
-                });
+                log.Info($"{Handle} attempted to invite themself to a group");
+                response.LocalizedFailure = GroupMessages.CantInviteYourself;
+                Send(response);
                 return;
             }
 
             GroupInfo group = GroupManager.GetPlayerGroup(AccountId);
+            if (group.Members.Contains(friendAccountId))
+            {
+                log.Info($"{Handle} attempted to invite {request.FriendHandle} to a group when they are already there");
+                response.LocalizedFailure = GroupMessages.AlreadyInYourGroup(friendAccountId);
+                Send(response);
+                return;
+            }
+            
+            PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
+            SocialComponent socialComponent = account?.SocialComponent;
+            PersistedAccountData friendAccount = DB.Get().AccountDao.GetAccount(friendAccountId);
+            SocialComponent friendSocialComponent = friendAccount?.SocialComponent;
+            PersistedAccountData leaderAccount = DB.Get().AccountDao.GetAccount(group.Leader);
+            
+            if (account is null || friendAccount is null || leaderAccount is null)
+            {
+                log.Error($"Failed to send group invite request: "
+                          + $"account={account?.Handle} "
+                          + $"friendAccount={friendAccount?.Handle}.");
+                Send(response);
+                return;
+            }
+            
+            if (socialComponent?.IsBlocked(friendAccountId) == true)
+            {
+                log.Info($"{Handle} attempted to invite {request.FriendHandle} whom they blocked to a group");
+                response.LocalizedFailure = GroupMessages.YouAreBlocking(friendAccountId);
+                Send(response);
+                return;
+            }
+            
+            if (friendSocialComponent?.IsBlocked(AccountId) == true)
+            {
+                log.Info($"{Handle} attempted to invite {request.FriendHandle} who blocked them to a group");
+                response.Success = true; // shadow ban
+                Send(response);
+                return;
+            }
+            
+            LobbyServerProtocol friend = SessionManager.GetClientConnection(friendAccountId);
+            if (friend is null) // offline
+            {
+                log.Info($"{Handle} attempted to invite {request.FriendHandle} who is offline to a group");
+                response.LocalizedFailure = GroupMessages.PlayerNotFound(request.FriendHandle);
+                Send(response);
+                return;
+            }
 
             if (group.Members.Count == LobbyConfiguration.GetMaxGroupSize())
             {
-                log.Warn($"{AccountId} attempted to invite {request.FriendHandle} into a full group");
-                Send(new GroupInviteResponse
-                {
-                    FriendHandle = request.FriendHandle,
-                    ResponseId = request.RequestId,
-                    Success = false
-                });
+                log.Info($"{Handle} attempted to invite {request.FriendHandle} into a full group");
+                response.LocalizedFailure = GroupMessages.MemberFailedToJoinGroupIsFull(request.FriendHandle);
+                Send(response);
                 return;
             }
-
-            GroupConfirmationRequest.JoinType joinType;
-            if (group == null)
+            
+            GroupInfo friendGroup = GroupManager.GetPlayerGroup(friendAccountId);
+            if (!friendGroup.IsSolo())
             {
-                joinType = GroupConfirmationRequest.JoinType.InviteToFormGroup;
-                GroupManager.CreateGroup(AccountId);
-                group = GroupManager.GetPlayerGroup(AccountId);
-                log.Info($"{AccountId} created group {group.GroupId}");
-            }
-            else
-            {
-                // TODO request to join group
-                // joinType = group.IsSolo()
-                //     ? GroupConfirmationRequest.JoinType.InviteToFormGroup
-                //     : GroupConfirmationRequest.JoinType.RequestToJoinGroup;
-                joinType = GroupConfirmationRequest.JoinType.InviteToFormGroup;
-            }
-
-            PersistedAccountData requester = DB.Get().AccountDao.GetAccount(AccountId);
-            PersistedAccountData leader = DB.Get().AccountDao.GetAccount(group.Leader);
-            LobbyServerProtocol friend = SessionManager.GetClientConnection((long)friendAccountId);
-
-            if (friend == null)  // can be offline
-            {
-                log.Info($"{AccountId}/{requester.Handle} failed to invite {friend.AccountId}/{request.FriendHandle} to group {group.GroupId} for they are offline");
-                Send(new GroupInviteResponse
-                {
-                    FriendHandle = request.FriendHandle,
-                    ResponseId = request.RequestId,
-                    Success = false
-                });
+                log.Info($"{Handle} attempted to invite {request.FriendHandle} who is already in a group");
+                response.LocalizedFailure = GroupMessages.OtherPlayerInOtherGroup(request.FriendHandle);
+                Send(response);
                 return;
             }
+            
+            // TODO GROUPS AleadyInvitedPlayerToGroup@Invite? You've already invited {0}, please await their response.
 
+            TimeSpan expirationTime = LobbyConfiguration.GetGroupConfiguration().InviteTimeout;
             if (group.Leader == AccountId)
             {
+                GroupConfirmationRequest.JoinType joinType = GroupConfirmationRequest.JoinType.InviteToFormGroup;
                 friend.Send(new GroupConfirmationRequest
                 {
                     GroupId = group.GroupId,
-                    LeaderName = leader.Handle,
-                    LeaderFullHandle = leader.Handle,
-                    JoinerName = requester.Handle,
-                    JoinerAccountId = AccountId,
-                    ConfirmationNumber = GroupManager.CreateGroupRequest(AccountId, friend.AccountId, group.GroupId),
-                    ExpirationTime = TimeSpan.FromSeconds(20),
-                    Type = joinType,
-                    // RequestId = TODO
+                    LeaderName = account.UserName,
+                    LeaderFullHandle = account.Handle,
+                    JoinerName = friendAccount.Handle,
+                    JoinerAccountId = friendAccount.AccountId,
+                    ConfirmationNumber = GroupManager.CreateGroupRequest(
+                        AccountId, friendAccount.AccountId, group.GroupId, joinType, expirationTime),
+                    ExpirationTime = expirationTime,
+                    Type = joinType
                 });
                 if (EvosConfiguration.GetPingOnGroupRequest() && !friend.IsInGroup() && !friend.IsInGame())
                 {
                     friend.Send(new ChatNotification
                     {
                         SenderAccountId = AccountId,
-                        SenderHandle = requester.Handle,
+                        SenderHandle = account.Handle,
                         ConsoleMessageType = ConsoleMessageType.WhisperChat,
-                        Text = "[Group request]"
+                        LocalizedText = LocalizationPayload.Create("GroupRequest", "Global")
                     });
                 }
 
-                log.Info($"{AccountId}/{requester.Handle} invited {friend.AccountId}/{request.FriendHandle} to group {group.GroupId}");
-                Send(new GroupInviteResponse
+                log.Info($"{AccountId}/{account.Handle} invited {friend.AccountId}/{request.FriendHandle} to group {group.GroupId}");
+                response.Success = true;
+                Send(response);
+
+                LocalizationPayload message = GroupMessages.InvitedFriendToGroup(friendAccount.AccountId);
+                foreach (long groupMember in group.Members)
                 {
-                    FriendHandle = request.FriendHandle,
-                    ResponseId = request.RequestId,
-                    Success = true
-                });
+                    if (groupMember != AccountId)
+                    {
+                        SessionManager.GetClientConnection(groupMember)?.SendSystemMessage(message);
+                    }
+                }
             }
             else
             {
-                LobbyServerProtocol leaderSession = SessionManager.GetClientConnection(leader.AccountId);
+                LobbyServerProtocol leaderSession = SessionManager.GetClientConnection(leaderAccount.AccountId);
                 leaderSession.Send(new GroupSuggestionRequest
                 {
                     LeaderAccountId = group.Leader,
                     SuggestedAccountFullHandle = request.FriendHandle,
-                    SuggesterAccountName = requester.Handle,
+                    SuggesterAccountName = account.Handle,
                     SuggesterAccountId = AccountId,
                 });
             }
         }
+        
+        public void HandleGroupJoinRequest(GroupJoinRequest request)
+        {
+            var response = new GroupJoinResponse
+            {
+                FriendHandle = request.FriendHandle,
+                ResponseId = request.RequestId,
+                Success = false
+            };
+            
+            GroupInfo myGroup = GroupManager.GetPlayerGroup(AccountId);
+            if (!myGroup.IsSolo())
+            {
+                log.Info($"{Handle} attempted to join {request.FriendHandle}'s group while being in another group.");
+                response.LocalizedFailure = GroupMessages.CantJoinIfInGroup;
+                Send(response);
+                return;
+            }
+                
+            long friendAccountId = SessionManager.GetOnlinePlayerByHandle(request.FriendHandle) ?? 0;
+            if (friendAccountId == 0)
+            {
+                log.Info($"Failed to find player {request.FriendHandle} to request to join their group.");
+                response.LocalizedFailure = GroupMessages.PlayerNotFound(request.FriendHandle);
+                Send(response);
+                return;
+            }
+
+            PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
+            SocialComponent socialComponent = account?.SocialComponent;
+            PersistedAccountData friendAccount = DB.Get().AccountDao.GetAccount(friendAccountId);
+            SocialComponent friendSocialComponent = friendAccount?.SocialComponent;
+            PersistedAccountData leaderAccount = DB.Get().AccountDao.GetAccount(myGroup.Leader);
+            SocialComponent leaderSocialComponent = leaderAccount?.SocialComponent;
+
+            if (account is null || friendAccount is null || leaderAccount is null)
+            {
+                log.Error($"Failed to send join group request: "
+                          + $"account={account?.Handle} "
+                          + $"friendAccount={friendAccount?.Handle} "
+                          + $"leaderAccount={leaderAccount?.Handle}.");
+                Send(response);
+                return;
+            }
+            
+            if (socialComponent?.IsBlocked(friendAccountId) == true)
+            {
+                log.Info($"{Handle} attempted to join {request.FriendHandle}'s group whom they blocked");
+                response.LocalizedFailure = GroupMessages.YouAreBlocking(friendAccountId);
+                Send(response);
+                return;
+            }
+            
+            if (friendSocialComponent?.IsBlocked(AccountId) == true)
+            {
+                log.Info($"{Handle} attempted to join {request.FriendHandle}'s group who blocked them");
+                response.Success = true; // shadow ban
+                Send(response);
+                return;
+            }
+            
+            if (leaderSocialComponent?.IsBlocked(AccountId) == true)
+            {
+                log.Info($"{Handle} attempted to join {leaderAccount.Handle}'s group who blocked them via {request.FriendHandle}");
+                response.Success = true; // shadow ban
+                Send(response);
+                return;
+            }
+            
+            GroupInfo friendGroup = GroupManager.GetPlayerGroup(friendAccountId);
+            if (friendGroup.IsSolo())
+            {
+                log.Info($"{Handle} attempted to join {request.FriendHandle}'s ({friendAccountId}) group while they are solo.");
+                response.LocalizedFailure = GroupMessages.OtherPlayerNotInGroup(friendAccountId);
+                Send(response);
+                return;
+            }
+            
+            LobbyServerProtocol friend = SessionManager.GetClientConnection(friendAccountId);
+            if (friend is null) // offline
+            {
+                log.Info($"{Handle} attempted to join {request.FriendHandle}'s group who is offline");
+                response.LocalizedFailure = GroupMessages.PlayerNotFound(request.FriendHandle);
+                Send(response);
+                return;
+            }
+            
+            if (friendGroup.Members.Count == LobbyConfiguration.GetMaxGroupSize())
+            {
+                log.Warn($"{AccountId} attempted to join {request.FriendHandle}'s full group");
+                response.LocalizedFailure = GroupMessages.FailedToJoinGroupIsFull;
+                Send(response);
+                return;
+            }
+
+            TimeSpan expirationTime = LobbyConfiguration.GetGroupConfiguration().InviteTimeout;
+            GroupConfirmationRequest.JoinType joinType = GroupConfirmationRequest.JoinType.RequestToJoinGroup;
+            LobbyServerProtocol leaderSession = SessionManager.GetClientConnection(friendGroup.Leader);
+            leaderSession.Send(new GroupConfirmationRequest
+            {
+                GroupId = friendGroup.GroupId,
+                LeaderName = account.UserName,
+                LeaderFullHandle = account.Handle,
+                JoinerName = account.Handle,
+                JoinerAccountId = AccountId,
+                ConfirmationNumber = GroupManager.CreateGroupRequest(
+                    AccountId, friendGroup.Leader, friendGroup.GroupId, joinType, expirationTime),
+                ExpirationTime = expirationTime,
+                Type = joinType
+            });
+
+            response.Success = true;
+            Send(response);
+        }
 
         public void HandleGroupSuggestionResponse(GroupSuggestionResponse response)
         {
-            //Is this needed? 
+            LobbyServerProtocol suggester = SessionManager.GetClientConnection(response.SuggesterAccountId);
+            if (suggester is null)
+            {
+                return;
+            }
+
+            if (response.SuggestionStatus == GroupSuggestionResponse.Status.Denied)
+            {
+                suggester.SendSystemMessage(GroupMessages.LeaderRejectedSuggestion);
+            }
+            // nothing else to say as we don't know who was suggested
         }
 
         public void HandleGroupConfirmationResponse(GroupConfirmationResponse response)
         {
+            GroupInfo myGroup = GroupManager.GetPlayerGroup(AccountId);
+            GroupRequestInfo groupRequestInfo = GroupManager.PopGroupRequest(response.ConfirmationNumber);
+
+            if (groupRequestInfo is null)
+            {
+                log.Error($"Player {AccountId} responded to not found request {response.ConfirmationNumber} "
+                          + $"to join group {response.GroupId} by {response.JoinerAccountId}: {response.Acceptance}");
+                if (response.GroupId == myGroup.GroupId)
+                {
+                    SendSystemMessage(GroupMessages.MemberFailedToJoinGroupInviteExpired(response.JoinerAccountId));
+                }
+                else
+                {
+                    SendSystemMessage(GroupMessages.FailedToJoinGroupInviteExpired(response.JoinerAccountId));
+                }
+                return;
+            }
+
+            string typeForLog = groupRequestInfo.IsInvitation
+                ? "invitation"
+                : "request";
+            if (groupRequestInfo.RequesteeAccountId != AccountId)
+            {
+                log.Info($"Player {AccountId} responded to {typeForLog} {response.ConfirmationNumber} "
+                         + $"to {groupRequestInfo.RequesteeAccountId} to join group {response.GroupId} "
+                         + $"by {response.JoinerAccountId}: {response.Acceptance}");
+                SendSystemMessage(GroupMessages.FailedToJoinUnknownError);
+                return;
+            }
+            
+            LobbyServerProtocol requester = SessionManager.GetClientConnection(groupRequestInfo.RequesterAccountId);
+            if (requester is null)
+            {
+                log.Info($"Player {AccountId} responded to {typeForLog} {response.ConfirmationNumber} "
+                         + $"to {groupRequestInfo.RequesteeAccountId} to join group {response.GroupId} "
+                         + $"by {response.JoinerAccountId} who is offline");
+                if (groupRequestInfo.IsInvitation)
+                {
+                    SendSystemMessage(GroupMessages.FailedToJoinGroupCreatorOffline);
+                }
+                else
+                {
+                    SendSystemMessage(GroupMessages.MemberFailedToJoinGroupPlayerNotFound(groupRequestInfo.RequesterAccountId));
+                }
+                return;
+            }
+
+            GroupInfo requesterGroup = GroupManager.GetPlayerGroup(groupRequestInfo.RequesterAccountId);
+            if (groupRequestInfo.IsInvitation)
+            {
+                if (groupRequestInfo.GroupId != requesterGroup.GroupId)
+                {
+                    log.Info($"Player {AccountId} responded to {typeForLog} {response.ConfirmationNumber} "
+                             + $"to {groupRequestInfo.RequesteeAccountId} to join group {response.GroupId} "
+                             + $"by {response.JoinerAccountId} who is already in another group");
+                    SendSystemMessage(GroupMessages.FailedToJoinGroupOtherPlayerInOtherGroup(groupRequestInfo.RequesterAccountId));
+                    return;
+                }
+
+                if (!myGroup.IsSolo())
+                {
+                    log.Info($"Player {AccountId} responded to {typeForLog} {response.ConfirmationNumber} "
+                             + $"to {groupRequestInfo.RequesteeAccountId} to join group {response.GroupId} "
+                             + $"by {response.JoinerAccountId} but they are already in a group");
+                    SendSystemMessage(GroupMessages.FailedToJoinGroupCantJoinIfInGroup);
+                    return;
+                }
+            }
+            else
+            {
+                if (groupRequestInfo.GroupId != myGroup.GroupId)
+                {
+                    log.Info($"Player {AccountId} responded to {typeForLog} {response.ConfirmationNumber} "
+                             + $"to {groupRequestInfo.RequesteeAccountId} to join group {response.GroupId} "
+                             + $"by {response.JoinerAccountId} but they are already in another group");
+                    requester.SendSystemMessage(GroupMessages.FailedToJoinGroupOtherPlayerInOtherGroup(groupRequestInfo.RequesterAccountId));
+                    SendSystemMessage(GroupMessages.MemberFailedToJoinGroupInviteExpired(groupRequestInfo.RequesterAccountId));
+                    return;
+                }
+
+                if (!requesterGroup.IsSolo())
+                {
+                    log.Info($"Player {AccountId} responded to {typeForLog} {response.ConfirmationNumber} "
+                             + $"to {groupRequestInfo.RequesteeAccountId} to join group {response.GroupId} "
+                             + $"by {response.JoinerAccountId} who is already in a group");
+                    SendSystemMessage(GroupMessages.MemberFailedToJoinGroupOtherPlayerInOtherGroup(groupRequestInfo.RequesterAccountId));
+                    return;
+                }
+            }
+            
+            if (response.Acceptance != GroupInviteResponseType.PlayerAccepted)
+            {
+                log.Info($"Player {AccountId} rejected {typeForLog} {response.ConfirmationNumber} " +
+                         $"to join group {response.GroupId} by {response.JoinerAccountId}: {response.Acceptance}");
+            }
+            else
+            {
+                log.Info($"Player {AccountId} accepted {typeForLog} {response.ConfirmationNumber} " +
+                         $"to join group {response.GroupId} by {response.JoinerAccountId}: {response.Acceptance}");
+            }
+            
             switch (response.Acceptance)
             {
                 case GroupInviteResponseType.PlayerRejected:
+                    requester.SendSystemMessage(GroupMessages.RejectedGroupInvite(AccountId));
+                    break;
                 case GroupInviteResponseType.OfferExpired:
+                    requester.SendSystemMessage(
+                        groupRequestInfo.IsInvitation
+                            ? GroupMessages.JoinGroupOfferExpired(AccountId)
+                            : GroupMessages.FailedToJoinGroupInviteExpired(AccountId));
+                    break;
                 case GroupInviteResponseType.RequestorSpamming:
+                    requester.SendSystemMessage(GroupMessages.AlreadyRejectedInvite(AccountId));
+                    break;
                 case GroupInviteResponseType.PlayerInCustomMatch:
+                    requester.SendSystemMessage(GroupMessages.PlayerInACustomMatchAtTheMoment(AccountId));
+                    break;
                 case GroupInviteResponseType.PlayerStillAwaitingPreviousQuery:
-                    log.Info($"Player {AccountId} rejected request {response.ConfirmationNumber} " +
-                             $"to join group {response.GroupId} by {response.JoinerAccountId}: {response.Acceptance}");
-                    // TODO send message
+                    requester.SendSystemMessage(GroupMessages.PlayerStillConsideringYourPreviousInviteRequest(AccountId));
                     break;
                 case GroupInviteResponseType.PlayerAccepted:
-                    log.Info($"Player {AccountId} accepted request {response.ConfirmationNumber} " +
-                             $"to join group {response.GroupId} by {response.JoinerAccountId}: {response.Acceptance}");
 
-                    // Check if the player is currently in a game.
-                    if (CurrentGame != null)
+                    if (CurrentGame != null && !LobbyConfiguration.GetGroupConfiguration().CanInviteActiveOpponents)
                     {
-                        // Get the server associated with the inviting player.
                         Game game = GameManager.GetGameWithPlayer(response.JoinerAccountId);
 
-                        // Check if the inviting player is on the same server.
                         if (game != null && game == CurrentGame)
                         {
-                            // Find the player information for both the inviting player and the current player.
                             LobbyServerPlayerInfo lobbyServerOtherPlayerInfo = game.TeamInfo.TeamPlayerInfo
                                 .FirstOrDefault(p => p.AccountId == response.JoinerAccountId);
                             LobbyServerPlayerInfo lobbyServerPlayerInfo = game.TeamInfo.TeamPlayerInfo
                                 .FirstOrDefault(p => p.AccountId == AccountId);
 
-                            // Check if the players are on opposing teams.
                             if (lobbyServerOtherPlayerInfo?.TeamId != lobbyServerPlayerInfo?.TeamId)
                             {
                                 log.Info($"Player {AccountId} is trying to accept a group invite but is currently on the opposing team.");
-                                // Send an error message indicating that members of opposing teams cannot group.
-                                // Failed to join group: Members of opposing teams cannot group.
-                                SendSystemMessage(LocalizationPayload.Create("FailedToJoinGroupError", "GroupInvite",
-                                                                        LocalizationArg_LocalizationPayload.Create(
-                                                                            LocalizationPayload.Create("CantInviteActiveOpponent", "AddFollower"))));
+                                SendSystemMessage(GroupMessages.FailedToJoinGroupCantInviteActiveOpponent);
                                 break;
                             }
                         }
                     }
 
-                    // TODO validation
-                    GroupManager.JoinGroup(response.GroupId, AccountId);
+                    GroupManager.JoinGroup(
+                        groupRequestInfo.GroupId,
+                        groupRequestInfo.IsInvitation
+                            ? groupRequestInfo.RequesteeAccountId
+                            : groupRequestInfo.RequesterAccountId);
                     BroadcastRefreshFriendList();
+                    requester.BroadcastRefreshFriendList();
                     break;
             }
         }
-
+        
         public void HandleGroupLeaveRequest(GroupLeaveRequest request)
         {
             GroupManager.CreateGroup(AccountId);
             BroadcastRefreshFriendList();
         }
-
+        
+        // TODO
+        // No message handler registered for GameInvitationRequest
+        
         private void OnAccountVisualsUpdated()
         {
             BroadcastRefreshFriendList();

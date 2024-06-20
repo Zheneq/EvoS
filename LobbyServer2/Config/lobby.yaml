@@ -4,6 +4,10 @@ PatchNotesCommitsUrl: https://api.github.com/repos/Zheneq/EvoS/commits?per_page=
 EnableTrustWar: true
 TrustWarGamePlayedPoints: 5
 TrustWarGameWonPoints: 10
+GroupConfig:
+  MaxGroupSize: 4
+  InviteTimeout: 00:00:20
+  CanInviteActiveOpponents: false
 Discord:
   Enabled: false
   BotToken: "" # Enter the bots token leave empty to disable

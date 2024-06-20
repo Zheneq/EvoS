@@ -20,7 +20,9 @@ namespace CentralServer.LobbyServer.Group
         
         private static readonly Dictionary<long, GroupInfo> ActiveGroups = new Dictionary<long, GroupInfo>();
         private static readonly Dictionary<long, long> PlayerToGroup = new Dictionary<long, long>();
-        private static readonly Dictionary<long, GroupRequestInfo> GroupRequests = new Dictionary<long, GroupRequestInfo>();
+        private static readonly Dictionary<long, GroupRequestInfo> GroupRequests = new Dictionary<long, GroupRequestInfo>(); // TODO GROUPS periodically purge expired + send JoinGroupOfferExpired@Group
+        // TODO GROUPS LeaderLoggedOff@Invite ?? Leader has logged off.
+        
         private static long _lastGroupId = -1;
         private static long _lastGroupRequestId = -1;
         private static readonly object _lock = new object();
@@ -58,7 +60,12 @@ namespace CentralServer.LobbyServer.Group
             return null;
         }
         
-        public static long CreateGroupRequest(long requesterAccountId, long requesteeAccountId, long groupId)
+        public static long CreateGroupRequest(
+            long requesterAccountId,
+            long requesteeAccountId,
+            long groupId,
+            GroupConfirmationRequest.JoinType joinType,
+            TimeSpan expirationTime)
         {
             lock (_lock)
             {
@@ -68,11 +75,36 @@ namespace CentralServer.LobbyServer.Group
                 }
 
                 long requestId = Interlocked.Increment(ref _lastGroupRequestId);
-                // TODO
-                // GroupRequests.Add(
-                //     requestId,
-                //     new GroupRequestInfo(requestId, requesterAccountId, requesteeAccountId, groupId));
+                GroupRequests.Add(
+                    requestId,
+                    new GroupRequestInfo(
+                        requestId,
+                        requesterAccountId,
+                        requesteeAccountId,
+                        groupId,
+                        joinType,
+                        DateTime.UtcNow.Add(expirationTime)));
                 return requestId;
+            }
+        }
+
+        public static GroupRequestInfo PopGroupRequest(long requestId)
+        {
+            lock (_lock)
+            {
+                GroupRequests.Remove(requestId, out GroupRequestInfo requestInfo);
+                if (requestInfo is not null && requestInfo.Expiration.AddSeconds(10) < DateTime.UtcNow)
+                {
+                    log.Error(
+                        $"Attempted to access an expired group {
+                            (requestInfo.JoinType == GroupConfirmationRequest.JoinType.InviteToFormGroup
+                                ? "invitation"
+                                : "request")
+                        } {requestId} to {requestInfo.RequesteeAccountId} to join group {
+                            requestInfo.GroupId} by {requestInfo.RequesterAccountId}");
+                    return null;
+                }
+                return requestInfo;
             }
         }
         
@@ -96,12 +128,15 @@ namespace CentralServer.LobbyServer.Group
                 {
                     GroupInfo groupInfo = ActiveGroups[groupId];
                     groupInfo.RemovePlayer(accountId);
+                    // TODO GROUPS MemberLeftGroup@Group / MemberKickedFromGroup@Group
+                    // TODO GROUPS NewLeader@Group
                     PlayerToGroup.Remove(accountId);
                     log.Info($"Removed {accountId} from group {groupId}");
                     if (groupInfo.IsEmpty())
                     {
                         ActiveGroups.Remove(groupId);
                         log.Info($"Group {groupId} disbanded");
+                        // TODO GROUPS GroupDisbanded@Group
                     }
                     leftGroup = groupInfo;
                 }
@@ -133,10 +168,12 @@ namespace CentralServer.LobbyServer.Group
                         groupInfo.AddPlayer(accountId);
                         PlayerToGroup.Add(accountId, groupId);
                         log.Info($"Added {accountId} to group {groupId}");
+                        // TODO GROUPS MemberJoinedGroup@Group
                         joinedGroup = groupInfo;
                     } 
                     else
                     {
+                        // TODO GROUPS MemberFailedToJoin@Group +- GroupIsFull@Invite
                         log.Error($"Player {accountId} attempted to join a full group {groupId}");
                     }
                 }

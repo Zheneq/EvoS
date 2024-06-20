@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using CentralServer.LobbyServer.Discord;
+using CentralServer.LobbyServer.Group;
 using YamlDotNet.Serialization;
 
 namespace EvoS.Framework
@@ -22,7 +23,6 @@ namespace EvoS.Framework
         public bool GameTypePvPAvailable = true;
         public bool GameTypeRankedAvailable = false;
         public bool GameTypeCustomAvailable = true;
-        public int MaxGroupSize = 5;
         public bool MatchAbandoningPenalty = true;
         public int ServerReserveSize = 0;
         public TimeSpan ServerGGTime = TimeSpan.FromSeconds(5);
@@ -32,6 +32,7 @@ namespace EvoS.Framework
         public bool EnableTrustWar = true;
         public int TrustWarGamePlayedPoints = 5;
         public int TrustWarGameWonPoints = 10;
+        public GroupConfiguration GroupConfig = new GroupConfiguration();
 
         private static LobbyConfiguration GetInstance()
         {
@@ -103,7 +104,7 @@ namespace EvoS.Framework
 
         public static int GetMaxGroupSize()
         {
-            return GetInstance().MaxGroupSize > 5 ? 5 : GetInstance().MaxGroupSize;
+            return GetGroupConfiguration().MaxGroupSize > 5 ? 5 : GetGroupConfiguration().MaxGroupSize;
         }
 
         public static int GetServerReserveSize()
@@ -149,6 +150,11 @@ namespace EvoS.Framework
         public static bool IsTrustWarEnabled()
         {
             return GetInstance().EnableTrustWar;
+        }
+
+        public static GroupConfiguration GetGroupConfiguration()
+        {
+            return GetInstance().GroupConfig;
         }
     }
 }
