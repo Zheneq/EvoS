@@ -6,8 +6,7 @@ export interface LoginResponse {
     banner: number;
 }
 
-export interface Status
-{
+export interface Status {
     players: PlayerData[];
     groups: GroupData[];
     queues: QueueData[];
@@ -15,8 +14,7 @@ export interface Status
     games: GameData[];
 }
 
-export interface PlayerData
-{
+export interface PlayerData {
     accountId: number;
     handle: string;
     bannerBg: number;
@@ -30,26 +28,22 @@ export interface PlayerDetails {
     mutedUntil?: string;
 }
 
-export interface GroupData
-{
+export interface GroupData {
     groupId: number;
     accountIds: number[];
 }
 
-export interface QueueData
-{
+export interface QueueData {
     type: string;
     groupIds: number[];
 }
 
-export interface ServerData
-{
+export interface ServerData {
     id: string;
     name: string;
 }
 
-export interface GameData
-{
+export interface GameData {
     id: string;
     ts: string;
     server: string;
@@ -212,7 +206,7 @@ export const MessagesWithMetadata = new Set([
     EvosServerMessageType.LauncherNotification
 ]);
 
-export function asDate(date?: string) : Date | undefined {
+export function asDate(date?: string): Date | undefined {
     return date ? new Date(date) : undefined;
 }
 
@@ -220,17 +214,17 @@ export function formatDate(ts: string): string {
     return ts ? new Date(ts).toLocaleString() : "N/A";
 }
 
-export function cap(txt: string) : string {
+export function cap(txt: string): string {
     return txt.charAt(0).toUpperCase() + txt.slice(1);
 }
 
-export function toMap<I, K, V>(input: I[], keyMapper: (i: I) => K, valueMapper: (i: I) => V) : Map<K, V> {
+export function toMap<I, K, V>(input: I[], keyMapper: (i: I) => K, valueMapper: (i: I) => V): Map<K, V> {
     const res = new Map<K, V>();
     input.forEach(i => res.set(keyMapper(i), valueMapper(i)));
     return res;
 }
 
-export function makeServerMsgData(msgMap: Map<Language,string>, severity: EvosServerMessageSeverity): ServerMessageData {
+export function makeServerMsgData(msgMap: Map<Language, string>, severity: EvosServerMessageSeverity): ServerMessageData {
     return {
         msg: Object.fromEntries(msgMap),
         severity: severity,
@@ -249,87 +243,87 @@ export function login(abort: AbortController, username: string, password: string
 export function getStatus(authHeader: string) {
     return axios.get<Status>(
         baseUrl + "/api/admin/lobby/status",
-        { headers: {'Authorization': authHeader} });
+        { headers: { 'Authorization': authHeader } });
 }
 
 export function findPlayers(abort: AbortController, authHeader: string, query: string) {
     return axios.get<SearchResults>(
         baseUrl + "/api/admin/player/find",
-        { params: { query: query }, headers: {'Authorization': authHeader}, signal: abort.signal });
+        { params: { query: query }, headers: { 'Authorization': authHeader }, signal: abort.signal });
 }
 
 export function getPlayer(abort: AbortController, authHeader: string, accountId: number) {
     return axios.get<PlayerDetails>(
         baseUrl + "/api/admin/player/details",
-        { params: { AccountId: accountId }, headers: {'Authorization': authHeader}, signal: abort.signal });
+        { params: { AccountId: accountId }, headers: { 'Authorization': authHeader }, signal: abort.signal });
 }
 
 export function pauseQueue(abort: AbortController, authHeader: string, paused: boolean) {
     return axios.put(
         baseUrl + "/api/admin/queue/paused",
         { Paused: paused },
-        { headers: {'Authorization': authHeader}, signal: abort.signal });
+        { headers: { 'Authorization': authHeader }, signal: abort.signal });
 }
 
 export function scheduleShutdown(abort: AbortController, authHeader: string, type: PendingShutdownType) {
     return axios.put(
         baseUrl + "/api/admin/server/shutdown",
         { Type: type },
-        { headers: {'Authorization': authHeader}, signal: abort.signal });
+        { headers: { 'Authorization': authHeader }, signal: abort.signal });
 }
 
 export function broadcast(abort: AbortController, authHeader: string, message: string) {
     return axios.post(
         baseUrl + "/api/admin/lobby/broadcast",
         { Msg: message },
-        { headers: {'Authorization': authHeader}, signal: abort.signal });
+        { headers: { 'Authorization': authHeader }, signal: abort.signal });
 }
 
 export function mute(authHeader: string, penaltyInfo: PenaltyInfo) {
     return axios.post(
         baseUrl + "/api/admin/player/muted",
         penaltyInfo,
-        { headers: {'Authorization': authHeader} });
+        { headers: { 'Authorization': authHeader } });
 }
 
 export function ban(authHeader: string, penaltyInfo: PenaltyInfo) {
     return axios.post(
         baseUrl + "/api/admin/player/banned",
         penaltyInfo,
-        { headers: {'Authorization': authHeader} });
+        { headers: { 'Authorization': authHeader } });
 }
 
 export function sendAdminMessage(abort: AbortController, authHeader: string, accountId: number, msg: string) {
     return axios.post(
         baseUrl + "/api/admin/player/adminMessage",
         { accountId: accountId, description: msg },
-        { headers: {'Authorization': authHeader}, signal: abort.signal });
+        { headers: { 'Authorization': authHeader }, signal: abort.signal });
 }
 
 export function getAdminMessages(abort: AbortController, authHeader: string, accountId: number) {
     return axios.get<AdminMessagesResponse>(
         baseUrl + "/api/admin/player/adminMessage",
-        { params: { accountId: accountId }, headers: {'Authorization': authHeader}, signal: abort.signal });
+        { params: { accountId: accountId }, headers: { 'Authorization': authHeader }, signal: abort.signal });
 }
 
 export function issueRegistrationCode(abort: AbortController, authHeader: string, data: RegistrationCodeRequest) {
     return axios.post<RegistrationCodeResponse>(
         baseUrl + "/api/admin/player/registrationCode",
         data,
-        { headers: {'Authorization': authHeader}, signal: abort.signal });
+        { headers: { 'Authorization': authHeader }, signal: abort.signal });
 }
 
 export function getRegistrationCodes(abort: AbortController, authHeader: string, before: Date) {
     return axios.get<RegistrationCodesResponse>(
         baseUrl + "/api/admin/player/registrationCode",
-        { params: { before: Math.floor(before.getTime() / 1000) }, headers: {'Authorization': authHeader}, signal: abort.signal });
+        { params: { before: Math.floor(before.getTime() / 1000) }, headers: { 'Authorization': authHeader }, signal: abort.signal });
 }
 
 export function generateTempPassword(abort: AbortController, authHeader: string, accountId: number) {
     return axios.post<RegistrationCodeResponse>(
         baseUrl + "/api/admin/player/generateTempPassword",
         { accountId: accountId },
-        { headers: {'Authorization': authHeader}, signal: abort.signal });
+        { headers: { 'Authorization': authHeader }, signal: abort.signal });
 }
 
 export function getMotd(abort: AbortController, type: EvosServerMessageType) {
@@ -342,5 +336,12 @@ export function setMotd(abort: AbortController, authHeader: string, type: EvosSe
     return axios.put(
         baseUrl + "/api/admin/lobby/motd/" + type,
         msg,
-        { headers: {'Authorization': authHeader}, signal: abort.signal });
+        { headers: { 'Authorization': authHeader }, signal: abort.signal });
+}
+
+export function shutdownServer(abort: AbortController, authHeader: string, processCode: string) {
+    return axios.post(
+        baseUrl + "/api/admin/server/shutdowngame",
+        { processCode: processCode},
+        { headers: { 'Authorization': authHeader }, signal: abort.signal });
 }

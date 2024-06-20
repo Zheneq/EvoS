@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
 using System.Text.Json.Serialization;
+using CentralServer.BridgeServer;
 using CentralServer.LobbyServer;
 using CentralServer.LobbyServer.Chat;
 using CentralServer.LobbyServer.Config;
@@ -12,6 +13,7 @@ using CentralServer.LobbyServer.Session;
 using CentralServer.LobbyServer.Utils;
 using EvoS.DirectoryServer.Account;
 using EvoS.Framework;
+using EvoS.Framework.Constants.Enums;
 using EvoS.Framework.DataAccess;
 using EvoS.Framework.DataAccess.Daos;
 using EvoS.Framework.Network.Static;
@@ -25,15 +27,15 @@ namespace CentralServer.ApiServer
     public static class AdminController
     {
         private static readonly ILog log = LogManager.GetLogger(typeof(AdminController));
-        
-        public static event Action<long, PauseQueueModel> OnAdminPauseQueue = delegate {};
-        public static event Action<long, PendingShutdownModel> OnAdminScheduleShutdown = delegate {};
-        
+
+        public static event Action<long, PauseQueueModel> OnAdminPauseQueue = delegate { };
+        public static event Action<long, PendingShutdownModel> OnAdminScheduleShutdown = delegate { };
+
         public class PauseQueueModel
         {
             public bool Paused { get; set; }
         }
-        
+
         public static IResult PauseQueue([FromBody] PauseQueueModel data, ClaimsPrincipal user)
         {
             if (!ValidateAdmin(user, out IResult error, out long adminAccountId, out string adminHandle))
@@ -45,13 +47,13 @@ namespace CentralServer.ApiServer
             OnAdminPauseQueue(adminAccountId, data);
             return Results.Ok();
         }
-        
+
         public class PendingShutdownModel
         {
             [JsonConverter(typeof(JsonStringEnumConverter))]
             public CentralServer.PendingShutdownType Type { get; set; }
         }
-        
+
         public static IResult ScheduleShutdown([FromBody] PendingShutdownModel data, ClaimsPrincipal user)
         {
             if (!ValidateAdmin(user, out IResult error, out long adminAccountId, out string adminHandle))
@@ -69,7 +71,7 @@ namespace CentralServer.ApiServer
         {
             public string Msg { get; set; }
         }
-        
+
         public static IResult Broadcast([FromBody] BroadcastModel data, ClaimsPrincipal user)
         {
             if (!ValidateAdmin(user, out IResult error, out long adminAccountId, out string adminHandle))
@@ -84,7 +86,7 @@ namespace CentralServer.ApiServer
             SessionManager.Broadcast(data.Msg);
             return Results.Ok();
         }
-        
+
         public class ServerMessageModel
         {
             public ServerMessage Msg { get; set; }
@@ -105,19 +107,19 @@ namespace CentralServer.ApiServer
                     };
             }
         }
-        
+
         public static IResult SetMotd([FromBody] ServerMessageModel data, ClaimsPrincipal user, string type)
         {
             if (!ValidateAdmin(user, out IResult error, out long adminAccountId, out string adminHandle))
             {
                 return error;
             }
-            
+
             if (!Enum.TryParse(type, true, out EvosServerMessageType messageType))
             {
                 return Results.NotFound();
             }
-            
+
             if (!Enum.TryParse(data.Severity, true, out EvosServerMessageSeverity messageSeverity))
             {
                 return Results.BadRequest();
@@ -132,7 +134,7 @@ namespace CentralServer.ApiServer
             });
             return Results.Ok();
         }
-        
+
         public static IResult GetMotd(string type)
         {
             if (!Enum.TryParse(type, true, out EvosServerMessageType messageType))
@@ -176,7 +178,7 @@ namespace CentralServer.ApiServer
         public struct SearchResults
         {
             public List<StatusController.Player> players { get; set; }
-            
+
             public static SearchResults Of(PersistedAccountData acc)
             {
                 return new SearchResults
@@ -184,7 +186,7 @@ namespace CentralServer.ApiServer
                     players = new List<StatusController.Player> { StatusController.Player.Of(acc) },
                 };
             }
-            
+
             public static SearchResults Of(List<PersistedAccountData> accounts)
             {
                 return new SearchResults
@@ -225,14 +227,14 @@ namespace CentralServer.ApiServer
 
             return Results.NotFound();
         }
-        
+
         public class PenaltyInfo
         {
             public long accountId { get; set; }
             public int durationMinutes { get; set; }
             public string description { get; set; }
         }
-        
+
         public static IResult MuteUser([FromBody] PenaltyInfo data, ClaimsPrincipal user)
         {
             if (!ValidateAdmin(user, out IResult error, out long adminAccountId, out string adminHandle)
@@ -248,7 +250,7 @@ namespace CentralServer.ApiServer
             bool success = AdminManager.Get().Mute(data.accountId, TimeSpan.FromMinutes(data.durationMinutes), adminHandle, data.description);
             return success ? Results.Ok() : Results.Problem();
         }
-        
+
         public static IResult BanUser([FromBody] PenaltyInfo data, ClaimsPrincipal user)
         {
             if (!ValidateAdmin(user, out IResult error, out long adminAccountId, out string adminHandle)
@@ -264,7 +266,7 @@ namespace CentralServer.ApiServer
             bool success = AdminManager.Get().Ban(data.accountId, TimeSpan.FromMinutes(data.durationMinutes), adminHandle, data.description);
             return success ? Results.Ok() : Results.Problem();
         }
-        
+
         public static IResult SendAdminMessage([FromBody] PenaltyInfo data, ClaimsPrincipal user)
         {
             if (!ValidateAdmin(user, out IResult error, out long adminAccountId, out string adminHandle))
@@ -276,8 +278,8 @@ namespace CentralServer.ApiServer
             bool success = AdminManager.Get().SendAdminMessage(data.accountId, adminAccountId, data.description);
             return success ? Results.Ok() : Results.Problem();
         }
-        
-        
+
+
         public class AdminMessagesResponseModel
         {
             public List<AdminMessageEntryModel> entries { get; set; }
@@ -303,7 +305,7 @@ namespace CentralServer.ApiServer
                 };
             }
         }
-        
+
         public static IResult GetAdminMessages(long accountId, ClaimsPrincipal user)
         {
             if (!ValidateAdmin(user, out IResult error, out long adminAccountId, out string adminHandle))
@@ -323,12 +325,12 @@ namespace CentralServer.ApiServer
                     .ToList()
             });
         }
-        
+
         public class AccountIdModel
         {
             public long accountId { get; set; }
         }
-        
+
         public static IResult GenerateTempPassword([FromBody] AccountIdModel data, ClaimsPrincipal user)
         {
             if (!ValidateAdmin(user, out IResult error, out long adminAccountId, out string adminHandle))
@@ -342,17 +344,17 @@ namespace CentralServer.ApiServer
                 ? Results.Problem()
                 : Results.Ok(new RegistrationCodeResponseModel { code = tempPassword });
         }
-        
+
         public class RegistrationCodeRequestModel
         {
             public string issueFor { get; set; }
         }
-        
+
         public class RegistrationCodeResponseModel
         {
             public string code { get; set; }
         }
-        
+
         public static IResult IssueRegistrationCode([FromBody] RegistrationCodeRequestModel data, ClaimsPrincipal user)
         {
             if (!ValidateAdmin(user, out IResult error, out long adminAccountId, out string adminHandle))
@@ -362,12 +364,12 @@ namespace CentralServer.ApiServer
 
             if (!LoginManager.IsAllowedUsername(data.issueFor))
             {
-                return Results.BadRequest(new ApiServer.ErrorResponseModel {message = "Invalid username"});
+                return Results.BadRequest(new ApiServer.ErrorResponseModel { message = "Invalid username" });
             }
 
             if (DB.Get().LoginDao.Find(data.issueFor.ToLower()) is not null)
             {
-                return Results.Conflict(new ApiServer.ErrorResponseModel {message = "Username already in use"});
+                return Results.Conflict(new ApiServer.ErrorResponseModel { message = "Username already in use" });
             }
 
             log.Info($"API ISSUE by {adminHandle} ({adminAccountId}): {data.issueFor}");
@@ -385,7 +387,7 @@ namespace CentralServer.ApiServer
             });
             return Results.Ok(new RegistrationCodeResponseModel { code = code });
         }
-        
+
         public class RegistrationCodesResponseModel
         {
             public List<RegistrationCodeEntryModel> entries { get; set; }
@@ -424,7 +426,7 @@ namespace CentralServer.ApiServer
             {
                 return Results.BadRequest("You cannot specify both offset and issue time limit.");
             }
-            
+
             if (!ValidateAdmin(user, out IResult error, out _, out _))
             {
                 return error;
@@ -482,6 +484,50 @@ namespace CentralServer.ApiServer
             }
 
             return true;
+        }
+
+        public class ShutdownModel
+        {
+            public string processCode { get; set; }
+        }
+
+
+        public static IResult ShutDownServer([FromBody] ShutdownModel data, ClaimsPrincipal user)
+        {
+            if (!ValidateAdmin(user, out IResult error, out long adminAccountId, out string adminHandle))
+            {
+                return error;
+            }
+
+            if (data.processCode == null)
+            {
+                return Results.BadRequest();
+            }
+
+            List<Game> games = GameManager.GetGames();
+            if (games == null)
+            {
+                return Results.NotFound();
+            }
+            else
+            {
+                foreach (Game game in games)
+                {
+                    if (game.ProcessCode == data.processCode)
+                    {
+                        if (game.GameStatus == GameStatus.Started)
+                        {
+                            game.Server.AdminShutdown(GameResult.TieGame);
+                        }
+                        else
+                        {
+                            game.Server.Shutdown();
+                        }
+                        return Results.Ok();
+                    }
+                }
+            }
+            return Results.NotFound();
         }
     }
 }

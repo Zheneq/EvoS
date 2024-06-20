@@ -51,6 +51,7 @@ public class AdminApiServer : ApiServer
         app.MapGet("/api/admin/lobby/motd/{type}", AdminController.GetMotd).AllowAnonymous();
         app.MapPut("/api/admin/queue/paused", AdminController.PauseQueue).RequireAuthorization("api_admin");
         app.MapPut("/api/admin/server/shutdown", AdminController.ScheduleShutdown).RequireAuthorization("api_admin");
+        app.MapPost("/api/admin/server/shutdowngame", AdminController.ShutDownServer).RequireAuthorization("api_admin");
         app.MapGet("/api/admin/player/find", AdminController.FindUser).RequireAuthorization("api_admin");
         app.MapGet("/api/admin/player/details", AdminController.GetUser).RequireAuthorization("api_admin");
         app.MapPost("/api/admin/player/muted", AdminController.MuteUser).RequireAuthorization("api_admin");
