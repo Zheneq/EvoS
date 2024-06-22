@@ -2,8 +2,44 @@ using CentralServer.LobbyServer.Utils;
 
 namespace CentralServer.LobbyServer.Group;
 
+// TODO GROUPS replace handles with usernames
 public static class GroupMessages
 {
+    public static LocalizationPayload MemberJoinedGroup(long accountId)
+    {
+        return LocalizationPayload.Create(
+            "MemberJoinedGroup",
+            "Group",
+            LocalizationArg_Handle.Create(LobbyServerUtils.GetHandle(accountId)));
+    }
+    
+    public static LocalizationPayload MemberLeftGroup(long accountId)
+    {
+        return LocalizationPayload.Create(
+            "MemberLeftGroup",
+            "Group",
+            LocalizationArg_Handle.Create(LobbyServerUtils.GetHandle(accountId)));
+    }
+    
+    public static LocalizationPayload MemberKickedFromGroup(long accountId)
+    {
+        return LocalizationPayload.Create(
+            "MemberKickedFromGroup",
+            "Group",
+            LocalizationArg_Handle.Create(LobbyServerUtils.GetHandle(accountId)));
+    }
+    
+    public static LocalizationPayload NewLeader(long accountId)
+    {
+        return LocalizationPayload.Create(
+            "NewLeader",
+            "Group",
+            LocalizationArg_Handle.Create(LobbyServerUtils.GetHandle(accountId)));
+    }
+
+    public static LocalizationPayload GroupDisbanded { get; }
+        = LocalizationPayload.Create("GroupDisbanded", "Group");
+    
     public static LocalizationPayload FailedToJoinGroupInviteExpired(long inviterAccountId)
     {
         return LocalizationPayload.Create(
@@ -70,6 +106,11 @@ public static class GroupMessages
                     "UnknownError",
                     "Global")));
 
+    public static LocalizationPayload MemberFailedToJoinGroupIsFull(long accountId)
+    {
+        return MemberFailedToJoinGroupIsFull(LobbyServerUtils.GetHandle(accountId));
+    }
+
     public static LocalizationPayload MemberFailedToJoinGroupIsFull(string handle)
     {
         return LocalizationPayload.Create(
@@ -80,6 +121,18 @@ public static class GroupMessages
                 LocalizationPayload.Create(
                     "GroupIsFull",
                     "Invite")));
+    }
+
+    public static LocalizationPayload MemberFailedToJoinUnknownError(long accountId)
+    {
+        return LocalizationPayload.Create(
+            "MemberFailedToJoin",
+            "Group",
+            LocalizationArg_Handle.Create(LobbyServerUtils.GetHandle(accountId)),
+            LocalizationArg_LocalizationPayload.Create(
+                LocalizationPayload.Create(
+                    "UnknownError",
+                    "Global")));
     }
 
     public static LocalizationPayload MemberFailedToJoinGroupInviteExpired(long inviterAccountId)

@@ -119,24 +119,23 @@ namespace CentralServer.LobbyServer.Group
             JoinGroup(groupId, leader);
         }
 
-        public static bool LeaveGroup(long accountId, bool warnIfNotInAGroup = true)
+        public static bool LeaveGroup(long accountId, bool warnIfNotInAGroup = true, bool wasKicked = false)
         {
             GroupInfo leftGroup = null;
+            bool wasLeader = false;
             lock (_lock)
             {
                 if (PlayerToGroup.TryGetValue(accountId, out long groupId))
                 {
                     GroupInfo groupInfo = ActiveGroups[groupId];
+                    wasLeader = groupInfo.IsLeader(accountId);
                     groupInfo.RemovePlayer(accountId);
-                    // TODO GROUPS MemberLeftGroup@Group / MemberKickedFromGroup@Group
-                    // TODO GROUPS NewLeader@Group
                     PlayerToGroup.Remove(accountId);
                     log.Info($"Removed {accountId} from group {groupId}");
                     if (groupInfo.IsEmpty())
                     {
                         ActiveGroups.Remove(groupId);
                         log.Info($"Group {groupId} disbanded");
-                        // TODO GROUPS GroupDisbanded@Group
                     }
                     leftGroup = groupInfo;
                 }
@@ -150,6 +149,19 @@ namespace CentralServer.LobbyServer.Group
             {
                 OnLeaveGroup(accountId);
                 OnGroupMembersUpdated(leftGroup);
+                BroadcastSystemMessage(
+                    leftGroup,
+                    wasKicked
+                        ? GroupMessages.MemberKickedFromGroup(accountId)
+                        : GroupMessages.MemberLeftGroup(accountId));
+                if (leftGroup.IsSolo())
+                {
+                    BroadcastSystemMessage(leftGroup, GroupMessages.GroupDisbanded);
+                }
+                else if (wasLeader)
+                {
+                    BroadcastSystemMessage(leftGroup, GroupMessages.NewLeader(leftGroup.Leader));
+                }
             }
 
             return leftGroup != null;
@@ -158,23 +170,24 @@ namespace CentralServer.LobbyServer.Group
         public static void JoinGroup(long groupId, long accountId)
         {
             GroupInfo joinedGroup = null;
+            GroupInfo groupInfo = null;
+            bool isGroupFull = false;
             lock (_lock)
             {
                 LeaveGroup(accountId, false);
-                if (ActiveGroups.TryGetValue(groupId, out GroupInfo groupInfo))
+                if (ActiveGroups.TryGetValue(groupId, out groupInfo))
                 {
                     if (groupInfo.Members.Count < LobbyConfiguration.GetMaxGroupSize())
                     {
                         groupInfo.AddPlayer(accountId);
                         PlayerToGroup.Add(accountId, groupId);
                         log.Info($"Added {accountId} to group {groupId}");
-                        // TODO GROUPS MemberJoinedGroup@Group
                         joinedGroup = groupInfo;
                     } 
                     else
                     {
-                        // TODO GROUPS MemberFailedToJoin@Group +- GroupIsFull@Invite
                         log.Error($"Player {accountId} attempted to join a full group {groupId}");
+                        isGroupFull = true;
                     }
                 }
                 else
@@ -187,9 +200,22 @@ namespace CentralServer.LobbyServer.Group
             {
                 OnJoinGroup(accountId);
                 OnGroupMembersUpdated(joinedGroup);
+                
+                BroadcastSystemMessage(joinedGroup, GroupMessages.MemberJoinedGroup(accountId), accountId);
             }
             else
             {
+                BroadcastSystemMessage(
+                    groupInfo,
+                    isGroupFull
+                        ? GroupMessages.MemberFailedToJoinGroupIsFull(accountId)
+                        : GroupMessages.MemberFailedToJoinUnknownError(accountId));
+                SessionManager.GetClientConnection(accountId)?.SendSystemMessage(
+                    isGroupFull
+                        ? GroupMessages.FailedToJoinGroupIsFull
+                        : GroupMessages.FailedToJoinUnknownError);
+                
+                
                 CreateGroup(accountId);
             }
         }
@@ -309,11 +335,27 @@ namespace CentralServer.LobbyServer.Group
             SessionManager.GetClientConnection(groupInfo.Leader)?.BroadcastRefreshGroup(false);
         }
 
-        public static void Broadcast(GroupInfo group, WebSocketMessage message)
+        public static void Broadcast(GroupInfo group, WebSocketMessage message, long skipAccountId = 0)
         {
             foreach (long groupMember in group.Members)
             {
+                if (groupMember == skipAccountId)
+                {
+                    continue;
+                }
                 SessionManager.GetClientConnection(groupMember)?.Send(message);
+            }
+        }
+
+        public static void BroadcastSystemMessage(GroupInfo group, LocalizationPayload message, long skipAccountId = 0)
+        {
+            foreach (long groupMember in group.Members)
+            {
+                if (groupMember == skipAccountId)
+                {
+                    continue;
+                }
+                SessionManager.GetClientConnection(groupMember)?.SendSystemMessage(message);
             }
         }
 

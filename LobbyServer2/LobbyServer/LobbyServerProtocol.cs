@@ -514,7 +514,7 @@ namespace CentralServer.LobbyServer
                 else
                 {
                     long accountId = memberData.AccountID;
-                    response.Success = GroupManager.LeaveGroup(accountId, false);
+                    response.Success = GroupManager.LeaveGroup(accountId, false, true);
                 }
                 if (!response.Success)
                 {
