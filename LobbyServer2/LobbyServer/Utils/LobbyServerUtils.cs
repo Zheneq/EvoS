@@ -37,6 +37,12 @@ namespace CentralServer.LobbyServer.Utils
             return DB.Get().AccountDao.GetAccount(accountId)?.Handle ?? "UNKNOWN";
         }
 
+        public static string GetHandleForLog(long accountId)
+        {
+            PersistedAccountData account = DB.Get().AccountDao.GetAccount(accountId);
+            return account is not null ? $"{account.UserName}#{accountId}" : "UNKNOWN";
+        }
+
         public static string GameIdString(LobbyGameInfo gameInfo)
         {
             return gameInfo != null

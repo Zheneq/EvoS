@@ -40,6 +40,9 @@ public static class GroupMessages
     public static LocalizationPayload GroupDisbanded { get; }
         = LocalizationPayload.Create("GroupDisbanded", "Group");
     
+    public static LocalizationPayload LeaderLoggedOff { get; }
+        = LocalizationPayload.Create("LeaderLoggedOff", "Invite");
+    
     public static LocalizationPayload FailedToJoinGroupInviteExpired(long inviterAccountId)
     {
         return LocalizationPayload.Create(

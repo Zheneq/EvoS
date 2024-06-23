@@ -29,5 +29,7 @@ namespace CentralServer.LobbyServer.Group
         }
 
         public bool IsInvitation => JoinType == GroupConfirmationRequest.JoinType.InviteToFormGroup;
+
+        public bool HasExpiredPadded => Expiration.AddSeconds(10) < DateTime.UtcNow;
     }
 }

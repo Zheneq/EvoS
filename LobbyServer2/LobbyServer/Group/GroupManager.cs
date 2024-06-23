@@ -18,10 +18,9 @@ namespace CentralServer.LobbyServer.Group
     {
         private static readonly ILog log = LogManager.GetLogger(typeof(GroupManager));
         
-        private static readonly Dictionary<long, GroupInfo> ActiveGroups = new Dictionary<long, GroupInfo>();
-        private static readonly Dictionary<long, long> PlayerToGroup = new Dictionary<long, long>();
-        private static readonly Dictionary<long, GroupRequestInfo> GroupRequests = new Dictionary<long, GroupRequestInfo>(); // TODO GROUPS periodically purge expired + send JoinGroupOfferExpired@Group
-        // TODO GROUPS LeaderLoggedOff@Invite ?? Leader has logged off.
+        private static readonly Dictionary<long, GroupInfo> ActiveGroups = new();
+        private static readonly Dictionary<long, long> PlayerToGroup = new();
+        private static readonly Dictionary<long, GroupRequestInfo> GroupRequests = new();
         
         private static long _lastGroupId = -1;
         private static long _lastGroupRequestId = -1;
@@ -93,7 +92,7 @@ namespace CentralServer.LobbyServer.Group
             lock (_lock)
             {
                 GroupRequests.Remove(requestId, out GroupRequestInfo requestInfo);
-                if (requestInfo is not null && requestInfo.Expiration.AddSeconds(10) < DateTime.UtcNow)
+                if (requestInfo is not null && requestInfo.HasExpiredPadded)
                 {
                     log.Error(
                         $"Attempted to access an expired group {
@@ -105,6 +104,45 @@ namespace CentralServer.LobbyServer.Group
                     return null;
                 }
                 return requestInfo;
+            }
+        }
+
+        public static void PingGroupRequests()
+        {
+            lock (_lock)
+            {
+                List<long> requestsToRemove = new List<long>();
+                foreach (var (id, request) in GroupRequests)
+                {
+                    if (!request.HasExpiredPadded)
+                    {
+                        continue;
+                    }
+                    
+                    LobbyServerProtocol requesterConn = SessionManager.GetClientConnection(request.RequesterAccountId);
+                    LobbyServerProtocol requesteeConn = SessionManager.GetClientConnection(request.RequesteeAccountId);
+                    if (requesteeConn is not null)
+                    {
+                        log.Warn($"Request {id} to {LobbyServerUtils.GetHandleForLog(
+                            request.RequesteeAccountId)} has expired while they were online");
+                    }
+                        
+                    if (requesteeConn is null && !request.IsInvitation)
+                    {
+                        requesterConn?.SendSystemMessage(GroupMessages.LeaderLoggedOff);
+                    }
+                    else
+                    {
+                        requesterConn?.SendSystemMessage(
+                            request.IsInvitation
+                                ? GroupMessages.JoinGroupOfferExpired(request.RequesteeAccountId)
+                                : GroupMessages.FailedToJoinGroupInviteExpired(request.RequesteeAccountId));
+                    }
+
+                    requestsToRemove.Add(id);
+                }
+                
+                requestsToRemove.ForEach(id => GroupRequests.Remove(id));
             }
         }
         

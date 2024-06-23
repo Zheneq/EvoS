@@ -8,6 +8,7 @@ using CentralServer.LobbyServer.Chat;
 using CentralServer.LobbyServer.CustomGames;
 using CentralServer.LobbyServer.Discord;
 using CentralServer.LobbyServer.Friend;
+using CentralServer.LobbyServer.Group;
 using CentralServer.LobbyServer.Matchmaking;
 using CentralServer.LobbyServer.Session;
 using EvoS.Framework;
@@ -72,6 +73,9 @@ namespace CentralServer
 
             FriendsTask friendsTask = new FriendsTask(CancellationToken.None);
             _ = Task.Run(friendsTask.Run, CancellationToken.None);
+
+            GroupsTask groupsTask = new GroupsTask(CancellationToken.None);
+            _ = Task.Run(groupsTask.Run, CancellationToken.None);
 
             MatchmakingTask matchmakingTask = new MatchmakingTask(CancellationToken.None);
             _ = Task.Run(matchmakingTask.Run, CancellationToken.None);
