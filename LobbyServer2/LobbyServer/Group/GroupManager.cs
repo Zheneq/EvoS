@@ -366,7 +366,7 @@ namespace CentralServer.LobbyServer.Group
             GroupInfo groupInfo = GetGroup(groupId);
             if (groupInfo is null)
             {
-                log.Error($"Received OnLeaveQueue for group {groupId} that does not exist");
+                log.Info($"Received OnLeaveQueue for group {groupId} that does not exist");
                 return;
             }
             Broadcast(groupInfo, new MatchmakingQueueAssignmentNotification { MatchmakingQueueInfo = null });
