@@ -271,7 +271,7 @@ namespace CentralServer.LobbyServer.Group
                 HasFullAccess = true,
                 IsLeader = groupInfo.IsLeader(account.AccountId),
                 IsReady = session?.IsReady == true,
-                IsInGame = false, // TODO
+                IsInGame = session?.IsInGame() == true,
                 // CreateGameTimestamp = session.CreateGameTimestamp,
                 AccountID = account.AccountId,
                 MemberDisplayCharacter = account.AccountComponent.LastCharacter,
