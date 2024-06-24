@@ -46,6 +46,7 @@ namespace CentralServer.LobbyServer
                 {
                     _currentGame = value;
                     BroadcastRefreshFriendList();
+                    BroadcastRefreshGroup();
                 }
             }
         }
