@@ -264,7 +264,7 @@ namespace CentralServer.LobbyServer.Group
             LobbyServerProtocol session = SessionManager.GetClientConnection(accountId);
             CharacterComponent characterComponent = account.CharacterData[account.AccountComponent.LastCharacter].CharacterComponent;
 
-            return new UpdateGroupMemberData()
+            return new UpdateGroupMemberData
             {
                 MemberDisplayName = account.Handle,
                 MemberHandle = account.Handle,
@@ -272,7 +272,7 @@ namespace CentralServer.LobbyServer.Group
                 IsLeader = groupInfo.IsLeader(account.AccountId),
                 IsReady = session?.IsReady == true,
                 IsInGame = session?.IsInGame() == true,
-                // CreateGameTimestamp = session.CreateGameTimestamp,
+                CreateGameTimestamp = session?.CurrentGame?.GameInfo?.CreateTimestamp ?? 0L,
                 AccountID = account.AccountId,
                 MemberDisplayCharacter = account.AccountComponent.LastCharacter,
                 VisualData = new GroupMemberVisualData
