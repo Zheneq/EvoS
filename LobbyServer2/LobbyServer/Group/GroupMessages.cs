@@ -192,12 +192,29 @@ public static class GroupMessages
             LocalizationArg_Handle.Create(handle));
     }
 
+    public static LocalizationPayload RequestToJoinGroup(long accountId)
+    {
+        return LocalizationPayload.Create(
+            "RequestToJoinGroup",
+            "Invite",
+            LocalizationArg_Handle.Create(LobbyServerUtils.GetHandle(accountId)));
+    }
+
     public static LocalizationPayload InvitedFriendToGroup(long accountId)
     {
         return LocalizationPayload.Create(
             "InvitedFriendToGroup",
             "Global",
             LocalizationArg_Handle.Create(LobbyServerUtils.GetHandle(accountId)));
+    }
+
+    public static LocalizationPayload InviteToGroupWithYou(long suggesterAccountId, long inviteeAccountId)
+    {
+        return LocalizationPayload.Create(
+            "InviteToGroupWithYou",
+            "Global",
+            LocalizationArg_Handle.Create(LobbyServerUtils.GetHandle(suggesterAccountId)),
+            LocalizationArg_Handle.Create(LobbyServerUtils.GetHandle(inviteeAccountId)));
     }
 
     public static LocalizationPayload OtherPlayerNotInGroup(long otherPlayerAccountId)

@@ -327,7 +327,7 @@ namespace CentralServer.LobbyServer
         {
             Game prevServer = CurrentGame;
             CurrentGame = game;
-            log.Info($"{LobbyServerUtils.GetHandle(AccountId)} joined {game?.ProcessCode} (was in {prevServer?.ProcessCode})");
+            log.Info($"{LobbyServerUtils.GetHandle(AccountId)} joined {game?.ProcessCode} (was in {prevServer?.ProcessCode ?? "lobby"})");
         }
 
         public bool LeaveGame(Game game)
@@ -1180,14 +1180,10 @@ namespace CentralServer.LobbyServer
                 response.Success = true;
                 Send(response);
 
-                LocalizationPayload message = GroupMessages.InvitedFriendToGroup(friendAccount.AccountId);
-                foreach (long groupMember in group.Members)
-                {
-                    if (groupMember != AccountId)
-                    {
-                        SessionManager.GetClientConnection(groupMember)?.SendSystemMessage(message);
-                    }
-                }
+                GroupManager.BroadcastSystemMessage(
+                    group,
+                    GroupMessages.InvitedFriendToGroup(friendAccount.AccountId),
+                    AccountId);
             }
             else
             {
@@ -1199,6 +1195,10 @@ namespace CentralServer.LobbyServer
                     SuggesterAccountName = account.Handle,
                     SuggesterAccountId = AccountId,
                 });
+                GroupManager.BroadcastSystemMessage(
+                    group,
+                    GroupMessages.InviteToGroupWithYou(AccountId, friendAccount.AccountId),
+                    AccountId);
             }
         }
         
@@ -1311,6 +1311,10 @@ namespace CentralServer.LobbyServer
                 ExpirationTime = expirationTime,
                 Type = joinType
             });
+            GroupManager.BroadcastSystemMessage(
+                friendGroup, 
+                GroupMessages.RequestToJoinGroup(AccountId),
+                leaderAccount.AccountId);
 
             response.Success = true;
             Send(response);
@@ -1318,15 +1322,17 @@ namespace CentralServer.LobbyServer
 
         public void HandleGroupSuggestionResponse(GroupSuggestionResponse response)
         {
-            LobbyServerProtocol suggester = SessionManager.GetClientConnection(response.SuggesterAccountId);
-            if (suggester is null)
+            GroupInfo group = GroupManager.GetPlayerGroup(AccountId);
+            if (group is null)
             {
                 return;
             }
 
             if (response.SuggestionStatus == GroupSuggestionResponse.Status.Denied)
             {
-                suggester.SendSystemMessage(GroupMessages.LeaderRejectedSuggestion);
+                GroupManager.BroadcastSystemMessage(
+                    group,
+                    GroupMessages.LeaderRejectedSuggestion); // no param for response.SuggesterAccountId
             }
             // nothing else to say as we don't know who was suggested
         }
@@ -1375,7 +1381,9 @@ namespace CentralServer.LobbyServer
                 }
                 else
                 {
-                    SendSystemMessage(GroupMessages.MemberFailedToJoinGroupPlayerNotFound(groupRequestInfo.RequesterAccountId));
+                    GroupManager.BroadcastSystemMessage(
+                        myGroup,
+                        GroupMessages.MemberFailedToJoinGroupPlayerNotFound(groupRequestInfo.RequesterAccountId));
                 }
                 return;
             }
@@ -1398,6 +1406,9 @@ namespace CentralServer.LobbyServer
                              + $"to {groupRequestInfo.RequesteeAccountId} to join group {response.GroupId} "
                              + $"by {response.JoinerAccountId} but they are already in a group");
                     SendSystemMessage(GroupMessages.FailedToJoinGroupCantJoinIfInGroup);
+                    GroupManager.BroadcastSystemMessage(
+                        requesterGroup,
+                        GroupMessages.MemberFailedToJoinGroupOtherPlayerInOtherGroup(AccountId));
                     return;
                 }
             }
@@ -1419,6 +1430,9 @@ namespace CentralServer.LobbyServer
                              + $"to {groupRequestInfo.RequesteeAccountId} to join group {response.GroupId} "
                              + $"by {response.JoinerAccountId} who is already in a group");
                     SendSystemMessage(GroupMessages.MemberFailedToJoinGroupOtherPlayerInOtherGroup(groupRequestInfo.RequesterAccountId));
+                    GroupManager.BroadcastSystemMessage(
+                        requesterGroup,
+                        GroupMessages.MemberFailedToJoinGroupOtherPlayerInOtherGroup(groupRequestInfo.RequesterAccountId));
                     return;
                 }
             }
@@ -1437,22 +1451,31 @@ namespace CentralServer.LobbyServer
             switch (response.Acceptance)
             {
                 case GroupInviteResponseType.PlayerRejected:
-                    requester.SendSystemMessage(GroupMessages.RejectedGroupInvite(AccountId));
+                    GroupManager.BroadcastSystemMessage(
+                        requesterGroup,
+                        GroupMessages.RejectedGroupInvite(AccountId));
                     break;
                 case GroupInviteResponseType.OfferExpired:
-                    requester.SendSystemMessage(
+                    GroupManager.BroadcastSystemMessage(
+                        requesterGroup,
                         groupRequestInfo.IsInvitation
                             ? GroupMessages.JoinGroupOfferExpired(AccountId)
                             : GroupMessages.FailedToJoinGroupInviteExpired(AccountId));
                     break;
                 case GroupInviteResponseType.RequestorSpamming:
-                    requester.SendSystemMessage(GroupMessages.AlreadyRejectedInvite(AccountId));
+                    GroupManager.BroadcastSystemMessage(
+                        requesterGroup,
+                        GroupMessages.AlreadyRejectedInvite(AccountId));
                     break;
                 case GroupInviteResponseType.PlayerInCustomMatch:
-                    requester.SendSystemMessage(GroupMessages.PlayerInACustomMatchAtTheMoment(AccountId));
+                    GroupManager.BroadcastSystemMessage(
+                        requesterGroup, 
+                        GroupMessages.PlayerInACustomMatchAtTheMoment(AccountId));
                     break;
                 case GroupInviteResponseType.PlayerStillAwaitingPreviousQuery:
-                    requester.SendSystemMessage(GroupMessages.PlayerStillConsideringYourPreviousInviteRequest(AccountId));
+                    GroupManager.BroadcastSystemMessage(
+                        requesterGroup, 
+                        GroupMessages.PlayerStillConsideringYourPreviousInviteRequest(AccountId));
                     break;
                 case GroupInviteResponseType.PlayerAccepted:
 
@@ -1470,7 +1493,9 @@ namespace CentralServer.LobbyServer
                             if (lobbyServerOtherPlayerInfo?.TeamId != lobbyServerPlayerInfo?.TeamId)
                             {
                                 log.Info($"Player {AccountId} is trying to accept a group invite but is currently on the opposing team.");
-                                SendSystemMessage(GroupMessages.FailedToJoinGroupCantInviteActiveOpponent);
+                                GroupManager.BroadcastSystemMessage(
+                                    requesterGroup,
+                                    GroupMessages.FailedToJoinGroupCantInviteActiveOpponent);
                                 break;
                             }
                         }
