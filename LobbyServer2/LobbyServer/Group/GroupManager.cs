@@ -258,6 +258,22 @@ namespace CentralServer.LobbyServer.Group
             }
         }
 
+        public static bool PromoteMember(GroupInfo groupInfo, long accountId)
+        {
+            bool success;
+            lock (Lock)
+            {
+                success = groupInfo.SetLeader(accountId);
+            }
+
+            if (success)
+            {
+                BroadcastSystemMessage(groupInfo, GroupMessages.NewLeader(accountId));
+            }
+
+            return success;
+        }
+
         private static UpdateGroupMemberData GetMemberData(GroupInfo groupInfo, long accountId)
         {
             PersistedAccountData account = DB.Get().AccountDao.GetAccount(accountId);

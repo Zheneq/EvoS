@@ -141,6 +141,13 @@ namespace CentralServer.LobbyServer.Session
             return SessionInfos.Values.FirstOrDefault(si => si.session?.Handle == handle)?.session?.AccountId;
         }
 
+        public static long? GetOnlinePlayerByHandleOrUsername(string handleOrUsername)
+        {
+            return SessionInfos.Values.FirstOrDefault(si =>
+                si.session?.Handle == handleOrUsername
+                || si.session?.UserName == handleOrUsername)?.session?.AccountId;
+        }
+
         public static HashSet<long> GetOnlinePlayers()
         {
             return new HashSet<long>(SessionInfos.Keys);

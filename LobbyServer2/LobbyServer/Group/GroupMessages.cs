@@ -2,7 +2,6 @@ using CentralServer.LobbyServer.Utils;
 
 namespace CentralServer.LobbyServer.Group;
 
-// TODO GROUPS replace handles with usernames
 public static class GroupMessages
 {
     public static LocalizationPayload MemberJoinedGroup(long accountId)
@@ -36,12 +35,29 @@ public static class GroupMessages
             "Group",
             LocalizationArg_Handle.Create(LobbyServerUtils.GetHandle(accountId)));
     }
-
+    
+    public static LocalizationPayload PlayerIsNotInGroup(string userName)
+    {
+        return LocalizationPayload.Create(
+            "PlayerIsNotInGroup", 
+            "GroupManager",
+            LocalizationArg_Handle.Create(userName));
+    }
+    
     public static LocalizationPayload GroupDisbanded { get; }
         = LocalizationPayload.Create("GroupDisbanded", "Group");
     
     public static LocalizationPayload LeaderLoggedOff { get; }
         = LocalizationPayload.Create("LeaderLoggedOff", "Invite");
+
+    public static LocalizationPayload NotTheLeader { get; }
+        = LocalizationPayload.Create("NotTheLeader", "GroupManager"); // You are not the leader.
+
+    public static LocalizationPayload NotInGroupMember { get; }
+        = LocalizationPayload.Create("NotInGroupMember", "GroupManager"); // You are not a member of a group.
+    
+    public static LocalizationPayload AlreadyTheLeader { get; }
+        = LocalizationPayload.Create("AlreadyTheLeader", "GroupManager");
     
     public static LocalizationPayload FailedToJoinGroupInviteExpired(long inviterAccountId)
     {
@@ -159,11 +175,7 @@ public static class GroupMessages
             "MemberFailedToJoin",
             "Group",
             LocalizationArg_Handle.Create(handle),
-            LocalizationArg_LocalizationPayload.Create(
-                LocalizationPayload.Create(
-                    "PlayerNotFound",
-                    "Invite",
-                    LocalizationArg_Handle.Create(LobbyServerUtils.GetHandle(accountId)))));
+            LocalizationArg_LocalizationPayload.Create(PlayerNotFound(handle)));
     }
 
     public static LocalizationPayload MemberFailedToJoinGroupOtherPlayerInOtherGroup(long accountId)

@@ -443,94 +443,79 @@ namespace CentralServer.LobbyServer
             });
         }
 
-        private void HandleGroupPromoteRequest(GroupPromoteRequest message)
+        private void HandleGroupPromoteRequest(GroupPromoteRequest request)
         {
             GroupInfo group = GroupManager.GetPlayerGroup(AccountId);
             //Sadly message.AccountId returns 0 so look it up by name/handle
-            long? accountId = SessionManager.GetOnlinePlayerByHandle(message.Name);
+            long? accountId = SessionManager.GetOnlinePlayerByHandleOrUsername(request.Name);
+            
+            GroupPromoteResponse response = new GroupPromoteResponse
+            {
+                ResponseId = request.RequestId,
+                Success = false
+            };
 
-            if (!group.IsLeader(AccountId))
+            if (group.IsSolo())
             {
-                Send(new GroupPromoteResponse()
-                {
-                    LocalizedFailure = LocalizationPayload.Create("NotTheLeader@GroupManager"),
-                    Success = false
-                });
+                response.LocalizedFailure = GroupMessages.NotInGroupMember;
             }
-            else if (accountId.HasValue)
+            else if (!group.IsLeader(AccountId))
             {
-                group.SetLeader((long)accountId);
+                response.LocalizedFailure = GroupMessages.NotTheLeader;
+            }
+            else if (AccountId == accountId)
+            {
+                response.LocalizedFailure = GroupMessages.AlreadyTheLeader;
+            }
+            else if (accountId.HasValue && GroupManager.PromoteMember(group, (long)accountId))
+            {
+                response.Success = true;
                 BroadcastRefreshGroup();
-                //If the new leader is accountId send success true else false tho we do not have any localization does nothing atm 
-                if (group.IsLeader((long)accountId))
-                {
-                    Send(new GroupPromoteResponse()
-                    {
-                        Success = true
-                    });
-                }
-                else
-                {
-                    Send(new GroupPromoteResponse()
-                    {
-                        Success = false
-                    });
-                }
             }
             else
             {
-                Send(new GroupPromoteResponse()
-                {
-                    //To send more need LocalizedFailure to be added
-                    Success = false
-                });
+                response.LocalizedFailure = GroupMessages.PlayerIsNotInGroup(request.Name);
             }
+            
+            Send(response);
         }
 
         private void HandleGroupKickRequest(GroupKickRequest request)
         {
-            LobbyPlayerGroupInfo info = GroupManager.GetGroupInfo(AccountId);
+            GroupInfo group = GroupManager.GetGroup(AccountId);
             GroupKickResponse response = new GroupKickResponse
             {
                 ResponseId = request.RequestId,
                 MemberName = request.MemberName,
             };
-            if (!info.InAGroup)
+            if (group.IsSolo())
             {
-                response.LocalizedFailure = LocalizationPayload.Create("NotInGroupMember@GroupManager");
+                response.LocalizedFailure = GroupMessages.NotInGroupMember;
                 response.Success = false;
             }
-            else if (!info.IsLeader)
+            else if (!group.IsLeader(AccountId))
             {
-                response.LocalizedFailure = LocalizationPayload.Create("NotTheLeader@GroupManager");
+                response.LocalizedFailure = GroupMessages.NotTheLeader;
                 response.Success = false;
             }
             else
             {
-                UpdateGroupMemberData memberData = info.Members.Find(m => m.MemberDisplayName == request.MemberName);
-                if (memberData is null)
+                long? accountId = SessionManager.GetOnlinePlayerByHandleOrUsername(request.MemberName);
+                if (!accountId.HasValue || !group.Members.Contains(accountId.Value))
                 {
                     response.Success = false;
                 }
                 else
                 {
-                    long accountId = memberData.AccountID;
-                    response.Success = GroupManager.LeaveGroup(accountId, false, true);
+                    response.Success = GroupManager.LeaveGroup(accountId.Value, false, true);
                 }
                 if (!response.Success)
                 {
-                    response.LocalizedFailure = LocalizationPayload.Create(
-                        "PlayerIsNotInGroup",
-                        "GroupManager",
-                        LocalizationArg_Handle.Create(request.MemberName));
+                    response.LocalizedFailure = GroupMessages.PlayerIsNotInGroup(request.MemberName);
                 }
-                foreach (UpdateGroupMemberData groupMember in info.Members)
+                else if (accountId.HasValue)
                 {
-                    LobbyServerProtocol conn = SessionManager.GetClientConnection(groupMember.AccountID);
-                    conn?.SendSystemMessage(LocalizationPayload.Create(
-                        "MemberKickedFromGroup", 
-                        "Group",
-                        LocalizationArg_Handle.Create(request.MemberName)));
+                    GroupManager.BroadcastSystemMessage(group, GroupMessages.MemberKickedFromGroup(accountId.Value));
                 }
             }
             Send(response);
@@ -649,7 +634,7 @@ namespace CentralServer.LobbyServer
                 Send(new PlayerGroupInfoUpdateResponse
                 {
                     Success = false,
-                    LocalizedFailure = LocalizationPayload.Create("NotTheLeader@GroupManager"),
+                    LocalizedFailure = GroupMessages.NotTheLeader,
                     ResponseId = request.RequestId
                 });
                 return;
