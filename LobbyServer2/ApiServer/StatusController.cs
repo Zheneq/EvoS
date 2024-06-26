@@ -264,6 +264,8 @@ namespace CentralServer.ApiServer
             public int turn { get; set; }
             public int teamAScore { get; set; }
             public int teamBScore { get; set; }
+            public string gameType { get; set; }
+            public string gameSubType { get; set; }
 
             public static Game Of(BridgeServer.Game s)
             {
@@ -285,6 +287,8 @@ namespace CentralServer.ApiServer
                     turn = s.GameSummary?.NumOfTurns ?? s.GameMetrics.CurrentTurn,
                     teamAScore = s.GameSummary?.TeamAPoints ?? s.GameMetrics.TeamAPoints,
                     teamBScore = s.GameSummary?.TeamBPoints ?? s.GameMetrics.TeamBPoints,
+                    gameType = s.GameInfo?.GameConfig.GameType.ToString(),
+                    gameSubType = s.GameSubType?.LocalizedName
                 };
             }
         }

@@ -54,6 +54,8 @@ export interface GameData {
     turn: number;
     teamAScore: number;
     teamBScore: number;
+    gameType: string;
+    gameSubType: string;
 }
 
 export interface GamePlayerData {

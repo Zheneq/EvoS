@@ -49,7 +49,7 @@ public class CustomGame : Game
             GameServerProcessCode = $"CustomGame-{Guid.NewGuid()}",
         };
         lobbyGameInfo.GameConfig.GameType = GameType.Custom;
-        // ProcessCode = lobbyGameInfo.GameServerProcessCode;
+        GameSubType = gameConfig.SubTypes.ElementAtOrDefault(0);
 
         LobbyServerTeamInfo teamInfo = new LobbyServerTeamInfo()
         {

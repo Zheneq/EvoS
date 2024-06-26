@@ -24,6 +24,15 @@ interface Props {
   playerData: Map<number, PlayerData>;
 }
 
+function buildTitle(info: ServerData, game?: GameData) {
+    let suffix = "";
+    if (game) {
+        const subType = game.gameSubType.split('@')[0];
+        suffix = ` - ${game.gameType} ${subType}`
+    }
+    return info.name + suffix;
+}
+
 export default function Server({ info, game, playerData }: Props) {
   const [msg, setMsg] = useState<string>();
   const [resultAction, setResultAction] = useState<string>("TieGame");
@@ -60,7 +69,7 @@ export default function Server({ info, game, playerData }: Props) {
       >
         <BaseDialog title={msg} onDismiss={() => setMsg(undefined)} />
         <Tooltip arrow title={info.id}>
-          <Typography variant="h3">{info.name}</Typography>
+          <Typography variant="h3">{buildTitle(info, game)}</Typography>
         </Tooltip>
         {game && info.name !== "Custom game" && (
             <Button

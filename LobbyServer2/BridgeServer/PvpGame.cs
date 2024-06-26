@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using CentralServer.LobbyServer;
-using CentralServer.LobbyServer.Gamemode;
 using CentralServer.LobbyServer.Matchmaking;
 using EvoS.Framework.Constants.Enums;
 using EvoS.Framework.Network.Static;
@@ -22,9 +21,9 @@ public class PvpGame: Game
     
     public async Task StartGameAsync(List<long> teamA, List<long> teamB, GameType gameType, List<GameSubType> gameSubTypes, int subTypeIndex)
     {
-        GameSubType gameSubType = gameSubTypes[subTypeIndex];
+        GameSubType = gameSubTypes[subTypeIndex];
         // Fill Teams
-        if (!FillTeam(teamA, Team.TeamA, gameSubType) || !FillTeam(teamB, Team.TeamB, gameSubType))
+        if (!FillTeam(teamA, Team.TeamA, GameSubType) || !FillTeam(teamB, Team.TeamB, GameSubType))
         {
             return;
         }

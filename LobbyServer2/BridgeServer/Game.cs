@@ -34,6 +34,8 @@ public abstract class Game
     public LobbyGameSummary GameSummary { get; private set; }
     public DateTime StopTime { private set; get; }
     public BridgeServerProtocol Server { private set; get; } // TODO check it is set when needed
+    
+    public GameSubType GameSubType { protected set; get; } // can be null
 
     public string ProcessCode => GameInfo?.GameServerProcessCode;
     public GameStatus GameStatus => GameInfo?.GameStatus ?? GameStatus.None;
