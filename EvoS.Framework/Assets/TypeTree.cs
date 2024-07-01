@@ -68,7 +68,7 @@ namespace EvoS.Framework.Assets
         public int TypeId { get; set; }
         public byte Unknown1 { get; set; }
         public short Unknown2 { get; set; }
-        public byte[]? Foo2 { get; set; }
+        public byte[] Foo2 { get; set; }
         public byte[] PropertiesHash { get; set; }
 
         public TypeEntry(StreamReader stream)

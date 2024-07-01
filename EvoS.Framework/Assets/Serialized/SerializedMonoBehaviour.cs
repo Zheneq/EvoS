@@ -7,7 +7,7 @@ namespace EvoS.Framework.Assets.Serialized
         public SerializedComponent GameObject { get; set; }
         public bool Enabled { get; set; }
         public SerializedMonoScript Script { get; set; }
-        [Obsolete("This is probably not what you want, see Script.ClassName")]
+        // [Obsolete("This is probably not what you want, see Script.ClassName")]
         public string Name { get; set; }
         public ISerializedItem Child { get; set; }
 

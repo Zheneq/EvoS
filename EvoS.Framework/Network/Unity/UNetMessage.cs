@@ -21,7 +21,7 @@ namespace EvoS.Framework.Network.Unity
             return numArray;
         }
 
-        public static byte[]? Deserialize(byte[] rawData)
+        public static byte[] Deserialize(byte[] rawData)
         {
             if (rawData == null || rawData.Length < MSG_HEADER_SIZE)
             {
