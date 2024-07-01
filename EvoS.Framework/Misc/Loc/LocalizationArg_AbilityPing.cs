@@ -13,27 +13,27 @@ public class LocalizationArg_AbilityPing : LocalizationArg
 	public int m_currentTechPoints;
 	public int m_maxTechPoints;
 
-	public static LocalizationArg_AbilityPing Create(
-		CharacterType characterType,
-		Ability ability,
-		bool isSelectable,
-		int remainingCooldown,
-		bool isUlt,
-		int currentTechPoints,
-		int maxTechPoints)
-	{
-		return new LocalizationArg_AbilityPing
-		{
-			m_characterType = characterType,
-			m_abilityType = ability.GetType().ToString(),
-			m_abilityName = ability.m_abilityName,
-			m_isSelectable = isSelectable,
-			m_remainingCooldown = remainingCooldown,
-			m_isUlt = isUlt,
-			m_currentTechPoints = currentTechPoints,
-			m_maxTechPoints = maxTechPoints
-		};
-	}
+	// public static LocalizationArg_AbilityPing Create(
+	// 	CharacterType characterType,
+	// 	Ability ability,
+	// 	bool isSelectable,
+	// 	int remainingCooldown,
+	// 	bool isUlt,
+	// 	int currentTechPoints,
+	// 	int maxTechPoints)
+	// {
+	// 	return new LocalizationArg_AbilityPing
+	// 	{
+	// 		m_characterType = characterType,
+	// 		m_abilityType = ability.GetType().ToString(),
+	// 		m_abilityName = ability.m_abilityName,
+	// 		m_isSelectable = isSelectable,
+	// 		m_remainingCooldown = remainingCooldown,
+	// 		m_isUlt = isUlt,
+	// 		m_currentTechPoints = currentTechPoints,
+	// 		m_maxTechPoints = maxTechPoints
+	// 	};
+	// }
 
 	// public override string TR()
 	// {

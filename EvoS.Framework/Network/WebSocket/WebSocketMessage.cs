@@ -1,8 +1,4 @@
 ﻿using System;
-using System.IO;
-using System.Text;
-using vtortola.WebSockets;
-using EvoS.Framework.Network.Static;
 
 namespace EvoS.Framework.Network.WebSocket
 {

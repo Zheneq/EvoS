@@ -46,10 +46,10 @@ namespace EvoS.Framework.Assets
             }
         }
 
-        public SerializedGameObject GetNetObj(string assetId)
-        {
-            return GetNetObj(new NetworkHash128(Utils.ToByteArray(assetId)));
-        }
+        // public SerializedGameObject GetNetObj(string assetId)
+        // {
+        //     return GetNetObj(new NetworkHash128(Utils.ToByteArray(assetId)));
+        // }
 
         public SerializedGameObject GetNetObj(NetworkHash128 assetId)
         {
@@ -115,13 +115,13 @@ namespace EvoS.Framework.Assets
             _assetBundles.Add(unityFs.Name, unityFs);
         }
 
-        public void ConstructCaches()
-        {
-            ConstructMonoScriptMap();
-
-            LoadNetworkedObjects();
-//            DumpNetworkObjectComponents();
-        }
+//         public void ConstructCaches()
+//         {
+//             ConstructMonoScriptMap();
+//
+//             LoadNetworkedObjects();
+// //            DumpNetworkObjectComponents();
+//         }
 
         public SerializedGameObject GetObjectByComponent<T>() where T : MonoBehaviour
         {
@@ -236,73 +236,73 @@ namespace EvoS.Framework.Assets
             Log.Print(LogType.Misc, $"Loaded {ScriptsByName.Count} MonoScript type mappings");
         }
 
-        private void LoadNetworkedObjects()
-        {
-            var count = 0;
-            foreach (var assetFile in AllAssetFiles())
-            {
-                InternalLoadNetworkedObjects(assetFile);
-                count++;
-            }
+        // private void LoadNetworkedObjects()
+        // {
+        //     var count = 0;
+        //     foreach (var assetFile in AllAssetFiles())
+        //     {
+        //         InternalLoadNetworkedObjects(assetFile);
+        //         count++;
+        //     }
+        //
+        //     Log.Print(LogType.Misc,
+        //         $"Loaded {NetworkScenes.Count} networked scenes and " +
+        //         $"{NetworkedObjects.Count} networked game objects from {count} asset files.");
+        // }
+        //
+        // private void InternalLoadNetworkedObjects(AssetFile assetFile)
+        // {
+        //     if (!ScriptsByName.TryGetValue(CommonTypes.NetworkIdentity, out var netIdentScript))
+        //     {
+        //         return;
+        //     }
+        //
+        //     foreach (SerializedGameObject obj in assetFile.GetObjectsByComponent(netIdentScript))
+        //     {
+        //         var netIdent = obj.GetComponent<NetworkIdentity>();
+        //         if (netIdent != null)
+        //         {
+        //             var netHash = netIdent.assetId;
+        //             if (!netHash.IsZero())
+        //             {
+        //                 if (!NetObjsByName.TryAdd(obj.Name, obj))
+        //                 {
+        //                     Log.Print(LogType.Warning,
+        //                         $"Multiple objects with name {obj.Name}, latest in {assetFile.Name}");
+        //                 }
+        //
+        //                 if (!NetObjsByAssetId.TryAdd(netHash, obj))
+        //                 {
+        //                     Log.Print(LogType.Warning,
+        //                         $"Multiple objects with netId {netHash}, latest in {assetFile.Name}");
+        //                 }
+        //             }
+        //             else
+        //             {
+        //                 NetworkScenes.Add(netIdent.sceneId.Value, obj);
+        //             }
+        //         }
+        //     }
+        // }
 
-            Log.Print(LogType.Misc,
-                $"Loaded {NetworkScenes.Count} networked scenes and " +
-                $"{NetworkedObjects.Count} networked game objects from {count} asset files.");
-        }
-
-        private void InternalLoadNetworkedObjects(AssetFile assetFile)
-        {
-            if (!ScriptsByName.TryGetValue(CommonTypes.NetworkIdentity, out var netIdentScript))
-            {
-                return;
-            }
-
-            foreach (SerializedGameObject obj in assetFile.GetObjectsByComponent(netIdentScript))
-            {
-                var netIdent = obj.GetComponent<NetworkIdentity>();
-                if (netIdent != null)
-                {
-                    var netHash = netIdent.assetId;
-                    if (!netHash.IsZero())
-                    {
-                        if (!NetObjsByName.TryAdd(obj.Name, obj))
-                        {
-                            Log.Print(LogType.Warning,
-                                $"Multiple objects with name {obj.Name}, latest in {assetFile.Name}");
-                        }
-
-                        if (!NetObjsByAssetId.TryAdd(netHash, obj))
-                        {
-                            Log.Print(LogType.Warning,
-                                $"Multiple objects with netId {netHash}, latest in {assetFile.Name}");
-                        }
-                    }
-                    else
-                    {
-                        NetworkScenes.Add(netIdent.sceneId.Value, obj);
-                    }
-                }
-            }
-        }
-
-        public void DumpNetworkObjectComponents()
-        {
-            foreach (var obj in NetworkedObjects)
-            {
-                var netIdent = obj.GetComponent<NetworkIdentity>();
-
-                Log.Print(LogType.Misc, $"{netIdent.assetId} {obj.Name}");
-                Log.Print(LogType.Misc, $"  {string.Join(", ", obj.ComponentNames())}");
-            }
-        }
-
-        public void ClearCache()
-        {
-            foreach (var assetFile in AllAssetFiles())
-            {
-                assetFile.ClearCache();
-            }
-        }
+        // public void DumpNetworkObjectComponents()
+        // {
+        //     foreach (var obj in NetworkedObjects)
+        //     {
+        //         var netIdent = obj.GetComponent<NetworkIdentity>();
+        //
+        //         Log.Print(LogType.Misc, $"{netIdent.assetId} {obj.Name}");
+        //         Log.Print(LogType.Misc, $"  {string.Join(", ", obj.ComponentNames())}");
+        //     }
+        // }
+        //
+        // public void ClearCache()
+        // {
+        //     foreach (var assetFile in AllAssetFiles())
+        //     {
+        //         assetFile.ClearCache();
+        //     }
+        // }
 
         public void Dispose(AssetFile assetFile)
         {

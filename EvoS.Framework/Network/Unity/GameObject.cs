@@ -1,8 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Linq;
-using EvoS.Framework.Game;
 using Newtonsoft.Json;
 
 namespace EvoS.Framework.Network.Unity
@@ -11,24 +9,24 @@ namespace EvoS.Framework.Network.Unity
     {
         public string Name { get; set; }
         private readonly List<Component> _components = new List<Component>();
-        private GameManager _gameManager;
+        // private GameManager _gameManager;
 
         [JsonIgnore] public Transform transform;
 
-        [JsonIgnore]
-        public GameManager GameManager
-        {
-            get => _gameManager;
-            set
-            {
-                if (_gameManager != null)
-                {
-                    throw new ApplicationException($"GameObject {this} already registered!");
-                }
-
-                _gameManager = value;
-            }
-        }
+        // [JsonIgnore]
+        // public GameManager GameManager
+        // {
+        //     get => _gameManager;
+        //     set
+        //     {
+        //         if (_gameManager != null)
+        //         {
+        //             throw new ApplicationException($"GameObject {this} already registered!");
+        //         }
+        //
+        //         _gameManager = value;
+        //     }
+        // }
 
         public GameObject() : this(null)
         {
@@ -75,10 +73,10 @@ namespace EvoS.Framework.Network.Unity
 
             _components.Add(component);
 
-            if (GameManager != null && component is MonoBehaviour behaviour)
-            {
-                behaviour.Awake();
-            }
+            // if (GameManager != null && component is MonoBehaviour behaviour)
+            // {
+            //     behaviour.Awake();
+            // }
 
             return component;
         }
