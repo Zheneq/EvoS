@@ -1,5 +1,4 @@
 using System;
-using EvoS.Framework.Assets.Serialized;
 
 namespace EvoS.Framework.Network.Unity
 {
