@@ -1,5 +1,4 @@
 using System;
-using EvoS.Framework.Assets;
 
 namespace EvoS.Framework.Misc
 {
