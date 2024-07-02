@@ -1,12 +1,11 @@
 using System;
-using EvoS.Framework.Assets;
 using EvoS.Framework.Assets.Serialized;
 
 namespace EvoS.Framework.Network.Static
 {
     [Serializable]
     [EvosMessage(390)]
-    public struct CharacterVisualInfo : ISerializedItem
+    public struct CharacterVisualInfo
     {
         public CharacterVisualInfo(int skin, int pattern, int color)
         {
@@ -22,13 +21,6 @@ namespace EvoS.Framework.Network.Static
                    $"{nameof(patternIndex)}: {patternIndex}, " +
                    $"{nameof(colorIndex)}: {colorIndex}" +
                    ")";
-        }
-
-        public void DeserializeAsset(AssetFile assetFile, StreamReader stream)
-        {
-            skinIndex = stream.ReadInt32();
-            patternIndex = stream.ReadInt32();
-            colorIndex = stream.ReadInt32();
         }
 
         public override bool Equals(object obj)

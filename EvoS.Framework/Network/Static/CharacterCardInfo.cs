@@ -1,12 +1,10 @@
 using System;
-using EvoS.Framework.Assets;
-using EvoS.Framework.Assets.Serialized;
 
 namespace EvoS.Framework.Network.Static
 {
     [Serializable]
     [EvosMessage(541)]
-    public struct CharacterCardInfo : ISerializedItem
+    public struct CharacterCardInfo
     {
         public static CharacterCardInfo MakeDefault()
         {
@@ -58,13 +56,6 @@ namespace EvoS.Framework.Network.Static
         public override int GetHashCode()
         {
             return PrepCard.GetHashCode() ^ CombatCard.GetHashCode() ^ DashCard.GetHashCode();
-        }
-
-        public void DeserializeAsset(AssetFile assetFile, StreamReader stream)
-        {
-            PrepCard = (CardType) stream.ReadInt32();
-            CombatCard = (CardType) stream.ReadInt32();
-            DashCard = (CardType) stream.ReadInt32();
         }
 
         public CardType PrepCard;

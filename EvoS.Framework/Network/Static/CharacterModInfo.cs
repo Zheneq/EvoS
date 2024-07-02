@@ -1,12 +1,10 @@
 using System;
-using EvoS.Framework.Assets;
-using EvoS.Framework.Assets.Serialized;
 
 namespace EvoS.Framework.Network.Static
 {
     [Serializable]
     [EvosMessage(540)]
-    public struct CharacterModInfo : ISerializedItem
+    public struct CharacterModInfo
     {
         public int ModForAbility0;
         public int ModForAbility1;
@@ -90,15 +88,6 @@ namespace EvoS.Framework.Network.Static
         {
             return ModForAbility0.GetHashCode() ^ ModForAbility1.GetHashCode() ^ ModForAbility2.GetHashCode() ^
                    ModForAbility3.GetHashCode() ^ ModForAbility4.GetHashCode();
-        }
-
-        public void DeserializeAsset(AssetFile assetFile, StreamReader stream)
-        {
-            ModForAbility0 = stream.ReadInt32();
-            ModForAbility1 = stream.ReadInt32();
-            ModForAbility2 = stream.ReadInt32();
-            ModForAbility3 = stream.ReadInt32();
-            ModForAbility4 = stream.ReadInt32();
         }
     }
 }
