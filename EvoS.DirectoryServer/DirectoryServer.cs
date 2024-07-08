@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using CentralServer.ApiServer;
@@ -25,9 +26,10 @@ using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Primitives;
 using Microsoft.IdentityModel.Tokens;
+using MongoDB.Driver;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace EvoS.DirectoryServer
 {
@@ -72,7 +74,7 @@ namespace EvoS.DirectoryServer
         private static long _nextTmpAccountId = 1;
         private static HashSet<IPAddress> _fullProxies;
         private static HashSet<IPAddress> _allProxies;
-        
+
         public void Configure(IApplicationBuilder app)
         {
             _fullProxies = EvosConfiguration.GetProxies().Select(IPAddress.Parse).ToHashSet();
@@ -238,6 +240,45 @@ namespace EvoS.DirectoryServer
             return HandleConnection(accountId, request, context);
         }
 
+        private static PersistedAccountData GetMentorStatus(PersistedAccountData account) {
+            account.Mentor = false;
+            if (EvosConfiguration.GetMentorApiUrl().StartsWith("http://") || EvosConfiguration.GetMentorApiUrl().StartsWith("https://")) {
+                string url = $"{EvosConfiguration.GetMentorApiUrl()}{Uri.EscapeDataString(account.Handle)}";
+                using HttpClient client = new();
+                try
+                {
+                    HttpResponseMessage responseMentor = client.GetAsync(url).Result;
+                    responseMentor.EnsureSuccessStatusCode();
+                    string responseBody = responseMentor.Content.ReadAsStringAsync().Result;
+                    JObject json = JObject.Parse(responseBody);
+                    JArray dataArray = (JArray)json["data"];
+                    if (dataArray != null && dataArray.Count > 0)
+                    {
+                        bool mentor = dataArray[0]["attributes"]["mentor"].Value<bool>();
+                        if (mentor)
+                        {
+                            account.Mentor = true;
+                            log.Info($"Enabling Mentor status for {account.Handle}");
+                        }
+                    }
+                    else
+                    {
+                        log.Info("No mentor information found for the given account handle.");
+                    }
+                }
+                catch (HttpRequestException e)
+                {
+                    log.Error($"Unable to fetch mentor status: {e.Message}");
+                }
+                catch (Exception e)
+                {
+                    log.Error($"An unexpected error occurred: {e.Message}");
+                }
+            }
+
+            return account;
+        }
+
         private static AssignGameClientResponse HandleConnection(long accountId, AssignGameClientRequest request, HttpContext context)
         {
             AssignGameClientResponse response = new AssignGameClientResponse
@@ -278,6 +319,7 @@ namespace EvoS.DirectoryServer
             // Someday we'll make a db migration tool but not today
             if (PatchAccountData(account))
             {
+                account = GetMentorStatus(account);
                 DB.Get().AccountDao.UpdateAccount(account);
             }
 

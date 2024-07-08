@@ -1,9 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using CentralServer.LobbyServer.Group;
 using CentralServer.LobbyServer.Session;
-using CentralServer.LobbyServer.Utils;
 using EvoS.DirectoryServer.Inventory;
 using EvoS.Framework.Constants.Enums;
 using EvoS.Framework.DataAccess;
@@ -28,13 +28,13 @@ namespace CentralServer.LobbyServer.Chat
         {
             return _instance ??= new ChatManager();
         }
-        
+
         private ChatManager()
         {
             SessionManager.OnPlayerConnected += Register;
             SessionManager.OnPlayerDisconnected += Unregister;
         }
-        
+
         ~ChatManager()
         {
             SessionManager.OnPlayerConnected -= Register;
@@ -53,13 +53,13 @@ namespace CentralServer.LobbyServer.Chat
             conn.OnChatNotification -= HandleChatNotification;
             conn.OnGroupChatRequest -= HandleGroupChatRequest;
         }
-        
+
         public void HandleChatNotification(LobbyServerProtocol conn, ChatNotification notification)
         {
             PersistedAccountData account = DB.Get().AccountDao.GetAccount(conn.AccountId);
             bool isMuted = account.AdminComponent.Muted
                            && notification.ConsoleMessageType != ConsoleMessageType.WhisperChat
-                           && notification.ConsoleMessageType != ConsoleMessageType.GroupChat;
+            && notification.ConsoleMessageType != ConsoleMessageType.GroupChat;
             ChatNotification message = new ChatNotification
             {
                 SenderAccountId = conn.AccountId,
@@ -89,125 +89,132 @@ namespace CentralServer.LobbyServer.Chat
 
             HashSet<long> recipients = new HashSet<long>();
             HashSet<long> blockedRecipients = new HashSet<long>();
-            
+
+            if (account.Mentor)
+            {
+                message.SenderHandle = $"<color=green>(Mentor)</color>{message.SenderHandle}";
+            }
+
             switch (notification.ConsoleMessageType)
             {
                 case ConsoleMessageType.GlobalChat:
-                {
-                    if (!isMuted)
                     {
-                        foreach (long player in SessionManager.GetOnlinePlayers())
+                        if (!isMuted)
                         {
-                            SendMessageToPlayer(player, message, out _);
+                            foreach (long player in SessionManager.GetOnlinePlayers())
+                            {
+                                SendMessageToPlayer(player, message, out _);
+                            }
+                            OnGlobalChatMessage(message);
                         }
-                        OnGlobalChatMessage(message);
+                        else
+                        {
+                            SendMessageToPlayer(conn.AccountId, message, out _);
+                        }
+                        break;
                     }
-                    else
-                    {
-                        SendMessageToPlayer(conn.AccountId, message, out _);
-                    }
-                    break;
-                }
                 case ConsoleMessageType.WhisperChat:
-                {
-                    long? accountId = SessionManager.GetOnlinePlayerByHandle(notification.RecipientHandle);
-                    if (accountId.HasValue && accountId.Value != conn.AccountId)
                     {
-                        message.RecipientHandle = notification.RecipientHandle;
-                        SendMessageToPlayer(accountId.Value, message, out bool isBlocked);
-                        conn.Send(message);
-                        (isBlocked ? blockedRecipients : recipients).Add(accountId.Value);
+                        // Remove (Dev and Mentor tags) incase they click a name to whisper them
+                        notification.RecipientHandle = Regex.Replace(notification.RecipientHandle, @"\((Mentor|Dev)\)", "");
+                        long? accountId = SessionManager.GetOnlinePlayerByHandle(notification.RecipientHandle);
+                        if (accountId.HasValue && accountId.Value != conn.AccountId)
+                        {
+                            message.RecipientHandle = notification.RecipientHandle;
+                            SendMessageToPlayer(accountId.Value, message, out bool isBlocked);
+                            conn.Send(message);
+                            (isBlocked ? blockedRecipients : recipients).Add(accountId.Value);
+                        }
+                        else
+                        {
+                            log.Warn($"{conn.AccountId} {account.Handle} failed to whisper to {notification.RecipientHandle}");
+                        }
+                        break;
                     }
-                    else
-                    {
-                        log.Warn($"{conn.AccountId} {account.Handle} failed to whisper to {notification.RecipientHandle}");
-                    }
-                    break;
-                }
                 case ConsoleMessageType.GameChat:
-                {
-                    if (conn.CurrentGame == null)
                     {
-                        log.Warn($"{conn.AccountId} {account.Handle} attempted to use {notification.ConsoleMessageType} while not in game");
-                        break;
-                    }
-                    if (!isMuted)
-                    {
-                        foreach (long accountId in conn.CurrentGame.GetPlayersDistinct())
+                        if (conn.CurrentGame == null)
                         {
-                            SendMessageToPlayer(accountId, message, out bool isBlocked);
-                            if (accountId != conn.AccountId)
+                            log.Warn($"{conn.AccountId} {account.Handle} attempted to use {notification.ConsoleMessageType} while not in game");
+                            break;
+                        }
+                        if (!isMuted)
+                        {
+                            foreach (long accountId in conn.CurrentGame.GetPlayersDistinct())
                             {
-                                (isBlocked ? blockedRecipients : recipients).Add(accountId);
+                                SendMessageToPlayer(accountId, message, out bool isBlocked);
+                                if (accountId != conn.AccountId)
+                                {
+                                    (isBlocked ? blockedRecipients : recipients).Add(accountId);
+                                }
                             }
                         }
+                        else
+                        {
+                            SendMessageToPlayer(conn.AccountId, message, out _);
+                            blockedRecipients.UnionWith(conn.CurrentGame.GetPlayers());
+                        }
+                        break;
                     }
-                    else
-                    {
-                        SendMessageToPlayer(conn.AccountId, message, out _);
-                        blockedRecipients.UnionWith(conn.CurrentGame.GetPlayers());
-                    }
-                    break;
-                }
                 case ConsoleMessageType.GroupChat:
-                {
-                    GroupInfo group = GroupManager.GetPlayerGroup(conn.AccountId);
-                    if (group == null || group.IsSolo())
                     {
-                        log.Error($"{conn.AccountId} {account.Handle} attempted to use {notification.ConsoleMessageType} while not in a group");
-                        break;
-                    }
-                    foreach (long member in group.Members)
-                    {
-                        SendMessageToPlayer(member, message, out bool isBlocked);
-                        if (member != conn.AccountId)
+                        GroupInfo group = GroupManager.GetPlayerGroup(conn.AccountId);
+                        if (group == null || group.IsSolo())
                         {
-                            (isBlocked ? blockedRecipients : recipients).Add(member);
+                            log.Error($"{conn.AccountId} {account.Handle} attempted to use {notification.ConsoleMessageType} while not in a group");
+                            break;
                         }
-                    }
-                    break;
-                }
-                case ConsoleMessageType.TeamChat:
-                {
-                    if (conn.CurrentGame == null)
-                    {
-                        log.Warn($"{conn.AccountId} {account.Handle} attempted to use {notification.ConsoleMessageType} while not in game");
-                        break;
-                    }
-                    if (lobbyServerPlayerInfo == null)
-                    {
-                        log.Error($"{conn.AccountId} {account.Handle} attempted to use {notification.ConsoleMessageType} " +
-                                  $"but they are not in the game they are supposed to be in");
-                        break;
-                    }
-
-                    List<long> teammateAccountIds = conn.CurrentGame.GetPlayers(lobbyServerPlayerInfo.TeamId).ToList();
-                    if (!isMuted)
-                    {
-                        foreach (long teammateAccountId in teammateAccountIds)
+                        foreach (long member in group.Members)
                         {
-                            SendMessageToPlayer(teammateAccountId, message, out bool isBlocked);
-                            if (teammateAccountId != conn.AccountId)
+                            SendMessageToPlayer(member, message, out bool isBlocked);
+                            if (member != conn.AccountId)
                             {
-                                (isBlocked ? blockedRecipients : recipients).Add(teammateAccountId);
+                                (isBlocked ? blockedRecipients : recipients).Add(member);
                             }
                         }
+                        break;
                     }
-                    else
+                case ConsoleMessageType.TeamChat:
                     {
-                        SendMessageToPlayer(conn.AccountId, message, out _);
-                        blockedRecipients.UnionWith(teammateAccountIds);
+                        if (conn.CurrentGame == null)
+                        {
+                            log.Warn($"{conn.AccountId} {account.Handle} attempted to use {notification.ConsoleMessageType} while not in game");
+                            break;
+                        }
+                        if (lobbyServerPlayerInfo == null)
+                        {
+                            log.Error($"{conn.AccountId} {account.Handle} attempted to use {notification.ConsoleMessageType} " +
+                                      $"but they are not in the game they are supposed to be in");
+                            break;
+                        }
+
+                        List<long> teammateAccountIds = conn.CurrentGame.GetPlayers(lobbyServerPlayerInfo.TeamId).ToList();
+                        if (!isMuted)
+                        {
+                            foreach (long teammateAccountId in teammateAccountIds)
+                            {
+                                SendMessageToPlayer(teammateAccountId, message, out bool isBlocked);
+                                if (teammateAccountId != conn.AccountId)
+                                {
+                                    (isBlocked ? blockedRecipients : recipients).Add(teammateAccountId);
+                                }
+                            }
+                        }
+                        else
+                        {
+                            SendMessageToPlayer(conn.AccountId, message, out _);
+                            blockedRecipients.UnionWith(teammateAccountIds);
+                        }
+                        break;
                     }
-                    break;
-                }
                 default:
-                {
-                    log.Error($"Console message type {notification.ConsoleMessageType} is not supported yet!");
-                    log.Info(DefaultJsonSerializer.Serialize(notification));
-                    break;
-                }
+                    {
+                        log.Error($"Console message type {notification.ConsoleMessageType} is not supported yet!");
+                        log.Info(DefaultJsonSerializer.Serialize(notification));
+                        break;
+                    }
             }
-            
+
             DB.Get().ChatHistoryDao.Save(new ChatHistoryDao.Entry(
                 message,
                 DateTime.UtcNow,
@@ -239,7 +246,7 @@ namespace CentralServer.LobbyServer.Chat
                 SenderHandle = account.Handle,
                 Text = request.Text
             };
-            
+
             HashSet<long> recipients = new HashSet<long>();
             HashSet<long> blockedRecipients = new HashSet<long>();
 
@@ -248,7 +255,7 @@ namespace CentralServer.LobbyServer.Chat
                 SendMessageToPlayer(accountID, message, out bool isBlocked);
                 (isBlocked ? blockedRecipients : recipients).Add(accountID);
             }
-            
+
             DB.Get().ChatHistoryDao.Save(new ChatHistoryDao.Entry(
                 message,
                 DateTime.UtcNow,

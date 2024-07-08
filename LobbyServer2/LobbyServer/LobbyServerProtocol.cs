@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using CentralServer.BridgeServer;
 using CentralServer.LobbyServer.Character;
 using CentralServer.LobbyServer.Config;
@@ -37,7 +38,7 @@ namespace CentralServer.LobbyServer
         private Game _currentGame;
 
         public PlayerOnlineStatus Status = PlayerOnlineStatus.Online;
-        
+
         public Game CurrentGame
         {
             get => _currentGame;
@@ -70,12 +71,12 @@ namespace CentralServer.LobbyServer
 
         public event Action<LobbyServerProtocol, ChatNotification> OnChatNotification = delegate { };
         public event Action<LobbyServerProtocol, GroupChatRequest> OnGroupChatRequest = delegate { };
-        
+
         private static readonly Summary ConnectionEndStatus = Metrics
             .CreateSummary(
                 "evos_connection_player_statuses",
                 "Error code player connection are ended with.",
-                new[] { "errorCode"},
+                new[] { "errorCode" },
                 new SummaryConfiguration
                 {
                     MaxAge = TimeSpan.FromHours(1)
@@ -158,7 +159,7 @@ namespace CentralServer.LobbyServer
             PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
 
             if (account == null || !(account.AccountComponent.UnlockedRibbonIDs.Contains(request.RibbonID) || request.RibbonID == -1))
-            { 
+            {
                 Send(new SelectRibbonResponse()
                 {
                     Success = false,
@@ -197,7 +198,7 @@ namespace CentralServer.LobbyServer
                     switch (notification.Command)
                     {
                         case "End Game (Win)":
-                            
+
                             game.Server.AdminShutdown(team == Team.TeamA ? GameResult.TeamAWon : GameResult.TeamBWon);
                             break;
                         case "End Game (Loss)":
@@ -227,10 +228,11 @@ namespace CentralServer.LobbyServer
             if (account.AccountComponent.AppliedEntitlements.ContainsKey("DEVELOPER_ACCESS"))
             {
                 account.AccountComponent.DisplayDevTag = request.active;
-                Send(new SetDevTagResponse() { 
+                Send(new SetDevTagResponse()
+                {
                     Success = true,
                 });
-            } 
+            }
             else
             {
                 Send(new SetDevTagResponse()
@@ -269,14 +271,14 @@ namespace CentralServer.LobbyServer
                 });
                 return;
             }
-            
+
             JoinGame(game);
             Send(new JoinGameResponse
             {
                 ResponseId = joinGameRequest.RequestId
             });
         }
-        
+
         private void HandleGameInfoUpdateRequest(GameInfoUpdateRequest gameInfoUpdateRequest)
         {
             bool success = CustomGameManager.UpdateGameInfo(AccountId, gameInfoUpdateRequest.GameInfo, gameInfoUpdateRequest.TeamInfo);
@@ -290,7 +292,7 @@ namespace CentralServer.LobbyServer
                 TeamInfo = LobbyTeamInfo.FromServer(game?.TeamInfo, 0, new MatchmakingQueueConfig()),
             });
         }
-        
+
         private void HandleCreateGameRequest(CreateGameRequest createGameRequest)
         {
             ResetReadyState();
@@ -324,13 +326,13 @@ namespace CentralServer.LobbyServer
             CurrentGame?.OnPlayerDisconnectedFromLobby(AccountId);
 
             SessionManager.OnPlayerDisconnect(this);
-            
+
             if (!SessionCleaned)
             {
                 SessionCleaned = true;
                 GroupManager.LeaveGroup(AccountId, false);
             }
-            
+
             BroadcastRefreshFriendList();
         }
 
@@ -361,7 +363,7 @@ namespace CentralServer.LobbyServer
 
             CurrentGame = null;
             log.Info($"{LobbyServerUtils.GetHandle(AccountId)} leaves {game.ProcessCode}");
-            
+
             // forcing catalyst panel update -- otherwise it would show catas for the character from the last game
             Send(new ForcedCharacterChangeFromServerNotification
             {
@@ -459,7 +461,7 @@ namespace CentralServer.LobbyServer
             GroupInfo group = GroupManager.GetPlayerGroup(AccountId);
             //Sadly message.AccountId returns 0 so look it up by name/handle
             long? accountId = SessionManager.GetOnlinePlayerByHandleOrUsername(request.Name);
-            
+
             GroupPromoteResponse response = new GroupPromoteResponse
             {
                 ResponseId = request.RequestId,
@@ -487,7 +489,7 @@ namespace CentralServer.LobbyServer
             {
                 response.LocalizedFailure = GroupMessages.PlayerIsNotInGroup(request.Name);
             }
-            
+
             Send(response);
         }
 
@@ -634,7 +636,7 @@ namespace CentralServer.LobbyServer
             SelectedSubTypeMask = request.SubTypeMask;
             Send(new SetGameSubTypeResponse { ResponseId = request.RequestId });
         }
-        
+
         public void HandlePlayerGroupInfoUpdateRequest(PlayerGroupInfoUpdateRequest request)
         {
             GroupInfo group = GroupManager.GetPlayerGroup(AccountId);
@@ -648,12 +650,12 @@ namespace CentralServer.LobbyServer
                 });
                 return;
             }
-            
+
             foreach (long accountId in group.Members)
             {
                 SessionManager.GetClientConnection(accountId)?.SetGameType(request.GameType);
             }
-            
+
             Send(new PlayerGroupInfoUpdateResponse
             {
                 Success = true,
@@ -677,7 +679,7 @@ namespace CentralServer.LobbyServer
                 account = DB.Get().AccountDao.GetAccount(AccountId);
                 playerInfo = LobbyServerPlayerInfo.Of(account);
             }
-            
+
             // TODO validate what player has purchased
 
             // building character info to validate it for current game
@@ -733,7 +735,7 @@ namespace CentralServer.LobbyServer
                 if (characterDataUpdate)
                 {
                     account.CharacterData[characterType].CharacterComponent = characterComponent;
-                    DB.Get().AccountDao.UpdateCharacterComponent(account, characterType); 
+                    DB.Get().AccountDao.UpdateCharacterComponent(account, characterType);
                 }
 
                 if (GroupManager.GetPlayerGroup(AccountId).IsSolo() && request.GameType != null && request.GameType.HasValue)
@@ -771,7 +773,7 @@ namespace CentralServer.LobbyServer
             LobbyPlayerInfoUpdate update)
         {
             bool characterDataUpdate = false;
-            
+
             if (update.CharacterSkin.HasValue)
             {
                 characterComponent.LastSkin = update.CharacterSkin.Value;
@@ -814,7 +816,7 @@ namespace CentralServer.LobbyServer
                 ResponseId = request.RequestId
             };
             Send(response);
-            
+
             if (LobbyConfiguration.IsTrustWarEnabled())
             {
                 PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
@@ -942,7 +944,7 @@ namespace CentralServer.LobbyServer
                 SendSystemMessage(failure);
                 return;
             }
-            
+
             GroupInfo group = GroupManager.GetPlayerGroup(AccountId);
             IsReady = contextualReadyState.ReadyState == ReadyState.Ready;  // TODO can be Accepted and others
             if (group == null)
@@ -999,7 +1001,7 @@ namespace CentralServer.LobbyServer
                 LocalizationPayload failure = QueuePenaltyManager.CheckQueuePenalties(AccountId, SelectedGameType);
                 if (failure is not null)
                 {
-                    Send(new JoinMatchmakingQueueResponse { Success = false, ResponseId = request.RequestId, LocalizedFailure = failure});
+                    Send(new JoinMatchmakingQueueResponse { Success = false, ResponseId = request.RequestId, LocalizedFailure = failure });
                     return;
                 }
 
@@ -1051,13 +1053,16 @@ namespace CentralServer.LobbyServer
 
         public void HandleGroupInviteRequest(GroupInviteRequest request)
         {
+            // Remove Mentor and or Dev from names (if invited using chat)
+            request.FriendHandle = Regex.Replace(request.FriendHandle, @"\((Mentor|Dev)\)", "");
+
             var response = new GroupInviteResponse
             {
                 FriendHandle = request.FriendHandle,
                 ResponseId = request.RequestId,
                 Success = false
             };
-            
+
             long friendAccountId = SessionManager.GetOnlinePlayerByHandle(request.FriendHandle) ?? 0;
             if (friendAccountId == 0)
             {
@@ -1083,13 +1088,13 @@ namespace CentralServer.LobbyServer
                 Send(response);
                 return;
             }
-            
+
             PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
             SocialComponent socialComponent = account?.SocialComponent;
             PersistedAccountData friendAccount = DB.Get().AccountDao.GetAccount(friendAccountId);
             SocialComponent friendSocialComponent = friendAccount?.SocialComponent;
             PersistedAccountData leaderAccount = DB.Get().AccountDao.GetAccount(group.Leader);
-            
+
             if (account is null || friendAccount is null || leaderAccount is null)
             {
                 log.Error($"Failed to send group invite request: "
@@ -1098,7 +1103,7 @@ namespace CentralServer.LobbyServer
                 Send(response);
                 return;
             }
-            
+
             if (socialComponent?.IsBlocked(friendAccountId) == true)
             {
                 log.Info($"{Handle} attempted to invite {request.FriendHandle} whom they blocked to a group");
@@ -1106,7 +1111,7 @@ namespace CentralServer.LobbyServer
                 Send(response);
                 return;
             }
-            
+
             if (friendSocialComponent?.IsBlocked(AccountId) == true)
             {
                 log.Info($"{Handle} attempted to invite {request.FriendHandle} who blocked them to a group");
@@ -1114,7 +1119,7 @@ namespace CentralServer.LobbyServer
                 Send(response);
                 return;
             }
-            
+
             LobbyServerProtocol friend = SessionManager.GetClientConnection(friendAccountId);
             if (friend is null) // offline
             {
@@ -1131,7 +1136,7 @@ namespace CentralServer.LobbyServer
                 Send(response);
                 return;
             }
-            
+
             GroupInfo friendGroup = GroupManager.GetPlayerGroup(friendAccountId);
             if (!friendGroup.IsSolo())
             {
@@ -1140,7 +1145,7 @@ namespace CentralServer.LobbyServer
                 Send(response);
                 return;
             }
-            
+
             // TODO GROUPS AleadyInvitedPlayerToGroup@Invite? You've already invited {0}, please await their response.
 
             TimeSpan expirationTime = LobbyConfiguration.GetGroupConfiguration().InviteTimeout;
@@ -1195,7 +1200,7 @@ namespace CentralServer.LobbyServer
                     AccountId);
             }
         }
-        
+
         public void HandleGroupJoinRequest(GroupJoinRequest request)
         {
             var response = new GroupJoinResponse
@@ -1204,7 +1209,7 @@ namespace CentralServer.LobbyServer
                 ResponseId = request.RequestId,
                 Success = false
             };
-            
+
             GroupInfo myGroup = GroupManager.GetPlayerGroup(AccountId);
             if (!myGroup.IsSolo())
             {
@@ -1213,7 +1218,7 @@ namespace CentralServer.LobbyServer
                 Send(response);
                 return;
             }
-                
+
             long friendAccountId = SessionManager.GetOnlinePlayerByHandle(request.FriendHandle) ?? 0;
             if (friendAccountId == 0)
             {
@@ -1239,7 +1244,7 @@ namespace CentralServer.LobbyServer
                 Send(response);
                 return;
             }
-            
+
             if (socialComponent?.IsBlocked(friendAccountId) == true)
             {
                 log.Info($"{Handle} attempted to join {request.FriendHandle}'s group whom they blocked");
@@ -1247,7 +1252,7 @@ namespace CentralServer.LobbyServer
                 Send(response);
                 return;
             }
-            
+
             if (friendSocialComponent?.IsBlocked(AccountId) == true)
             {
                 log.Info($"{Handle} attempted to join {request.FriendHandle}'s group who blocked them");
@@ -1255,7 +1260,7 @@ namespace CentralServer.LobbyServer
                 Send(response);
                 return;
             }
-            
+
             if (leaderSocialComponent?.IsBlocked(AccountId) == true)
             {
                 log.Info($"{Handle} attempted to join {leaderAccount.Handle}'s group who blocked them via {request.FriendHandle}");
@@ -1263,7 +1268,7 @@ namespace CentralServer.LobbyServer
                 Send(response);
                 return;
             }
-            
+
             GroupInfo friendGroup = GroupManager.GetPlayerGroup(friendAccountId);
             if (friendGroup.IsSolo())
             {
@@ -1272,7 +1277,7 @@ namespace CentralServer.LobbyServer
                 Send(response);
                 return;
             }
-            
+
             LobbyServerProtocol friend = SessionManager.GetClientConnection(friendAccountId);
             if (friend is null) // offline
             {
@@ -1281,7 +1286,7 @@ namespace CentralServer.LobbyServer
                 Send(response);
                 return;
             }
-            
+
             if (friendGroup.Members.Count == LobbyConfiguration.GetMaxGroupSize())
             {
                 log.Warn($"{AccountId} attempted to join {request.FriendHandle}'s full group");
@@ -1306,7 +1311,7 @@ namespace CentralServer.LobbyServer
                 Type = joinType
             });
             GroupManager.BroadcastSystemMessage(
-                friendGroup, 
+                friendGroup,
                 GroupMessages.RequestToJoinGroup(AccountId),
                 leaderAccount.AccountId);
 
@@ -1362,7 +1367,7 @@ namespace CentralServer.LobbyServer
                 SendSystemMessage(GroupMessages.FailedToJoinUnknownError);
                 return;
             }
-            
+
             LobbyServerProtocol requester = SessionManager.GetClientConnection(groupRequestInfo.RequesterAccountId);
             if (requester is null)
             {
@@ -1430,7 +1435,7 @@ namespace CentralServer.LobbyServer
                     return;
                 }
             }
-            
+
             if (response.Acceptance != GroupInviteResponseType.PlayerAccepted)
             {
                 log.Info($"Player {AccountId} rejected {typeForLog} {response.ConfirmationNumber} " +
@@ -1441,7 +1446,7 @@ namespace CentralServer.LobbyServer
                 log.Info($"Player {AccountId} accepted {typeForLog} {response.ConfirmationNumber} " +
                          $"to join group {response.GroupId} by {response.JoinerAccountId}: {response.Acceptance}");
             }
-            
+
             switch (response.Acceptance)
             {
                 case GroupInviteResponseType.PlayerRejected:
@@ -1463,12 +1468,12 @@ namespace CentralServer.LobbyServer
                     break;
                 case GroupInviteResponseType.PlayerInCustomMatch:
                     GroupManager.BroadcastSystemMessage(
-                        requesterGroup, 
+                        requesterGroup,
                         GroupMessages.PlayerInACustomMatchAtTheMoment(AccountId));
                     break;
                 case GroupInviteResponseType.PlayerStillAwaitingPreviousQuery:
                     GroupManager.BroadcastSystemMessage(
-                        requesterGroup, 
+                        requesterGroup,
                         GroupMessages.PlayerStillConsideringYourPreviousInviteRequest(AccountId));
                     break;
                 case GroupInviteResponseType.PlayerAccepted:
@@ -1505,16 +1510,16 @@ namespace CentralServer.LobbyServer
                     break;
             }
         }
-        
+
         public void HandleGroupLeaveRequest(GroupLeaveRequest request)
         {
             GroupManager.CreateGroup(AccountId);
             BroadcastRefreshFriendList();
         }
-        
+
         // TODO
         // No message handler registered for GameInvitationRequest
-        
+
         private void OnAccountVisualsUpdated()
         {
             BroadcastRefreshFriendList();
@@ -2010,7 +2015,7 @@ namespace CentralServer.LobbyServer
             }
 
             log.Info($"{UserName} wants to reconnect to game {request.PreviousGameInfo.GameServerProcessCode}");
-            
+
             Game game = GameManager.GetGameWithPlayer(AccountId);
 
             if (game == null || game.Server == null || !game.Server.IsConnected)
@@ -2113,58 +2118,58 @@ namespace CentralServer.LobbyServer
             switch (request.FriendOperation)
             {
                 case FriendOperation.Block:
-                {
-                    bool updated = account.SocialComponent.Block(friendAccountId);
-                    log.Info($"{account.Handle} blocked {friendAccount.Handle}{(updated ? "" : ", but they were already blocked")}");
-                    if (updated)
                     {
-                        DB.Get().AccountDao.UpdateSocialComponent(account);
+                        bool updated = account.SocialComponent.Block(friendAccountId);
+                        log.Info($"{account.Handle} blocked {friendAccount.Handle}{(updated ? "" : ", but they were already blocked")}");
+                        if (updated)
+                        {
+                            DB.Get().AccountDao.UpdateSocialComponent(account);
+                            Send(FriendUpdateResponse.of(request));
+                            RefreshFriendList();
+                        }
+                        else
+                        {
+                            Send(FriendUpdateResponse.of(
+                                request,
+                                LocalizationPayload.Create("FailedFriendBlock", "FriendList",
+                                    LocalizationArg_LocalizationPayload.Create(
+                                        LocalizationPayload.Create("PlayerAlreadyBlocked", "FriendUpdateResponse",
+                                            LocalizationArg_Handle.Create(request.FriendHandle))))
+                            ));
+                        }
+                        return;
+                    }
+                case FriendOperation.Unblock:
+                    {
+                        bool updated = account.SocialComponent.Unblock(friendAccountId);
+                        log.Info($"{account.Handle} unblocked {friendAccount.Handle}{(updated ? "" : ", but they weren't blocked")}");
+                        if (updated)
+                        {
+                            DB.Get().AccountDao.UpdateSocialComponent(account);
+                        }
+
                         Send(FriendUpdateResponse.of(request));
                         RefreshFriendList();
+                        return;
                     }
-                    else
-                    {
-                        Send(FriendUpdateResponse.of(
-                            request, 
-                            LocalizationPayload.Create("FailedFriendBlock", "FriendList",
-                                LocalizationArg_LocalizationPayload.Create(
-                                    LocalizationPayload.Create("PlayerAlreadyBlocked", "FriendUpdateResponse",
-                                        LocalizationArg_Handle.Create(request.FriendHandle))))
-                        ));
-                    }
-                    return;
-                }
-                case FriendOperation.Unblock:
-                {
-                    bool updated = account.SocialComponent.Unblock(friendAccountId);
-                    log.Info($"{account.Handle} unblocked {friendAccount.Handle}{(updated ? "" : ", but they weren't blocked")}");
-                    if (updated)
-                    {
-                        DB.Get().AccountDao.UpdateSocialComponent(account);
-                    }
-
-                    Send(FriendUpdateResponse.of(request));
-                    RefreshFriendList();
-                    return;
-                }
                 case FriendOperation.Remove:
-                {
-                    if (account.SocialComponent.IsBlocked(friendAccountId))
                     {
-                        goto case FriendOperation.Unblock;
+                        if (account.SocialComponent.IsBlocked(friendAccountId))
+                        {
+                            goto case FriendOperation.Unblock;
+                        }
+                        else
+                        {
+                            goto default;
+                        }
                     }
-                    else
-                    {
-                        goto default;
-                    }
-                }
                 default:
-                {
-                    log.Warn($"{account.Handle} attempted to {request.FriendOperation} {friendAccount.Handle}, " +
-                             $"but this operation is not supported yet");
-                    Send(FriendUpdateResponse.of(request, LocalizationPayload.Create("ServerError@Global")));
-                    return;
-                }
+                    {
+                        log.Warn($"{account.Handle} attempted to {request.FriendOperation} {friendAccount.Handle}, " +
+                                 $"but this operation is not supported yet");
+                        Send(FriendUpdateResponse.of(request, LocalizationPayload.Create("ServerError@Global")));
+                        return;
+                    }
             }
         }
     }

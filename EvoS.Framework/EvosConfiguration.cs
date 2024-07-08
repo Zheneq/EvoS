@@ -37,7 +37,8 @@ namespace EvoS.Framework
         public bool AllowUsernamePasswordAuth = true;
         public List<string> Proxies = new List<string>();
         public List<string> LightProxies = new List<string>();
-        
+        public string MentorApiUrl = "";
+
         public bool PingOnGroupRequest = true;
 
         private static Lazy<EvosConfiguration> _instance = new Lazy<EvosConfiguration>(() =>
@@ -71,25 +72,25 @@ namespace EvoS.Framework
         public static bool SteamApiEnabled => !string.IsNullOrWhiteSpace(GetSteamWebApiKey());
 
         public static bool GetAutoRegisterNewUsers() => Instance.AutoRegisterNewUsers;
-        
+
         public static HashSet<LinkedAccount.AccountType> GetLinkedAccountAllowedTypes() => Instance.LinkedAccountAllowedTypes;
-        
+
         public static List<List<LinkedAccount.Condition>> GetLinkedAccountRegistrationConditions() => Instance.LinkedAccountRegistrationConditions;
-        
+
         public static List<List<LinkedAccount.Condition>> GetLinkedAccountLoginConditions() => Instance.LinkedAccountLoginConditions ?? GetLinkedAccountRegistrationConditions();
-        
+
         public static HashSet<LinkedAccount.AccountType> GetLinkedAccountsForPasswordReset() => Instance.LinkedAccountsForPasswordReset;
-        
+
         public static bool GetRequireRegistrationCode() => Instance.RequireRegistrationCode;
-        
+
         public static TimeSpan GetRegistrationCodeLifetime() => Instance.RegistrationCodeLifetime;
-        
+
         public static TimeSpan GetTempPasswordLifetime() => Instance.TempPasswordLifetime;
-        
+
         public static bool GetDisableUserIpCheck() => Instance.DisableUserIpCheck;
 
         public static int GetMaxLinkedAccounts() => Instance.MaxLinkedAccounts;
-        
+
         public static DBConfig GetDBConfig() => Instance.Database;
 
         public static bool GetPingOnGroupRequest() => Instance.PingOnGroupRequest;
@@ -112,6 +113,8 @@ namespace EvoS.Framework
 
         public static List<string> GetProxies() => Instance.Proxies;
         public static List<string> GetLightProxies() => Instance.LightProxies;
+
+        public static string GetMentorApiUrl() => Instance.MentorApiUrl;
 
         public enum DBType
         {
