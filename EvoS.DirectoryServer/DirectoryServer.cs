@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using CentralServer.ApiServer;
 using CentralServer.LobbyServer.Session;
+using CentralServer.LobbyServer.Stats;
 using CentralServer.LobbyServer.Utils;
 using EvoS.DirectoryServer.Account;
 using EvoS.DirectoryServer.Inventory;
@@ -34,20 +35,20 @@ namespace EvoS.DirectoryServer
     public static class Program
     {
         private static IWebHost host;
-        
+
         public static void Main(string[] args = null)
         {
             host = WebHost.CreateDefaultBuilder()
                 .SuppressStatusMessages(true)
                 .UseKestrel(koptions => koptions.Listen(IPAddress.Parse("0.0.0.0"), EvosConfiguration.GetDirectoryServerPort()))
-                .UseStartup<DirectoryServer>()           
+                .UseStartup<DirectoryServer>()
                 .ConfigureLogging((hostingContext, logging) =>
                 {
                     logging.ClearProviders();
                     logging.AddProvider(new Log4NetProvider(new Log4NetProviderOptions("log4net.xml")
-                    { 
+                    {
                         LogLevelTranslator = new ApiServer.CustomLogLevelTranslator(),
-                    }));                   
+                    }));
                 })
                 .Build();
 
@@ -67,12 +68,12 @@ namespace EvoS.DirectoryServer
     {
         public const string SUPPORTED_PROTO_VERSION = "STABLE-122-100";
         public const string ERROR_INVALID_PROTOCOL_VERSION = "INVALID_PROTOCOL_VERSION";
-        
+
         private static readonly ILog log = LogManager.GetLogger(typeof(DirectoryServer));
         private static long _nextTmpAccountId = 1;
         private static HashSet<IPAddress> _fullProxies;
         private static HashSet<IPAddress> _allProxies;
-        
+
         public void Configure(IApplicationBuilder app)
         {
             _fullProxies = EvosConfiguration.GetProxies().Select(IPAddress.Parse).ToHashSet();
@@ -93,14 +94,14 @@ namespace EvoS.DirectoryServer
                 {
                     syncIOFeature.AllowSynchronousIO = true;
                 }
-                
+
                 context.Response.ContentType = "application/json";
                 MemoryStream ms = new MemoryStream();
                 context.Request.Body.CopyTo(ms);
                 ms.Position = 0;
                 string requestBody = new StreamReader(ms).ReadToEnd();
                 ms.Dispose();
-                
+
                 AssignGameClientRequest request = JsonConvert.DeserializeObject<AssignGameClientRequest>(requestBody);
                 log.Debug($"< {request.GetType().Name} {DefaultJsonSerializer.Serialize(request)}");
                 AssignGameClientResponse response;
@@ -124,7 +125,7 @@ namespace EvoS.DirectoryServer
             {
                 return Fail(request, ERROR_INVALID_PROTOCOL_VERSION);
             }
-            
+
             string ticket = request.AuthInfo.GetTicket();
 
             if (!ticket.IsNullOrEmpty())
@@ -143,7 +144,7 @@ namespace EvoS.DirectoryServer
                         return resp;
                     }
                 }
-                
+
                 if (!isSessionTicket && EvosConfiguration.GetAllowTicketAuth())
                 {
                     AuthTicket authTicket = AuthTicket.TryParse(ticket);
@@ -165,7 +166,7 @@ namespace EvoS.DirectoryServer
             {
                 return Fail(request, "No credentials provided");
             }
-            
+
             EvosAuth.TokenData tokenData;
             try
             {
@@ -218,7 +219,7 @@ namespace EvoS.DirectoryServer
             {
                 return Fail(request, "No credentials provided");
             }
-            
+
             if (!EvosConfiguration.GetAllowUsernamePasswordAuth())
             {
                 return Fail(request, "Username and password auth is not allowed");
@@ -278,6 +279,7 @@ namespace EvoS.DirectoryServer
             // Someday we'll make a db migration tool but not today
             if (PatchAccountData(account))
             {
+                account = StatsApi.GetMentorStatus(account);
                 DB.Get().AccountDao.UpdateAccount(account);
             }
 
@@ -318,7 +320,7 @@ namespace EvoS.DirectoryServer
             {
                 return null;
             }
-            
+
             if (session.SessionToken != request.SessionInfo.SessionToken)
             {
                 return Fail(request, "ReconnectionError: SessionToken invalid");
@@ -328,12 +330,12 @@ namespace EvoS.DirectoryServer
             {
                 return Fail(request, "ReconnectionError: ReconnectSessionToken invalid");
             }
-            
+
             // TODO extra security? Reconnect tokens are possible to hijack
 
             // SessionManager.CleanSessionAfterReconnect(request.SessionInfo.AccountId);
             session = SessionManager.CreateSession(request.SessionInfo.AccountId, request.SessionInfo, GetIpAddress(context));
-            
+
             return new AssignGameClientResponse
             {
                 Success = true,
@@ -367,7 +369,7 @@ namespace EvoS.DirectoryServer
             }
 
             // PATCH Make sure PendingWillFill has default CharacterLoadouts
-            if (willFill.CharacterComponent.CharacterLoadouts.Count == 0) 
+            if (willFill.CharacterComponent.CharacterLoadouts.Count == 0)
             {
                 willFill.CharacterComponent.CharacterLoadouts = new List<CharacterLoadout>()
                 {
@@ -426,7 +428,8 @@ namespace EvoS.DirectoryServer
                                 }
                 }
 );
-            } else
+            }
+            else
             {
                 account.AccountComponent.UnlockedRibbonIDs = new List<int>();
             }

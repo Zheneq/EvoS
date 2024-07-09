@@ -40,9 +40,10 @@ namespace EvoS.Framework.Network.Static
         [JsonIgnore] public PersistedAccountDataSnapshotReason SnapshotReason { get; set; }
 
         [JsonIgnore] public string SnapshotNote { get; set; }
-        
+
+        [NonSerialized] public bool Mentor;
         [NonSerialized] public string ApiKey;
-        
+
         public PersistedAccountData()
         {
             SchemaVersion = new SchemaVersion<AccountSchemaChange>();
@@ -57,29 +58,29 @@ namespace EvoS.Framework.Network.Static
             AddedMatchData = new List<PersistedCharacterMatchData>();
             QuestComponent = new QuestComponent();
         }
-        
-        
 
-//        [JsonIgnore]
-//        public int SeasonLevel
-//        {
-//            get { return QuestComponent.SeasonLevel; }
-//            set { QuestComponent.SeasonLevel = value; }
-//        }
-//
-//        [JsonIgnore]
-//        public int SeasonXPProgressThroughLevel
-//        {
-//            get { return QuestComponent.SeasonXPProgressThroughLevel; }
-//            set { QuestComponent.SeasonXPProgressThroughLevel = value; }
-//        }
-//
-//        [JsonIgnore]
-//        public int HighestSeasonChapter
-//        {
-//            get { return QuestComponent.HighestSeasonChapter; }
-//            set { QuestComponent.HighestSeasonChapter = value; }
-//        }
+
+
+        //        [JsonIgnore]
+        //        public int SeasonLevel
+        //        {
+        //            get { return QuestComponent.SeasonLevel; }
+        //            set { QuestComponent.SeasonLevel = value; }
+        //        }
+        //
+        //        [JsonIgnore]
+        //        public int SeasonXPProgressThroughLevel
+        //        {
+        //            get { return QuestComponent.SeasonXPProgressThroughLevel; }
+        //            set { QuestComponent.SeasonXPProgressThroughLevel = value; }
+        //        }
+        //
+        //        [JsonIgnore]
+        //        public int HighestSeasonChapter
+        //        {
+        //            get { return QuestComponent.HighestSeasonChapter; }
+        //            set { QuestComponent.HighestSeasonChapter = value; }
+        //        }
 
         public object Clone()
         {
@@ -143,25 +144,25 @@ namespace EvoS.Framework.Network.Static
             };
         }
 
-//        public void AddMatchData(PersistedCharacterMatchData matchData)
-//        {
-//            AddedMatchData.Add(matchData);
-//        }
-//
-//        public IEnumerable<PersistedCharacterMatchData> GetAddedMatchData()
-//        {
-//            return AddedMatchData;
-//        }
-//
-//        public void ClearAddedMatchData()
-//        {
-//            AddedMatchData.Clear();
-//        }
+        //        public void AddMatchData(PersistedCharacterMatchData matchData)
+        //        {
+        //            AddedMatchData.Add(matchData);
+        //        }
+        //
+        //        public IEnumerable<PersistedCharacterMatchData> GetAddedMatchData()
+        //        {
+        //            return AddedMatchData;
+        //        }
+        //
+        //        public void ClearAddedMatchData()
+        //        {
+        //            AddedMatchData.Clear();
+        //        }
 
-//        public int GetReactorLevel(List<SeasonTemplate> seasons)
-//        {
-//            return this.QuestComponent.GetReactorLevel(seasons);
-//        }
+        //        public int GetReactorLevel(List<SeasonTemplate> seasons)
+        //        {
+        //            return this.QuestComponent.GetReactorLevel(seasons);
+        //        }
 
         public override string ToString()
         {

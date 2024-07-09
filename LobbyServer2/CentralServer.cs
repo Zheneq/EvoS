@@ -11,6 +11,7 @@ using CentralServer.LobbyServer.Friend;
 using CentralServer.LobbyServer.Group;
 using CentralServer.LobbyServer.Matchmaking;
 using CentralServer.LobbyServer.Session;
+using CentralServer.LobbyServer.Stats;
 using EvoS.Framework;
 using log4net;
 using WebSocketSharp;
@@ -69,6 +70,7 @@ namespace CentralServer
 
             ChatManager.Get(); // TODO Dependency injection
             await DiscordManager.Get().Start();
+            StatsApi.Get();
             AdminManager.Get().Start();
 
             FriendsTask friendsTask = new FriendsTask(CancellationToken.None);
@@ -82,7 +84,7 @@ namespace CentralServer
 
             ServerStatisticsTask serverStatisticsTask = new ServerStatisticsTask(CancellationToken.None);
             _ = Task.Run(serverStatisticsTask.Run, CancellationToken.None);
-            
+
             _server.Start();
             log.Info($"Started lobby server on port {port}");
 
@@ -107,9 +109,9 @@ namespace CentralServer
             {
                 Thread.Sleep(5000);
             }
-            
+
             DiscordManager.Get().Shutdown();
-            
+
             log.Info("Lobby server is not listening, exiting...");
         }
 

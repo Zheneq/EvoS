@@ -2,6 +2,7 @@
 using System.IO;
 using CentralServer.LobbyServer.Discord;
 using CentralServer.LobbyServer.Group;
+using CentralServer.LobbyServer.Stats;
 using YamlDotNet.Serialization;
 
 namespace EvoS.Framework
@@ -9,7 +10,7 @@ namespace EvoS.Framework
     public class LobbyConfiguration
     {
         private static LobbyConfiguration Instance = null;
-        
+
         public string MOTDPopUpText = "";
         public string MOTDText = "Lobby server version 2";
 
@@ -29,6 +30,7 @@ namespace EvoS.Framework
         public TimeSpan ServerShutdownTime = TimeSpan.FromMinutes(1);
         public TimeSpan ServerReconnectionTimeout = TimeSpan.FromSeconds(10);
         public DiscordConfiguration Discord = new DiscordConfiguration();
+        public StatsConfiguration Stats = new StatsConfiguration();
         public bool EnableTrustWar = true;
         public int TrustWarGamePlayedPoints = 5;
         public int TrustWarGameWonPoints = 10;
@@ -76,27 +78,27 @@ namespace EvoS.Framework
         {
             return GetInstance().PatchNotesCommitsUrl;
         }
-        
+
         public static bool GetGameTypePracticeAvailable()
         {
             return GetInstance().GameTypePracticeAvailable;
         }
-        
+
         public static bool GetGameTypeCoopAvailable()
         {
             return GetInstance().GameTypeCoopAvailable;
         }
-        
+
         public static bool GetGameTypePvPAvailable()
         {
             return GetInstance().GameTypePvPAvailable;
         }
-        
+
         public static bool GetGameTypeRankedAvailable()
         {
             return GetInstance().GameTypeRankedAvailable;
         }
-        
+
         public static bool GetGameTypeCustomAvailable()
         {
             return GetInstance().GameTypeCustomAvailable;
@@ -131,7 +133,12 @@ namespace EvoS.Framework
         {
             return GetInstance().Discord;
         }
-        
+
+        public static StatsConfiguration GetStatsConfiguration()
+        {
+            return GetInstance().Stats;
+        }
+
         public static bool GetMatchAbandoningPenalty()
         {
             return GetInstance().MatchAbandoningPenalty;

@@ -31,3 +31,7 @@ Discord:
   LobbyEnableServerStatus: true
   LobbyChannelUpdatePeriodSeconds: 300
   LobbyChannelUpdateOnChangeOnly: true
+Stats:
+  Enabled: false
+  ApiKey: ""
+  ApiUrl: ""

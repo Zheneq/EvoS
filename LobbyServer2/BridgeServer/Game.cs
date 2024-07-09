@@ -7,6 +7,7 @@ using CentralServer.LobbyServer.Character;
 using CentralServer.LobbyServer.Discord;
 using CentralServer.LobbyServer.Matchmaking;
 using CentralServer.LobbyServer.Session;
+using CentralServer.LobbyServer.Stats;
 using CentralServer.LobbyServer.TrustWar;
 using CentralServer.LobbyServer.Utils;
 using EvoS.Framework;
@@ -26,15 +27,15 @@ public abstract class Game
     private static readonly ILog log = LogManager.GetLogger(typeof(Game));
     public static readonly object characterSelectionLock = new object();
     protected static readonly Random rand = new Random();
-    
+
     public LobbyGameInfo GameInfo { protected set; get; } // TODO check it is set when needed
     public LobbyServerTeamInfo TeamInfo { protected set; get; } = new LobbyServerTeamInfo() { TeamPlayerInfo = new List<LobbyServerPlayerInfo>() };
-    
+
     public ServerGameMetrics GameMetrics { get; private set; } = new ServerGameMetrics();
     public LobbyGameSummary GameSummary { get; private set; }
     public DateTime StopTime { private set; get; }
     public BridgeServerProtocol Server { private set; get; } // TODO check it is set when needed
-    
+
     public GameSubType GameSubType { protected set; get; } // can be null
 
     public string ProcessCode => GameInfo?.GameServerProcessCode;
@@ -50,7 +51,7 @@ public abstract class Game
             Server.OnPlayerDisconnect -= OnPlayerDisconnect;
             Server.OnServerDisconnect -= OnServerDisconnect;
         }
-        
+
         Server = server;
         // TODO clear on destroy
         if (Server is not null)
@@ -61,7 +62,7 @@ public abstract class Game
             Server.OnPlayerDisconnect += OnPlayerDisconnect;
             Server.OnServerDisconnect += OnServerDisconnect;
         }
-        
+
         log.Info($"{GetType().Name} {LobbyServerUtils.GameIdString(GameInfo)} is assigned to server {Server?.Name}");
     }
 
@@ -72,9 +73,9 @@ public abstract class Game
 
     public virtual void OnPlayerDisconnectedFromLobby(long accountId)
     {
-        
+
     }
-    
+
     protected void OnGameEnded(BridgeServerProtocol server, LobbyGameSummary summary, LobbyGameSummaryOverrides overrides)
     {
         GameInfo.GameResult = summary?.GameResult ?? GameResult.TieGame;
@@ -120,7 +121,7 @@ public abstract class Game
 
         _ = FinalizeGame();
     }
-    
+
     protected void OnStatusUpdate(BridgeServerProtocol server, GameStatus newStatus)
     {
         log.Info($"Game {GameInfo?.Name} {newStatus}");
@@ -177,21 +178,21 @@ public abstract class Game
         {
             lobbyPlayerInfo.ReplacedWithBots = true;
         }
-            
+
         QueuePenaltyManager.IssueQueuePenalties(playerInfo.AccountId, this);
     }
 
     protected async void OnServerDisconnect(BridgeServerProtocol server)
     {
         QueuePenaltyManager.CapQueuePenalties(this);
-        
+
         await Task.Delay(LobbyConfiguration.GetServerReconnectionTimeout());
         if (Server == server && GameStatus != GameStatus.Stopped)
         {
             OnGameEnded(server, null, null);
         }
     }
-    
+
     protected void StartGame()
     {
         GameInfo.GameStatus = GameStatus.Assembling;
@@ -224,7 +225,7 @@ public abstract class Game
         }
         lobbyServerPlayerInfo.CharacterInfo = characterInfo;
     }
-    
+
     // TODO there can be multiple
     public LobbyServerPlayerInfo GetPlayerInfo(long accountId)
     {
@@ -336,7 +337,7 @@ public abstract class Game
             log.Warn($"Attempting to send game info notifications before creating game info!");
             return;
         }
-        
+
         GameInfo.ActivePlayers = TeamInfo.TeamPlayerInfo.Count;
         GameInfo.UpdateTimestamp = DateTime.UtcNow.Ticks;
         foreach (long player in GetPlayersDistinct())
@@ -499,10 +500,12 @@ public abstract class Game
             // TrustWar
             TrustWarManager.CalculateTrustWar(this, GameSummary);
 
-            // SendGameInfoNotifications(); // moved down
+            // Send stats to api, no longer rely on discord
+            await StatsApi.Get().ParseStats(GameInfo, Server?.Name, Server?.BuildVersion, GameSummary);
+
             DiscordManager.Get().SendGameReport(GameInfo, Server?.Name, Server?.BuildVersion, GameSummary);
             DiscordManager.Get().SendAdminGameReport(GameInfo, Server?.Name, Server?.BuildVersion, GameSummary);
-        
+
             //Wait a bit so people can look at stuff but we do have to send it so server can restart
             await Task.Delay(LobbyConfiguration.GetServerShutdownTime());
         }
@@ -514,13 +517,13 @@ public abstract class Game
     {
         int botNum = team == Team.TeamA ? gameSubType.TeamABots : gameSubType.TeamBBots;
         int playerNum = (team == Team.TeamA ? gameSubType.TeamAPlayers : gameSubType.TeamBPlayers) - botNum;
-        
+
         if (playerNum < 0)
         {
             log.Error($"Misconfigured sub type {gameSubType.LocalizedName} with {playerNum} human players in {team}");
             playerNum = 0;
         }
-        
+
         if (team == Team.TeamA
             && gameSubType.Mods is not null
             && gameSubType.Mods.Contains(GameSubType.SubTypeMods.AntiSocial))
@@ -530,12 +533,12 @@ public abstract class Game
             playerNum = players.Count;
             log.Info($"Adding {botsForAntiSocial} bots for an antisocial game");
         }
-        
+
         if (playerNum != players.Count)
         {
             log.Error($"Expected {playerNum} players in {team} but got {players.Count}");
         }
-        
+
         foreach (long accountId in players)
         {
             LobbyServerProtocol client = SessionManager.GetClientConnection(accountId);
@@ -894,7 +897,7 @@ public abstract class Game
             log.Error($"Cannot reconnect player {LobbyServerUtils.GetHandle(conn.AccountId)} to {ProcessCode}");
             return false;
         }
-            
+
         conn.JoinGame(this);
         playerInfo.ReplacedWithBots = false;
         SendGameAssignmentNotification(conn, true);
