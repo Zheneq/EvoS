@@ -43,7 +43,8 @@ namespace CentralServer.LobbyServer.Stats
             // Trim the end / if its there
             conf.ApiUrl = conf.ApiUrl.TrimEnd('/');
             client = new HttpClient();
-            if (conf.ApiKey != null) { 
+            if (conf.ApiKey != null)
+            {
                 client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", conf.ApiKey);
             }
         }
@@ -137,7 +138,7 @@ namespace CentralServer.LobbyServer.Stats
             StringContent content = new(json, Encoding.UTF8, "application/json");
 
             HttpResponseMessage response = await client.PostAsync($"{Get().conf.ApiUrl}/games", content);
-            
+
             if (response.IsSuccessStatusCode)
             {
                 string responseBody = await response.Content.ReadAsStringAsync();
@@ -174,30 +175,6 @@ namespace CentralServer.LobbyServer.Stats
                         MostDecorated = badges.TopParticipationEarned.Contains(TopParticipantSlot.MostDecorated);
                     }
 
-                    var abilityList = new JArray();
-                    foreach (AbilityGameSummary abilityGameSummary in player.AbilityGameSummaryList)
-                    {
-                        JObject abilityJson = new()
-                        {
-                            ["AbilityClassName"] = abilityGameSummary.AbilityClassName,
-                            ["AbilityName"] = abilityGameSummary.AbilityName,
-                            ["ActionType"] = abilityGameSummary.ActionType,
-                            ["CastCount"] = abilityGameSummary.CastCount,
-                            ["ModName"] = abilityGameSummary.ModName,
-                            ["TauntCount"] = abilityGameSummary.TauntCount,
-                            ["TotalAbsorb"] = abilityGameSummary.TotalAbsorb,
-                            ["TotalDamage"] = abilityGameSummary.TotalDamage,
-                            ["TotalEnergyGainOnSelf"] = abilityGameSummary.TotalEnergyGainOnSelf,
-                            ["TotalEnergyGainToOthers"] = abilityGameSummary.TotalEnergyGainToOthers,
-                            ["TotalEnergyLossToOthers"] = abilityGameSummary.TotalEnergyLossToOthers,
-                            ["TotalHealing"] = abilityGameSummary.TotalHealing,
-                            ["TotalPotentialAbsorb"] = abilityGameSummary.TotalPotentialAbsorb,
-                            ["TotalTargetsHit"] = abilityGameSummary.TotalTargetsHit
-                        };
-
-                        abilityList.Add(abilityJson);
-                    }
-
                     var playerGameData = new
                     {
                         data = new
@@ -230,7 +207,6 @@ namespace CentralServer.LobbyServer.Stats
                             player.CombatCatalystName,
                             player.PrepCatalystUsed,
                             player.PrepCatalystName,
-                            AbilityGameSummaryList = abilityList,
                             Deadliest,
                             Supportiest,
                             Tankiest,
@@ -239,11 +215,52 @@ namespace CentralServer.LobbyServer.Stats
                     };
 
                     string jsonPlayer = JsonConvert.SerializeObject(playerGameData);
-                    StringContent contentPlayer = new StringContent(jsonPlayer, Encoding.UTF8, "application/json");
+                    StringContent contentPlayer = new(jsonPlayer, Encoding.UTF8, "application/json");
 
                     HttpResponseMessage responsePlayer = await client.PostAsync($"{Get().conf.ApiUrl}/stats", contentPlayer);
 
-                    if (!responsePlayer.IsSuccessStatusCode)
+                    if (responsePlayer.IsSuccessStatusCode)
+                    {
+                        string responseBodyAdvanced = await responsePlayer.Content.ReadAsStringAsync();
+                        var responseJsonAdvanced = JsonConvert.DeserializeObject<JObject>(responseBodyAdvanced);
+                        string idAdvanced = responseJsonAdvanced["data"]["id"].ToString();
+                        foreach (AbilityGameSummary abilityGameSummary in player.AbilityGameSummaryList)
+                        {
+                            var playerAbilityData = new
+                            {
+                                data = new
+                                {
+                                    stat = idAdvanced,
+                                    abilityGameSummary.AbilityClassName,
+                                    abilityGameSummary.AbilityName,
+                                    abilityGameSummary.ActionType,
+                                    abilityGameSummary.CastCount,
+                                    abilityGameSummary.ModName,
+                                    abilityGameSummary.TauntCount,
+                                    abilityGameSummary.TotalAbsorb,
+                                    abilityGameSummary.TotalDamage,
+                                    abilityGameSummary.TotalEnergyGainOnSelf,
+                                    abilityGameSummary.TotalEnergyGainToOthers,
+                                    abilityGameSummary.TotalEnergyLossToOthers,
+                                    abilityGameSummary.TotalHealing,
+                                    abilityGameSummary.TotalPotentialAbsorb,
+                                    abilityGameSummary.TotalTargetsHit
+                                }
+                            };
+                            string jsonAbility = JsonConvert.SerializeObject(playerAbilityData);
+                            StringContent contentAbility = new(jsonAbility, Encoding.UTF8, "application/json");
+
+                            HttpResponseMessage responseAbility = await client.PostAsync($"{Get().conf.ApiUrl}/advancedstats", contentAbility);
+                            string responseBodyAdvanced1 = await responseAbility.Content.ReadAsStringAsync();
+
+                            if (!responseAbility.IsSuccessStatusCode)
+                            {
+                                log.Error($"Failed to post player ability data. Status code: {responseAbility.StatusCode}. Reason: {responseAbility.ReasonPhrase}");
+                            }
+                        }
+
+                    }
+                    else
                     {
                         log.Error($"Failed to post player stats data. Status code: {responsePlayer.StatusCode}. Reason: {responsePlayer.ReasonPhrase}");
                     }
@@ -252,7 +269,7 @@ namespace CentralServer.LobbyServer.Stats
             }
             else
             {
-                log.Error($"Failed to post game data. Status code: {response.StatusCode}");
+                log.Error($"Failed to post game data. Status code: {response.StatusCode}. Reason: {response.ReasonPhrase}");
             }
         }
     }
