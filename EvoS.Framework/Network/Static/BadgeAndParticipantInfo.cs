@@ -37,5 +37,7 @@ namespace EvoS.Framework.Network.Static
         [EvosMessage(36)]
         public Dictionary<int, PercentileInfo> FreelancerSpecificPercentiles;
         public CharacterType FreelancerPlayed;
+        [NonSerialized]
+        public int ActorIndex;
     }
 }
