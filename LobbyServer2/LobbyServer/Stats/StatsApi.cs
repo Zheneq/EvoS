@@ -87,6 +87,12 @@ namespace CentralServer.LobbyServer.Stats
 
             try
             {
+                if (gameSummary.GameResult != GameResult.TeamAWon
+                    && gameSummary.GameResult != GameResult.TeamBWon)
+                {
+                    return;
+                }
+
                 string map = Maps.GetMapName[gameInfo.GameConfig.Map];
                 string gameType = gameInfo.GameConfig.GameType.ToString();
 
@@ -163,7 +169,7 @@ namespace CentralServer.LobbyServer.Stats
                         BadgeAndParticipantInfo badges = gameSummary.BadgeAndParticipantsInfo
                             .FirstOrDefault(p => p.ActorIndex == player.ActorIndex);
 
-                        if (badges != null)
+                        if (badges != null && badges.TopParticipationEarned != null)
                         {
                             Deadliest = badges.TopParticipationEarned.Contains(TopParticipantSlot.Deadliest);
                             Supportiest = badges.TopParticipationEarned.Contains(TopParticipantSlot.Supportiest);
