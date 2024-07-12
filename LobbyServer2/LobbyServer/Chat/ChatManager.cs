@@ -225,6 +225,9 @@ namespace CentralServer.LobbyServer.Chat
                 blockedRecipients,
                 account.AdminComponent.Muted));
 
+            // Remove Mentor
+            message.SenderHandle = message.SenderHandle.Replace("<color=green>(Mentor)</color>", "");
+
             OnChatMessage(message, isMuted);
         }
 

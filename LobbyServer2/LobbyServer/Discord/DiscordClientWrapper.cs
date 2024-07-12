@@ -57,8 +57,6 @@ namespace CentralServer.LobbyServer.Discord
                 }
             }
 
-            username?.Replace("<color=green>(Mentor)</color>", "");
-
             return client.SendMessageAsync(
                 text, isTTS, embeds, username, avatarUrl, options, allowedMentions, components, flags, _threadId);
         }
