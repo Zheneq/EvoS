@@ -10,12 +10,12 @@ namespace CentralServer.LobbyServer.Discord
     public class DiscordClientWrapper
     {
         private static readonly ILog log = LogManager.GetLogger(typeof(DiscordClientWrapper));
-        
+
         private readonly DiscordWebhookClient client;
         private readonly ulong? threadId;
         private readonly ulong? pingRoleId;
         private readonly string pingRoleHandle;
-        
+
         public DiscordClientWrapper(DiscordChannel conf)
         {
             client = new DiscordWebhookClient(conf.Webhook);
@@ -29,7 +29,7 @@ namespace CentralServer.LobbyServer.Discord
         {
             return DiscordUtils.Log(log, msg);
         }
-        
+
         public Task<ulong> SendMessageAsync(
             string text = null,
             bool isTTS = false,
@@ -45,8 +45,8 @@ namespace CentralServer.LobbyServer.Discord
             ulong? _threadId = threadIdOverride ?? threadId;
             if (_threadId == 0) _threadId = null;
 
-            if (pingRoleId != null) 
-            { 
+            if (pingRoleId != null)
+            {
                 text = text?
                     .Replace("@here", $"<@&{pingRoleId}>")
                     .Replace("@everyone", $"<@&{pingRoleId}>");
@@ -56,6 +56,8 @@ namespace CentralServer.LobbyServer.Discord
                     text = text?.Replace($"@{pingRoleHandle}", $"<@&{pingRoleId}>");
                 }
             }
+
+            username?.Replace("<color=green>(Mentor)</color>", "");
 
             return client.SendMessageAsync(
                 text, isTTS, embeds, username, avatarUrl, options, allowedMentions, components, flags, _threadId);
