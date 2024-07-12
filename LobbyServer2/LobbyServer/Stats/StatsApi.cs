@@ -33,6 +33,7 @@ namespace CentralServer.LobbyServer.Stats
             if (!conf.ApiUrl.StartsWith("http"))
             {
                 log.Info("StatsApi is not configured correctly");
+                conf.Enabled = false;
                 return;
             }
             log.Info("StatsApi Enabled");
@@ -71,15 +72,8 @@ namespace CentralServer.LobbyServer.Stats
                             log.Info($"Enabling Mentor status for {account.Handle}");
                         }
                     }
-                    else
-                    {
-                        log.Info("No mentor information found for the given account handle.");
-                    }
                 }
-                catch (HttpRequestException e)
-                {
-                    log.Error($"Unable to fetch mentor status: {e.Message}");
-                }
+                catch { }
             }
             return account;
         }
@@ -274,7 +268,7 @@ namespace CentralServer.LobbyServer.Stats
                     log.Error($"Failed to post game data. Status code: {response.StatusCode}. Reason: {response.ReasonPhrase}");
                 }
             }
-            catch (HttpRequestException e)
+            catch (Exception e)
             {
                 log.Error($"Failed to post game data: {e.Message}");
             }
