@@ -90,10 +90,12 @@ namespace CentralServer.LobbyServer.Chat
 
             HashSet<long> recipients = new HashSet<long>();
             HashSet<long> blockedRecipients = new HashSet<long>();
+            string mentorTag = "<size=24><sprite=2></size>";
+            string patternMentorTag = Regex.Escape(mentorTag);
 
             if (account.Mentor)
             {
-                message.SenderHandle = $"<color=green>(Mentor)</color>{message.SenderHandle}";
+                message.SenderHandle = $"{mentorTag}{message.SenderHandle}";
             }
 
             switch (notification.ConsoleMessageType)
@@ -106,6 +108,10 @@ namespace CentralServer.LobbyServer.Chat
                             {
                                 SendMessageToPlayer(player, message, out _);
                             }
+
+                            // Remove Mentor icon
+                            message.SenderHandle = Regex.Replace(message.SenderHandle, patternMentorTag, "");
+
                             OnGlobalChatMessage(message);
                         }
                         else
@@ -116,8 +122,8 @@ namespace CentralServer.LobbyServer.Chat
                     }
                 case ConsoleMessageType.WhisperChat:
                     {
-                        // Remove (Dev and Mentor tags) incase they click a name to whisper them
-                        notification.RecipientHandle = Regex.Replace(notification.RecipientHandle, @"\((Mentor|Dev)\)", "");
+                        // Clean the recipient handle by removing (mentor icon) and (Dev) tag
+                        notification.RecipientHandle = Regex.Replace(notification.RecipientHandle, @"\p{C}|\(Dev\)", "");
 
                         long? accountId = SessionManager.GetOnlinePlayerByHandle(notification.RecipientHandle);
                         if (accountId.HasValue && accountId.Value != conn.AccountId)
@@ -217,6 +223,9 @@ namespace CentralServer.LobbyServer.Chat
                     }
             }
 
+            // Remove Mentor icon
+            message.SenderHandle = Regex.Replace(message.SenderHandle, patternMentorTag, "");
+
             DB.Get().ChatHistoryDao.Save(new ChatHistoryDao.Entry(
                 message,
                 DateTime.UtcNow,
@@ -224,9 +233,6 @@ namespace CentralServer.LobbyServer.Chat
                 recipients,
                 blockedRecipients,
                 account.AdminComponent.Muted));
-
-            // Remove Mentor
-            message.SenderHandle = message.SenderHandle.Replace("<color=green>(Mentor)</color>", "");
 
             OnChatMessage(message, isMuted);
         }

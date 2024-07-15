@@ -1053,8 +1053,8 @@ namespace CentralServer.LobbyServer
 
         public void HandleGroupInviteRequest(GroupInviteRequest request)
         {
-            // Remove Mentor and or Dev from names (if invited using chat)
-            request.FriendHandle = Regex.Replace(request.FriendHandle, @"\((Mentor|Dev)\)", "");
+            // Clean the recipient handle by removing (mentor icon) and (Dev) tag
+            request.FriendHandle = Regex.Replace(request.FriendHandle, @"\p{C}|\(Dev\)", "");
 
             var response = new GroupInviteResponse
             {
