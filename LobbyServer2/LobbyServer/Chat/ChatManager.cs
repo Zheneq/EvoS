@@ -123,7 +123,7 @@ namespace CentralServer.LobbyServer.Chat
                 case ConsoleMessageType.WhisperChat:
                     {
                         // Clean the recipient handle by removing (mentor icon) and (Dev) tag
-                        notification.RecipientHandle = Regex.Replace(notification.RecipientHandle, @"\p{C}|\(Dev\)", "");
+                        notification.RecipientHandle = Regex.Replace(notification.RecipientHandle, @"\p{C}|\(.*?\)", "");
 
                         long? accountId = SessionManager.GetOnlinePlayerByHandle(notification.RecipientHandle);
                         if (accountId.HasValue && accountId.Value != conn.AccountId)

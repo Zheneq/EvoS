@@ -1054,7 +1054,7 @@ namespace CentralServer.LobbyServer
         public void HandleGroupInviteRequest(GroupInviteRequest request)
         {
             // Clean the recipient handle by removing (mentor icon) and (Dev) tag
-            request.FriendHandle = Regex.Replace(request.FriendHandle, @"\p{C}|\(Dev\)", "");
+            request.FriendHandle = Regex.Replace(request.FriendHandle, @"\p{C}|\(.*?\)", "");
 
             var response = new GroupInviteResponse
             {
