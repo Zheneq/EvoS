@@ -12,7 +12,7 @@ namespace EvoS.Framework.Network.Static
     {
         public GameSubType Clone()
         {
-            GameSubType gameSubType = (GameSubType) MemberwiseClone();
+            GameSubType gameSubType = (GameSubType)MemberwiseClone();
             gameSubType.GameMapConfigs = new List<GameMapConfig>();
             foreach (GameMapConfig gameMapConfig in GameMapConfigs)
             {
@@ -22,8 +22,9 @@ namespace EvoS.Framework.Network.Static
             return gameSubType;
         }
 
-        public GameSubType() {
-            
+        public GameSubType()
+        {
+
         }
 
         public static TimeSpan ConformTurnTimeSpanFromSeconds(double totalSeconds)
@@ -54,6 +55,8 @@ namespace EvoS.Framework.Network.Static
         public PersistedStatBucket PersistedStatBucket;
         public GameBalanceVars.GameRewardBucketType RewardBucket = GameBalanceVars.GameRewardBucketType.NoRewards;
         public TimeSpan LoadoutSelectionTimeoutOverride;
+        [NonSerialized]
+        public bool Bans;
 
         [JsonIgnore]
         public int TeamAHumanPlayers => TeamAPlayers - TeamABots;

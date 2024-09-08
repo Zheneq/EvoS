@@ -31,8 +31,8 @@
         "IsActive": true
       }
     ],
-    "TeamAPlayers": 1,
-    "TeamBPlayers": 1,
+    "TeamAPlayers": 4,
+    "TeamBPlayers": 4,
     "TeamABots": 0,
     "TeamBBots": 0,
     "TeamComposition": {
@@ -55,9 +55,11 @@
     },
     "RewardBucket": "NoRewards",
     "PersistedStatBucket": "DoNotPersist",
+    "Bans": true,
     "Mods": [
       "AllowPlayingLockedCharacters",
-      "HumansHaveFirstSlots"
+      "HumansHaveFirstSlots",
+      "RankedFreelancerSelection"
     ],
     "GameOverrides": {
       "TurnTimeSpan": "00:00:20"

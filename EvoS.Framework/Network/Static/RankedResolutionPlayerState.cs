@@ -14,8 +14,8 @@ namespace EvoS.Framework.Network.Static
         public enum ReadyState
         {
             Unicode001D,
-            Unicode000E,
-            Unicode0012
+            Unselected,
+            Selected
         }
     }
 }

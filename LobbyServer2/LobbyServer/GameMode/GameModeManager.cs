@@ -3,6 +3,7 @@ using EvoS.Framework.Constants.Enums;
 using EvoS.Framework.Misc;
 using EvoS.Framework.Network.Static;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using System.Collections.Generic;
 using System.IO;
 
@@ -17,6 +18,18 @@ namespace CentralServer.LobbyServer.Gamemode
             { GameType.Custom, "Custom.json" },
             { GameType.Coop, "Coop.json" }
         };
+
+        private static Dictionary<string, bool> LocalizedNameToBans = new Dictionary<string, bool>();
+
+        public static bool GetBans(string name)
+        {
+            if (LocalizedNameToBans.TryGetValue(name, out bool value))
+            {
+                return value;
+            }
+            return false;
+        }
+
 
         public static Dictionary<GameType, GameTypeAvailability> GetGameTypeAvailabilities()
         {
@@ -110,6 +123,26 @@ namespace CentralServer.LobbyServer.Gamemode
         /// <returns>List of GameSubTypes loaded from the file</returns>
         private static List<GameSubType> LoadGameSubTypes(string filename)
         {
+            // We need to exract bans cause its has [NonSerialized] cause client cant have it, then map it based of LocalizedName witch should be unique for all game modes we have
+            string jsonString = new StreamReader(ConfigPath + filename).ReadToEnd();
+            JArray jsonArray = JArray.Parse(jsonString);
+
+            foreach (JObject item in jsonArray)
+            {
+                JToken localizedNameToken = item["LocalizedName"];
+                JToken bansToken = item["Bans"];
+
+                if (localizedNameToken != null && bansToken != null &&
+                    localizedNameToken.Type == JTokenType.String &&
+                    bansToken.Type == JTokenType.Boolean)
+                {
+                    string localizedName = localizedNameToken.ToString();
+                    bool bans = (bool)bansToken;
+
+                    LocalizedNameToBans[localizedName] = bans;  // Update the static dictionary
+                }
+            }
+
             // TODO: this always read from file, it could be stored in a cache
             JsonReader reader = new JsonTextReader(new StreamReader(ConfigPath + filename));
             try

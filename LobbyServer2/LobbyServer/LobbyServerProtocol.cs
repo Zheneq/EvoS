@@ -146,6 +146,11 @@ namespace CentralServer.LobbyServer
             RegisterHandler<CalculateFreelancerStatsRequest>(HandleCalculateFreelancerStatsRequest);
             RegisterHandler<PlayerPanelUpdatedNotification>(HandlePlayerPanelUpdatedNotification);
 
+            RegisterHandler<RankedHoverClickRequest>(HandlePlayerRankedHoverClickRequest);
+            RegisterHandler<RankedBanRequest>(HandlePlayerRankedBanRequest);
+            RegisterHandler<RankedSelectionRequest>(HandleRankedSelectionRequest);
+            RegisterHandler<RankedTradeRequest>(HandleRankedTradeRequest);
+            
             RegisterHandler<SetRegionRequest>(HandleSetRegionRequest);
             RegisterHandler<LoadingScreenToggleRequest>(HandleLoadingScreenToggleRequest);
             RegisterHandler<SendRAFReferralEmailsRequest>(HandleSendRAFReferralEmailsRequest);
@@ -157,6 +162,287 @@ namespace CentralServer.LobbyServer
 
 
             RegisterHandler<FriendUpdateRequest>(HandleFriendUpdate);
+        }
+
+        private void HandleRankedTradeRequest(RankedTradeRequest request)
+        {
+            Game game = GameManager.GetGameWithPlayerDraft(AccountId);
+            if (game == null)
+            {
+                Send(new RankedTradeResponse()
+                {
+                    //TODO: loc?
+                    Success = false,
+                });
+                return;
+            }
+
+            RankedResolutionPhaseData rankedResolutionPhaseData = game.GetRankedResolutionPhaseData();
+            LobbyServerPlayerInfo player = game.GetPlayerInfo(AccountId);
+
+            Dictionary<int, CharacterType> teamSelections = player.TeamId == Team.TeamA
+                ? rankedResolutionPhaseData.FriendlyTeamSelections
+                : rankedResolutionPhaseData.EnemyTeamSelections;
+
+            if (request.Trade.TradeAction == RankedTradeData.TradeActionType.Reject)
+            {
+                var existingTradeAction = rankedResolutionPhaseData.TradeActions.Find(p => p.OfferedCharacter == request.Trade.DesiredCharacter);
+                rankedResolutionPhaseData.TradeActions.Remove(existingTradeAction);
+            }
+            else if (request.Trade.TradeAction == RankedTradeData.TradeActionType.AcceptOrOffer)
+            {
+                var existingTradeAction = rankedResolutionPhaseData.TradeActions.Find(p => p.OfferedCharacter == request.Trade.DesiredCharacter);
+
+                if (existingTradeAction.OfferedCharacter == request.Trade.DesiredCharacter)
+                {
+                    // Update the existing trade action to accepted
+                    teamSelections[existingTradeAction.OfferingPlayerId] = existingTradeAction.DesiredCharacter;
+                    teamSelections[existingTradeAction.AskedPlayerId] = existingTradeAction.OfferedCharacter;
+                    rankedResolutionPhaseData.TradeActions.Remove(existingTradeAction);
+                }
+                else
+                {
+                    // Handle the case where the trade request does not exist
+                    CharacterType currentCharacterType = teamSelections[player.PlayerId];
+                    CharacterType wantedCharacterType = request.Trade.DesiredCharacter;
+                    int playerThatHasCharacter = teamSelections
+                        .Where(item => item.Value == wantedCharacterType)
+                        .Select(item => item.Key)
+                        .FirstOrDefault();
+
+                    LobbyServerPlayerInfo checkIsBot = game.GetPlayerById(playerThatHasCharacter);
+
+                    if (checkIsBot.IsAIControlled)
+                    {
+                        //automatic accept trade
+                        teamSelections[playerThatHasCharacter] = currentCharacterType;
+                        teamSelections[player.PlayerId] = wantedCharacterType;
+                    }
+                    else
+                    {
+                        RankedTradeData newTradeData = new RankedTradeData()
+                        {
+                            AskedPlayerId = playerThatHasCharacter,
+                            TradeAction = RankedTradeData.TradeActionType.AcceptOrOffer,
+                            DesiredCharacter = wantedCharacterType,
+                            OfferedCharacter = currentCharacterType,
+                            OfferingPlayerId = player.PlayerId
+                        };
+                        rankedResolutionPhaseData.TradeActions.Add(newTradeData);
+                    }
+                }
+            }
+
+            game.SetRankedResolutionPhaseData(rankedResolutionPhaseData);
+            game.SendRankedResolutionSubPhase();
+
+            Send(new RankedTradeResponse()
+            {
+                Success = true,
+            });
+        }
+
+        private void HandleRankedSelectionRequest(RankedSelectionRequest request)
+        {
+            Game game = GameManager.GetGameWithPlayerDraft(AccountId);
+            if (game == null)
+            {
+                Send(new RankedSelectionResponse()
+                {
+                    //TODO: loc
+                    Success = false,
+                });
+                return;
+            }
+
+            RankedResolutionPhaseData rankedResolutionPhaseData = game.GetRankedResolutionPhaseData();
+            LobbyServerPlayerInfo player = game.GetPlayerInfo(AccountId);
+
+            Dictionary<int, CharacterType> teamSelections = player.TeamId == Team.TeamA
+                ? rankedResolutionPhaseData.FriendlyTeamSelections
+                : rankedResolutionPhaseData.EnemyTeamSelections;
+
+            CharacterType characterType = request.Selection;
+
+            if (characterType == CharacterType.PendingWillFill 
+                || characterType == CharacterType.TestFreelancer1 
+                || characterType == CharacterType.TestFreelancer2)
+            {
+                // Build a list of all used character types for use with Fill
+                List<CharacterType> usedCharacterTypes = new();
+                usedCharacterTypes.AddRange(rankedResolutionPhaseData.FriendlyBans);
+                usedCharacterTypes.AddRange(rankedResolutionPhaseData.EnemyBans);
+                usedCharacterTypes.AddRange(rankedResolutionPhaseData.FriendlyTeamSelections.Values);
+                usedCharacterTypes.AddRange(rankedResolutionPhaseData.EnemyTeamSelections.Values);
+                characterType = game.AssignRandomCharacterForDraft(player, usedCharacterTypes, characterType);
+            }
+
+            List<RankedResolutionPlayerState> unselectedPlayerStates = rankedResolutionPhaseData.UnselectedPlayerStates;
+            RankedResolutionPlayerState existingUnselectedPlayerStates = unselectedPlayerStates.Find(p => p.PlayerId == player.PlayerId);
+
+            if (existingUnselectedPlayerStates.PlayerId == player.PlayerId)
+            {
+                existingUnselectedPlayerStates.Intention = characterType;
+                existingUnselectedPlayerStates.OnDeckness = RankedResolutionPlayerState.ReadyState.Selected;
+                int index1 = unselectedPlayerStates.FindIndex(p => p.PlayerId == player.PlayerId);
+                if (index1 >= 0)
+                {
+                    unselectedPlayerStates[index1] = existingUnselectedPlayerStates;
+                }
+            }
+
+            List<RankedResolutionPlayerState> playersOnDeck = rankedResolutionPhaseData.PlayersOnDeck;
+            RankedResolutionPlayerState existingPlayersOnDeck = playersOnDeck.Find(p => p.PlayerId == player.PlayerId);
+
+            if (existingPlayersOnDeck.PlayerId == player.PlayerId)
+            {
+                existingPlayersOnDeck.Intention = characterType;
+                existingPlayersOnDeck.OnDeckness = RankedResolutionPlayerState.ReadyState.Unselected;
+                int index2 = playersOnDeck.FindIndex(p => p.PlayerId == player.PlayerId);
+                if (index2 >= 0)
+                {
+                    playersOnDeck[index2] = existingPlayersOnDeck;
+                }
+            }
+
+            rankedResolutionPhaseData.UnselectedPlayerStates = unselectedPlayerStates;
+            rankedResolutionPhaseData.PlayersOnDeck = playersOnDeck;
+            teamSelections.Add(player.PlayerId, characterType);
+            game.UpdatePlayersInDeck();
+
+
+            game.SetRankedResolutionPhaseData(rankedResolutionPhaseData);
+            game.SendRankedResolutionSubPhase();
+
+            if (game.PlayersInDeck == 0)
+            {
+                game.SkipRankedResolutionSubPhase();
+            }
+
+            Send(new RankedSelectionResponse()
+            {
+                Success = true,
+            });
+        }
+
+
+        private void HandlePlayerRankedBanRequest(RankedBanRequest request) {
+            Game game = GameManager.GetGameWithPlayerDraft(AccountId);
+            if (game == null)
+            {
+                Send(new RankedHoverClickResponse()
+                {
+                    //TODO: loc
+                    Success = false,
+                });
+                return;
+            }
+
+            RankedResolutionPhaseData rankedResolutionPhaseData = game.GetRankedResolutionPhaseData();
+            LobbyServerPlayerInfo player = game.GetPlayerInfo(AccountId);
+
+            List<RankedResolutionPlayerState> playersOnDeck = rankedResolutionPhaseData.PlayersOnDeck;
+            RankedResolutionPlayerState existingPlayersOnDeck = playersOnDeck.Find(p => p.PlayerId == player.PlayerId);
+
+            if (existingPlayersOnDeck.PlayerId == player.PlayerId)
+            {
+                CharacterType characterType = request.Selection;
+
+                if (characterType == CharacterType.PendingWillFill
+                    || characterType == CharacterType.TestFreelancer1
+                    || characterType == CharacterType.TestFreelancer2)
+                {
+                    // Build a list of all used character types for use with Fill
+                    List<CharacterType> usedCharacterTypes = new();
+                    usedCharacterTypes.AddRange(rankedResolutionPhaseData.FriendlyBans);
+                    usedCharacterTypes.AddRange(rankedResolutionPhaseData.EnemyBans);
+                    usedCharacterTypes.AddRange(rankedResolutionPhaseData.FriendlyTeamSelections.Values);
+                    usedCharacterTypes.AddRange(rankedResolutionPhaseData.EnemyTeamSelections.Values);
+                    characterType = game.AssignRandomCharacterForDraft(player, usedCharacterTypes, characterType);
+                }
+
+                if (player.TeamId == Team.TeamA)
+                {
+                    rankedResolutionPhaseData.FriendlyBans.Add(characterType);
+                }
+                else
+                {
+                    rankedResolutionPhaseData.EnemyBans.Add(characterType);
+                }
+
+                existingPlayersOnDeck.Intention = characterType;
+                existingPlayersOnDeck.OnDeckness = RankedResolutionPlayerState.ReadyState.Unselected;
+                int index2 = playersOnDeck.FindIndex(p => p.PlayerId == player.PlayerId);
+                if (index2 >= 0)
+                {
+                    playersOnDeck[index2] = existingPlayersOnDeck;
+                }
+            }
+
+            rankedResolutionPhaseData.PlayersOnDeck = playersOnDeck;
+            game.SetRankedResolutionPhaseData(rankedResolutionPhaseData);
+            game.SendRankedResolutionSubPhase();
+
+
+            game.SkipRankedResolutionSubPhase();
+
+            Send(new RankedBanResponse()
+            {
+                Success = true,
+            });
+
+        }
+
+        private void HandlePlayerRankedHoverClickRequest(RankedHoverClickRequest request)
+        {
+            Game game = GameManager.GetGameWithPlayerDraft(AccountId);
+            if (game == null)
+            {
+                Send(new RankedHoverClickResponse()
+                {
+                    Success = false,
+                });
+                return;
+            }
+            
+            RankedResolutionPhaseData rankedResolutionPhaseData = game.GetRankedResolutionPhaseData();
+            LobbyServerPlayerInfo player = game.GetPlayerInfo(AccountId);
+
+            List<RankedResolutionPlayerState> unselectedPlayerStates = rankedResolutionPhaseData.UnselectedPlayerStates;
+            RankedResolutionPlayerState existingUnselectedPlayerStates = unselectedPlayerStates.Find(p => p.PlayerId == player.PlayerId);
+
+            if (existingUnselectedPlayerStates.PlayerId == player.PlayerId)
+            {
+                existingUnselectedPlayerStates.Intention = request.Selection;
+                int index1 = unselectedPlayerStates.FindIndex(p => p.PlayerId == player.PlayerId);
+                if (index1 >= 0)
+                {
+                    unselectedPlayerStates[index1] = existingUnselectedPlayerStates;
+                }
+            }
+
+            List<RankedResolutionPlayerState> playersOnDeck = rankedResolutionPhaseData.PlayersOnDeck;
+            RankedResolutionPlayerState existingPlayersOnDeck = playersOnDeck.Find(p => p.PlayerId == player.PlayerId);
+
+            if (existingPlayersOnDeck.PlayerId == player.PlayerId)
+            {
+                existingPlayersOnDeck.Intention = request.Selection;
+                int index2 = playersOnDeck.FindIndex(p => p.PlayerId == player.PlayerId);
+                if (index2 >= 0)
+                {
+                    playersOnDeck[index2] = existingPlayersOnDeck;
+                }
+            }
+
+            rankedResolutionPhaseData.UnselectedPlayerStates = unselectedPlayerStates;
+            rankedResolutionPhaseData.PlayersOnDeck = playersOnDeck;
+            game.SetRankedResolutionPhaseData(rankedResolutionPhaseData);
+            game.SendRankedResolutionSubPhase();
+
+            Send(new RankedHoverClickResponse()
+            {
+                Success = true,
+            });
         }
 
         private void HandleSelectRibbonRequest(SelectRibbonRequest request)
@@ -286,8 +572,28 @@ namespace CentralServer.LobbyServer
 
         private void HandleGameInfoUpdateRequest(GameInfoUpdateRequest gameInfoUpdateRequest)
         {
-            bool success = CustomGameManager.UpdateGameInfo(AccountId, gameInfoUpdateRequest.GameInfo, gameInfoUpdateRequest.TeamInfo);
             Game game = CustomGameManager.GetMyGame(AccountId);
+
+            if (game.GameSubType.Mods.Contains(GameSubType.SubTypeMods.RankedFreelancerSelection)) {
+                List<LobbyPlayerInfo> hasControllingPlayerId = gameInfoUpdateRequest.TeamInfo.TeamPlayerInfo.FindAll(p => p.ControllingPlayerId != 0);
+                if (hasControllingPlayerId.Count > 0) {
+                    bool success1 = CustomGameManager.BalanceTeams(AccountId, new List<BalanceTeamSlot>());
+                    Send(new BalancedTeamResponse
+                    {
+                        Success = success1,
+                        ResponseId = gameInfoUpdateRequest.RequestId,
+                        Slots = new List<BalanceTeamSlot>()
+                    });
+                    Send(new ChatNotification
+                    {
+                        ConsoleMessageType = ConsoleMessageType.SystemMessage,
+                        Text = "Controlling characters is not allowed in this mode. use DeathMatch or Tournament No Draft mode for this, Normal bots are allowed however"
+                    });
+                    return;
+                }
+            }
+
+            bool success = CustomGameManager.UpdateGameInfo(AccountId, gameInfoUpdateRequest.GameInfo, gameInfoUpdateRequest.TeamInfo);
 
             Send(new GameInfoUpdateResponse
             {

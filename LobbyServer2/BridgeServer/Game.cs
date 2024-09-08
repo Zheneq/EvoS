@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 using CentralServer.LobbyServer;
 using CentralServer.LobbyServer.Character;
 using CentralServer.LobbyServer.Discord;
+using CentralServer.LobbyServer.Gamemode;
 using CentralServer.LobbyServer.Matchmaking;
 using CentralServer.LobbyServer.Session;
 using CentralServer.LobbyServer.Stats;
@@ -40,6 +42,15 @@ public abstract class Game
 
     public string ProcessCode => GameInfo?.GameServerProcessCode;
     public GameStatus GameStatus => GameInfo?.GameStatus ?? GameStatus.None;
+
+    // Draft
+    private RankedResolutionPhaseData RankedResolutionPhaseData = new();
+    private TimeSpan TimeLeftInSubPhase = new();
+    private bool isCancellationRequested = false;
+    private FreelancerResolutionPhaseSubType PhaseSubType = FreelancerResolutionPhaseSubType.UNDEFINED;
+    private Team CurrentTeam = Team.TeamA;
+    public int PlayersInDeck { protected set; get; }
+    private List<CharacterType> botCharacters = new();
 
     public void AssignServer(BridgeServerProtocol server)
     {
@@ -184,7 +195,9 @@ public abstract class Game
 
     protected async void OnServerDisconnect(BridgeServerProtocol server)
     {
-        QueuePenaltyManager.CapQueuePenalties(this);
+        if (GameStatus < GameStatus.Started) {
+            QueuePenaltyManager.CapQueuePenalties(this);
+        }
 
         await Task.Delay(LobbyConfiguration.GetServerReconnectionTimeout());
         if (Server == server && GameStatus != GameStatus.Stopped)
@@ -687,11 +700,16 @@ public abstract class Game
 
                 bool allowDuplicates = GameInfo.GameConfig.HasGameOption(GameOptionFlag.AllowDuplicateCharacters);
                 List<LobbyServerPlayerInfo> playersRequiredToSwitch = characters
-                    .Where(players => !allowDuplicates && players.Count() > 1 && players.Key != CharacterType.PendingWillFill)
+                    .Where(players => !allowDuplicates && players.Count() > 1 
+                            && players.Key != CharacterType.PendingWillFill 
+                            && players.Key != CharacterType.TestFreelancer1
+                            && players.Key != CharacterType.TestFreelancer2)
                     .SelectMany(players => players.Skip(1))
                     .Concat(
                         characters
-                            .Where(players => players.Key == CharacterType.PendingWillFill)
+                            .Where(players => players.Key == CharacterType.PendingWillFill
+                                                || players.Key == CharacterType.TestFreelancer1
+                                                || players.Key == CharacterType.TestFreelancer2)
                             .SelectMany(players => players))
                     .ToList();
 
@@ -863,6 +881,67 @@ public abstract class Game
         return randomType;
     }
 
+    public CharacterType AssignRandomCharacterForDraft(
+        LobbyServerPlayerInfo playerInfo,
+        List<CharacterType> unavailableCharacters,
+        CharacterType preferedCat = CharacterType.Gryd)
+    {
+        CharacterRole characterRole = CharacterRole.None;
+
+        if (preferedCat != CharacterType.Gryd)
+        {
+            switch (preferedCat)
+            {
+                case CharacterType.PendingWillFill:
+                    characterRole = CharacterRole.Assassin;
+                    break;
+                case CharacterType.TestFreelancer1:
+                    characterRole = CharacterRole.Tank;
+                    break;
+                case CharacterType.TestFreelancer2:
+                    characterRole = CharacterRole.Support;
+                    break;
+            }
+        }
+
+        List<CharacterType> availableTypes;
+
+        if (preferedCat != CharacterType.Gryd)
+        {
+            // Select only characters that match the specified characterRole (from preferedCat)
+            availableTypes = CharacterConfigs.Characters
+                .Where(cc =>
+                    cc.Value.AllowForPlayers
+                    && cc.Value.CharacterRole == characterRole
+                    && !unavailableCharacters.Contains(cc.Key))
+                .Select(cc => cc.Key)
+                .ToList();
+        }
+        else
+        {
+            // Select all available characters (ignoring the preferedCat)
+            availableTypes = CharacterConfigs.Characters
+                .Where(cc =>
+                    cc.Value.AllowForPlayers
+                    && cc.Value.CharacterRole != CharacterRole.None
+                    && !unavailableCharacters.Contains(cc.Key))
+                .Select(cc => cc.Key)
+                .ToList();
+        }
+
+        // Shuffle the availableTypes list
+        Random rand = new Random();
+        CharacterType randomType = availableTypes[rand.Next(availableTypes.Count)];
+
+        log.Info($"Selected random character {randomType} for {playerInfo.Handle} " +
+                 $"(was {playerInfo.CharacterType}), options were {string.Join(", ", availableTypes)}, " +
+                 $"used characters: {string.Join(", ", unavailableCharacters)})");
+
+        return randomType;
+    }
+
+
+
     private void NotifyCharacterChange(LobbyServerProtocol playerConnection, LobbyServerPlayerInfo playerInfo, CharacterType randomType)
     {
         PersistedAccountData account = DB.Get().AccountDao.GetAccount(playerInfo.AccountId);
@@ -906,5 +985,392 @@ public abstract class Game
         Server.StartGameForReconnection(conn.AccountId);
 
         return true;
+    }
+
+    public async Task HandleRankedResolutionPhase()
+    {
+        // Add RankedFreelancerSelection in any of the GameSubTypes to enable drafting
+        if (!GameSubType.Mods.Contains(GameSubType.SubTypeMods.RankedFreelancerSelection))
+            return;
+
+        // Initialize unselected player states
+        var unselectedPlayerStates = TeamInfo.TeamPlayerInfo.Select(player =>
+            new RankedResolutionPlayerState
+            {
+                PlayerId = player.PlayerId,
+                Intention = CharacterType.None,
+                OnDeckness = RankedResolutionPlayerState.ReadyState.Unselected,
+            }).ToList();
+
+        // Initialize ranked resolution phase data
+        RankedResolutionPhaseData = new RankedResolutionPhaseData
+        {
+            TimeLeftInSubPhase = TimeSpan.Zero,
+            UnselectedPlayerStates = unselectedPlayerStates,
+            PlayersOnDeck = new List<RankedResolutionPlayerState>(),
+            FriendlyBans = new List<CharacterType>(),
+            EnemyBans = new List<CharacterType>(),
+            FriendlyTeamSelections = new Dictionary<int, CharacterType>(),
+            EnemyTeamSelections = new Dictionary<int, CharacterType>(),
+            TradeActions = new List<RankedTradeData>(),
+            PlayerIdByImporance = TeamInfo.TeamPlayerInfo.Select(p => p.PlayerId).ToList(),
+        };
+
+        // Define phase order
+        // Bans can be disabled if they are disable client wont show ban windows (Due to poll of favoring bans add a setting to Custom to disable bans only there)
+        // -1 for other fases where we dont need the player (trade)
+        // Teams NEED to be min 8 and max 8 only
+        List<KeyValuePair<int, FreelancerResolutionPhaseSubType>> phases;
+        string localizedName = GameSubType.LocalizedName;
+        bool hasBans = GameModeManager.GetBans(localizedName);
+        if (hasBans)
+        {
+            phases = new()
+            {
+                // Playerid (-1)                           Phase
+                new(0, FreelancerResolutionPhaseSubType.PICK_BANS1),    // TeamA First Person
+                new(4, FreelancerResolutionPhaseSubType.PICK_BANS1),    // TeamB First Person
+                new(0, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamA First Person
+                new(4, FreelancerResolutionPhaseSubType.PICK_FREELANCER2),  // TeamB * 2 First and Second Person
+                new(1, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamA Second Person
+                new(5, FreelancerResolutionPhaseSubType.PICK_BANS2),    // TeamB Second Person
+                new(1, FreelancerResolutionPhaseSubType.PICK_BANS2),    // TeamA Second Person
+                new(6, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamB Third Person
+                new(2, FreelancerResolutionPhaseSubType.PICK_FREELANCER2),  // TeamA * 2 Third and Fourth Person
+                new(7, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamB Fourth Person
+                new(-1, FreelancerResolutionPhaseSubType.FREELANCER_TRADE),
+            };
+        }
+        else
+        {
+            phases = new()
+            {
+                new(0, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamA First Person
+                new(4, FreelancerResolutionPhaseSubType.PICK_FREELANCER2),  // TeamB * 2 First and Second Person
+                new(1, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamA Second Person
+                new(6, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamB Third Person
+                new(2, FreelancerResolutionPhaseSubType.PICK_FREELANCER2),  // TeamA * 2 Third and Fourth Person
+                new(7, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamB Fourth Person
+                new(-1, FreelancerResolutionPhaseSubType.FREELANCER_TRADE),
+            };
+        }
+
+
+        // Process each phase
+        foreach (KeyValuePair<int, FreelancerResolutionPhaseSubType> subPhase in phases)
+        {
+            if (!CheckIfAllParticipantsAreConnected())
+            {
+                return;
+            }
+
+            PhaseSubType = subPhase.Value;
+
+            LobbyServerPlayerInfo player1 = GetPlayerInfo(subPhase.Key, TeamInfo.TeamPlayerInfo);
+            LobbyServerPlayerInfo player2 = GetPlayerInfo(subPhase.Key + 1, TeamInfo.TeamPlayerInfo);
+
+            if (PhaseSubType == FreelancerResolutionPhaseSubType.FREELANCER_TRADE || player1 == null)
+            {
+                // Mostly when subPhase.Key is -1 (FREELANCER_TRADE) we still need a player1
+                player1 = new LobbyServerPlayerInfo();
+            }
+
+            RankedResolutionPhaseData.PlayersOnDeck.Clear(); // Reset deck (People who can do stuff, ban or select a freelancer those are the PlayersOnDeck)
+            // Clear botCharacters so we can start using it again this is for when using bots and we have 2 players on deck we dont want them to accendently pick same character
+            botCharacters.Clear();
+            PlayersInDeck = 0;
+            if (subPhase.Key != -1)
+            {
+                AddPlayersToDeckBasedOnPhase(PhaseSubType, player1, player2);
+            }
+
+            SendRankedResolutionSubPhase();
+            await HandleRankedResolutionSubPhase(PhaseSubType, CurrentTeam, player1);
+
+            foreach (RankedResolutionPlayerState playersInDeck in RankedResolutionPhaseData.PlayersOnDeck)
+            {
+                LobbyServerPlayerInfo player = GetPlayerInfo(playersInDeck.PlayerId - 1, TeamInfo.TeamPlayerInfo);
+                if (playersInDeck.Intention == CharacterType.None)
+                {
+                    // Cancel Match AFK Player
+                    CancelMatch(player.Handle);
+                    // TODO: Punish Player
+                    return;
+                }
+                // Selected is when did not lock in or clicked ban button
+                if (playersInDeck.OnDeckness == RankedResolutionPlayerState.ReadyState.Selected)
+                {
+                    CharacterType characterType = playersInDeck.Intention;
+                    //Player selected fill but did not locked in, or edge case where "MAYBE" we still have fill
+                    if (characterType == CharacterType.PendingWillFill
+                        || characterType == CharacterType.TestFreelancer1
+                        || characterType == CharacterType.TestFreelancer2)
+                    {
+                        List<CharacterType> usedCharacterTypes = new();
+                        usedCharacterTypes.AddRange(RankedResolutionPhaseData.FriendlyBans);
+                        usedCharacterTypes.AddRange(RankedResolutionPhaseData.EnemyBans);
+                        usedCharacterTypes.AddRange(RankedResolutionPhaseData.FriendlyTeamSelections.Values);
+                        usedCharacterTypes.AddRange(RankedResolutionPhaseData.EnemyTeamSelections.Values);
+                        characterType = AssignRandomCharacterForDraft(player, usedCharacterTypes, characterType);
+                    }
+
+                    if (PhaseSubType == FreelancerResolutionPhaseSubType.PICK_BANS1
+                        || PhaseSubType == FreelancerResolutionPhaseSubType.PICK_BANS2)
+                    {
+                        AddToTeamBanSelection(characterType);
+                    }
+                    else if (PhaseSubType == FreelancerResolutionPhaseSubType.PICK_FREELANCER1
+                             || PhaseSubType == FreelancerResolutionPhaseSubType.PICK_FREELANCER2)
+                    {
+                        AddToTeamSelection(player, characterType);
+                    }
+                }
+            }
+
+            CurrentTeam = ToggleTeam(CurrentTeam);
+        }
+
+        // Update TeamInfo with new values from rankedResolutionPhaseData.FriendlyTeamSelections
+        UpdateTeamSelection(RankedResolutionPhaseData.FriendlyTeamSelections);
+
+        // Update TeamInfo with new values from rankedResolutionPhaseData.EnemyTeamSelections
+        UpdateTeamSelection(RankedResolutionPhaseData.EnemyTeamSelections);
+
+    }
+
+    private void UpdateTeamSelection(Dictionary<int, CharacterType> selections)
+    {
+        foreach (KeyValuePair<int, CharacterType> selection in selections)
+        {
+            int lobbyServerPlayerInfoIndex = TeamInfo.TeamPlayerInfo.FindIndex(p => p.PlayerId == selection.Key);
+            LobbyServerPlayerInfo playerInfo = TeamInfo.TeamPlayerInfo[lobbyServerPlayerInfoIndex];
+            if (!playerInfo.IsAIControlled)
+            {
+                PersistedAccountData account = DB.Get().AccountDao.GetAccount(playerInfo.AccountId);
+                playerInfo.CharacterInfo = LobbyCharacterInfo.Of(account.CharacterData[selection.Value]);
+            }
+            else
+            {
+                // Update bots handle
+                playerInfo.Handle = selection.Value.ToString();
+                playerInfo.CharacterInfo = new LobbyCharacterInfo
+                {
+                    CharacterType = selection.Value,
+                    CharacterAbilityVfxSwaps = new CharacterAbilityVfxSwapInfo(),
+                    CharacterCards = CharacterCardInfo.MakeDefault(),
+                    CharacterLevel = 1,
+                    CharacterLoadouts = new List<CharacterLoadout>(),
+                    CharacterMatches = 0,
+                    CharacterMods = EvoS.DirectoryServer.Character.CharacterManager.GetDefaultMods(selection.Value),
+                    CharacterSkin = new CharacterVisualInfo(),
+                    CharacterTaunts = new List<PlayerTauntData>()
+                };
+            }
+            
+        }
+    }
+
+
+    private void AddPlayerToDeck(LobbyServerPlayerInfo player)
+    {
+
+        CharacterType characterType = CharacterType.None;
+
+        // Let AI Randomize
+        if (player.IsAIControlled)
+        {
+            List<CharacterType> usedCharacterTypes = new();
+            usedCharacterTypes.AddRange(RankedResolutionPhaseData.FriendlyBans);
+            usedCharacterTypes.AddRange(RankedResolutionPhaseData.EnemyBans);
+            usedCharacterTypes.AddRange(RankedResolutionPhaseData.FriendlyTeamSelections.Values);
+            usedCharacterTypes.AddRange(RankedResolutionPhaseData.EnemyTeamSelections.Values);
+            usedCharacterTypes.AddRange(botCharacters);
+            characterType = AssignRandomCharacterForDraft(player, usedCharacterTypes);
+            if (PhaseSubType == FreelancerResolutionPhaseSubType.PICK_FREELANCER1 || PhaseSubType == FreelancerResolutionPhaseSubType.PICK_FREELANCER2)
+            {
+                RankedResolutionPlayerState unselectedPlayerState = RankedResolutionPhaseData.UnselectedPlayerStates.First(p => p.PlayerId == player.PlayerId);
+                unselectedPlayerState.Intention = characterType;
+                botCharacters.Add(characterType);
+            }
+        }
+#if DEBUG
+        log.Info($"Adding {player.PlayerId} {characterType} on deck ");
+#endif
+        // Add player to the deck with the appropriate state
+        RankedResolutionPhaseData.PlayersOnDeck.Add(new RankedResolutionPlayerState
+        {
+            PlayerId = player.PlayerId,
+            Intention = characterType,
+            OnDeckness = RankedResolutionPlayerState.ReadyState.Selected,
+        });
+
+        // Increment the count of players in the deck (To know when people locked in we can have 2 so we cant just skip a phase if one is locked in and the other is not)
+        PlayersInDeck++;
+    }
+
+    private LobbyServerPlayerInfo GetPlayerInfo(int index, List<LobbyServerPlayerInfo> teamPlayerInfo)
+    {
+        return index >= 0 && index < teamPlayerInfo.Count ? teamPlayerInfo[index] : null;
+    }
+
+    private void AddToTeamSelection(LobbyServerPlayerInfo player, CharacterType characterType)
+    {
+        Dictionary<int, CharacterType> selections = CurrentTeam == Team.TeamA
+            ? RankedResolutionPhaseData.FriendlyTeamSelections
+            : RankedResolutionPhaseData.EnemyTeamSelections;
+
+        selections.Add(player.PlayerId, characterType);
+    }
+
+    private void AddToTeamBanSelection(CharacterType characterType)
+    {
+        List<CharacterType> selections = CurrentTeam == Team.TeamA
+            ? RankedResolutionPhaseData.FriendlyBans
+            : RankedResolutionPhaseData.EnemyBans;
+
+        selections.Add(characterType); // Ban a non existing character just to simulate we NEED things to hapening or client is unhappy and totally breaks
+    }
+
+    // Method to add players to the deck based on the phase type
+    void AddPlayersToDeckBasedOnPhase(FreelancerResolutionPhaseSubType phase, LobbyServerPlayerInfo player1, LobbyServerPlayerInfo player2)
+    {
+        if (phase == FreelancerResolutionPhaseSubType.PICK_BANS1 ||
+            phase == FreelancerResolutionPhaseSubType.PICK_BANS2 ||
+            phase == FreelancerResolutionPhaseSubType.PICK_FREELANCER1)
+        {
+            AddPlayerToDeck(player1);
+        }
+
+        if (phase == FreelancerResolutionPhaseSubType.PICK_FREELANCER2)
+        {
+            AddPlayerToDeck(player1);
+            // Can be null if we are at the last Freelancer selection
+            if (player2 != null)
+            {
+                AddPlayerToDeck(player2);
+            }
+        }
+    }
+
+    private static Team ToggleTeam(Team currentTeam)
+    {
+        return currentTeam == Team.TeamA ? Team.TeamB : Team.TeamA;
+    }
+
+    private async Task HandleRankedResolutionSubPhase(FreelancerResolutionPhaseSubType subPhase, Team currentTeam, LobbyServerPlayerInfo player)
+    {
+#if DEBUG
+        log.Info($"Starting ranked resolution sub phase {subPhase} for Team {currentTeam}");
+#endif
+        RankedResolutionPhaseData pickPhaseData = new()
+        {
+            TimeLeftInSubPhase = GetSubPhaseTimeout(subPhase)
+        };
+
+        TimeLeftInSubPhase = pickPhaseData.TimeLeftInSubPhase;
+        SendRankedResolutionSubPhase();
+
+        isCancellationRequested = false;
+
+        await MonitorSubPhaseAsync(pickPhaseData.TimeLeftInSubPhase, player);
+    }
+
+    private TimeSpan GetSubPhaseTimeout(FreelancerResolutionPhaseSubType subPhase) =>
+        subPhase switch
+        {
+            FreelancerResolutionPhaseSubType.PICK_BANS1 => GameInfo.SelectSubPhaseBan1Timeout,
+            FreelancerResolutionPhaseSubType.PICK_BANS2 => GameInfo.SelectSubPhaseBan2Timeout,
+            FreelancerResolutionPhaseSubType.PICK_FREELANCER1 => GameInfo.SelectSubPhaseFreelancerSelectTimeout,
+            FreelancerResolutionPhaseSubType.PICK_FREELANCER2 => GameInfo.SelectSubPhaseFreelancerSelectTimeout,
+            FreelancerResolutionPhaseSubType.FREELANCER_TRADE => GameInfo.SelectSubPhaseTradeTimeout,
+            _ => throw new ArgumentOutOfRangeException(nameof(subPhase), subPhase, "Invalid sub phase type")
+        };
+
+    private async Task MonitorSubPhaseAsync(TimeSpan timeLeftInSubPhase, LobbyServerPlayerInfo player)
+    {
+        Stopwatch stopwatch = Stopwatch.StartNew();
+        TimeSpan botCheckInterval = TimeSpan.FromSeconds(5);
+
+        while (stopwatch.Elapsed <= timeLeftInSubPhase)
+        {
+            if (isCancellationRequested)
+            {
+#if DEBUG
+                log.Info($"Cancellation requested. Exiting sub-phase monitoring for player {player.PlayerId}.");
+#endif
+                return;
+            }
+
+            if (!player.IsHumanControlled && stopwatch.Elapsed > botCheckInterval)
+            {
+#if DEBUG
+                log.Info($"AI-controlled player {player.PlayerId} has been checked after {botCheckInterval.TotalSeconds} seconds. Exiting sub-phase early.");
+#endif
+                return;
+            }
+
+
+            TimeLeftInSubPhase = timeLeftInSubPhase - stopwatch.Elapsed;
+            await Task.Delay(100);
+        }
+
+#if DEBUG
+        log.Info($"Sub-phase monitoring complete for player {player.PlayerId} after {stopwatch.Elapsed.TotalSeconds} seconds.");
+#endif
+    }
+
+    // When a player locks in kill the timer
+    public void SkipRankedResolutionSubPhase()
+    {
+        isCancellationRequested = true;
+    }
+
+    public void SetRankedResolutionPhaseData(RankedResolutionPhaseData newRankedResolutionPhaseData)
+    {
+        RankedResolutionPhaseData = newRankedResolutionPhaseData;
+    }
+
+    public RankedResolutionPhaseData GetRankedResolutionPhaseData()
+    {
+        return RankedResolutionPhaseData;
+    }
+
+    public void UpdatePlayersInDeck()
+    {
+        PlayersInDeck--;
+    }
+
+    public void SendRankedResolutionSubPhase()
+    {
+        RankedResolutionPhaseData.TimeLeftInSubPhase = TimeLeftInSubPhase;
+
+
+        GetClients().ForEach(c =>
+        {
+            LobbyServerPlayerInfo player = GetPlayerInfo(c.AccountId);
+
+            // Clone the data for each player to prevent data sharing between players
+            RankedResolutionPhaseData rankedResolutionPhaseDataClone = RankedResolutionPhaseData.Clone();
+
+
+            // Client always thinks they are TeamA! we need to swap values if we are TeamB (this was a funny one to figure out)
+            // Server side we already check if players are in TeamA or TeamB so we are fine
+            if (player.TeamId == Team.TeamB)
+            {
+                // Swap EnemyBans and FriendlyBans
+                (rankedResolutionPhaseDataClone.EnemyBans, rankedResolutionPhaseDataClone.FriendlyBans) =
+                    (rankedResolutionPhaseDataClone.FriendlyBans, rankedResolutionPhaseDataClone.EnemyBans);
+
+                // Swap EnemyTeamSelections and FriendlyTeamSelections
+                (rankedResolutionPhaseDataClone.EnemyTeamSelections, rankedResolutionPhaseDataClone.FriendlyTeamSelections) =
+                    (rankedResolutionPhaseDataClone.FriendlyTeamSelections, rankedResolutionPhaseDataClone.EnemyTeamSelections);
+            }
+
+            c.Send(new EnterFreelancerResolutionPhaseNotification()
+            {
+                SubPhase = PhaseSubType,
+                RankedData = rankedResolutionPhaseDataClone,
+            });
+        });
     }
 }

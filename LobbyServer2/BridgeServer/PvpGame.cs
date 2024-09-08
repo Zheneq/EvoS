@@ -37,11 +37,13 @@ public class PvpGame: Game
         SetGameStatus(GameStatus.FreelancerSelecting);
         GetClients().ForEach(client => SendGameAssignmentNotification(client));
 
+        await HandleRankedResolutionPhase();
+
         // Check for duplicated and WillFill characters
         if (CheckDuplicatedAndFill())
         {
             // Wait for Freelancer selection time
-            TimeSpan timeout = GameInfo.SelectTimeout;
+            TimeSpan timeout = GameSubType.Mods.Contains(GameSubType.SubTypeMods.RankedFreelancerSelection) ? TimeSpan.Zero : GameInfo.SelectTimeout;
             TimeSpan timePassed = TimeSpan.Zero;
             bool allReady = false;
 
@@ -126,6 +128,10 @@ public class PvpGame: Game
             AcceptTimeout = new TimeSpan(0, 0, 0),
             SelectTimeout = TimeSpan.FromSeconds(30),
             LoadoutSelectTimeout = TimeSpan.FromSeconds(30),
+            SelectSubPhaseBan1Timeout = TimeSpan.FromSeconds(60),
+            SelectSubPhaseBan2Timeout = TimeSpan.FromSeconds(30),
+            SelectSubPhaseFreelancerSelectTimeout = TimeSpan.FromSeconds(30),
+            SelectSubPhaseTradeTimeout = TimeSpan.FromSeconds(30),
             ActiveHumanPlayers = TeamInfo.TeamPlayerInfo.Count(p => p.IsHumanControlled),
             ActivePlayers = TeamInfo.TeamPlayerInfo.Count,
             CreateTimestamp = DateTime.UtcNow.Ticks,

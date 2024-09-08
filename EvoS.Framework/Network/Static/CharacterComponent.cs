@@ -185,6 +185,14 @@ namespace EvoS.Framework.Network.Static
                         UnlockSkinPatternColor(0, 0, 0); UnlockSkinPatternColor(0, 0, 1); UnlockSkinPatternColor(0, 0, 2); UnlockSkinPatternColor(0, 0, 3);
                         UnlockSkinPatternColor(1, 0, 0); UnlockSkinPatternColor(1, 0, 1); UnlockSkinPatternColor(1, 0, 2);
                         break;
+                    case CharacterType.TestFreelancer1:
+                        UnlockSkinPatternColor(0, 0, 0); UnlockSkinPatternColor(0, 0, 1); UnlockSkinPatternColor(0, 0, 2); UnlockSkinPatternColor(0, 0, 3);
+                        UnlockSkinPatternColor(1, 0, 0); UnlockSkinPatternColor(1, 0, 1); UnlockSkinPatternColor(1, 0, 2);
+                        break;
+                    case CharacterType.TestFreelancer2:
+                        UnlockSkinPatternColor(0, 0, 0); UnlockSkinPatternColor(0, 0, 1); UnlockSkinPatternColor(0, 0, 2); UnlockSkinPatternColor(0, 0, 3);
+                        UnlockSkinPatternColor(1, 0, 0); UnlockSkinPatternColor(1, 0, 1); UnlockSkinPatternColor(1, 0, 2);
+                        break;
                     case CharacterType.Manta:
                         UnlockSkinPatternColor(0, 0, 0); UnlockSkinPatternColor(0, 0, 1); UnlockSkinPatternColor(0, 0, 2); UnlockSkinPatternColor(0, 0, 3); UnlockSkinPatternColor(0, 0, 4); UnlockSkinPatternColor(0, 0, 5); UnlockSkinPatternColor(0, 0, 6); UnlockSkinPatternColor(0, 0, 7); UnlockSkinPatternColor(0, 0, 8); UnlockSkinPatternColor(0, 0, 9); UnlockSkinPatternColor(0, 0, 10); UnlockSkinPatternColor(0, 0, 11); UnlockSkinPatternColor(0, 0, 12); UnlockSkinPatternColor(0, 0, 13); UnlockSkinPatternColor(0, 0, 14);
                         UnlockSkinPatternColor(1, 0, 0); UnlockSkinPatternColor(1, 0, 1); UnlockSkinPatternColor(1, 0, 2); UnlockSkinPatternColor(1, 0, 3); UnlockSkinPatternColor(1, 0, 4); UnlockSkinPatternColor(1, 0, 5); UnlockSkinPatternColor(1, 0, 6);

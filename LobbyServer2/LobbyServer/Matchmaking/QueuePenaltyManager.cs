@@ -39,6 +39,11 @@ public static class QueuePenaltyManager
             {
                 return;
             }
+            if (game.GameStatus < GameStatus.Started) {
+                //Left in Draft, punish harder, no leaving Draft cause they dont like the map or the Draft
+                SetQueuePenalty(accountId, GameType.PvP, TimeSpan.FromMinutes(10));
+                return;
+            }
             if (game.GameStatus != GameStatus.Stopped)
             {
                 SetQueuePenalty(accountId, GameType.PvP, TimeSpan.FromSeconds(200));
