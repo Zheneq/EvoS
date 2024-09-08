@@ -195,7 +195,7 @@ public abstract class Game
 
     protected async void OnServerDisconnect(BridgeServerProtocol server)
     {
-        if (GameStatus < GameStatus.Started) {
+        if (GameStatus > GameStatus.Started) {
             QueuePenaltyManager.CapQueuePenalties(this);
         }
 
