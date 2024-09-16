@@ -251,5 +251,19 @@
     "ModForAbility2": -1,
     "ModForAbility3": -1,
     "ModForAbility4": -1
+  },
+  "TestFreelancer1": {
+    "ModForAbility0": -1,
+    "ModForAbility1": -1,
+    "ModForAbility2": -1,
+    "ModForAbility3": -1,
+    "ModForAbility4": -1
+  },
+  "TestFreelancer2": {
+    "ModForAbility0": -1,
+    "ModForAbility1": -1,
+    "ModForAbility2": -1,
+    "ModForAbility3": -1,
+    "ModForAbility4": -1
   }
 }

@@ -51,6 +51,8 @@ public abstract class Game
     private Team CurrentTeam = Team.TeamA;
     public int PlayersInDeck { protected set; get; }
     private List<CharacterType> botCharacters = new();
+    public bool IsDraft => GameSubType?.Mods.Contains(GameSubType.SubTypeMods.RankedFreelancerSelection) ?? false;
+    public bool IsDrafting => IsDraft && GameStatus == GameStatus.FreelancerSelecting;
 
     public void AssignServer(BridgeServerProtocol server)
     {
@@ -1055,6 +1057,7 @@ public abstract class Game
             };
         }
 
+        bool sendGameInfoNotify = true;
 
         // Process each phase
         foreach (KeyValuePair<int, FreelancerResolutionPhaseSubType> subPhase in phases)
@@ -1084,8 +1087,8 @@ public abstract class Game
                 AddPlayersToDeckBasedOnPhase(PhaseSubType, player1, player2);
             }
 
-            SendRankedResolutionSubPhase();
-            await HandleRankedResolutionSubPhase(PhaseSubType, CurrentTeam, player1);
+            await HandleRankedResolutionSubPhase(PhaseSubType, CurrentTeam, player1, sendGameInfoNotify);
+            sendGameInfoNotify = false;
 
             foreach (RankedResolutionPlayerState playersInDeck in RankedResolutionPhaseData.PlayersOnDeck)
             {
@@ -1257,7 +1260,7 @@ public abstract class Game
         return currentTeam == Team.TeamA ? Team.TeamB : Team.TeamA;
     }
 
-    private async Task HandleRankedResolutionSubPhase(FreelancerResolutionPhaseSubType subPhase, Team currentTeam, LobbyServerPlayerInfo player)
+    private async Task HandleRankedResolutionSubPhase(FreelancerResolutionPhaseSubType subPhase, Team currentTeam, LobbyServerPlayerInfo player, bool sendGameInfoNotify)
     {
 #if DEBUG
         log.Info($"Starting ranked resolution sub phase {subPhase} for Team {currentTeam}");
@@ -1269,6 +1272,10 @@ public abstract class Game
 
         TimeLeftInSubPhase = pickPhaseData.TimeLeftInSubPhase;
         SendRankedResolutionSubPhase();
+        if (sendGameInfoNotify)
+        {
+            SendGameInfoNotifications();
+        }
 
         isCancellationRequested = false;
 

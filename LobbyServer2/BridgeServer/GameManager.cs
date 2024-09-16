@@ -103,26 +103,6 @@ public class GameManager
         return null;
     }
 
-    public static Game GetGameWithPlayerDraft(long accountId)
-    {
-        foreach (Game game in Games.Values)
-        {
-            if (game.GameStatus is >= GameStatus.Started
-                && game.Server is { IsConnected: true })
-            {
-                foreach (long player in game.GetPlayers())
-                {
-                    if (player.Equals(accountId))
-                    {
-                        return game;
-                    }
-                }
-            }
-        }
-
-        return null;
-    }
-
     public static void ReconnectServer(BridgeServerProtocol server)
     {
         if (Games.TryGetValue(server.ProcessCode, out Game game))

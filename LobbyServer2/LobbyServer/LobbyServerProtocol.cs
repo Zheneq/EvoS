@@ -166,19 +166,19 @@ namespace CentralServer.LobbyServer
 
         private void HandleRankedTradeRequest(RankedTradeRequest request)
         {
-            Game game = GameManager.GetGameWithPlayerDraft(AccountId);
-            if (game == null)
+            if (CurrentGame == null || !CurrentGame.IsDrafting)
             {
                 Send(new RankedTradeResponse()
                 {
                     //TODO: loc?
+                    ResponseId = request.RequestId,
                     Success = false,
                 });
                 return;
             }
 
-            RankedResolutionPhaseData rankedResolutionPhaseData = game.GetRankedResolutionPhaseData();
-            LobbyServerPlayerInfo player = game.GetPlayerInfo(AccountId);
+            RankedResolutionPhaseData rankedResolutionPhaseData = CurrentGame.GetRankedResolutionPhaseData();
+            LobbyServerPlayerInfo player = CurrentGame.GetPlayerInfo(AccountId);
 
             Dictionary<int, CharacterType> teamSelections = player.TeamId == Team.TeamA
                 ? rankedResolutionPhaseData.FriendlyTeamSelections
@@ -210,7 +210,7 @@ namespace CentralServer.LobbyServer
                         .Select(item => item.Key)
                         .FirstOrDefault();
 
-                    LobbyServerPlayerInfo checkIsBot = game.GetPlayerById(playerThatHasCharacter);
+                    LobbyServerPlayerInfo checkIsBot = CurrentGame.GetPlayerById(playerThatHasCharacter);
 
                     if (checkIsBot.IsAIControlled)
                     {
@@ -233,30 +233,31 @@ namespace CentralServer.LobbyServer
                 }
             }
 
-            game.SetRankedResolutionPhaseData(rankedResolutionPhaseData);
-            game.SendRankedResolutionSubPhase();
+            CurrentGame.SetRankedResolutionPhaseData(rankedResolutionPhaseData);
+            CurrentGame.SendRankedResolutionSubPhase();
 
             Send(new RankedTradeResponse()
             {
+                ResponseId = request.RequestId,
                 Success = true,
             });
         }
 
         private void HandleRankedSelectionRequest(RankedSelectionRequest request)
         {
-            Game game = GameManager.GetGameWithPlayerDraft(AccountId);
-            if (game == null)
+            if (CurrentGame == null || !CurrentGame.IsDrafting)
             {
                 Send(new RankedSelectionResponse()
                 {
                     //TODO: loc
+                    ResponseId = request.RequestId,
                     Success = false,
                 });
                 return;
             }
 
-            RankedResolutionPhaseData rankedResolutionPhaseData = game.GetRankedResolutionPhaseData();
-            LobbyServerPlayerInfo player = game.GetPlayerInfo(AccountId);
+            RankedResolutionPhaseData rankedResolutionPhaseData = CurrentGame.GetRankedResolutionPhaseData();
+            LobbyServerPlayerInfo player = CurrentGame.GetPlayerInfo(AccountId);
 
             Dictionary<int, CharacterType> teamSelections = player.TeamId == Team.TeamA
                 ? rankedResolutionPhaseData.FriendlyTeamSelections
@@ -274,7 +275,7 @@ namespace CentralServer.LobbyServer
                 usedCharacterTypes.AddRange(rankedResolutionPhaseData.EnemyBans);
                 usedCharacterTypes.AddRange(rankedResolutionPhaseData.FriendlyTeamSelections.Values);
                 usedCharacterTypes.AddRange(rankedResolutionPhaseData.EnemyTeamSelections.Values);
-                characterType = game.AssignRandomCharacterForDraft(player, usedCharacterTypes, characterType);
+                characterType = CurrentGame.AssignRandomCharacterForDraft(player, usedCharacterTypes, characterType);
             }
 
             List<RankedResolutionPlayerState> unselectedPlayerStates = rankedResolutionPhaseData.UnselectedPlayerStates;
@@ -308,38 +309,39 @@ namespace CentralServer.LobbyServer
             rankedResolutionPhaseData.UnselectedPlayerStates = unselectedPlayerStates;
             rankedResolutionPhaseData.PlayersOnDeck = playersOnDeck;
             teamSelections.Add(player.PlayerId, characterType);
-            game.UpdatePlayersInDeck();
+            CurrentGame.UpdatePlayersInDeck();
 
 
-            game.SetRankedResolutionPhaseData(rankedResolutionPhaseData);
-            game.SendRankedResolutionSubPhase();
+            CurrentGame.SetRankedResolutionPhaseData(rankedResolutionPhaseData);
+            CurrentGame.SendRankedResolutionSubPhase();
 
-            if (game.PlayersInDeck == 0)
+            if (CurrentGame.PlayersInDeck == 0)
             {
-                game.SkipRankedResolutionSubPhase();
+                CurrentGame.SkipRankedResolutionSubPhase();
             }
 
             Send(new RankedSelectionResponse()
             {
+                ResponseId = request.RequestId,
                 Success = true,
             });
         }
 
 
         private void HandlePlayerRankedBanRequest(RankedBanRequest request) {
-            Game game = GameManager.GetGameWithPlayerDraft(AccountId);
-            if (game == null)
+            if (CurrentGame == null || !CurrentGame.IsDrafting)
             {
                 Send(new RankedHoverClickResponse()
                 {
                     //TODO: loc
+                    ResponseId = request.RequestId,
                     Success = false,
                 });
                 return;
             }
 
-            RankedResolutionPhaseData rankedResolutionPhaseData = game.GetRankedResolutionPhaseData();
-            LobbyServerPlayerInfo player = game.GetPlayerInfo(AccountId);
+            RankedResolutionPhaseData rankedResolutionPhaseData = CurrentGame.GetRankedResolutionPhaseData();
+            LobbyServerPlayerInfo player = CurrentGame.GetPlayerInfo(AccountId);
 
             List<RankedResolutionPlayerState> playersOnDeck = rankedResolutionPhaseData.PlayersOnDeck;
             RankedResolutionPlayerState existingPlayersOnDeck = playersOnDeck.Find(p => p.PlayerId == player.PlayerId);
@@ -358,7 +360,7 @@ namespace CentralServer.LobbyServer
                     usedCharacterTypes.AddRange(rankedResolutionPhaseData.EnemyBans);
                     usedCharacterTypes.AddRange(rankedResolutionPhaseData.FriendlyTeamSelections.Values);
                     usedCharacterTypes.AddRange(rankedResolutionPhaseData.EnemyTeamSelections.Values);
-                    characterType = game.AssignRandomCharacterForDraft(player, usedCharacterTypes, characterType);
+                    characterType = CurrentGame.AssignRandomCharacterForDraft(player, usedCharacterTypes, characterType);
                 }
 
                 if (player.TeamId == Team.TeamA)
@@ -380,14 +382,15 @@ namespace CentralServer.LobbyServer
             }
 
             rankedResolutionPhaseData.PlayersOnDeck = playersOnDeck;
-            game.SetRankedResolutionPhaseData(rankedResolutionPhaseData);
-            game.SendRankedResolutionSubPhase();
+            CurrentGame.SetRankedResolutionPhaseData(rankedResolutionPhaseData);
+            CurrentGame.SendRankedResolutionSubPhase();
 
 
-            game.SkipRankedResolutionSubPhase();
+            CurrentGame.SkipRankedResolutionSubPhase();
 
             Send(new RankedBanResponse()
             {
+                ResponseId = request.RequestId,
                 Success = true,
             });
 
@@ -395,18 +398,18 @@ namespace CentralServer.LobbyServer
 
         private void HandlePlayerRankedHoverClickRequest(RankedHoverClickRequest request)
         {
-            Game game = GameManager.GetGameWithPlayerDraft(AccountId);
-            if (game == null)
+            if (CurrentGame == null || !CurrentGame.IsDrafting)
             {
                 Send(new RankedHoverClickResponse()
                 {
+                    ResponseId = request.RequestId,
                     Success = false,
                 });
                 return;
             }
             
-            RankedResolutionPhaseData rankedResolutionPhaseData = game.GetRankedResolutionPhaseData();
-            LobbyServerPlayerInfo player = game.GetPlayerInfo(AccountId);
+            RankedResolutionPhaseData rankedResolutionPhaseData = CurrentGame.GetRankedResolutionPhaseData();
+            LobbyServerPlayerInfo player = CurrentGame.GetPlayerInfo(AccountId);
 
             List<RankedResolutionPlayerState> unselectedPlayerStates = rankedResolutionPhaseData.UnselectedPlayerStates;
             RankedResolutionPlayerState existingUnselectedPlayerStates = unselectedPlayerStates.Find(p => p.PlayerId == player.PlayerId);
@@ -436,11 +439,12 @@ namespace CentralServer.LobbyServer
 
             rankedResolutionPhaseData.UnselectedPlayerStates = unselectedPlayerStates;
             rankedResolutionPhaseData.PlayersOnDeck = playersOnDeck;
-            game.SetRankedResolutionPhaseData(rankedResolutionPhaseData);
-            game.SendRankedResolutionSubPhase();
+            CurrentGame.SetRankedResolutionPhaseData(rankedResolutionPhaseData);
+            CurrentGame.SendRankedResolutionSubPhase();
 
             Send(new RankedHoverClickResponse()
             {
+                ResponseId = request.RequestId,
                 Success = true,
             });
         }
