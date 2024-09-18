@@ -47,10 +47,10 @@ public abstract class Game
     private RankedResolutionPhaseData RankedResolutionPhaseData = new();
     private TimeSpan TimeLeftInSubPhase = new();
     private bool isCancellationRequested = false;
-    private FreelancerResolutionPhaseSubType PhaseSubType = FreelancerResolutionPhaseSubType.UNDEFINED;
+    public FreelancerResolutionPhaseSubType PhaseSubType { get; private set; } = FreelancerResolutionPhaseSubType.UNDEFINED;
     private Team CurrentTeam = Team.TeamA;
     public int PlayersInDeck { protected set; get; }
-    private List<CharacterType> botCharacters = new();
+    private readonly List<CharacterType> botCharacters = new();
     public bool IsDraft => GameSubType?.Mods.Contains(GameSubType.SubTypeMods.RankedFreelancerSelection) ?? false;
     public bool IsDrafting => IsDraft && GameStatus == GameStatus.FreelancerSelecting;
 
@@ -197,7 +197,7 @@ public abstract class Game
 
     protected async void OnServerDisconnect(BridgeServerProtocol server)
     {
-        if (GameStatus > GameStatus.Started) {
+        if (GameStatus == GameStatus.Stopped || !IsDraft) {
             QueuePenaltyManager.CapQueuePenalties(this);
         }
 
@@ -280,9 +280,7 @@ public abstract class Game
         HashSet<long> accountIds = new HashSet<long>();
         foreach (LobbyServerPlayerInfo player in TeamInfo.TeamPlayerInfo)
         {
-            if (
-                // player.IsSpectator || 
-                player.IsNPCBot
+            if (player.IsNPCBot
                 || player.ReplacedWithBots
                 || accountIds.Contains(player.AccountId))
             {
@@ -299,7 +297,7 @@ public abstract class Game
         return clients;
     }
 
-    public void ForceReady()
+    protected void ForceReady()
     {
         TeamInfo.TeamPlayerInfo.ForEach(p => p.ReadyState = ReadyState.Ready);
     }
@@ -885,7 +883,7 @@ public abstract class Game
 
     public CharacterType AssignRandomCharacterForDraft(
         LobbyServerPlayerInfo playerInfo,
-        List<CharacterType> unavailableCharacters,
+        HashSet<CharacterType> unavailableCharacters,
         CharacterType preferedCat = CharacterType.Gryd)
     {
         CharacterRole characterRole = CharacterRole.None;
@@ -908,6 +906,7 @@ public abstract class Game
 
         List<CharacterType> availableTypes;
 
+        // TODO check AllowForBots?
         if (preferedCat != CharacterType.Gryd)
         {
             // Select only characters that match the specified characterRole (from preferedCat)
@@ -989,7 +988,7 @@ public abstract class Game
         return true;
     }
 
-    public async Task HandleRankedResolutionPhase()
+    protected async Task HandleRankedResolutionPhase()
     {
         // Add RankedFreelancerSelection in any of the GameSubTypes to enable drafting
         if (!GameSubType.Mods.Contains(GameSubType.SubTypeMods.RankedFreelancerSelection))
@@ -1019,8 +1018,9 @@ public abstract class Game
         };
 
         // Define phase order
-        // Bans can be disabled if they are disable client wont show ban windows (Due to poll of favoring bans add a setting to Custom to disable bans only there)
-        // -1 for other fases where we dont need the player (trade)
+        // Bans can be disabled. If they are disabled, client won't show ban windows
+        // (Due to poll of favoring bans add a setting to Custom to disable bans only there)
+        // -1 for phases where we don't need the player (trade)
         // Teams NEED to be min 8 and max 8 only
         List<KeyValuePair<int, FreelancerResolutionPhaseSubType>> phases;
         string localizedName = GameSubType.LocalizedName;
@@ -1079,7 +1079,7 @@ public abstract class Game
             }
 
             RankedResolutionPhaseData.PlayersOnDeck.Clear(); // Reset deck (People who can do stuff, ban or select a freelancer those are the PlayersOnDeck)
-            // Clear botCharacters so we can start using it again this is for when using bots and we have 2 players on deck we dont want them to accendently pick same character
+            // Clear botCharacters so we can start using it again this is for when using bots, and we have 2 players on deck we don't want them to accidentally pick same character
             botCharacters.Clear();
             PlayersInDeck = 0;
             if (subPhase.Key != -1)
@@ -1087,8 +1087,10 @@ public abstract class Game
                 AddPlayersToDeckBasedOnPhase(PhaseSubType, player1, player2);
             }
 
-            await HandleRankedResolutionSubPhase(PhaseSubType, CurrentTeam, player1, sendGameInfoNotify);
+            await HandleRankedResolutionSubPhase(PhaseSubType, player1, sendGameInfoNotify);
             sendGameInfoNotify = false;
+            
+            // TODO: There can be a race condition if a client request comes at this point
 
             foreach (RankedResolutionPlayerState playersInDeck in RankedResolutionPhaseData.PlayersOnDeck)
             {
@@ -1104,19 +1106,15 @@ public abstract class Game
                 if (playersInDeck.OnDeckness == RankedResolutionPlayerState.ReadyState.Selected)
                 {
                     CharacterType characterType = playersInDeck.Intention;
-                    //Player selected fill but did not locked in, or edge case where "MAYBE" we still have fill
+                    //Player selected fill but did not lock in, or edge case where "MAYBE" we still have fill
                     if (characterType == CharacterType.PendingWillFill
                         || characterType == CharacterType.TestFreelancer1
                         || characterType == CharacterType.TestFreelancer2)
                     {
-                        List<CharacterType> usedCharacterTypes = new();
-                        usedCharacterTypes.AddRange(RankedResolutionPhaseData.FriendlyBans);
-                        usedCharacterTypes.AddRange(RankedResolutionPhaseData.EnemyBans);
-                        usedCharacterTypes.AddRange(RankedResolutionPhaseData.FriendlyTeamSelections.Values);
-                        usedCharacterTypes.AddRange(RankedResolutionPhaseData.EnemyTeamSelections.Values);
+                        HashSet<CharacterType> usedCharacterTypes = GetUsedCharacterTypes();
                         characterType = AssignRandomCharacterForDraft(player, usedCharacterTypes, characterType);
                     }
-
+                    
                     if (PhaseSubType == FreelancerResolutionPhaseSubType.PICK_BANS1
                         || PhaseSubType == FreelancerResolutionPhaseSubType.PICK_BANS2)
                     {
@@ -1141,12 +1139,21 @@ public abstract class Game
 
     }
 
+    public HashSet<CharacterType> GetUsedCharacterTypes()
+    {
+        // Build a list of all used character types for use with Fill
+        return RankedResolutionPhaseData.FriendlyBans
+            .Concat(RankedResolutionPhaseData.EnemyBans)
+            .Concat(RankedResolutionPhaseData.FriendlyTeamSelections.Values)
+            .Concat(RankedResolutionPhaseData.EnemyTeamSelections.Values)
+            .ToHashSet();
+    }
+
     private void UpdateTeamSelection(Dictionary<int, CharacterType> selections)
     {
         foreach (KeyValuePair<int, CharacterType> selection in selections)
         {
-            int lobbyServerPlayerInfoIndex = TeamInfo.TeamPlayerInfo.FindIndex(p => p.PlayerId == selection.Key);
-            LobbyServerPlayerInfo playerInfo = TeamInfo.TeamPlayerInfo[lobbyServerPlayerInfoIndex];
+            LobbyServerPlayerInfo playerInfo = TeamInfo.TeamPlayerInfo.Find(p => p.PlayerId == selection.Key);
             if (!playerInfo.IsAIControlled)
             {
                 PersistedAccountData account = DB.Get().AccountDao.GetAccount(playerInfo.AccountId);
@@ -1169,30 +1176,31 @@ public abstract class Game
                     CharacterTaunts = new List<PlayerTauntData>()
                 };
             }
-            
         }
     }
-
-
+    
     private void AddPlayerToDeck(LobbyServerPlayerInfo player)
     {
-
         CharacterType characterType = CharacterType.None;
 
         // Let AI Randomize
         if (player.IsAIControlled)
         {
-            List<CharacterType> usedCharacterTypes = new();
-            usedCharacterTypes.AddRange(RankedResolutionPhaseData.FriendlyBans);
-            usedCharacterTypes.AddRange(RankedResolutionPhaseData.EnemyBans);
-            usedCharacterTypes.AddRange(RankedResolutionPhaseData.FriendlyTeamSelections.Values);
-            usedCharacterTypes.AddRange(RankedResolutionPhaseData.EnemyTeamSelections.Values);
-            usedCharacterTypes.AddRange(botCharacters);
+            HashSet<CharacterType> usedCharacterTypes = GetUsedCharacterTypes();
+            usedCharacterTypes.UnionWith(botCharacters);
             characterType = AssignRandomCharacterForDraft(player, usedCharacterTypes);
             if (PhaseSubType == FreelancerResolutionPhaseSubType.PICK_FREELANCER1 || PhaseSubType == FreelancerResolutionPhaseSubType.PICK_FREELANCER2)
             {
-                RankedResolutionPlayerState unselectedPlayerState = RankedResolutionPhaseData.UnselectedPlayerStates.First(p => p.PlayerId == player.PlayerId);
-                unselectedPlayerState.Intention = characterType;
+                int index = RankedResolutionPhaseData.UnselectedPlayerStates.FindIndex(p => p.PlayerId == player.PlayerId);
+                if (index < 0)
+                {
+                    log.Error($"Failed to find bot #{player.PlayerId}! Cancelling match");
+                    CancelMatch();
+                }
+
+                RankedResolutionPlayerState state = RankedResolutionPhaseData.UnselectedPlayerStates[index];
+                state.Intention = characterType;
+                RankedResolutionPhaseData.UnselectedPlayerStates[index] = state;
                 botCharacters.Add(characterType);
             }
         }
@@ -1231,26 +1239,30 @@ public abstract class Game
             ? RankedResolutionPhaseData.FriendlyBans
             : RankedResolutionPhaseData.EnemyBans;
 
-        selections.Add(characterType); // Ban a non existing character just to simulate we NEED things to hapening or client is unhappy and totally breaks
+        selections.Add(characterType); // Ban a non-existing character just to simulate we NEED things to happening or client is unhappy and totally breaks
     }
 
     // Method to add players to the deck based on the phase type
     void AddPlayersToDeckBasedOnPhase(FreelancerResolutionPhaseSubType phase, LobbyServerPlayerInfo player1, LobbyServerPlayerInfo player2)
     {
-        if (phase == FreelancerResolutionPhaseSubType.PICK_BANS1 ||
-            phase == FreelancerResolutionPhaseSubType.PICK_BANS2 ||
-            phase == FreelancerResolutionPhaseSubType.PICK_FREELANCER1)
+        switch (phase)
         {
-            AddPlayerToDeck(player1);
-        }
-
-        if (phase == FreelancerResolutionPhaseSubType.PICK_FREELANCER2)
-        {
-            AddPlayerToDeck(player1);
-            // Can be null if we are at the last Freelancer selection
-            if (player2 != null)
+            case FreelancerResolutionPhaseSubType.PICK_BANS1:
+            case FreelancerResolutionPhaseSubType.PICK_BANS2:
+            case FreelancerResolutionPhaseSubType.PICK_FREELANCER1:
             {
-                AddPlayerToDeck(player2);
+                AddPlayerToDeck(player1);
+                break;
+            }
+            case FreelancerResolutionPhaseSubType.PICK_FREELANCER2:
+            {
+                AddPlayerToDeck(player1);
+                // Can be null if we are at the last Freelancer selection
+                if (player2 != null)
+                {
+                    AddPlayerToDeck(player2);
+                }
+                break;
             }
         }
     }
@@ -1260,7 +1272,7 @@ public abstract class Game
         return currentTeam == Team.TeamA ? Team.TeamB : Team.TeamA;
     }
 
-    private async Task HandleRankedResolutionSubPhase(FreelancerResolutionPhaseSubType subPhase, Team currentTeam, LobbyServerPlayerInfo player, bool sendGameInfoNotify)
+    private async Task HandleRankedResolutionSubPhase(FreelancerResolutionPhaseSubType subPhase, LobbyServerPlayerInfo player, bool sendGameInfoNotify)
     {
 #if DEBUG
         log.Info($"Starting ranked resolution sub phase {subPhase} for Team {currentTeam}");
@@ -1326,7 +1338,7 @@ public abstract class Game
 #endif
     }
 
-    // When a player locks in kill the timer
+    // When a player locks in, kill the timer
     public void SkipRankedResolutionSubPhase()
     {
         isCancellationRequested = true;
@@ -1358,8 +1370,7 @@ public abstract class Game
 
             // Clone the data for each player to prevent data sharing between players
             RankedResolutionPhaseData rankedResolutionPhaseDataClone = RankedResolutionPhaseData.Clone();
-
-
+            
             // Client always thinks they are TeamA! we need to swap values if we are TeamB (this was a funny one to figure out)
             // Server side we already check if players are in TeamA or TeamB so we are fine
             if (player.TeamId == Team.TeamB)

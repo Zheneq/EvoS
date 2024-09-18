@@ -270,11 +270,7 @@ namespace CentralServer.LobbyServer
                 || characterType == CharacterType.TestFreelancer2)
             {
                 // Build a list of all used character types for use with Fill
-                List<CharacterType> usedCharacterTypes = new();
-                usedCharacterTypes.AddRange(rankedResolutionPhaseData.FriendlyBans);
-                usedCharacterTypes.AddRange(rankedResolutionPhaseData.EnemyBans);
-                usedCharacterTypes.AddRange(rankedResolutionPhaseData.FriendlyTeamSelections.Values);
-                usedCharacterTypes.AddRange(rankedResolutionPhaseData.EnemyTeamSelections.Values);
+                HashSet<CharacterType> usedCharacterTypes = CurrentGame.GetUsedCharacterTypes();
                 characterType = CurrentGame.AssignRandomCharacterForDraft(player, usedCharacterTypes, characterType);
             }
 
@@ -355,11 +351,7 @@ namespace CentralServer.LobbyServer
                     || characterType == CharacterType.TestFreelancer2)
                 {
                     // Build a list of all used character types for use with Fill
-                    List<CharacterType> usedCharacterTypes = new();
-                    usedCharacterTypes.AddRange(rankedResolutionPhaseData.FriendlyBans);
-                    usedCharacterTypes.AddRange(rankedResolutionPhaseData.EnemyBans);
-                    usedCharacterTypes.AddRange(rankedResolutionPhaseData.FriendlyTeamSelections.Values);
-                    usedCharacterTypes.AddRange(rankedResolutionPhaseData.EnemyTeamSelections.Values);
+                    HashSet<CharacterType> usedCharacterTypes = CurrentGame.GetUsedCharacterTypes();
                     characterType = CurrentGame.AssignRandomCharacterForDraft(player, usedCharacterTypes, characterType);
                 }
 
