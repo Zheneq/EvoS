@@ -15,9 +15,9 @@ namespace EvoS.Framework.Network.Static
         [EvosMessage(194)]
         public enum TradeActionType
         {
-            Unicode001D,
-            Unicode000E,
-            Unicode0012
+            AcceptOrOffer,
+            Reject,
+            StopTrading
         }
     }
 }

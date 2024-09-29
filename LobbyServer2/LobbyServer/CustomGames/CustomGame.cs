@@ -40,6 +40,10 @@ public class CustomGame : Game
             AcceptTimeout = new TimeSpan(0, 0, 0),
             SelectTimeout = TimeSpan.FromSeconds(30),
             LoadoutSelectTimeout = TimeSpan.FromSeconds(30),
+            SelectSubPhaseBan1Timeout = TimeSpan.FromSeconds(60),
+            SelectSubPhaseBan2Timeout = TimeSpan.FromSeconds(30),
+            SelectSubPhaseFreelancerSelectTimeout = TimeSpan.FromSeconds(30),
+            SelectSubPhaseTradeTimeout = TimeSpan.FromSeconds(30),
             ActiveHumanPlayers = GroupManager.GetPlayerGroup(accountId).Members.Count,
             ActivePlayers = GroupManager.GetPlayerGroup(accountId).Members.Count,
             CreateTimestamp = DateTime.UtcNow.Ticks,
@@ -539,6 +543,8 @@ public class CustomGame : Game
         SetGameStatus(GameStatus.FreelancerSelecting);
         GetClients().ForEach(client => SendGameAssignmentNotification(client));
 
+        await HandleRankedResolutionPhase();
+
         SetGameStatus(GameStatus.LoadoutSelecting);
 
         if (!CheckIfAllParticipantsAreConnected())
@@ -678,6 +684,10 @@ public class CustomGame : Game
         GameInfo = gameinfo.Clone();
         GameInfo.ActivePlayers = TeamInfo.TeamPlayerInfo.Count;
         GameInfo.LoadoutSelectTimeout = TimeSpan.FromSeconds(30);
+        GameInfo.SelectSubPhaseBan1Timeout = TimeSpan.FromSeconds(60);
+        GameInfo.SelectSubPhaseBan2Timeout = TimeSpan.FromSeconds(30);
+        GameInfo.SelectSubPhaseFreelancerSelectTimeout = TimeSpan.FromSeconds(30);
+        GameInfo.SelectSubPhaseTradeTimeout = TimeSpan.FromSeconds(30);
         GameInfo.AcceptedPlayers = TeamInfo.TeamPlayerInfo.Count;
         GameInfo.ActiveHumanPlayers = TeamInfo.TeamPlayerInfo.Count(p => p.IsHumanControlled);
         GameInfo.GameConfig.TeamAPlayers = TeamInfo.TeamAPlayerInfo.Count();

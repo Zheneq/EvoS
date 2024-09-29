@@ -474,6 +474,32 @@ namespace CentralServer.LobbyServer.Character
                     GameTypesProhibitedFrom = new List<GameType>(),
                     IsHidden = false
                 }
+            },
+            {
+                CharacterType.TestFreelancer1,
+                new CharacterConfig()
+                {
+                    AllowForBots = false,
+                    AllowForPlayers = true,
+                    CharacterRole = CharacterRole.None,
+                    CharacterType = CharacterType.TestFreelancer1,
+                    Difficulty = 1,
+                    GameTypesProhibitedFrom = new List<GameType>(),
+                    IsHidden = false // does show but it is disabled for bots GameTypesProhibitedFrom does not add it as hidden just disabled but we already set AllowForBots to false, it only shows in custom
+                }
+            },
+            {
+                CharacterType.TestFreelancer2,
+                new CharacterConfig()
+                {
+                    AllowForBots = false,
+                    AllowForPlayers = true,
+                    CharacterRole = CharacterRole.None,
+                    CharacterType = CharacterType.TestFreelancer2,
+                    Difficulty = 1,
+                    GameTypesProhibitedFrom = new List<GameType>(),
+                    IsHidden = false // does show but it is disabled for bots GameTypesProhibitedFrom does not add it as hidden just disabled but we already set AllowForBots to false, it only shows in custom
+                }
             }
         };
     }

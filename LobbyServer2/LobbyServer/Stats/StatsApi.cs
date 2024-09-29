@@ -100,7 +100,10 @@ namespace CentralServer.LobbyServer.Stats
                 {
                     foreach (GameSubType subType in gameInfo.GameConfig.SubTypes)
                     {
-                        if (subType.Mods != null && subType.Mods.Contains(SubTypeMods.RankedFreelancerSelection))
+                        if (subType.LocalizedName != null && 
+                            (subType.LocalizedName == "Tournament_Draft_Bans@GameWideData"
+                              || subType.LocalizedName == "Tournament_Draft_NoBans@GameWideData")
+                              || subType.LocalizedName == "Tournament_NoDraft@GameWideData")
                         {
                             gameType = "Tournament";
                         }
