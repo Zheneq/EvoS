@@ -166,14 +166,17 @@ namespace CentralServer.LobbyServer
 
         private void HandleRankedTradeRequest(RankedTradeRequest request)
         {
-            if (CurrentGame == null || !CurrentGame.IsDrafting)
+            RankedTradeResponse response = new RankedTradeResponse
             {
-                Send(new RankedTradeResponse()
-                {
-                    //TODO: loc?
-                    ResponseId = request.RequestId,
-                    Success = false,
-                });
+                ResponseId = request.RequestId,
+                Success = false,
+            };
+            
+            if (CurrentGame == null
+                || !CurrentGame.IsDrafting
+                || CurrentGame.PhaseSubType != FreelancerResolutionPhaseSubType.FREELANCER_TRADE)
+            {
+                Send(response); // TODO: error message?
                 return;
             }
 
@@ -184,51 +187,74 @@ namespace CentralServer.LobbyServer
                 ? rankedResolutionPhaseData.FriendlyTeamSelections
                 : rankedResolutionPhaseData.EnemyTeamSelections;
 
-            if (request.Trade.TradeAction == RankedTradeData.TradeActionType.Reject)
+            int tradeActionId = rankedResolutionPhaseData.TradeActions.FindIndex(
+                p => p.OfferedCharacter == request.Trade.DesiredCharacter
+                     && p.AskedPlayerId == player.PlayerId);
+            lock (teamSelections)
             {
-                var existingTradeAction = rankedResolutionPhaseData.TradeActions.Find(p => p.OfferedCharacter == request.Trade.DesiredCharacter);
-                rankedResolutionPhaseData.TradeActions.Remove(existingTradeAction);
-            }
-            else if (request.Trade.TradeAction == RankedTradeData.TradeActionType.AcceptOrOffer)
-            {
-                var existingTradeAction = rankedResolutionPhaseData.TradeActions.Find(p => p.OfferedCharacter == request.Trade.DesiredCharacter);
-
-                if (existingTradeAction.OfferedCharacter == request.Trade.DesiredCharacter)
+                switch (request.Trade.TradeAction)
                 {
-                    // Update the existing trade action to accepted
-                    teamSelections[existingTradeAction.OfferingPlayerId] = existingTradeAction.DesiredCharacter;
-                    teamSelections[existingTradeAction.AskedPlayerId] = existingTradeAction.OfferedCharacter;
-                    rankedResolutionPhaseData.TradeActions.Remove(existingTradeAction);
-                }
-                else
-                {
-                    // Handle the case where the trade request does not exist
-                    CharacterType currentCharacterType = teamSelections[player.PlayerId];
-                    CharacterType wantedCharacterType = request.Trade.DesiredCharacter;
-                    int playerThatHasCharacter = teamSelections
-                        .Where(item => item.Value == wantedCharacterType)
-                        .Select(item => item.Key)
-                        .FirstOrDefault();
-
-                    LobbyServerPlayerInfo checkIsBot = CurrentGame.GetPlayerById(playerThatHasCharacter);
-
-                    if (checkIsBot.IsAIControlled)
+                    case RankedTradeData.TradeActionType.Reject:
                     {
-                        //automatic accept trade
-                        teamSelections[playerThatHasCharacter] = currentCharacterType;
-                        teamSelections[player.PlayerId] = wantedCharacterType;
-                    }
-                    else
-                    {
-                        RankedTradeData newTradeData = new RankedTradeData()
+                        if (tradeActionId >= 0)
                         {
-                            AskedPlayerId = playerThatHasCharacter,
-                            TradeAction = RankedTradeData.TradeActionType.AcceptOrOffer,
-                            DesiredCharacter = wantedCharacterType,
-                            OfferedCharacter = currentCharacterType,
-                            OfferingPlayerId = player.PlayerId
-                        };
-                        rankedResolutionPhaseData.TradeActions.Add(newTradeData);
+                            rankedResolutionPhaseData.TradeActions.RemoveAt(tradeActionId);
+                        }
+                        else
+                        {
+                            Send(response); // TODO: error message?
+                            return;
+                        }
+
+                        break;
+                    }
+                    case RankedTradeData.TradeActionType.AcceptOrOffer:
+                    {
+                        if (tradeActionId >= 0)
+                        {
+                            var existingTradeAction = rankedResolutionPhaseData.TradeActions[tradeActionId];
+                            // Update the existing trade action to accepted
+                            teamSelections[existingTradeAction.OfferingPlayerId] = existingTradeAction.DesiredCharacter;
+                            teamSelections[existingTradeAction.AskedPlayerId] = existingTradeAction.OfferedCharacter;
+                            rankedResolutionPhaseData.TradeActions.RemoveAll(p =>
+                                p.OfferingPlayerId == player.PlayerId
+                                || p.AskedPlayerId == player.PlayerId
+                                || p.OfferingPlayerId == existingTradeAction.OfferingPlayerId
+                                || p.AskedPlayerId == existingTradeAction.OfferingPlayerId);
+                        }
+                        else
+                        {
+                            // Handle the case where the trade request does not exist
+                            CharacterType currentCharacterType = teamSelections[player.PlayerId];
+                            CharacterType wantedCharacterType = request.Trade.DesiredCharacter;
+                            int playerThatHasCharacter = teamSelections
+                                .Where(item => item.Value == wantedCharacterType)
+                                .Select(item => item.Key)
+                                .FirstOrDefault();
+
+                            LobbyServerPlayerInfo checkIsBot = CurrentGame.GetPlayerById(playerThatHasCharacter);
+
+                            if (checkIsBot.IsAIControlled)
+                            {
+                                //automatic accept trade
+                                teamSelections[playerThatHasCharacter] = currentCharacterType;
+                                teamSelections[player.PlayerId] = wantedCharacterType;
+                            }
+                            else
+                            {
+                                RankedTradeData newTradeData = new RankedTradeData()
+                                {
+                                    AskedPlayerId = playerThatHasCharacter,
+                                    TradeAction = RankedTradeData.TradeActionType.AcceptOrOffer,
+                                    DesiredCharacter = teamSelections[playerThatHasCharacter],
+                                    OfferedCharacter = currentCharacterType,
+                                    OfferingPlayerId = player.PlayerId
+                                };
+                                rankedResolutionPhaseData.TradeActions.Add(newTradeData);
+                            }
+                        }
+
+                        break;
                     }
                 }
             }
@@ -236,23 +262,25 @@ namespace CentralServer.LobbyServer
             CurrentGame.SetRankedResolutionPhaseData(rankedResolutionPhaseData);
             CurrentGame.SendRankedResolutionSubPhase();
 
-            Send(new RankedTradeResponse()
-            {
-                ResponseId = request.RequestId,
-                Success = true,
-            });
+            response.Success = true;
+            Send(response);
         }
 
         private void HandleRankedSelectionRequest(RankedSelectionRequest request)
         {
-            if (CurrentGame == null || !CurrentGame.IsDrafting)
+            // TODO also check ready state - do not update if already ready
+            RankedSelectionResponse response = new RankedSelectionResponse
             {
-                Send(new RankedSelectionResponse()
-                {
-                    //TODO: loc
-                    ResponseId = request.RequestId,
-                    Success = false,
-                });
+                ResponseId = request.RequestId,
+                Success = false,
+            };
+            
+            if (CurrentGame == null
+                || !CurrentGame.IsDrafting
+                || (CurrentGame.PhaseSubType != FreelancerResolutionPhaseSubType.PICK_FREELANCER1
+                    && CurrentGame.PhaseSubType != FreelancerResolutionPhaseSubType.PICK_FREELANCER2))
+            {
+                Send(response); // TODO: error message
                 return;
             }
 
@@ -265,67 +293,67 @@ namespace CentralServer.LobbyServer
 
             CharacterType characterType = request.Selection;
 
-            if (characterType == CharacterType.PendingWillFill 
-                || characterType == CharacterType.TestFreelancer1 
-                || characterType == CharacterType.TestFreelancer2)
+            lock (teamSelections)
             {
-                // Build a list of all used character types for use with Fill
                 HashSet<CharacterType> usedCharacterTypes = CurrentGame.GetUsedCharacterTypes();
-                characterType = CurrentGame.AssignRandomCharacterForDraft(player, usedCharacterTypes, characterType);
-            }
-
-            List<RankedResolutionPlayerState> unselectedPlayerStates = rankedResolutionPhaseData.UnselectedPlayerStates;
-            RankedResolutionPlayerState existingUnselectedPlayerStates = unselectedPlayerStates.Find(p => p.PlayerId == player.PlayerId);
-
-            if (existingUnselectedPlayerStates.PlayerId == player.PlayerId)
-            {
-                existingUnselectedPlayerStates.Intention = characterType;
-                existingUnselectedPlayerStates.OnDeckness = RankedResolutionPlayerState.ReadyState.Selected;
-                int index1 = unselectedPlayerStates.FindIndex(p => p.PlayerId == player.PlayerId);
-                if (index1 >= 0)
+                if (characterType == CharacterType.PendingWillFill 
+                    || characterType == CharacterType.TestFreelancer1 
+                    || characterType == CharacterType.TestFreelancer2)
                 {
-                    unselectedPlayerStates[index1] = existingUnselectedPlayerStates;
+                    characterType = CurrentGame.AssignRandomCharacterForDraft(player, usedCharacterTypes, characterType);
+                }
+
+                List<RankedResolutionPlayerState> unselectedPlayerStates = rankedResolutionPhaseData.UnselectedPlayerStates;
+                int stateIndex = unselectedPlayerStates.FindIndex(p => p.PlayerId == player.PlayerId);
+                
+                if (stateIndex >= 0)
+                {
+                    RankedResolutionPlayerState existingUnselectedPlayerStates = unselectedPlayerStates[stateIndex];
+                    existingUnselectedPlayerStates.Intention = characterType;
+                    existingUnselectedPlayerStates.OnDeckness = RankedResolutionPlayerState.ReadyState.Selected;
+                    unselectedPlayerStates[stateIndex] = existingUnselectedPlayerStates;
+                }
+
+                List<RankedResolutionPlayerState> playersOnDeck = rankedResolutionPhaseData.PlayersOnDeck;
+                int deckIndex = playersOnDeck.FindIndex(p => p.PlayerId == player.PlayerId);
+
+                if (deckIndex >= 0 && !usedCharacterTypes.Contains(characterType))
+                {
+                    RankedResolutionPlayerState existingPlayersOnDeck = playersOnDeck[deckIndex];
+                    existingPlayersOnDeck.Intention = characterType;
+                    existingPlayersOnDeck.OnDeckness = RankedResolutionPlayerState.ReadyState.Unselected;
+                    playersOnDeck[deckIndex] = existingPlayersOnDeck;
+
+                    teamSelections.Add(player.PlayerId, characterType);
+
+                    CurrentGame.UpdatePlayersInDeck();
+
+                    CurrentGame.SetRankedResolutionPhaseData(rankedResolutionPhaseData);
+                    CurrentGame.SendRankedResolutionSubPhase();
+
+                    if (CurrentGame.PlayersInDeck == 0)
+                    {
+                        CurrentGame.SkipRankedResolutionSubPhase();
+                    }
+
+                    response.Success = true;
+                }
+                else
+                {
+                    // TODO: error message!
                 }
             }
-
-            List<RankedResolutionPlayerState> playersOnDeck = rankedResolutionPhaseData.PlayersOnDeck;
-            RankedResolutionPlayerState existingPlayersOnDeck = playersOnDeck.Find(p => p.PlayerId == player.PlayerId);
-
-            if (existingPlayersOnDeck.PlayerId == player.PlayerId)
-            {
-                existingPlayersOnDeck.Intention = characterType;
-                existingPlayersOnDeck.OnDeckness = RankedResolutionPlayerState.ReadyState.Unselected;
-                int index2 = playersOnDeck.FindIndex(p => p.PlayerId == player.PlayerId);
-                if (index2 >= 0)
-                {
-                    playersOnDeck[index2] = existingPlayersOnDeck;
-                }
-            }
-
-            rankedResolutionPhaseData.UnselectedPlayerStates = unselectedPlayerStates;
-            rankedResolutionPhaseData.PlayersOnDeck = playersOnDeck;
-            teamSelections.Add(player.PlayerId, characterType);
-            CurrentGame.UpdatePlayersInDeck();
-
-
-            CurrentGame.SetRankedResolutionPhaseData(rankedResolutionPhaseData);
-            CurrentGame.SendRankedResolutionSubPhase();
-
-            if (CurrentGame.PlayersInDeck == 0)
-            {
-                CurrentGame.SkipRankedResolutionSubPhase();
-            }
-
-            Send(new RankedSelectionResponse()
-            {
-                ResponseId = request.RequestId,
-                Success = true,
-            });
+            
+            Send(response);
         }
-
-
-        private void HandlePlayerRankedBanRequest(RankedBanRequest request) {
-            if (CurrentGame == null || !CurrentGame.IsDrafting)
+        
+        private void HandlePlayerRankedBanRequest(RankedBanRequest request)
+        {
+            // TODO also check ready state - do not update if already ready
+            if (CurrentGame == null
+                || !CurrentGame.IsDrafting
+                || (CurrentGame.PhaseSubType != FreelancerResolutionPhaseSubType.PICK_BANS1
+                    && CurrentGame.PhaseSubType != FreelancerResolutionPhaseSubType.PICK_BANS2))
             {
                 Send(new RankedHoverClickResponse()
                 {
@@ -340,18 +368,17 @@ namespace CentralServer.LobbyServer
             LobbyServerPlayerInfo player = CurrentGame.GetPlayerInfo(AccountId);
 
             List<RankedResolutionPlayerState> playersOnDeck = rankedResolutionPhaseData.PlayersOnDeck;
-            RankedResolutionPlayerState existingPlayersOnDeck = playersOnDeck.Find(p => p.PlayerId == player.PlayerId);
+            int deckIndex = playersOnDeck.FindIndex(p => p.PlayerId == player.PlayerId);
 
-            if (existingPlayersOnDeck.PlayerId == player.PlayerId)
+            HashSet<CharacterType> usedCharacterTypes = CurrentGame.GetUsedCharacterTypes();
+            CharacterType characterType = request.Selection;
+            if (deckIndex >= 0 && !usedCharacterTypes.Contains(characterType)) // TODO you can still lock in a duplicate by timing out
             {
-                CharacterType characterType = request.Selection;
 
                 if (characterType == CharacterType.PendingWillFill
                     || characterType == CharacterType.TestFreelancer1
                     || characterType == CharacterType.TestFreelancer2)
                 {
-                    // Build a list of all used character types for use with Fill
-                    HashSet<CharacterType> usedCharacterTypes = CurrentGame.GetUsedCharacterTypes();
                     characterType = CurrentGame.AssignRandomCharacterForDraft(player, usedCharacterTypes, characterType);
                 }
 
@@ -364,32 +391,37 @@ namespace CentralServer.LobbyServer
                     rankedResolutionPhaseData.EnemyBans.Add(characterType);
                 }
 
+                RankedResolutionPlayerState existingPlayersOnDeck = playersOnDeck[deckIndex];
                 existingPlayersOnDeck.Intention = characterType;
                 existingPlayersOnDeck.OnDeckness = RankedResolutionPlayerState.ReadyState.Unselected;
-                int index2 = playersOnDeck.FindIndex(p => p.PlayerId == player.PlayerId);
-                if (index2 >= 0)
+                playersOnDeck[deckIndex] = existingPlayersOnDeck;
+
+                CurrentGame.SetRankedResolutionPhaseData(rankedResolutionPhaseData);
+                CurrentGame.SendRankedResolutionSubPhase();
+            
+                CurrentGame.SkipRankedResolutionSubPhase();
+
+                Send(new RankedBanResponse()
                 {
-                    playersOnDeck[index2] = existingPlayersOnDeck;
-                }
+                    ResponseId = request.RequestId,
+                    Success = true,
+                });
             }
-
-            rankedResolutionPhaseData.PlayersOnDeck = playersOnDeck;
-            CurrentGame.SetRankedResolutionPhaseData(rankedResolutionPhaseData);
-            CurrentGame.SendRankedResolutionSubPhase();
-
-
-            CurrentGame.SkipRankedResolutionSubPhase();
-
-            Send(new RankedBanResponse()
+            else
             {
-                ResponseId = request.RequestId,
-                Success = true,
-            });
+                Send(new RankedBanResponse()
+                {
+                    ResponseId = request.RequestId,
+                    Success = false,
+                });
+                // TODO: error message?
+            }
 
         }
 
         private void HandlePlayerRankedHoverClickRequest(RankedHoverClickRequest request)
         {
+            // TODO also check ready state - do not update if already ready
             if (CurrentGame == null || !CurrentGame.IsDrafting)
             {
                 Send(new RankedHoverClickResponse()
@@ -404,41 +436,42 @@ namespace CentralServer.LobbyServer
             LobbyServerPlayerInfo player = CurrentGame.GetPlayerInfo(AccountId);
 
             List<RankedResolutionPlayerState> unselectedPlayerStates = rankedResolutionPhaseData.UnselectedPlayerStates;
-            RankedResolutionPlayerState existingUnselectedPlayerStates = unselectedPlayerStates.Find(p => p.PlayerId == player.PlayerId);
-
-            if (existingUnselectedPlayerStates.PlayerId == player.PlayerId)
+            int stateIndex = unselectedPlayerStates.FindIndex(p => p.PlayerId == player.PlayerId);
+            
+            if (stateIndex >= 0)
             {
+                RankedResolutionPlayerState existingUnselectedPlayerStates = unselectedPlayerStates[stateIndex];
                 existingUnselectedPlayerStates.Intention = request.Selection;
-                int index1 = unselectedPlayerStates.FindIndex(p => p.PlayerId == player.PlayerId);
-                if (index1 >= 0)
+                unselectedPlayerStates[stateIndex] = existingUnselectedPlayerStates;
+
+                List<RankedResolutionPlayerState> playersOnDeck = rankedResolutionPhaseData.PlayersOnDeck;
+                int deckIndex = playersOnDeck.FindIndex(p => p.PlayerId == player.PlayerId);
+                
+                if (deckIndex >= 0)
                 {
-                    unselectedPlayerStates[index1] = existingUnselectedPlayerStates;
+                    RankedResolutionPlayerState existingPlayersOnDeck = playersOnDeck[deckIndex];
+                    existingPlayersOnDeck.Intention = request.Selection;
+                    playersOnDeck[deckIndex] = existingPlayersOnDeck;
                 }
-            }
 
-            List<RankedResolutionPlayerState> playersOnDeck = rankedResolutionPhaseData.PlayersOnDeck;
-            RankedResolutionPlayerState existingPlayersOnDeck = playersOnDeck.Find(p => p.PlayerId == player.PlayerId);
+                CurrentGame.SetRankedResolutionPhaseData(rankedResolutionPhaseData);
+                CurrentGame.SendRankedResolutionSubPhase();
 
-            if (existingPlayersOnDeck.PlayerId == player.PlayerId)
-            {
-                existingPlayersOnDeck.Intention = request.Selection;
-                int index2 = playersOnDeck.FindIndex(p => p.PlayerId == player.PlayerId);
-                if (index2 >= 0)
+                Send(new RankedHoverClickResponse()
                 {
-                    playersOnDeck[index2] = existingPlayersOnDeck;
-                }
+                    ResponseId = request.RequestId,
+                    Success = true,
+                });
             }
-
-            rankedResolutionPhaseData.UnselectedPlayerStates = unselectedPlayerStates;
-            rankedResolutionPhaseData.PlayersOnDeck = playersOnDeck;
-            CurrentGame.SetRankedResolutionPhaseData(rankedResolutionPhaseData);
-            CurrentGame.SendRankedResolutionSubPhase();
-
-            Send(new RankedHoverClickResponse()
+            else
             {
-                ResponseId = request.RequestId,
-                Success = true,
-            });
+                Send(new RankedHoverClickResponse()
+                {
+                    ResponseId = request.RequestId,
+                    Success = false,
+                });
+                // TODO: error message?
+            }
         }
 
         private void HandleSelectRibbonRequest(SelectRibbonRequest request)
