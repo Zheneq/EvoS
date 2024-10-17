@@ -1089,8 +1089,10 @@ public abstract class Game
 
             await HandleRankedResolutionSubPhase(PhaseSubType, player1, sendGameInfoNotify);
             sendGameInfoNotify = false;
-            
+
             // TODO: There can be a race condition if a client request comes at this point
+
+            HashSet<CharacterType> usedCharacterTypes = GetUsedCharacterTypes();
 
             foreach (RankedResolutionPlayerState playersInDeck in RankedResolutionPhaseData.PlayersOnDeck)
             {
@@ -1111,7 +1113,7 @@ public abstract class Game
                         || characterType == CharacterType.TestFreelancer1
                         || characterType == CharacterType.TestFreelancer2)
                     {
-                        HashSet<CharacterType> usedCharacterTypes = GetUsedCharacterTypes();
+                        usedCharacterTypes = GetUsedCharacterTypes(); //Reupdate for when multiple people in players on deck as whe reuse usedCharacterTypes store value
                         characterType = AssignRandomCharacterForDraft(player, usedCharacterTypes, characterType);
                     }
                     
@@ -1125,6 +1127,16 @@ public abstract class Game
                     {
                         AddToTeamSelection(player, characterType);
                     }
+                }
+            }
+
+            // Update any players who have a character selected, but that character is already selected or banned, reset there selection
+            for (int i = 0; i < RankedResolutionPhaseData.UnselectedPlayerStates.Count; i++)
+            {
+                RankedResolutionPlayerState player = RankedResolutionPhaseData.UnselectedPlayerStates[i];
+                if (usedCharacterTypes.Contains(player.Intention) && player.OnDeckness == RankedResolutionPlayerState.ReadyState.Unselected)
+                {
+                    player.Intention = CharacterType.None;
                 }
             }
 
@@ -1183,10 +1195,11 @@ public abstract class Game
     {
         CharacterType characterType = CharacterType.None;
 
+        HashSet<CharacterType> usedCharacterTypes = GetUsedCharacterTypes();
+
         // Let AI Randomize
         if (player.IsAIControlled)
         {
-            HashSet<CharacterType> usedCharacterTypes = GetUsedCharacterTypes();
             usedCharacterTypes.UnionWith(botCharacters);
             characterType = AssignRandomCharacterForDraft(player, usedCharacterTypes);
             if (PhaseSubType == FreelancerResolutionPhaseSubType.PICK_FREELANCER1 || PhaseSubType == FreelancerResolutionPhaseSubType.PICK_FREELANCER2)
@@ -1207,6 +1220,13 @@ public abstract class Game
 #if DEBUG
         log.Info($"Adding {player.PlayerId} {characterType} on deck ");
 #endif
+        // Get there intent they whant to play from UnselectedPlayerStates
+        RankedResolutionPlayerState rankedResolutionPlayerState = RankedResolutionPhaseData.UnselectedPlayerStates.Find(p => p.PlayerId == player.PlayerId);
+
+        // Check if this character is already used or banned if so set CharacterType.None
+        // We "should" never get to this point as we reset UnselectedPlayerStates.Intend after a phase is finished and character is unavaible, but just in case.
+        characterType = usedCharacterTypes.Contains(rankedResolutionPlayerState.Intention) ? CharacterType.None : rankedResolutionPlayerState.Intention;
+
         // Add player to the deck with the appropriate state
         RankedResolutionPhaseData.PlayersOnDeck.Add(new RankedResolutionPlayerState
         {
@@ -1239,7 +1259,7 @@ public abstract class Game
             ? RankedResolutionPhaseData.FriendlyBans
             : RankedResolutionPhaseData.EnemyBans;
 
-        selections.Add(characterType); // Ban a non-existing character just to simulate we NEED things to happening or client is unhappy and totally breaks
+        selections.Add(characterType);
     }
 
     // Method to add players to the deck based on the phase type
@@ -1275,7 +1295,7 @@ public abstract class Game
     private async Task HandleRankedResolutionSubPhase(FreelancerResolutionPhaseSubType subPhase, LobbyServerPlayerInfo player, bool sendGameInfoNotify)
     {
 #if DEBUG
-        log.Info($"Starting ranked resolution sub phase {subPhase} for Team {currentTeam}");
+        log.Info($"Starting ranked resolution sub phase {subPhase} for Team {CurrentTeam}");
 #endif
         RankedResolutionPhaseData pickPhaseData = new()
         {
