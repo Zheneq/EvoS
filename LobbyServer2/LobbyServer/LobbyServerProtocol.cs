@@ -155,6 +155,7 @@ namespace CentralServer.LobbyServer
             RegisterHandler<PurchaseAbilityVfxRequest>(HandlePurchasAbilityVfx);
             RegisterHandler<PurchaseInventoryItemRequest>(HandlePurchaseInventoryItemRequest);
 
+            RegisterHandler<UpdateRemoteCharacterRequest>(HandleUpdateRemoteCharacterRequest);
 
             RegisterHandler<FriendUpdateRequest>(HandleFriendUpdate);
         }
@@ -184,6 +185,87 @@ namespace CentralServer.LobbyServer
                 Success = true,
                 ResponseId = request.RequestId,
             });
+        }
+
+        private void HandleUpdateRemoteCharacterRequest(UpdateRemoteCharacterRequest request)
+        {
+            UpdateRemoteCharacterResponse response = new UpdateRemoteCharacterResponse
+            {
+                ResponseId = request.RequestId,
+                Success = false,
+            };
+
+            if (request.RemoteSlotIndexes.Length == 0 || request.Characters.Length == 0)
+            {
+                log.Warn("No characters or slots provided in the request.");
+                Send(response);
+                return;
+            }
+
+            PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
+            int maxSlots = 3;
+            int[] slots = request.RemoteSlotIndexes;
+            CharacterType[] characterTypes = request.Characters;
+            int totalSlots = Math.Min(slots.Length, characterTypes.Length);
+
+            bool updated = UpdateCharacterSlots(account, slots, characterTypes, totalSlots, maxSlots);
+
+            if (updated)
+            {
+                DB.Get().AccountDao.UpdateAccount(account);
+                response.Success = true;
+                PlayerAccountDataUpdateNotification updateNotification = new PlayerAccountDataUpdateNotification(account);
+                Send(updateNotification);
+            }
+
+            Send(response);
+        }
+
+        private bool UpdateCharacterSlots(PersistedAccountData account, int[] slots, CharacterType[] characterTypes, int totalSlots, int maxSlots)
+        {
+            bool updated = false;
+
+            for (int i = 0; i < totalSlots; i++)
+            {
+                int slotIndex = slots[i];
+                CharacterType newCharacter = characterTypes[i];
+
+                // Skip if slot exceeds the maximum allowed slots
+                if (slotIndex >= maxSlots)
+                {
+                    log.Warn($"Slot index {slotIndex} exceeds the maximum allowed slots.");
+                    continue;
+                }
+
+                // Never allow these
+                if (newCharacter == CharacterType.PendingWillFill
+                    || newCharacter == CharacterType.TestFreelancer1
+                    || newCharacter == CharacterType.TestFreelancer2)
+                {
+                    Send(new ChatNotification
+                    {
+                        ConsoleMessageType = ConsoleMessageType.SystemMessage,
+                        Text = "This character is not allowed (for draft purposes only)"
+                    });
+                    continue;
+                }
+
+                // Expand the LastRemoteCharacters list if necessary
+                while (account.AccountComponent.LastRemoteCharacters.Count <= slotIndex)
+                {
+                    account.AccountComponent.LastRemoteCharacters.Add(CharacterType.None);
+                }
+
+                // Update if the character in the slot has changed
+                if (account.AccountComponent.LastRemoteCharacters[slotIndex] != newCharacter)
+                {
+                    account.AccountComponent.LastRemoteCharacters[slotIndex] = newCharacter;
+                    updated = true;
+                    log.Info($"Updated slot {slotIndex} to character {newCharacter} for account {AccountId}.");
+                }
+            }
+
+            return updated;
         }
 
         private void HandleDEBUG_AdminSlashCommandNotification(DEBUG_AdminSlashCommandNotification notification)
@@ -746,6 +828,16 @@ namespace CentralServer.LobbyServer
                 if (GroupManager.GetPlayerGroup(AccountId).IsSolo() && request.GameType != null && request.GameType.HasValue)
                 {
                     SetGameType(request.GameType.Value);
+                }
+
+                // Unselect a dublicated remotecharacter to none if we pick it ourself
+                // We can delete since we recreate if they select another one
+                // This always runs not sure i can catch the difrence between Coop/PvP and Custom
+                // And Deathmatch vs Fourlancer
+                // Before we send PlayerAccountDataUpdateNotification
+                if (account.AccountComponent.LastRemoteCharacters.Contains(characterType))
+                {
+                    account.AccountComponent.LastRemoteCharacters.Remove(characterType);
                 }
 
                 // without this client instantly resets character type back to what it was

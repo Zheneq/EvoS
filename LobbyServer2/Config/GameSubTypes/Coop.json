@@ -1,5 +1,45 @@
 [
   {
+    "LocalizedName": "AllFourCharacters@SubTypes",
+    "GameMapConfigs": [
+      {
+        "Map": "CargoShip_Deathmatch",
+        "IsActive": true
+      },
+      {
+        "Map": "Skyway_Deathmatch",
+        "IsActive": true
+      },
+      {
+        "Map": "EvosLab_Deathmatch",
+        "IsActive": true
+      },
+      {
+        "Map": "RobotFactory_Deathmatch",
+        "IsActive": true
+      },
+      {
+        "Map": "Reactor_Deathmatch",
+        "IsActive": true
+      }
+    ],
+    "RewardBucket": "NoRewards",
+    "PersistedStatBucket": "DoNotPersist",
+    "Mods": [
+      "AntiSocial",
+      "NotCheckedByDefault",
+      "NotAllowedForGroups",
+      "ControlAllBots"
+    ],
+    "TeamAPlayers": "4",
+    "TeamABots": "3",
+    "TeamBPlayers": "4",
+    "TeamBBots": "4",
+    "GameOverrides": {
+      "TurnTimeSpan": "00:00:40"
+    }
+  },
+  {
     "LocalizedName": "CoopWithHumans@SubTypes",
     "GameMapConfigs": [
       {
