@@ -752,7 +752,7 @@ public abstract class Game
             return null;
         }
 
-        int playerId = team == Team.TeamA ? 1 : 5;
+        int playerId = GetControllingPlayerIdInternal(team);
         return TeamInfo.TeamPlayerInfo.Find(p => p.PlayerId == playerId);
     }
 
