@@ -27,7 +27,7 @@ public abstract class Game
     private static readonly ILog log = LogManager.GetLogger(typeof(Game));
     public static readonly object characterSelectionLock = new object();
     protected static readonly Random rand = new Random();
-    public bool IsFourLancher => GameSubType?.Mods.Contains(GameSubType.SubTypeMods.ControlAllBots) ?? false;
+    public bool IsControlAllBots => GameSubType?.Mods.Contains(GameSubType.SubTypeMods.ControlAllBots) ?? false;
 
     public LobbyGameInfo GameInfo { protected set; get; } // TODO check it is set when needed
     public LobbyServerTeamInfo TeamInfo { protected set; get; } = new LobbyServerTeamInfo() { TeamPlayerInfo = new List<LobbyServerPlayerInfo>() };
@@ -528,7 +528,7 @@ public abstract class Game
         if (team == Team.TeamA
             && gameSubType.Mods is not null
             && gameSubType.Mods.Contains(GameSubType.SubTypeMods.AntiSocial) 
-            && !IsFourLancher)
+            && !IsControlAllBots)
         {
             int botsForAntiSocial = playerNum - players.Count;
             botNum += botsForAntiSocial;
@@ -559,10 +559,6 @@ public abstract class Game
             log.Info($"adding player {client.UserName} ({playerInfo.CharacterType}), {client.AccountId} to {team}. readystate: {playerInfo.ReadyState}");
             TeamInfo.TeamPlayerInfo.Add(playerInfo);
         }
-
-        if (IsFourLancher) {
-            botNum = team == Team.TeamA ? gameSubType.TeamABots : gameSubType.TeamBBots;
-        }
         
 
         for (int i = 0; i < botNum; i++)
@@ -577,74 +573,26 @@ public abstract class Game
     protected LobbyServerPlayerInfo AddBot(Team team, int botNr, GameSubType gameSubType)
     {
         // Initialize basic character information
-        CharacterType characterType = CharacterType.None;
-        LobbyCharacterInfo lobbyCharacterInfo = new();
+        CharacterType characterType = PickCharacter(team, true);
+        LobbyCharacterInfo lobbyCharacterInfo = InitializeDefaultCharacterInfo(characterType);
         LobbyServerPlayerInfo controllingPlayer = new();
         bool isAntiSocial = gameSubType.Mods is not null && gameSubType.Mods.Contains(GameSubType.SubTypeMods.AntiSocial);
-        long accountId = 0;
 
-        // Check if FourLancher mode is enabled
-        if (IsFourLancher)
+        if (IsControlAllBots && !(isAntiSocial && team == Team.TeamB))
         {
-            // Handle AntiSocial games
-            if (isAntiSocial)
+            // either non-AntiSocial or Team A in AntiSocial mode
+            controllingPlayer = GetControllingPlayer(team);
+            PersistedAccountData account = DB.Get().AccountDao.GetAccount(controllingPlayer.AccountId);
+            if (account?.AccountComponent?.LastRemoteCharacters != null &&
+                botNr >= 0 && botNr < account.AccountComponent.LastRemoteCharacters.Count)
             {
-                if (team == Team.TeamA)
-                {
-                    // Team A: has controlling player
-                    controllingPlayer = GetControllingPlayer(team);
-                    PersistedAccountData account = DB.Get().AccountDao.GetAccount(controllingPlayer.AccountId);
-                    accountId = controllingPlayer.AccountId;
-                    if (account?.AccountComponent?.LastRemoteCharacters != null &&
-                        botNr >= 0 && botNr < account.AccountComponent.LastRemoteCharacters.Count)
-                    {
-                        characterType = account.AccountComponent.LastRemoteCharacters[botNr];
-                        CharacterComponent characterComponent = (CharacterComponent)account.CharacterData[characterType].CharacterComponent.Clone();
-                        lobbyCharacterInfo = LobbyCharacterInfo.Of(account.CharacterData[characterType], characterComponent);
-                    }
-                    else
-                    {
-                        // Fallback if LastRemoteCharacters is null or botNr is out of range pick a random one for that player and let them controll it
-                        characterType = PickCharacter(team, true);
-                        CharacterComponent characterComponent = (CharacterComponent)account.CharacterData[characterType].CharacterComponent.Clone();
-                        lobbyCharacterInfo = LobbyCharacterInfo.Of(account.CharacterData[characterType], characterComponent);
-                    }
-                }
-                else if (team == Team.TeamB)
-                {
-                    // Team B: Uncontrolled bots (no controlling player)
-                    characterType = PickCharacter(team, true);
-                    lobbyCharacterInfo = InitializeDefaultCharacterInfo(characterType);
-                }
-            }
-            else
-            {
-                // Not AntiSocial, both teams are controlled
-                controllingPlayer = GetControllingPlayer(team);
-                PersistedAccountData account = DB.Get().AccountDao.GetAccount(controllingPlayer.AccountId);
-                accountId = controllingPlayer.AccountId;
-                if (account?.AccountComponent?.LastRemoteCharacters != null &&
-                    botNr >= 0 && botNr < account.AccountComponent.LastRemoteCharacters.Count)
+                if (account.AccountComponent.LastRemoteCharacters[botNr] != CharacterType.None)
                 {
                     characterType = account.AccountComponent.LastRemoteCharacters[botNr];
-                    CharacterComponent characterComponent = (CharacterComponent)account.CharacterData[characterType].CharacterComponent.Clone();
-                    lobbyCharacterInfo = LobbyCharacterInfo.Of(account.CharacterData[characterType], characterComponent);
                 }
-                else
-                {
-                    // Fallback if LastRemoteCharacters is null or botNr is out of range pick a random one for that player and let them controll it
-                    characterType = PickCharacter(team, true);
-                    CharacterComponent characterComponent = (CharacterComponent)account.CharacterData[characterType].CharacterComponent.Clone();
-                    lobbyCharacterInfo = LobbyCharacterInfo.Of(account.CharacterData[characterType], characterComponent);
-                }
-                
             }
-        }
-        else
-        {
-            // Not FourLancher mode, normal bot assignment
-            characterType = PickCharacter(team, true);
-            lobbyCharacterInfo = InitializeDefaultCharacterInfo(characterType);
+            CharacterComponent characterComponent = (CharacterComponent)account.CharacterData[characterType].CharacterComponent.Clone();
+            lobbyCharacterInfo = LobbyCharacterInfo.Of(account.CharacterData[characterType], characterComponent);
         }
 
         LobbyServerPlayerInfo playerInfo = new LobbyServerPlayerInfo
@@ -653,7 +601,7 @@ public abstract class Game
             IsGameOwner = false,
             TeamId = team,
             PlayerId = TeamInfo.TeamPlayerInfo.Count + 1,
-            IsNPCBot = !IsFourLancher || (team == Team.TeamB && isAntiSocial),  // Team B bots in AntiSocial are NPC bots
+            IsNPCBot = !IsControlAllBots || (team == Team.TeamB && isAntiSocial),  // Team B bots in AntiSocial are NPC bots
             Handle = GameWideData.Get().GetCharacterResourceLink(characterType).m_displayName, // TODO localization?
             CharacterInfo = lobbyCharacterInfo,
             ControllingPlayerId = GetControllingPlayerId(team),
@@ -664,20 +612,13 @@ public abstract class Game
         };
 
         // Assign ProxyPlayerIds based on team and game mode
-        if (IsFourLancher)
+        if (IsControlAllBots)
         {
-            if (team == Team.TeamA)
+            if (team == Team.TeamA || (team == Team.TeamB && !isAntiSocial))
             {
                 // Team A: Always add player to ProxyPlayerIds
                 controllingPlayer.ProxyPlayerIds.Add(playerInfo.PlayerId);
-                playerInfo.AccountId = accountId;
-                playerInfo.Handle = controllingPlayer.Handle;
-            }
-            else if (team == Team.TeamB && !isAntiSocial)
-            {
-                // Team B: Add player to ProxyPlayerIds only if it's not AntiSocial
-                controllingPlayer.ProxyPlayerIds.Add(playerInfo.PlayerId);
-                playerInfo.AccountId = accountId;
+                playerInfo.AccountId = controllingPlayer.AccountId;
                 playerInfo.Handle = controllingPlayer.Handle;
             }
         }
@@ -712,7 +653,7 @@ public abstract class Game
 
     private int GetControllingPlayerId(Team team)
     {
-        if (!IsFourLancher || (GameInfo?.GameConfig.GameType == GameType.PvE && team == Team.TeamB))
+        if (!IsControlAllBots || (GameInfo?.GameConfig.GameType == GameType.PvE && team == Team.TeamB))
         {
             return 0;
         }
@@ -741,7 +682,7 @@ public abstract class Game
 
     private LobbyServerPlayerInfo GetControllingPlayerInfo(Team team)
     {
-        if (!IsFourLancher)
+        if (!IsControlAllBots)
         {
             return null;
         }

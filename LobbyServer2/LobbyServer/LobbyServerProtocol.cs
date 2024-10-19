@@ -202,6 +202,12 @@ namespace CentralServer.LobbyServer
                 return;
             }
 
+            if (MatchmakingManager.IsQueued(GroupManager.GetPlayerGroup(AccountId)))
+            {
+                // Not allowed to change characters while in queue.
+                return;
+            }
+
             PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
             int maxSlots = 3;
             int[] slots = request.RemoteSlotIndexes;
@@ -831,13 +837,14 @@ namespace CentralServer.LobbyServer
                 }
 
                 // Unselect a dublicated remotecharacter to none if we pick it ourself
-                // We can delete since we recreate if they select another one
                 // This always runs not sure i can catch the difrence between Coop/PvP and Custom
-                // And Deathmatch vs Fourlancer
+                // And Deathmatch vs ControlAllBots
                 // Before we send PlayerAccountDataUpdateNotification
-                if (account.AccountComponent.LastRemoteCharacters.Contains(characterType))
+                int index = account.AccountComponent.LastRemoteCharacters.IndexOf(characterType);
+
+                if (index != -1)
                 {
-                    account.AccountComponent.LastRemoteCharacters.Remove(characterType);
+                    account.AccountComponent.LastRemoteCharacters[index] = CharacterType.None;
                 }
 
                 // without this client instantly resets character type back to what it was
