@@ -202,12 +202,6 @@ namespace CentralServer.LobbyServer
                 return;
             }
 
-            if (MatchmakingManager.IsQueued(GroupManager.GetPlayerGroup(AccountId)))
-            {
-                // Not allowed to change characters while in queue.
-                return;
-            }
-
             PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
             int maxSlots = 3;
             int[] slots = request.RemoteSlotIndexes;
