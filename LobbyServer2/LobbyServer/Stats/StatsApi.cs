@@ -96,18 +96,17 @@ namespace CentralServer.LobbyServer.Stats
                 string map = Maps.GetMapName[gameInfo.GameConfig.Map];
                 string gameType = gameInfo.GameConfig.GameType.ToString();
 
-                if (gameInfo.GameConfig.SubTypes != null)
+                if (gameInfo.GameConfig.SelectedSubType.Mods != null)
                 {
-                    foreach (GameSubType subType in gameInfo.GameConfig.SubTypes)
+                    if (gameInfo.GameConfig.SelectedSubType.Mods.Contains(SubTypeMods.RankedFreelancerSelection)
+                        && gameInfo.GameConfig.GameType == GameType.Custom)
                     {
-                        if (subType.Mods != null && subType.Mods.Contains(SubTypeMods.RankedFreelancerSelection))
-                        {
-                            gameType = "Tournament";
-                        }
-                        if (subType.Mods != null && subType.Mods.Contains(SubTypeMods.ControlAllBots))
-                        {
-                            gameType = "Fourlancer";
-                        }
+                        gameType = "Tournament";
+                    }
+                    if (gameInfo.GameConfig.SelectedSubType.Mods.Contains(SubTypeMods.ControlAllBots)
+                        && gameInfo.GameConfig.GameType != GameType.Custom)
+                    {
+                        gameType = "FourLancer";
                     }
                 }
 
