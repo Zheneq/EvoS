@@ -364,11 +364,12 @@ namespace CentralServer.LobbyServer.Matchmaking
             return selected;
         }
 
-        public void OnGameEnded(LobbyGameInfo gameInfo, LobbyGameSummary gameSummary)
+        public void OnGameEnded(LobbyGameInfo gameInfo, LobbyGameSummary gameSummary, GameSubType gameSubType)
         {
             Elo.OnGameEnded(
                 gameInfo,
                 gameSummary,
+                gameSubType,
                 EloKey,
                 Conf,
                 DateTime.UtcNow,

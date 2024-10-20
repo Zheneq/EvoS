@@ -111,7 +111,7 @@ public abstract class Game
         }
         try
         {
-            MatchmakingManager.OnGameEnded(GameInfo, GameSummary);
+            MatchmakingManager.OnGameEnded(GameInfo, GameSummary, GameSubType);
         }
         catch (Exception e)
         {

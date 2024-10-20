@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Numerics;
 using EvoS.Framework.Constants.Enums;
 using EvoS.Framework.Misc;
 using Newtonsoft.Json;
@@ -22,6 +23,10 @@ namespace EvoS.Framework.Network.Static
             ResolveTimeoutLimit = 160;
             GameOptionFlags = GameOptionFlag.None;
         }
+
+        private int SelectedSubTypeIndex => BitOperations.Log2(InstanceSubTypeBit);
+        
+        GameSubType SelectedSubType => SelectedSubTypeIndex < SubTypes.Count ? SubTypes[SelectedSubTypeIndex] : null;
 
         public LobbyGameConfig Clone()
         {
