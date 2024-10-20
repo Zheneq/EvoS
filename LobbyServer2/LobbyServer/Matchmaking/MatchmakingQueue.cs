@@ -79,11 +79,6 @@ namespace CentralServer.LobbyServer.Matchmaking
             return QueuedGroups.OrderBy(kv => kv.Value).Select(kv => kv.Key);
         }
         
-        public List<long> GetQueuedGroupsAsList()
-        {
-            return GetQueuedGroups().ToList();
-        }
-        
         public IEnumerable<long> GetQueuedGroups(int subTypeIndex)
         {
             uint subTypeFlag = 1U << subTypeIndex;
@@ -91,9 +86,28 @@ namespace CentralServer.LobbyServer.Matchmaking
                 .Where(groupId => (GroupManager.GetGroupSubTypeMask(groupId) & subTypeFlag) != 0);
         }
         
-        public List<long> GetQueuedPlayersAsList()
+        public List<List<long>> GetQueuedGroupsBySubType()
         {
-            return QueuedGroups.Keys.SelectMany(g => GroupManager.GetGroup(g).Members).ToList();
+            var res = new List<List<long>>();
+            for (int i = 0; i < MatchmakingQueueInfo.GameConfig.SubTypes.Count; i++)
+            {
+                res.Add(GetQueuedGroups(i).ToList());
+            }
+
+            return res;
+        }
+        
+        public List<List<long>> GetQueuedPlayersBySubType()
+        {
+            var res = new List<List<long>>();
+            for (int i = 0; i < MatchmakingQueueInfo.GameConfig.SubTypes.Count; i++)
+            {
+                res.Add(GetQueuedGroups(i)
+                    .SelectMany(g => GroupManager.GetGroup(g).Members)
+                    .ToList());
+            }
+
+            return res;
         }
         
         public bool GetQueueTime(long groupId, out DateTime time)

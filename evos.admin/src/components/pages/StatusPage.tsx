@@ -86,11 +86,11 @@ function StatusPage() {
                     .filter(s => games.get(s.id))
                     .map(s => <Server key={s.id} info={s} game={games.get(s.id)} playerData={players}/>)}
             {status && groups && players
-                && status.queues.map(q => <Queue key={q.type} info={q} groupData={groups} playerData={players} />)}
+                && status.queues.map(q => <Queue key={ `${q.type}_${q.subtype}`} info={q} groupData={groups} playerData={players} />)}
             {notQueuedGroups && groups && players && inGame
                 && <Queue
                     key={'not_queued'}
-                    info={{type: "Not queued", groupIds: notQueuedGroups}}
+                    info={{type: "Not queued", subtype: "", groupIds: notQueuedGroups}}
                     groupData={groups}
                     playerData={players}
                     hidePlayers={inGame}
