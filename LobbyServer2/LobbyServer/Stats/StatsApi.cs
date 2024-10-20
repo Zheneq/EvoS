@@ -104,6 +104,10 @@ namespace CentralServer.LobbyServer.Stats
                         {
                             gameType = "Tournament";
                         }
+                        if (subType.Mods != null && subType.Mods.Contains(SubTypeMods.ControlAllBots))
+                        {
+                            gameType = "Fourlancer";
+                        }
                     }
                 }
 
