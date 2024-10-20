@@ -64,7 +64,7 @@
     }
   },
   {
-    "LocalizedName": "PlayerTitle_47_Unlock_1_Condition@GameWideData",
+    "LocalizedName": "Tournament_Draft_Bans@GameWideData", // Add in client patch
     "GameMapConfigs": [
       {
         "Map": "Skyway_Deathmatch",
@@ -95,8 +95,8 @@
         "IsActive": true
       }
     ],
-    "TeamAPlayers": 1,
-    "TeamBPlayers": 1,
+    "TeamAPlayers": 4,
+    "TeamBPlayers": 4,
     "TeamABots": 0,
     "TeamBBots": 0,
     "TeamComposition": {
@@ -119,6 +119,270 @@
     },
     "RewardBucket": "NoRewards",
     "PersistedStatBucket": "DoNotPersist",
+    "Bans": true,
+    "Mods": [
+      "AllowPlayingLockedCharacters",
+      "HumansHaveFirstSlots",
+      "RankedFreelancerSelection"
+    ],
+    "GameOverrides": {
+      "TurnTimeSpan": "00:00:20"
+    }
+  },
+  {
+    "LocalizedName": "Tournament_Draft_NoBans@GameWideData", // Add in client patch
+    "GameMapConfigs": [
+      {
+        "Map": "Skyway_Deathmatch",
+        "IsActive": true
+      },
+      {
+        "Map": "CargoShip_Deathmatch",
+        "IsActive": true
+      },
+      {
+        "Map": "Casino01_Deathmatch",
+        "IsActive": true
+      },
+      {
+        "Map": "EvosLab_Deathmatch",
+        "IsActive": true
+      },
+      {
+        "Map": "Oblivion_Deathmatch",
+        "IsActive": true
+      },
+      {
+        "Map": "Reactor_Deathmatch",
+        "IsActive": true
+      },
+      {
+        "Map": "RobotFactory_Deathmatch",
+        "IsActive": true
+      }
+    ],
+    "TeamAPlayers": 4,
+    "TeamBPlayers": 4,
+    "TeamABots": 0,
+    "TeamBBots": 0,
+    "TeamComposition": {
+      "Rules": {
+        "A1": {
+          "Roles": [
+            "Tank",
+            "Assassin",
+            "Support"
+          ]
+        },
+        "B1": {
+          "Roles": [
+            "Tank",
+            "Assassin",
+            "Support"
+          ]
+        }
+      }
+    },
+    "RewardBucket": "NoRewards",
+    "PersistedStatBucket": "DoNotPersist",
+    "Bans": false,
+    "Mods": [
+      "AllowPlayingLockedCharacters",
+      "HumansHaveFirstSlots",
+      "RankedFreelancerSelection"
+    ],
+    "GameOverrides": {
+      "TurnTimeSpan": "00:00:20"
+    }
+  },
+  {
+    "LocalizedName": "Tournament_NoDraft@GameWideData", // Add in client patch
+    "GameMapConfigs": [
+      {
+        "Map": "Skyway_Deathmatch",
+        "IsActive": true
+      },
+      {
+        "Map": "CargoShip_Deathmatch",
+        "IsActive": true
+      },
+      {
+        "Map": "Casino01_Deathmatch",
+        "IsActive": true
+      },
+      {
+        "Map": "EvosLab_Deathmatch",
+        "IsActive": true
+      },
+      {
+        "Map": "Oblivion_Deathmatch",
+        "IsActive": true
+      },
+      {
+        "Map": "Reactor_Deathmatch",
+        "IsActive": true
+      },
+      {
+        "Map": "RobotFactory_Deathmatch",
+        "IsActive": true
+      }
+    ],
+    "TeamAPlayers": 4,
+    "TeamBPlayers": 4,
+    "TeamABots": 0,
+    "TeamBBots": 0,
+    "TeamComposition": {
+      "Rules": {
+        "A1": {
+          "Roles": [
+            "Tank",
+            "Assassin",
+            "Support"
+          ]
+        },
+        "B1": {
+          "Roles": [
+            "Tank",
+            "Assassin",
+            "Support"
+          ]
+        }
+      }
+    },
+    "RewardBucket": "NoRewards",
+    "PersistedStatBucket": "DoNotPersist",
+    "Bans": false,
+    "Mods": [
+      "AllowPlayingLockedCharacters",
+      "HumansHaveFirstSlots"
+    ],
+    "GameOverrides": {
+      "TurnTimeSpan": "00:00:20"
+    }
+  },
+  {
+    "LocalizedName": "Draft_Bans@GameWideData", // Add in client patch
+    "GameMapConfigs": [
+      {
+        "Map": "Skyway_Deathmatch",
+        "IsActive": true
+      },
+      {
+        "Map": "CargoShip_Deathmatch",
+        "IsActive": true
+      },
+      {
+        "Map": "Casino01_Deathmatch",
+        "IsActive": true
+      },
+      {
+        "Map": "EvosLab_Deathmatch",
+        "IsActive": true
+      },
+      {
+        "Map": "Oblivion_Deathmatch",
+        "IsActive": true
+      },
+      {
+        "Map": "Reactor_Deathmatch",
+        "IsActive": true
+      },
+      {
+        "Map": "RobotFactory_Deathmatch",
+        "IsActive": true
+      }
+    ],
+    "TeamAPlayers": 4,
+    "TeamBPlayers": 4,
+    "TeamABots": 0,
+    "TeamBBots": 0,
+    "TeamComposition": {
+      "Rules": {
+        "A1": {
+          "Roles": [
+            "Tank",
+            "Assassin",
+            "Support"
+          ]
+        },
+        "B1": {
+          "Roles": [
+            "Tank",
+            "Assassin",
+            "Support"
+          ]
+        }
+      }
+    },
+    "RewardBucket": "NoRewards",
+    "PersistedStatBucket": "DoNotPersist",
+    "Bans": true,
+    "Mods": [
+      "AllowPlayingLockedCharacters",
+      "HumansHaveFirstSlots",
+      "RankedFreelancerSelection"
+    ],
+    "GameOverrides": {
+      "TurnTimeSpan": "00:00:20"
+    }
+  },
+  {
+    "LocalizedName": "Draft_NoBans@GameWideData", // Add in client patch
+    "GameMapConfigs": [
+      {
+        "Map": "Skyway_Deathmatch",
+        "IsActive": true
+      },
+      {
+        "Map": "CargoShip_Deathmatch",
+        "IsActive": true
+      },
+      {
+        "Map": "Casino01_Deathmatch",
+        "IsActive": true
+      },
+      {
+        "Map": "EvosLab_Deathmatch",
+        "IsActive": true
+      },
+      {
+        "Map": "Oblivion_Deathmatch",
+        "IsActive": true
+      },
+      {
+        "Map": "Reactor_Deathmatch",
+        "IsActive": true
+      },
+      {
+        "Map": "RobotFactory_Deathmatch",
+        "IsActive": true
+      }
+    ],
+    "TeamAPlayers": 4,
+    "TeamBPlayers": 4,
+    "TeamABots": 0,
+    "TeamBBots": 0,
+    "TeamComposition": {
+      "Rules": {
+        "A1": {
+          "Roles": [
+            "Tank",
+            "Assassin",
+            "Support"
+          ]
+        },
+        "B1": {
+          "Roles": [
+            "Tank",
+            "Assassin",
+            "Support"
+          ]
+        }
+      }
+    },
+    "RewardBucket": "NoRewards",
+    "PersistedStatBucket": "DoNotPersist",
+    "Bans": false,
     "Mods": [
       "AllowPlayingLockedCharacters",
       "HumansHaveFirstSlots",

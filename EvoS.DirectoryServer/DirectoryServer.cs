@@ -385,6 +385,55 @@ namespace EvoS.DirectoryServer
                 willFill.CharacterComponent.LastSelectedLoadout = 0;
             }
 
+            // These are used in Draft in random fill for subcategory
+            // Check if TestFreelancer1 is missing in CharacterData, if it is add it
+            account.CharacterData.TryGetValue(CharacterType.TestFreelancer1, out PersistedCharacterData testFreelancer1);
+            if (testFreelancer1 == null)
+            {
+                account.CharacterData.TryAdd(CharacterType.TestFreelancer1, new PersistedCharacterData(CharacterType.TestFreelancer1));
+                testFreelancer1 = account.CharacterData[CharacterType.TestFreelancer1];
+            }
+
+            // PATCH Make sure testFreelancer1 has default CharacterLoadouts
+            if (testFreelancer1.CharacterComponent.CharacterLoadouts.Count == 0)
+            {
+                testFreelancer1.CharacterComponent.CharacterLoadouts = new List<CharacterLoadout>()
+                {
+                    new CharacterLoadout
+                    (
+                        new CharacterModInfo() { ModForAbility0 = 0, ModForAbility1 = 0, ModForAbility2 = 0, ModForAbility3 = 0, ModForAbility4 = 0 },
+                        new CharacterAbilityVfxSwapInfo() { VfxSwapForAbility0 = 0, VfxSwapForAbility1 = 0, VfxSwapForAbility2 = 0, VfxSwapForAbility3 = 0, VfxSwapForAbility4 = 0 },
+                        "Default",
+                        ModStrictness.AllModes
+                    )
+                };
+                testFreelancer1.CharacterComponent.LastSelectedLoadout = 0;
+            }
+
+            // Check if TestFreelancer1 is missing in CharacterData, if it is add it
+            account.CharacterData.TryGetValue(CharacterType.TestFreelancer2, out PersistedCharacterData testFreelancer2);
+            if (testFreelancer2 == null)
+            {
+                account.CharacterData.TryAdd(CharacterType.TestFreelancer2, new PersistedCharacterData(CharacterType.TestFreelancer2));
+                testFreelancer2 = account.CharacterData[CharacterType.TestFreelancer2];
+            }
+
+            // PATCH Make sure testFreelancer1 has default CharacterLoadouts
+            if (testFreelancer2.CharacterComponent.CharacterLoadouts.Count == 0)
+            {
+                testFreelancer2.CharacterComponent.CharacterLoadouts = new List<CharacterLoadout>()
+                {
+                    new CharacterLoadout
+                    (
+                        new CharacterModInfo() { ModForAbility0 = 0, ModForAbility1 = 0, ModForAbility2 = 0, ModForAbility3 = 0, ModForAbility4 = 0 },
+                        new CharacterAbilityVfxSwapInfo() { VfxSwapForAbility0 = 0, VfxSwapForAbility1 = 0, VfxSwapForAbility2 = 0, VfxSwapForAbility3 = 0, VfxSwapForAbility4 = 0 },
+                        "Default",
+                        ModStrictness.AllModes
+                    )
+                };
+                testFreelancer2.CharacterComponent.LastSelectedLoadout = 0;
+            }
+
             foreach (PersistedCharacterData persistedCharacterData in account.CharacterData.Values)
             {
                 persistedCharacterData.CharacterComponent.UnlockSkinsAndTaunts(persistedCharacterData.CharacterType);

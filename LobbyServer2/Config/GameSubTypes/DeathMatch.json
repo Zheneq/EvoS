@@ -94,9 +94,11 @@
     },
     "RewardBucket": "NoRewards",
     "PersistedStatBucket": "DoNotPersist",
+    "Bans": true,
     "Mods": [
       "AllowPlayingLockedCharacters",
-      "HumansHaveFirstSlots"
+      "HumansHaveFirstSlots",
+      "RankedFreelancerSelection"
     ],
     "GameOverrides": {
       "TurnTimeSpan": "00:00:20"
