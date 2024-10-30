@@ -616,7 +616,9 @@ namespace CentralServer.LobbyServer
                     Send(new ChatNotification
                     {
                         ConsoleMessageType = ConsoleMessageType.SystemMessage,
-                        Text = "Controlling characters is not allowed in this mode. use DeathMatch or Tournament No Draft mode for this, Normal bots are allowed however"
+                        Text = "Controlling multiple characters is not allowed in this mode. "
+                               + "If you want to control multiple characters, please select Deathmatch mode. "
+                               + "Normal bots are allowed, however."
                     });
                     return;
                 }

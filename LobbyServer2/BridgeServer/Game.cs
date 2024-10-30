@@ -1202,7 +1202,10 @@ public abstract class Game
         {
             usedCharacterTypes.UnionWith(botCharacters);
             characterType = AssignRandomCharacterForDraft(player, usedCharacterTypes);
-            if (PhaseSubType == FreelancerResolutionPhaseSubType.PICK_FREELANCER1 || PhaseSubType == FreelancerResolutionPhaseSubType.PICK_FREELANCER2)
+            if (PhaseSubType == FreelancerResolutionPhaseSubType.PICK_BANS1
+                || PhaseSubType == FreelancerResolutionPhaseSubType.PICK_BANS2
+                || PhaseSubType == FreelancerResolutionPhaseSubType.PICK_FREELANCER1
+                || PhaseSubType == FreelancerResolutionPhaseSubType.PICK_FREELANCER2)
             {
                 int index = RankedResolutionPhaseData.UnselectedPlayerStates.FindIndex(p => p.PlayerId == player.PlayerId);
                 if (index < 0)
@@ -1215,6 +1218,7 @@ public abstract class Game
                 state.Intention = characterType;
                 RankedResolutionPhaseData.UnselectedPlayerStates[index] = state;
                 botCharacters.Add(characterType);
+                // TODO Update bot name when it picks a character to play (not to ban)
             }
         }
 #if DEBUG
