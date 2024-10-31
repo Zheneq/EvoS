@@ -7,6 +7,7 @@ using CentralServer.LobbyServer.Session;
 using EvoS.Framework.Network.NetworkMessages;
 using EvoS.Framework.Network.Static;
 using log4net;
+using static MoreLinq.Extensions.ShuffleExtension;
 
 namespace CentralServer.LobbyServer.Matchmaking
 {
@@ -226,7 +227,7 @@ namespace CentralServer.LobbyServer.Matchmaking
                 log.Info($"Failed to create {gameType} game");
                 return;
             }
-            await game.StartGameAsync(teamA, teamB, gameType, gameSubTypes, subTypeIndex);
+            await game.StartGameAsync(teamA.Shuffle().ToList(), teamB.Shuffle().ToList(), gameType, gameSubTypes, subTypeIndex);
         }
 
         public static void OnGameEnded(LobbyGameInfo gameInfo, LobbyGameSummary gameSummary)
