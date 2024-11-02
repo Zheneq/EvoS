@@ -230,11 +230,11 @@ namespace CentralServer.LobbyServer.Matchmaking
             await game.StartGameAsync(teamA.Shuffle().ToList(), teamB.Shuffle().ToList(), gameType, gameSubTypes, subTypeIndex);
         }
 
-        public static void OnGameEnded(LobbyGameInfo gameInfo, LobbyGameSummary gameSummary)
+        public static void OnGameEnded(LobbyGameInfo gameInfo, LobbyGameSummary gameSummary, GameSubType gameSubType)
         {
             if (Queues.TryGetValue(gameInfo.GameConfig.GameType, out var queue))
             {
-                queue.OnGameEnded(gameInfo, gameSummary);
+                queue.OnGameEnded(gameInfo, gameSummary, gameSubType);
             }
         }
     }

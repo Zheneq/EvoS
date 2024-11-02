@@ -8,32 +8,27 @@ public readonly struct BuildVersionInfo
 {
     private static readonly Regex versionRegex = new(@"^([\w-]+-\d+-\d+)(?:_(\d)+.(\d)+(?:\.(\d+))?(?:-([\w-]+))?)?$");
     
-    public string AtlasVersion { get; }
-    public int Major { get; }
-    public int Minor { get; }
-    public int Patch { get; }
-    public string Branch { get; }
+    public string AtlasVersion { get; } = "UNKNOWN";
+    public int Major { get; } = -1;
+    public int Minor { get; } = -1;
+    public int Patch { get; } = -1;
+    public string Branch { get; } = "UNKNOWN";
             
     public bool IsPatched => Major > 0 || Minor > 0 || Patch > 0;
 
     public BuildVersionInfo(string versionString)
     {
-        Match match = versionRegex.Match(versionString);
-        if (match.Success)
+        if (versionString is not null)
         {
-            AtlasVersion = match.Groups[1].Value;
-            Major = V(match.Groups[2].Value);
-            Minor = V(match.Groups[3].Value);
-            Patch = V(match.Groups[4].Value);
-            Branch = IsPatched ? match.Groups[5].Value : "vanilla";
-        }
-        else
-        {
-            AtlasVersion = "UNKNOWN";
-            Major = -1;
-            Minor = -1;
-            Patch = -1;
-            Branch = "UNKNOWN";
+            Match match = versionRegex.Match(versionString);
+            if (match.Success)
+            {
+                AtlasVersion = match.Groups[1].Value;
+                Major = V(match.Groups[2].Value);
+                Minor = V(match.Groups[3].Value);
+                Patch = V(match.Groups[4].Value);
+                Branch = IsPatched ? match.Groups[5].Value : "vanilla";
+            }
         }
     }
 

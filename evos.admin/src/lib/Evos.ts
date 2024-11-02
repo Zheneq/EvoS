@@ -43,6 +43,7 @@ export interface GroupData {
 
 export interface QueueData {
     type: string;
+    subtype: string;
     groupIds: number[];
 }
 

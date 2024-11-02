@@ -16,6 +16,7 @@ public static class Elo
     public static void OnGameEnded(
         LobbyGameInfo gameInfo,
         LobbyGameSummary gameSummary,
+        GameSubType gameSubType,
         string eloKey, // TODO move eloKey into conf
         MatchmakingConfiguration conf,
         DateTime now,
@@ -26,6 +27,13 @@ public static class Elo
             || gameSummary.GameResult != GameResult.TeamAWon && gameSummary.GameResult != GameResult.TeamBWon
             || gameInfo.GameConfig.GameType != GameType.PvP)
         {
+            return;
+        }
+        
+        if (gameSubType is null
+            || gameSubType.Mods.Contains(GameSubType.SubTypeMods.ControlAllBots))
+        {
+            log.Info($"{gameInfo.GameServerProcessCode} was a fourlancer game, not updating elo");
             return;
         }
         

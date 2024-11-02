@@ -44,7 +44,7 @@ namespace CentralServer.ApiServer
                     .Select(Group.Of)
                     .ToList(),
                 queues = MatchmakingManager.GetQueues()
-                    .Select(Queue.Of)
+                    .SelectMany(Queue.Of)
                     .ToList(),
                 servers = servers
                     .Select(Server.Of)
@@ -82,7 +82,7 @@ namespace CentralServer.ApiServer
                     .Select(Group.OfPlayer)
                     .ToList(),
                 queues = MatchmakingManager.GetQueues()
-                    .Select(Queue.OfPlayers)
+                    .SelectMany(Queue.OfPlayers)
                     .ToList(),
                 servers = servers
                     .Where(s => !s.IsAvailable())
@@ -225,24 +225,36 @@ namespace CentralServer.ApiServer
         public struct Queue
         {
             public string type { get; set; }
+            public string subtype { get; set; }
             public List<long> groupIds { get; set; }
 
-            public static Queue Of(MatchmakingQueue q)
+            public static IEnumerable<Queue> Of(MatchmakingQueue q)
             {
-                return new Queue
-                {
-                    type = q.GameType.ToString(),
-                    groupIds = q.GetQueuedGroupsAsList()
-                };
+                return Of(q, q.GetQueuedGroupsBySubType());
             }
 
-            public static Queue OfPlayers(MatchmakingQueue q)
+            public static IEnumerable<Queue> OfPlayers(MatchmakingQueue q)
             {
-                return new Queue
-                {
-                    type = q.GameType.ToString(),
-                    groupIds = q.GetQueuedPlayersAsList()
-                };
+                return Of(q, q.GetQueuedPlayersBySubType());
+            }
+
+            private static IEnumerable<Queue> Of(MatchmakingQueue q, List<List<long>> groupsBySubType)
+            {
+                return Enumerable
+                    .Range(0, groupsBySubType.Count)
+                    .Zip(groupsBySubType)
+                    .Where(idAndGroups => idAndGroups.Second.Count > 0)
+                    .Select(
+                        idAndGroups =>
+                        {
+                            GameSubType subtype = q.MatchmakingQueueInfo.GameConfig.SubTypes[idAndGroups.First];
+                            return new Queue
+                            {
+                                type = q.GameType.ToString(),
+                                subtype = subtype.LocalizedName.Split('@', 2)[0],
+                                groupIds = idAndGroups.Second
+                            };
+                        });
             }
         }
 

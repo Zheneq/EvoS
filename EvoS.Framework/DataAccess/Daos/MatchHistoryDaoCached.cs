@@ -9,17 +9,16 @@ namespace EvoS.Framework.DataAccess.Daos
     public class MatchHistoryDaoCached: MatchHistoryDao
     {
         private readonly MatchHistoryDao dao;
-        private readonly ConcurrentDictionary<long, ConcurrentQueue<PersistedCharacterMatchData>> cache =
-            new ConcurrentDictionary<long, ConcurrentQueue<PersistedCharacterMatchData>>();
-
+        private readonly ConcurrentDictionary<long, ConcurrentQueue<PersistedCharacterMatchData>> cache = new();
         private readonly ConcurrentDictionary<long, bool> cachedAccounts = new();
+        private readonly ConcurrentDictionary<long, object> accountLocks = new();
 
         public MatchHistoryDaoCached(MatchHistoryDao dao)
         {
             this.dao = dao;
         }
 
-        private void Cache(ICollection<MatchHistoryDao.MatchEntry> matchEntries)
+        private void AddToCache(ICollection<MatchHistoryDao.MatchEntry> matchEntries)
         {
             var byAccount = matchEntries.GroupBy(m => m.AccountId);
 
@@ -27,13 +26,13 @@ namespace EvoS.Framework.DataAccess.Daos
             {
                 ConcurrentQueue<PersistedCharacterMatchData> matches = cache
                     .GetOrAdd(accountToMatches.Key, _ => new ConcurrentQueue<PersistedCharacterMatchData>());
-                foreach (MatchHistoryDao.MatchEntry match in accountToMatches)
-                {
-                    matches.Enqueue(match.Data);
-                }
 
                 lock (matches)
                 {
+                    foreach (MatchHistoryDao.MatchEntry match in accountToMatches)
+                    {
+                        matches.Enqueue(match.Data);
+                    }
                     while (matches.Count > MatchHistoryDao.LIMIT)
                     {
                         matches.TryDequeue(out _);
@@ -42,33 +41,44 @@ namespace EvoS.Framework.DataAccess.Daos
             }
         }
 
+        private void OverrideCache(long accountId, List<PersistedCharacterMatchData> matchDataList)
+        {
+            cache[accountId] = new ConcurrentQueue<PersistedCharacterMatchData>(matchDataList.AsEnumerable().Reverse());
+        }
+
         public List<PersistedCharacterMatchData> Find(long accountId)
         {
-            bool hasCachedValue = cache.TryGetValue(accountId, out var cachedMatches);
-            if (cachedAccounts.ContainsKey(accountId))
+            object _lock = accountLocks.GetOrAdd(accountId, _ => new());
+            lock (_lock)
             {
-                return hasCachedValue ? cachedMatches.ToList() : new();
-            }
-
-            List<PersistedCharacterMatchData> dbMatches = dao.Find(accountId);
-            if (!dbMatches.IsNullOrEmpty())
-            {
-                if (hasCachedValue)
+                bool hasCachedValue = cache.TryGetValue(accountId, out var cachedMatches);
+                if (cachedAccounts.ContainsKey(accountId))
                 {
-                    cachedMatches.Clear();
+                    return hasCachedValue ? cachedMatches.Reverse().ToList() : new();
                 }
-                Cache(dbMatches
-                    .Select(d => new MatchHistoryDao.MatchEntry { AccountId = accountId, Data = d})
-                    .ToList());
+
+                List<PersistedCharacterMatchData> dbMatches = dao.Find(accountId);
+                if (!dbMatches.IsNullOrEmpty())
+                {
+                    OverrideCache(accountId, dbMatches);
+                }
+                cachedAccounts[accountId] = true;
+                return dbMatches;
             }
-            cachedAccounts[accountId] = true;
-            return dbMatches;
         }
         
         public void Save(ICollection<MatchHistoryDao.MatchEntry> matchEntries)
         {
+            foreach (long accountId in matchEntries.Select(m => m.AccountId).Distinct())
+            {
+                if (!cachedAccounts.ContainsKey(accountId))
+                {
+                    Find(accountId);
+                }
+            }
+
             dao.Save(matchEntries);
-            Cache(matchEntries);
+            AddToCache(matchEntries);
         }
     }
 }
