@@ -64,7 +64,7 @@
     }
   },
   {
-    "LocalizedName": "Tournament_Draft_Bans@GameWideData", // Add in client patch
+    "LocalizedName": "Tournament_Draft_Bans@GameWideData",
     "GameMapConfigs": [
       {
         "Map": "Skyway_Deathmatch",
@@ -130,7 +130,7 @@
     }
   },
   {
-    "LocalizedName": "Tournament_Draft_NoBans@GameWideData", // Add in client patch
+    "LocalizedName": "Tournament_Draft_NoBans@GameWideData",
     "GameMapConfigs": [
       {
         "Map": "Skyway_Deathmatch",
@@ -196,7 +196,7 @@
     }
   },
   {
-    "LocalizedName": "Tournament_NoDraft@GameWideData", // Add in client patch
+    "LocalizedName": "Tournament_NoDraft@GameWideData",
     "GameMapConfigs": [
       {
         "Map": "Skyway_Deathmatch",
@@ -261,7 +261,7 @@
     }
   },
   {
-    "LocalizedName": "Draft_Bans@GameWideData", // Add in client patch
+    "LocalizedName": "RankedCustom@SubTypes",
     "GameMapConfigs": [
       {
         "Map": "Skyway_Deathmatch",
@@ -327,7 +327,7 @@
     }
   },
   {
-    "LocalizedName": "Draft_NoBans@GameWideData", // Add in client patch
+    "LocalizedName": "Draft_NoBans@GameWideData",
     "GameMapConfigs": [
       {
         "Map": "Skyway_Deathmatch",
