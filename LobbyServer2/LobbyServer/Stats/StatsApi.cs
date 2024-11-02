@@ -96,20 +96,20 @@ namespace CentralServer.LobbyServer.Stats
                 string map = Maps.GetMapName[gameInfo.GameConfig.Map];
                 string gameType = gameInfo.GameConfig.GameType.ToString();
 
-                if (gameInfo.GameConfig.SelectedSubType.Mods != null)
+                GameSubType subType = gameInfo.GameConfig.SelectedSubType;
+                if (subType.Mods != null)
                 {
-                    if (gameInfo.GameConfig.SelectedSubType.Mods.Contains(SubTypeMods.RankedFreelancerSelection)
+                    if (subType.Mods.Contains(SubTypeMods.RankedFreelancerSelection)
                         && gameInfo.GameConfig.GameType == GameType.Custom)
                     {
-                        if (subType.LocalizedName != null && 
-                            (subType.LocalizedName == "Tournament_Draft_Bans@GameWideData"
-                              || subType.LocalizedName == "Tournament_Draft_NoBans@GameWideData")
-                              || subType.LocalizedName == "Tournament_NoDraft@GameWideData")
+                        if (subType.LocalizedName == "Tournament_Draft_Bans@GameWideData"
+                            || subType.LocalizedName == "Tournament_Draft_NoBans@GameWideData"
+                            || subType.LocalizedName == "Tournament_NoDraft@GameWideData")
                         {
                             gameType = "Tournament";
                         }
                     }
-                    if (gameInfo.GameConfig.SelectedSubType.Mods.Contains(SubTypeMods.ControlAllBots)
+                    if (subType.Mods.Contains(SubTypeMods.ControlAllBots)
                         && gameInfo.GameConfig.GameType != GameType.Custom)
                     {
                         gameType = "FourLancer";
