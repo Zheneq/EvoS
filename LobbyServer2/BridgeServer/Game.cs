@@ -1200,14 +1200,12 @@ public abstract class Game
                 LobbyServerPlayerInfo player = GetPlayerInfo(playersInDeck.PlayerId - 1, TeamInfo.TeamPlayerInfo);
                 CharacterType characterType = playersInDeck.Intention;
                 // Let bans be random if they do not select a freelancer
-                if (playersInDeck.Intention == CharacterType.None && 
-                    (PhaseSubType == FreelancerResolutionPhaseSubType.PICK_BANS1 || PhaseSubType == FreelancerResolutionPhaseSubType.PICK_BANS2))
+                if (playersInDeck.Intention == CharacterType.None
+                    && (PhaseSubType == FreelancerResolutionPhaseSubType.PICK_BANS1
+                        || PhaseSubType == FreelancerResolutionPhaseSubType.PICK_BANS2))
                 {
                     // can only use one ban at time , so usedCharacterTypes does not need to be updated here so the value outside foreach can be used
                     characterType = AssignRandomCharacterForDraft(player, usedCharacterTypes);
-                    AddToTeamBanSelection(characterType);
-                    // dont need anything else in this foreach
-                    return;
                 }
                 else if (playersInDeck.Intention == CharacterType.None)
                 {
@@ -1241,7 +1239,7 @@ public abstract class Game
                 }
             }
 
-            // Update any players who have a character selected, but that character is already selected or banned, reset there selection
+            // Update any players who have a character selected, but that character is already selected or banned, reset their selection
             for (int i = 0; i < RankedResolutionPhaseData.UnselectedPlayerStates.Count; i++)
             {
                 RankedResolutionPlayerState player = RankedResolutionPhaseData.UnselectedPlayerStates[i];
