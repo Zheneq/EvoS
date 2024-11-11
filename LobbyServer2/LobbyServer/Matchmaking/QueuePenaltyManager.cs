@@ -19,16 +19,22 @@ public static class QueuePenaltyManager
     
     public static void IssueQueuePenalties(long accountId, Game game)
     {
-        if (!LobbyConfiguration.GetMatchAbandoningPenalty()
-            || game?.GameInfo?.GameConfig is null
-            || game.GameInfo.GameConfig.GameType != GameType.PvP
-            || game.GameInfo.GameResult == GameResult.NoResult)
+        if (!LobbyConfiguration.GetMatchAbandoningPenalty() ||
+            game.GameInfo?.GameConfig is null ||
+            game.GameInfo.GameConfig.GameType != GameType.PvP ||
+            (!game.IsDraft && game.GameInfo.GameResult == GameResult.NoResult))
         {
             return;
         }
 
         lock (game)
         {
+            if (game.IsDraft && game.GameStatus <= GameStatus.Started)
+            {
+                //Left in Draft, punish harder, no leaving Draft cause they dont like the map or the Draft
+                SetQueuePenalty(accountId, GameType.PvP, TimeSpan.FromMinutes(5));
+                return;
+            }
             int replacedWithBotsNum = game.TeamInfo.TeamPlayerInfo.Count(i => i.ReplacedWithBots);
             if (replacedWithBotsNum == game.TeamInfo.TeamPlayerInfo.Count)
             {
@@ -37,12 +43,6 @@ public static class QueuePenaltyManager
             }
             if (replacedWithBotsNum * 2 > game.TeamInfo.TeamPlayerInfo.Count)
             {
-                return;
-            }
-            if (game.IsDraft && game.GameStatus < GameStatus.Started)
-            {
-                //Left in Draft, punish harder, no leaving Draft cause they dont like the map or the Draft
-                SetQueuePenalty(accountId, GameType.PvP, TimeSpan.FromMinutes(10));
                 return;
             }
             if (game.GameStatus != GameStatus.Stopped)
