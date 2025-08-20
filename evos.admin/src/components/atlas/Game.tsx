@@ -1,4 +1,4 @@
-import {GameData, GamePlayerData, PlayerData} from "../../lib/Evos";
+import {GameData, GamePlayerData, PlayerData, Team} from "../../lib/Evos";
 import {Box, Collapse, Slide, Stack, styled, Tooltip, Typography, useTheme} from "@mui/material";
 import {FlexBox} from "../generic/BasicComponents";
 import {mapMiniPic} from "../../lib/Resources";
@@ -29,13 +29,13 @@ const TeamRow = React.forwardRef(({info, isTeamA, playerData}: TeamProps, ref) =
                     key={`teamA_${id}`}
                     characterType={player.characterType}
                     data={playerData.get(player.accountId)}
-                    isTeamA={isTeamA}
+                    team={isTeamA ? Team.TeamA : Team.TeamB}
                 />)}
         </TeamFlexBox>
     )
 });
 
-function Team({caption, info, isTeamA, playerData}: TeamProps) {
+function TeamList({caption, info, isTeamA, playerData}: TeamProps) {
     return (
         <Stack>
             {caption && <Typography variant={'h5'}>{caption}</Typography>}
@@ -45,7 +45,7 @@ function Team({caption, info, isTeamA, playerData}: TeamProps) {
                     <CharacterIcon
                         characterType={p.characterType}
                         data={playerData.get(p.accountId)}
-                        isTeamA={isTeamA}
+                        team={isTeamA ? Team.TeamA : Team.TeamB}
                         rightSkew
                         noTooltip
                     />
@@ -123,8 +123,8 @@ export default function Game({info, playerData, expanded}: Props) {
             </FlexBox>
             <Collapse in={!collapsed}>
                 <FlexBox style={{justifyContent : 'space-around', flexWrap: 'wrap'}} >
-                    <Team {...A} />
-                    <Team {...B} />
+                    <TeamList {...A} />
+                    <TeamList {...B} />
                 </FlexBox>
             </Collapse>
         </Stack>

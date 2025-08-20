@@ -31,7 +31,23 @@ export const StackWrapper = styled(Stack)(({theme}) => ({
     maxWidth: theme.size.basicWidth,
 }));
 
-export function plainAccountLink(accountId: number, text: string, navigate: NavigateFunction) {
+const StyledAccountLink = styled(Link)(({ theme }) => ({
+    color: '#94cef6',
+    cursor: 'pointer',
+    border: 'none',
+    background: 'none',
+    padding: 0,
+    font: 'inherit',
+    '&:hover': {
+        textDecoration: 'underline',
+    },
+}));
+
+export function plainAccountLink(accountId: number, text: string, navigate: NavigateFunction, sx?: any) {
     const uri = `/account/${accountId}`;
-    return <Link component={'button'} onClick={() => navigate(uri)}>{text}</Link>;
+    return (
+        <StyledAccountLink onClick={() => navigate(uri)} sx={sx}>
+            {text}
+        </StyledAccountLink>
+    );
 }

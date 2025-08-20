@@ -128,11 +128,11 @@ namespace CentralServer.ApiServer
 
             log.Info($"MOTD {type} {adminHandle}: [{data.Severity}] {data.Msg.EN}");
             DB.Get().MiscDao.SaveEntry(new MiscDao.ServerMessageEntry
-            {
-                _id = messageType.ToString(),
-                Message = data.Msg,
-                Severity = messageSeverity
-            });
+                {
+                    _id = messageType.ToString(),
+                    Message = data.Msg,
+                    Severity = messageSeverity
+                });
             return Results.Ok();
         }
 
@@ -174,6 +174,38 @@ namespace CentralServer.ApiServer
             }
 
             return Results.Json(PlayerDetails.Of(account));
+        }
+
+        public class BatchUserRequest
+        {
+            public List<long> accountIds { get; set; }
+        }
+
+        public class BatchUserResponse
+        {
+            public List<PlayerDetails> players { get; set; }
+        }
+
+        public static IResult GetUsers([FromBody] BatchUserRequest request)
+        {
+            if (request?.accountIds == null || request.accountIds.Count == 0)
+            {
+                return Results.BadRequest();
+            }
+
+            var response = new BatchUserResponse
+            {
+                players = request
+                    .accountIds
+                    .Select(DB.Get().AccountDao.GetAccount)
+                    .Where(x => x != null)
+                    .Select(PlayerDetails.Of)
+                    .ToList()
+            };
+
+            return response.players.Count > 0 
+                ? Results.Json(response) 
+                : Results.NotFound();
         }
 
         public struct SearchResults
@@ -275,7 +307,7 @@ namespace CentralServer.ApiServer
                 return error;
             }
             log.Info($"API ADMIN MESSAGE by {adminHandle} ({adminAccountId}) " +
-                     $"to {LobbyServerUtils.GetHandle(data.accountId)} ({data.accountId}): {data.description}");
+                $"to {LobbyServerUtils.GetHandle(data.accountId)} ({data.accountId}): {data.description}");
             bool success = AdminManager.Get().SendAdminMessage(data.accountId, adminAccountId, data.description);
             return success ? Results.Ok() : Results.Problem();
         }
@@ -320,11 +352,11 @@ namespace CentralServer.ApiServer
                 return Results.NotFound();
             }
             return Results.Json(new AdminMessagesResponseModel
-            {
-                entries = AdminMessageManager.GetAdminMessages(accountId)
-                    .Select(AdminMessageEntryModel.Of)
-                    .ToList()
-            });
+                {
+                    entries = AdminMessageManager.GetAdminMessages(accountId)
+                        .Select(AdminMessageEntryModel.Of)
+                        .ToList()
+                });
         }
 
         public class AccountIdModel
@@ -339,7 +371,7 @@ namespace CentralServer.ApiServer
                 return error;
             }
             log.Info($"API ADMIN GEN TEMP PW by {adminHandle} ({adminAccountId}) " +
-                     $"to {LobbyServerUtils.GetHandle(data.accountId)} ({data.accountId})");
+                $"to {LobbyServerUtils.GetHandle(data.accountId)} ({data.accountId})");
             string tempPassword = LoginManager.GenerateTempPassword(data.accountId);
             return tempPassword.IsNullOrEmpty()
                 ? Results.Problem()
@@ -376,16 +408,16 @@ namespace CentralServer.ApiServer
             log.Info($"API ISSUE by {adminHandle} ({adminAccountId}): {data.issueFor}");
             string code = Guid.NewGuid().ToString();
             DB.Get().RegistrationCodeDao.Save(new RegistrationCodeDao.RegistrationCodeEntry
-            {
-                Code = code,
-                IssuedAt = DateTime.UtcNow,
-                ExpiresAt = EvosConfiguration.GetRegistrationCodeLifetime().Ticks > 0
-                    ? DateTime.UtcNow.Add(EvosConfiguration.GetRegistrationCodeLifetime())
-                    : DateTime.MaxValue,
-                IssuedBy = adminAccountId,
-                IssuedTo = data.issueFor.Trim().ToLower(),
-                UsedBy = 0
-            });
+                {
+                    Code = code,
+                    IssuedAt = DateTime.UtcNow,
+                    ExpiresAt = EvosConfiguration.GetRegistrationCodeLifetime().Ticks > 0
+                        ? DateTime.UtcNow.Add(EvosConfiguration.GetRegistrationCodeLifetime())
+                        : DateTime.MaxValue,
+                    IssuedBy = adminAccountId,
+                    IssuedTo = data.issueFor.Trim().ToLower(),
+                    UsedBy = 0
+                });
             return Results.Ok(new RegistrationCodeResponseModel { code = code });
         }
 
@@ -447,7 +479,7 @@ namespace CentralServer.ApiServer
             return Results.Ok(new RegistrationCodesResponseModel { entries = entries });
         }
 
-        private static bool ValidateAdmin(
+        public static bool ValidateAdmin(
             ClaimsPrincipal user,
             out IResult error,
             out long adminAccountId,

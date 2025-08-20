@@ -11,6 +11,9 @@ namespace EvoS.Framework.DataAccess.Mongo
             "user_feedback", 
             new CreateIndexModel<UserFeedbackDao.UserFeedback>(Builders<UserFeedbackDao.UserFeedback>.IndexKeys
                 .Ascending(msg => msg.accountId)
+                .Ascending(msg => msg.time)), 
+            new CreateIndexModel<UserFeedbackDao.UserFeedback>(Builders<UserFeedbackDao.UserFeedback>.IndexKeys
+                .Ascending(msg => msg.reportedPlayerAccountId)
                 .Ascending(msg => msg.time)))
         {
         }
@@ -18,7 +21,15 @@ namespace EvoS.Framework.DataAccess.Mongo
         public List<UserFeedbackDao.UserFeedback> Get(long accountId)
         {
             return c.Find(f.Eq(nameof(UserFeedbackDao.UserFeedback.accountId), accountId))
-                .Sort(s.Ascending(nameof(UserFeedbackDao.UserFeedback.time)))
+                .Sort(s.Descending(nameof(UserFeedbackDao.UserFeedback.time)))
+                .Limit(100)
+                .ToList();
+        }
+
+        public List<UserFeedbackDao.UserFeedback> GetReportsAgainst(long accountId)
+        {
+            return c.Find(f.Eq(nameof(UserFeedbackDao.UserFeedback.reportedPlayerAccountId), accountId))
+                .Sort(s.Descending(nameof(UserFeedbackDao.UserFeedback.time)))
                 .Limit(100)
                 .ToList();
         }

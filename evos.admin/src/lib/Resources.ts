@@ -17,6 +17,9 @@ export function playerBanner(type: BannerType, id: number) {
 }
 
 export function characterIcon(characterType: CharacterType) {
+    if (characterType === CharacterType.None || characterType === CharacterType.FemaleWillFill || characterType === CharacterType.PendingWillFill) {
+        return `/img/characters/icons/Default.png`;
+    }
     return `/img/characters/icons/${characterType}.png`;
 }
 

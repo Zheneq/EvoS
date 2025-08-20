@@ -9,6 +9,7 @@ import ProfilePage from "./components/pages/ProfilePage";
 import {colors, createTheme, CssBaseline, Paper, ThemeProvider} from "@mui/material";
 import ProfileSearchPage from "./components/pages/ProfileSearchPage";
 import CodesPage from './components/pages/CodesPage';
+import ChatHistoryPage from "./components/pages/ChatHistoryPage";
 
 const theme = createTheme({
     components: {
@@ -67,6 +68,14 @@ const theme = createTheme({
         teamB: {
             main: colors.red[500],
             dark: colors.red[900],
+        },
+        teamSpectator: {
+            main: colors.yellow[500],
+            dark: colors.yellow[900],
+        },
+        teamOther: {
+            main: colors.grey[500],
+            dark: colors.grey[900],
         }
     }
 });
@@ -108,6 +117,7 @@ function App() {
                         <Route path="/codes" element={page("Codes", <CodesPage/>)}/>
                         <Route path="/account" element={page("Search", <ProfileSearchPage/>)}/>
                         <Route path="/account/:accountId" element={page("Account", <ProfilePage/>)}/>
+                        <Route path="/account/:accountId/chat" element={page("Chat History", <ChatHistoryPage/>)}/>
                     </Routes>
                 </Paper>
             </BrowserRouter>

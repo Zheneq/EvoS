@@ -10,6 +10,11 @@ namespace EvoS.Framework.DataAccess.Mock
             return new List<UserFeedbackDao.UserFeedback>();
         }
 
+        public List<UserFeedbackDao.UserFeedback> GetReportsAgainst(long accountId)
+        {
+            return new List<UserFeedbackDao.UserFeedback>();
+        }
+
         public void Save(UserFeedbackDao.UserFeedback entry)
         {
         }

@@ -105,6 +105,10 @@ export interface SearchResults {
     players: PlayerData[];
 }
 
+export interface SearchResultsTodo {
+    players: PlayerDetails[];
+}
+
 export interface AdminMessage {
     from: number;
     fromHandle: string;
@@ -269,6 +273,13 @@ export function getPlayer(abort: AbortController, authHeader: string, accountId:
         { params: { AccountId: accountId }, headers: { 'Authorization': authHeader }, signal: abort.signal });
 }
 
+export function getPlayers(abort: AbortController, authHeader: string, accountIds: number[]) {
+    return axios.post<SearchResultsTodo>(
+        baseUrl + "/api/admin/player/details",
+        { accountIds: accountIds },
+        { headers: { 'Authorization': authHeader }, signal: abort.signal });
+}
+
 export function pauseQueue(abort: AbortController, authHeader: string, paused: boolean) {
     return axios.put(
         baseUrl + "/api/admin/queue/paused",
@@ -362,4 +373,112 @@ export function reloadProxyConfig(abort: AbortController, authHeader: string) {
         baseUrl + "/api/admin/proxy/reload",
         {},
         { headers: { 'Authorization': authHeader }, signal: abort.signal });
+}
+
+export interface ChatMessage {
+    message: string;
+    senderId: number;
+    senderHandle: string;
+    game: string;
+    time: string;
+    character: CharacterType;
+    team: Team;
+    isMuted: boolean;
+    recipients: number[];
+    blockedRecipients: number[];
+}
+
+export interface ChatHistoryResponse {
+    messages: ChatMessage[];
+}
+
+export enum Team {
+    Invalid = 'Invalid',
+    TeamA = 'TeamA',
+    TeamB = 'TeamB',
+    Objects = 'Objects',
+    Spectator = 'Spectator'
+}
+
+export interface UserFeedback {
+    time: string;
+    context: string;
+    message: string;
+    reason: FeedbackReason;
+    reportedPlayerAccountId: number;
+    reportedPlayerHandle: string;
+}
+
+export interface UserFeedbackResponse {
+    feedback: UserFeedback[];
+}
+
+export enum FeedbackReason {
+    None = 'None',
+    Suggestion = 'Suggestion',
+    Bug = 'Bug',
+    UnsportsmanlikeConduct = 'UnsportsmanlikeConduct',
+    VerbalHarassment = 'VerbalHarassment',
+    LeavingTheGameAFK = 'LeavingTheGameAFK',
+    HateSpeech = 'HateSpeech',
+    IntentionallyFeeding = 'IntentionallyFeeding',
+    SpammingAdvertising = 'SpammingAdvertising',
+    OffensiveName = 'OffensiveName',
+    Other = 'Other',
+    Botting = 'Botting'
+}
+
+export function getChatHistory(
+    abort: AbortController, 
+    authHeader: string, 
+    accountId: number, 
+    after: number, 
+    before: number, 
+    includeBlocked?: boolean, 
+    limit?: number
+) {
+    return axios.get<ChatHistoryResponse>(
+        baseUrl + "/api/admin/moderation/chatHistory",
+        { 
+            params: { 
+                accountId: accountId,
+                after: after,
+                before: before,
+                includeBlocked: includeBlocked,
+                limit: limit
+            }, 
+            headers: { 'Authorization': authHeader }, 
+            signal: abort.signal 
+        }
+    );
+}
+
+export function getSentFeedback(
+    abort: AbortController,
+    authHeader: string,
+    accountId: number
+) {
+    return axios.get<UserFeedbackResponse>(
+        baseUrl + "/api/admin/moderation/sentFeedback",
+        {
+            params: { accountId: accountId },
+            headers: { 'Authorization': authHeader },
+            signal: abort.signal
+        }
+    );
+}
+
+export function getReceivedFeedback(
+    abort: AbortController,
+    authHeader: string,
+    accountId: number
+) {
+    return axios.get<UserFeedbackResponse>(
+        baseUrl + "/api/admin/moderation/receivedFeedback",
+        {
+            params: { accountId: accountId },
+            headers: { 'Authorization': authHeader },
+            signal: abort.signal
+        }
+    );
 }

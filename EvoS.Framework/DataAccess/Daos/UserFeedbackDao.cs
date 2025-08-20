@@ -9,6 +9,7 @@ namespace EvoS.Framework.DataAccess.Daos
     public interface UserFeedbackDao
     {
         List<UserFeedback> Get(long accountId);
+        List<UserFeedbackDao.UserFeedback> GetReportsAgainst(long accountId);
         void Save(UserFeedback entry);
         
         public class UserFeedback

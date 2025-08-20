@@ -60,6 +60,7 @@ public class AdminApiServer : ApiServer
         app.MapPost("/api/admin/proxy/reload", AdminController.ReloadProxyConfig).RequireAuthorization("api_admin");
         app.MapGet("/api/admin/player/find", AdminController.FindUser).RequireAuthorization("api_admin");
         app.MapGet("/api/admin/player/details", AdminController.GetUser).RequireAuthorization("api_admin");
+        app.MapPost("/api/admin/player/details", AdminController.GetUsers).RequireAuthorization("api_admin");
         app.MapPost("/api/admin/player/muted", AdminController.MuteUser).RequireAuthorization("api_admin");
         app.MapPost("/api/admin/player/banned", AdminController.BanUser).RequireAuthorization("api_admin");
         app.MapPost("/api/admin/player/adminMessage", AdminController.SendAdminMessage).RequireAuthorization("api_admin");
@@ -67,6 +68,9 @@ public class AdminApiServer : ApiServer
         app.MapPost("/api/admin/player/generateTempPassword", AdminController.GenerateTempPassword).RequireAuthorization("api_admin");
         app.MapPost("/api/admin/player/registrationCode", AdminController.IssueRegistrationCode).RequireAuthorization("api_admin");
         app.MapGet("/api/admin/player/registrationCode", AdminController.GetRegistrationCodes).RequireAuthorization("api_admin");
+        app.MapGet("/api/admin/moderation/chatHistory", ModerationController.GetChatHistory).RequireAuthorization("api_admin");
+        app.MapGet("/api/admin/moderation/sentFeedback", ModerationController.GetSentFeedback).RequireAuthorization("api_admin");
+        app.MapGet("/api/admin/moderation/receivedFeedback", ModerationController.GetReceivedFeedback).RequireAuthorization("api_admin");
         app.UseAuthorization();
     }
 

@@ -25,12 +25,16 @@ declare module '@mui/material/styles' {
     interface Palette {
         teamA: PaletteColor;
         teamB: PaletteColor;
+        teamSpectator: PaletteColor;
+        teamOther: PaletteColor;
         header: PaletteColor;
     }
 
     interface PaletteOptions {
         teamA?: PaletteColorOptions;
         teamB?: PaletteColorOptions;
+        teamSpectator?: PaletteColorOptions;
+        teamOther?: PaletteColorOptions;
         header?: PaletteColorOptions;
     }
 }

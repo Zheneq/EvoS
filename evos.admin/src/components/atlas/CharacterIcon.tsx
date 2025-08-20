@@ -1,4 +1,4 @@
-import {CharacterType, PlayerData} from "../../lib/Evos";
+import {CharacterType, PlayerData, Team} from "../../lib/Evos";
 import {ButtonBase, Tooltip, useTheme} from "@mui/material";
 import {BgImage} from "../generic/BasicComponents";
 import {characterIcon} from "../../lib/Resources";
@@ -9,24 +9,31 @@ import {useNavigate} from "react-router-dom";
 interface CharacterIconProps {
     characterType: CharacterType;
     data?: PlayerData;
-    isTeamA: boolean;
+    team: Team,
     rightSkew?: boolean;
     noTooltip?: boolean;
+    small?: boolean;
 }
 
-export function CharacterIcon({characterType, data, isTeamA, rightSkew, noTooltip}: CharacterIconProps) {
+export function CharacterIcon({characterType, data, team, rightSkew, noTooltip, small}: CharacterIconProps) {
     const navigate = useNavigate();
     const theme = useTheme();
 
     let transformOuter, transformInner;
-    if (isTeamA || rightSkew) {
+    if (team === Team.TeamA || rightSkew) {
         transformOuter = theme.transform.skewA;
         transformInner = theme.transform.skewB;
     } else {
         transformOuter = theme.transform.skewB;
         transformInner = theme.transform.skewA;
     }
-    const borderColor = isTeamA ? theme.palette.teamA.main : theme.palette.teamB.main;
+    const borderColor = team === Team.TeamA
+        ? theme.palette.teamA.main
+        : team === Team.TeamB
+            ? theme.palette.teamB.main
+            : team === Team.Spectator
+                ? theme.palette.teamSpectator.main
+                : theme.palette.teamOther.main;
     const handle = data?.handle ?? "UNKNOWN";
 
     const handleClick = () => {
@@ -40,8 +47,8 @@ export function CharacterIcon({characterType, data, isTeamA, rightSkew, noToolti
         focusRipple
         onClick={handleClick}
         style={{
-            width: 80,
-            height: 50,
+            width: small ? 40 : 80,
+            height: small ? 25 : 50,
             transform: transformOuter,
             overflow: 'hidden',
             borderColor: borderColor,

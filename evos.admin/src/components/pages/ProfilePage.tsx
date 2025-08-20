@@ -10,6 +10,7 @@ import MuteBanPlayer from "../controls/MuteBanPlayer";
 import {EvosCard, StackWrapper} from "../generic/BasicComponents";
 import AdminMessages from "../controls/AdminMessages";
 import TempPassword from "../controls/TempPassword";
+import {ChatHistory} from "../controls/ChatHistory";
 
 
 export default function ProfilePage() {
@@ -75,6 +76,7 @@ export default function ProfilePage() {
                 <EvosCard variant="outlined">
                     <TempPassword accountId={playerDetails?.player.accountId ?? 0}/>
                 </EvosCard>
+                <ChatHistory accountId={playerDetails?.player.accountId ?? 0}/>
             </StackWrapper>
         </Paper>
     );
