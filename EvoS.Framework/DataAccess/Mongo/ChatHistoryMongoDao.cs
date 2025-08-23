@@ -30,28 +30,54 @@ namespace EvoS.Framework.DataAccess.Mongo
         {
         }
 
-        public List<ChatHistoryDao.Entry> GetRelevantMessages(
+        public List<ChatHistoryDao.Entry> GetRelevantMessagesAfter(
             long accountId,
             bool includeBlocked,
+            bool includeGeneral,
             DateTime afterTime,
-            DateTime beforeTime,
             int limit)
         {
-            var baseCond = f.Or(
-                f.Eq(e => e.sender, accountId),
-                f.AnyEq(e => e.recipients, accountId),
-                f.Eq(e => e.consoleMessageType, ConsoleMessageType.GlobalChat));
-            var cond = includeBlocked
-                ? f.Or(baseCond, f.AnyEq(e => e.blockedRecipients, accountId))
-                : baseCond;
             return c
                 .Find(f.And(
-                    f.Lt(e => e.time, beforeTime),
                     f.Gte(e => e.time, afterTime),
-                    cond))
+                    MakeBaseCondition(accountId, includeBlocked, includeGeneral)
+                ))
                 .Sort(s.Ascending(e => e.time))
                 .Limit(limit)
                 .ToList();
+        }
+
+        public List<ChatHistoryDao.Entry> GetRelevantMessagesBefore(
+            long accountId,
+            bool includeBlocked,
+            bool includeGeneral,
+            DateTime beforeTime,
+            int limit)
+        {
+            List<ChatHistoryDao.Entry> entries = c
+                .Find(f.And(
+                    f.Lte(e => e.time, beforeTime),
+                    MakeBaseCondition(accountId, includeBlocked, includeGeneral)
+                ))
+                .Sort(s.Descending(e => e.time))
+                .Limit(limit)
+                .ToList();
+            entries.Reverse();
+            return entries;
+        }
+
+        private static FilterDefinition<ChatHistoryDao.Entry> MakeBaseCondition(long accountId, bool includeBlocked, bool includeGeneral)
+        {
+            var cond = f.Or(
+                f.Eq(e => e.sender, accountId),
+                f.AnyEq(e => e.recipients, accountId));
+            cond = includeBlocked
+                ? f.Or(cond, f.AnyEq(e => e.blockedRecipients, accountId))
+                : cond;
+            cond = includeGeneral
+                ? f.Or(cond, f.Eq(e => e.consoleMessageType, ConsoleMessageType.GlobalChat))
+                : cond;
+            return cond;
         }
 
         public void Save(ChatHistoryDao.Entry entry)

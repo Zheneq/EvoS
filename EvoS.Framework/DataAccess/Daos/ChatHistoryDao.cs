@@ -10,10 +10,16 @@ namespace EvoS.Framework.DataAccess.Daos
 {
     public interface ChatHistoryDao
     {
-        List<Entry> GetRelevantMessages(
+        List<Entry> GetRelevantMessagesAfter( // TODO UNITE THEM
             long accountId,
             bool includeBlocked,
+            bool includeGeneral,
             DateTime afterTime,
+            int limit);
+        List<Entry> GetRelevantMessagesBefore(
+            long accountId,
+            bool includeBlocked,
+            bool includeGeneral,
             DateTime beforeTime,
             int limit);
         void Save(Entry entry);

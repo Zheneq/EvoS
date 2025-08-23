@@ -1,5 +1,16 @@
 import React, {useEffect, useState} from 'react';
-import {Box, CircularProgress, Table, TableBody, TableCell, TableHead, TableRow, Typography} from '@mui/material';
+import {
+    Box,
+    CircularProgress,
+    FormControlLabel,
+    Switch,
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableRow,
+    Typography
+} from '@mui/material';
 import {LocalizationProvider} from '@mui/x-date-pickers/LocalizationProvider';
 import {AdapterDayjs} from '@mui/x-date-pickers/AdapterDayjs';
 import {DateTimePicker} from '@mui/x-date-pickers/DateTimePicker';
@@ -28,8 +39,16 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({accountId}: ChatHistory
         const startParam = searchParams.get('start');
         return startParam ? dayjs(parseInt(startParam) * 1000) : defaultStart;
     });
-    const [isBefore, setIsBefore] = useState(true);
-    const [isWithGeneralChat, setIsWithGeneralChat] = useState(true);
+    const [isBefore, setIsBefore] = useState(() => {
+        const beforeParam = searchParams.get('before');
+        return beforeParam === null ? true : beforeParam === 'true';
+    });
+
+    const [isWithGeneralChat, setIsWithGeneralChat] = useState(() => {
+        const generalChatParam = searchParams.get('generalChat');
+        return generalChatParam === null ? true : generalChatParam === 'true';
+    });
+
 
     const [error, setError] = useState<EvosError>();
     const authHeader = useAuthHeader()();
@@ -42,6 +61,22 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({accountId}: ChatHistory
             newParams.set('start', Math.floor(newValue.unix()).toString());
             setSearchParams(newParams);
         }
+    };
+
+    const handleBeforeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const newValue = event.target.checked;
+        setIsBefore(newValue);
+        const newParams = new URLSearchParams(searchParams);
+        newParams.set('before', newValue.toString());
+        setSearchParams(newParams);
+    };
+
+    const handleGeneralChatChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const newValue = event.target.checked;
+        setIsWithGeneralChat(newValue);
+        const newParams = new URLSearchParams(searchParams);
+        newParams.set('generalChat', newValue.toString());
+        setSearchParams(newParams);
     };
 
     useEffect(() => {
@@ -104,6 +139,27 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({accountId}: ChatHistory
                         slotProps={{textField: {size: 'small'}}}
                     />
                 </LocalizationProvider>
+                <FormControlLabel
+                    control={
+                        <Switch
+                            checked={isBefore}
+                            onChange={handleBeforeChange}
+                            size="small"
+                        />
+                    }
+                    label="Show messages before date"
+                />
+                <FormControlLabel
+                    control={
+                        <Switch
+                            checked={isWithGeneralChat}
+                            onChange={handleGeneralChatChange}
+                            size="small"
+                        />
+                    }
+                    label="Include general chat"
+                />
+
             </Box>
 
             { loading &&
