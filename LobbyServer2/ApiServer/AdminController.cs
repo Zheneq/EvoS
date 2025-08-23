@@ -181,11 +181,6 @@ namespace CentralServer.ApiServer
             public List<long> accountIds { get; set; }
         }
 
-        public class BatchUserResponse
-        {
-            public List<PlayerDetails> players { get; set; }
-        }
-
         public static IResult GetUsers([FromBody] BatchUserRequest request)
         {
             if (request?.accountIds == null || request.accountIds.Count == 0)
@@ -193,13 +188,13 @@ namespace CentralServer.ApiServer
                 return Results.BadRequest();
             }
 
-            var response = new BatchUserResponse
+            var response = new SearchResults
             {
                 players = request
                     .accountIds
                     .Select(DB.Get().AccountDao.GetAccount)
                     .Where(x => x != null)
-                    .Select(PlayerDetails.Of)
+                    .Select(StatusController.Player.Of)
                     .ToList()
             };
 

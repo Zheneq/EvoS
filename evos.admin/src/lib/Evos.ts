@@ -105,10 +105,6 @@ export interface SearchResults {
     players: PlayerData[];
 }
 
-export interface SearchResultsTodo {
-    players: PlayerDetails[];
-}
-
 export interface AdminMessage {
     from: number;
     fromHandle: string;
@@ -274,7 +270,7 @@ export function getPlayer(abort: AbortController, authHeader: string, accountId:
 }
 
 export function getPlayers(abort: AbortController, authHeader: string, accountIds: number[]) {
-    return axios.post<SearchResultsTodo>(
+    return axios.post<SearchResults>(
         baseUrl + "/api/admin/player/details",
         { accountIds: accountIds },
         { headers: { 'Authorization': authHeader }, signal: abort.signal });
@@ -386,6 +382,7 @@ export interface ChatMessage {
     isMuted: boolean;
     recipients: number[];
     blockedRecipients: number[];
+    type: ChatType;
 }
 
 export interface ChatHistoryResponse {
@@ -398,6 +395,22 @@ export enum Team {
     TeamB = 'TeamB',
     Objects = 'Objects',
     Spectator = 'Spectator'
+}
+
+export enum ChatType {
+    GlobalChat = 'GlobalChat',
+    GameChat = 'GameChat',
+    TeamChat = 'TeamChat',
+    GroupChat = 'GroupChat',
+    WhisperChat = 'WhisperChat',
+    CombatLog = 'CombatLog',
+    SystemMessage = 'SystemMessage',
+    Error = 'Error',
+    Exception = 'Exception',
+    BroadcastMessage = 'BroadcastMessage',
+    PingChat = 'PingChat',
+    ScriptedChat = 'ScriptedChat',
+    NUM_VALUES = 'NUM_VALUES'
 }
 
 export interface UserFeedback {
@@ -432,9 +445,10 @@ export function getChatHistory(
     abort: AbortController, 
     authHeader: string, 
     accountId: number, 
-    after: number, 
-    before: number, 
-    includeBlocked?: boolean, 
+    date: number,
+    before: boolean,
+    includeBlocked?: boolean,
+    includeGeneral?: boolean,
     limit?: number
 ) {
     return axios.get<ChatHistoryResponse>(
@@ -442,9 +456,10 @@ export function getChatHistory(
         { 
             params: { 
                 accountId: accountId,
-                after: after,
-                before: before,
+                after: before ? undefined : date,
+                before: before ? date : undefined,
                 includeBlocked: includeBlocked,
+                includeGeneral: includeGeneral,
                 limit: limit
             }, 
             headers: { 'Authorization': authHeader }, 

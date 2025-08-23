@@ -1,17 +1,5 @@
 import React, {useEffect, useState} from 'react';
-import {
-    Box,
-    CircularProgress,
-    FormControlLabel,
-    Switch,
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableRow,
-    TextField,
-    Typography
-} from '@mui/material';
+import {Box, CircularProgress, Table, TableBody, TableCell, TableHead, TableRow, Typography} from '@mui/material';
 import {LocalizationProvider} from '@mui/x-date-pickers/LocalizationProvider';
 import {AdapterDayjs} from '@mui/x-date-pickers/AdapterDayjs';
 import {DateTimePicker} from '@mui/x-date-pickers/DateTimePicker';
@@ -19,9 +7,9 @@ import dayjs from 'dayjs';
 import {CharacterType, ChatMessage, formatDate, getChatHistory, getPlayers, PlayerData} from "../../lib/Evos";
 import {useAuthHeader} from "react-auth-kit";
 import {EvosError, processError} from "../../lib/Error";
-import {useNavigate} from "react-router-dom";
+import {useNavigate, useSearchParams} from "react-router-dom";
 import ErrorDialog from "../generic/ErrorDialog";
-import {EvosCard, FlexBox, plainAccountLink} from "../generic/BasicComponents";
+import {FlexBox, plainAccountLink} from "../generic/BasicComponents";
 import {CharacterIcon} from "../atlas/CharacterIcon";
 
 interface ChatHistoryProps {
@@ -29,17 +17,32 @@ interface ChatHistoryProps {
 }
 
 export const ChatHistory: React.FC<ChatHistoryProps> = ({accountId}: ChatHistoryProps) => {
+    const [searchParams, setSearchParams] = useSearchParams();
     const [messages, setMessages] = useState<ChatMessage[]>([]);
-    const [players, setPlayers] = useState<Map<number, PlayerData>>(new Map()); // TODO is it needed?
+    const [players, setPlayers] = useState<Map<number, PlayerData>>(new Map());
     const [loading, setLoading] = useState(false);
-    const [includeBlocked, setIncludeBlocked] = useState(false);
-    const [limit, setLimit] = useState(100);
-    const [startDate, setStartDate] = useState(dayjs().subtract(7, 'day'));
-    const [endDate, setEndDate] = useState(dayjs());
-    
+
+    const defaultStart = dayjs().subtract(1, 'hour');
+
+    const [date, setDate] = useState(() => {
+        const startParam = searchParams.get('start');
+        return startParam ? dayjs(parseInt(startParam) * 1000) : defaultStart;
+    });
+    const [isBefore, setIsBefore] = useState(true);
+    const [isWithGeneralChat, setIsWithGeneralChat] = useState(true);
+
     const [error, setError] = useState<EvosError>();
     const authHeader = useAuthHeader()();
     const navigate = useNavigate();
+
+    const handleDateChange = (newValue: dayjs.Dayjs | null) => {
+        if (newValue) {
+            setDate(newValue);
+            const newParams = new URLSearchParams(searchParams);
+            newParams.set('start', Math.floor(newValue.unix()).toString());
+            setSearchParams(newParams);
+        }
+    };
 
     useEffect(() => {
         if (accountId === 0) {
@@ -51,10 +54,9 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({accountId}: ChatHistory
 
         const abort = new AbortController();
         
-        const startTimestamp = Math.floor(startDate.unix());
-        const endTimestamp = Math.floor(endDate.unix());
+        const timestamp = Math.floor(date.unix());
 
-        getChatHistory(abort, authHeader, accountId, startTimestamp, endTimestamp, includeBlocked, limit)
+        getChatHistory(abort, authHeader, accountId, timestamp, isBefore, true, isWithGeneralChat)
             .then((resp) => {
                 setMessages(resp.data.messages);
 
@@ -67,7 +69,7 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({accountId}: ChatHistory
             })
             .then((playersResp) => {
                 const playersMap = new Map(
-                    playersResp.data.players.map(player => [player.player.accountId, player.player])
+                    playersResp.data.players.map(player => [player.accountId, player])
                 );
                 setPlayers(playersMap);
             })
@@ -75,56 +77,34 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({accountId}: ChatHistory
             .finally(() => setLoading(false));
 
         return () => abort.abort();
-    }, [accountId, authHeader, includeBlocked, limit, startDate, endDate, navigate]);
+    }, [accountId, authHeader, date, isBefore, isWithGeneralChat, navigate]);
 
     function getBackgroundColor(msg: ChatMessage) {
-        return msg.senderId === accountId
-            ? msg.recipients.length === 0 && msg.blockedRecipients.length === 0
-                ? 'rgba(255, 255, 0, 0.1)'
-                : 'rgba(0, 255, 0, 0.1)'
-            : msg.recipients.length === 0 && msg.blockedRecipients.length === 0
+        return msg.recipients.length === 0 && msg.blockedRecipients.length === 0
                 ? 'rgba(255, 0, 0, 0.1)'
-                : undefined;
+                : accountId in msg.blockedRecipients
+                        ? 'rgba(0, 0, 0, 1)'
+                        : undefined;
+    }
+
+    function getTextColor(msg: ChatMessage) {
+        return msg.senderId === accountId ? 'white' : 'grey.400'
     }
 
     return (
         <FlexBox style={{ flexDirection: 'column' }}>
             { error && <ErrorDialog error={error} onDismiss={() => setError(undefined)} /> }
-            <EvosCard variant="outlined">
-                <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
-                    <LocalizationProvider dateAdapter={AdapterDayjs}>
-                        <DateTimePicker
-                            label="Start Date"
-                            value={startDate}
-                            onChange={(newValue) => newValue && setStartDate(newValue)}
-                            slotProps={{textField: {size: 'small'}}}
-                        />
-                        <DateTimePicker
-                            label="End Date"
-                            value={endDate}
-                            onChange={(newValue) => newValue && setEndDate(newValue)}
-                            slotProps={{ textField: { size: 'small' } }}
-                        />
-                    </LocalizationProvider>
-                    <TextField
-                        type="number"
-                        label="Message Limit"
-                        value={limit}
-                        onChange={(e) => setLimit(Number(e.target.value))}
-                        slotProps={{htmlInput: {min: 1, max: 1000}}}
-                        size="small"
+
+            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
+                <LocalizationProvider dateAdapter={AdapterDayjs}>
+                    <DateTimePicker
+                        label="Start Date"
+                        value={date}
+                        onChange={handleDateChange}
+                        slotProps={{textField: {size: 'small'}}}
                     />
-                    <FormControlLabel
-                        control={
-                            <Switch
-                                checked={includeBlocked}
-                                onChange={(e) => setIncludeBlocked(e.target.checked)}
-                            />
-                        }
-                        label="Include Blocked Messages"
-                    />
-                </Box>
-            </EvosCard>
+                </LocalizationProvider>
+            </Box>
 
             { loading &&
                 <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
@@ -158,7 +138,7 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({accountId}: ChatHistory
                                     key={index}
                                     sx={{
                                         '&:last-child td, &:last-child th': { border: 0 },
-                                        backgroundColor: getBackgroundColor(msg),
+                                        backgroundColor: getBackgroundColor(msg)
                                     }}
                                 >
                                     <TableCell sx={{fontSize: "0.6em"}}>{formatDate(msg.time)}</TableCell>
@@ -171,11 +151,29 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({accountId}: ChatHistory
                                             noTooltip
                                         />
                                     }</TableCell>
-                                    <TableCell>{plainAccountLink(msg.senderId, msg.senderHandle, navigate)}</TableCell>
-                                    <TableCell>{msg.message}</TableCell>
+                                    <TableCell>{
+                                        plainAccountLink(
+                                            msg.senderId,
+                                            msg.senderHandle,
+                                            navigate,
+                                            msg.isMuted ? {textDecorationLine: "strikethrough"} : {}
+                                        )
+                                    }</TableCell>
+                                    <TableCell sx={{color: getTextColor(msg)}}>{msg.message}</TableCell>
                                     <TableCell sx={{fontSize: "0.8em"}}>{[
-                                        ...msg.recipients.map(it => plainAccountLink(it, players.get(it)?.handle ?? "UNKNOWN", navigate)),
-                                        ...msg.blockedRecipients.map(it => plainAccountLink(it, players.get(it)?.handle ?? "UNKNOWN", navigate, {textDecorationLine: "strikethrough"})),
+                                        ...msg.recipients.map(it =>
+                                            plainAccountLink(
+                                                it,
+                                                players.get(it)?.handle ?? "UNKNOWN",
+                                                navigate
+                                            )),
+                                        ...msg.blockedRecipients.map(it =>
+                                            plainAccountLink(
+                                                it,
+                                                players.get(it)?.handle ?? "UNKNOWN",
+                                                navigate,
+                                                {textDecorationLine: "strikethrough"}
+                                            )),
                                     ].map((element, index, array) => (
                                         <React.Fragment key={index}>
                                             {element}

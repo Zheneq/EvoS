@@ -28,7 +28,7 @@ public static class ModerationController
         public bool IsMuted { get; set; }
         public List<long> Recipients { get; set; }
         public List<long> BlockedRecipients { get; set; }
-
+        public string Type { get; set; }
 
         public static ChatMessageModel From(ChatHistoryDao.Entry entry)
         {
@@ -43,7 +43,8 @@ public static class ModerationController
                 Team = entry.senderTeam.ToString(),
                 IsMuted = entry.isMuted,
                 Recipients = entry.recipients,
-                BlockedRecipients = entry.blockedRecipients
+                BlockedRecipients = entry.blockedRecipients,
+                Type = entry.consoleMessageType.ToString()
             };
         }
     }
@@ -55,9 +56,10 @@ public static class ModerationController
 
     public static IResult GetChatHistory(
         long accountId,
-        long after,
-        long before,
+        long? after,
+        long? before,
         bool? includeBlocked,
+        bool? includeGeneral,
         int? limit,
         ClaimsPrincipal user)
     {
@@ -66,21 +68,38 @@ public static class ModerationController
             return error;
         }
 
-        if (before <= after)
+        if (before is null == after is null)
         {
-            return Results.BadRequest(new { message = "Parameter 'before' must be greater than 'after'" });
+            return Results.BadRequest(new { message = "Either specify 'before' or 'after'" });
         }
-
-        var afterTime = DateTimeOffset.FromUnixTimeSeconds(after).UtcDateTime;
-        var beforeTime = DateTimeOffset.FromUnixTimeSeconds(before).UtcDateTime;
         
-        var messages = DB.Get().ChatHistoryDao.GetRelevantMessages(
-            accountId,
-            includeBlocked ?? false,
-            afterTime,
-            beforeTime,
-            limit ?? 100
-        );
+        bool finalIncludeBlocked = includeBlocked ?? false;
+        bool finalIncludeGeneral = includeGeneral ?? false;
+        int finalLimit = limit ?? 100;
+
+        List<ChatHistoryDao.Entry> messages;
+        if (after is not null)
+        {
+            var afterTime = DateTimeOffset.FromUnixTimeSeconds((long)after).UtcDateTime;
+            messages = DB.Get().ChatHistoryDao.GetRelevantMessagesAfter(
+                accountId,
+                finalIncludeBlocked,
+                finalIncludeGeneral,
+                afterTime,
+                finalLimit
+            );
+        }
+        else
+        {
+            var beforeTime = DateTimeOffset.FromUnixTimeSeconds((long)before).UtcDateTime;
+            messages = DB.Get().ChatHistoryDao.GetRelevantMessagesBefore(
+                accountId,
+                finalIncludeBlocked,
+                finalIncludeGeneral,
+                beforeTime,
+                finalLimit
+            );
+        }
         
         return Results.Ok(
             new ChatHistoryResponseModel
