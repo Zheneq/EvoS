@@ -36,18 +36,21 @@ interface ChatHistoryProps {
     accountId: number;
 }
 
+const LIMIT = 50;
+
 export const ChatHistory: React.FC<ChatHistoryProps> = ({accountId}: ChatHistoryProps) => {
     const [searchParams, setSearchParams] = useSearchParams();
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [players, setPlayers] = useState<Map<number, PlayerData>>(new Map());
     const [loading, setLoading] = useState(false);
 
-    const defaultStart = dayjs().subtract(1, 'hour');
+    const defaultTs = dayjs();
 
     const [date, setDate] = useState(() => {
-        const startParam = searchParams.get('start');
-        return startParam ? dayjs(parseInt(startParam) * 1000) : defaultStart;
+        const tsParam = searchParams.get('ts');
+        return tsParam ? dayjs(parseInt(tsParam) * 1000) : defaultTs;
     });
+
     const [isBefore, setIsBefore] = useState(() => {
         const beforeParam = searchParams.get('before');
         return beforeParam === null ? true : beforeParam === 'true';
@@ -58,7 +61,6 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({accountId}: ChatHistory
         return generalChatParam === null ? true : generalChatParam === 'true';
     });
 
-
     const [error, setError] = useState<EvosError>();
     const authHeader = useAuthHeader()();
     const navigate = useNavigate();
@@ -67,7 +69,7 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({accountId}: ChatHistory
         if (newValue) {
             setDate(newValue);
             const newParams = new URLSearchParams(searchParams);
-            newParams.set('start', Math.floor(newValue.unix()).toString());
+            newParams.set('ts', Math.floor(newValue.unix()).toString());
             setSearchParams(newParams);
         }
     };
@@ -94,7 +96,7 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({accountId}: ChatHistory
             setDate(oldestMessageTime);
             setIsBefore(true);
             const newParams = new URLSearchParams(searchParams);
-            newParams.set('start', Math.floor(oldestMessageTime.unix()).toString());
+            newParams.set('ts', Math.floor(oldestMessageTime.unix()).toString());
             setSearchParams(newParams);
         }
     };
@@ -107,7 +109,7 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({accountId}: ChatHistory
             setDate(newestMessageTime);
             setIsBefore(false);
             const newParams = new URLSearchParams(searchParams);
-            newParams.set('start', Math.floor(newestMessageTime.unix()).toString());
+            newParams.set('ts', Math.floor(newestMessageTime.unix()).toString());
             setSearchParams(newParams);
         }
     };
@@ -120,11 +122,17 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({accountId}: ChatHistory
 
         setLoading(true);
 
+        const newParams = new URLSearchParams(searchParams);
+        newParams.set('before', isBefore.toString());
+        newParams.set('generalChat', isWithGeneralChat.toString());
+        newParams.set('ts', Math.floor(date.unix()).toString());
+        setSearchParams(newParams);
+
         const abort = new AbortController();
         
         const timestamp = Math.floor(date.unix());
 
-        getChatHistory(abort, authHeader, accountId, timestamp, isBefore, true, isWithGeneralChat)
+        getChatHistory(abort, authHeader, accountId, timestamp, isBefore, true, isWithGeneralChat, LIMIT)
             .then((resp) => {
                 setMessages(resp.data.messages);
 
@@ -145,7 +153,7 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({accountId}: ChatHistory
             .finally(() => setLoading(false));
 
         return () => abort.abort();
-    }, [accountId, authHeader, date, isBefore, isWithGeneralChat, navigate]);
+    }, [accountId, authHeader, date, isBefore, isWithGeneralChat, navigate, searchParams, setSearchParams]);
 
     function getBackgroundColor(msg: ChatMessage) {
         return chatTypeColors.get(msg.type) ?? 'rgba(0,0,0,0)';
@@ -155,19 +163,30 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({accountId}: ChatHistory
         return msg.senderId === accountId ? 'white' : 'grey.400'
     }
 
-    return (
-        <FlexBox style={{ flexDirection: 'column' }}>
-            { error && <ErrorDialog error={error} onDismiss={() => setError(undefined)} /> }
+    function renderNavigation() {
+        return <Box sx={{display: 'flex', justifyContent: 'center', gap: 2, my: 2}}>
+            <Button
+                variant="contained"
+                onClick={handleBackward}
+                disabled={loading || messages.length === 0}
+            >
+                ← Older
+            </Button>
+            <Button
+                variant="contained"
+                onClick={handleForward}
+                disabled={loading || messages.length === 0}
+            >
+                Newer →
+            </Button>
+        </Box>;
+    }
 
-            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
-                <LocalizationProvider dateAdapter={AdapterDayjs}>
-                    <DateTimePicker
-                        label="Start Date"
-                        value={date}
-                        onChange={handleDateChange}
-                        slotProps={{textField: {size: 'small'}}}
-                    />
-                </LocalizationProvider>
+    return (
+        <FlexBox style={{flexDirection: 'column'}}>
+            {error && <ErrorDialog error={error} onDismiss={() => setError(undefined)}/>}
+
+            <Box sx={{display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center'}}>
                 <FormControlLabel
                     control={
                         <Switch
@@ -176,8 +195,16 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({accountId}: ChatHistory
                             size="small"
                         />
                     }
-                    label="Show messages before date"
+                    label={isBefore ? "Showing messages before" : "Showing messages after"}
                 />
+                <LocalizationProvider dateAdapter={AdapterDayjs}>
+                    <DateTimePicker
+                        label="Date"
+                        value={date}
+                        onChange={handleDateChange}
+                        slotProps={{textField: {size: 'small'}}}
+                    />
+                </LocalizationProvider>
                 <FormControlLabel
                     control={
                         <Switch
@@ -190,31 +217,16 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({accountId}: ChatHistory
                 />
 
             </Box>
-            <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2, my: 2 }}>
-                <Button
-                    variant="contained"
-                    onClick={handleBackward}
-                    disabled={loading || messages.length === 0}
-                >
-                    ← Older
-                </Button>
-                <Button
-                    variant="contained"
-                    onClick={handleForward}
-                    disabled={loading || messages.length === 0}
-                >
-                    Newer →
-                </Button>
-            </Box>
+            {renderNavigation()}
 
-            { loading &&
+            {loading &&
                 <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
                     <CircularProgress/>
                 </Box>
             }
 
-            { !loading &&
-                <Box style={{ margin: "0 auto" }}>
+            {!loading &&
+                <Box style={{margin: "0 auto"}}>
                     <Table
                         size="small"
                         sx={{
@@ -238,12 +250,14 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({accountId}: ChatHistory
                                 <TableRow
                                     key={index}
                                     sx={{
-                                        '&:last-child td, &:last-child th': { border: 0 },
+                                        '&:last-child td, &:last-child th': {border: 0},
                                         backgroundColor: getBackgroundColor(msg)
                                     }}
+                                    title={msg.type}
                                 >
                                     <TableCell sx={{fontSize: "0.6em"}}>{formatDate(msg.time)}</TableCell>
                                     <TableCell>{
+                                        msg.game !== null &&
                                         msg.character !== CharacterType.None &&
                                         <CharacterIcon
                                             characterType={msg.character}
@@ -300,6 +314,7 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({accountId}: ChatHistory
                     No messages found
                 </Typography>
             )}
+            {!loading && messages.length > 0 && renderNavigation()}
         </FlexBox>
     );
 };

@@ -76,7 +76,6 @@ export default function ProfilePage() {
                 <EvosCard variant="outlined">
                     <TempPassword accountId={playerDetails?.player.accountId ?? 0}/>
                 </EvosCard>
-                <ChatHistory accountId={playerDetails?.player.accountId ?? 0}/>
             </StackWrapper>
         </Paper>
     );
