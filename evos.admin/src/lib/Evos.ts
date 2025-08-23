@@ -413,6 +413,22 @@ export enum ChatType {
     NUM_VALUES = 'NUM_VALUES'
 }
 
+export const chatTypeColors = new Map<ChatType, string>([
+    [ChatType.GlobalChat, '#505050'],
+    [ChatType.GameChat, '#655a01'],
+    [ChatType.TeamChat, '#04014c'],
+    [ChatType.GroupChat, '#146700'],
+    [ChatType.WhisperChat, '#5a015a'],
+    [ChatType.CombatLog, '#006053'],
+    [ChatType.SystemMessage, '#006053'],
+    [ChatType.Error, '#006053'],
+    [ChatType.Exception, '#006053'],
+    [ChatType.BroadcastMessage, '#006053'],
+    [ChatType.PingChat, '#006053'],
+    [ChatType.ScriptedChat, '#006053'],
+]);
+
+
 export interface UserFeedback {
     time: string;
     context: string;

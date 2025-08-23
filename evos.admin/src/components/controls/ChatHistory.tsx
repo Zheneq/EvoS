@@ -16,7 +16,15 @@ import {LocalizationProvider} from '@mui/x-date-pickers/LocalizationProvider';
 import {AdapterDayjs} from '@mui/x-date-pickers/AdapterDayjs';
 import {DateTimePicker} from '@mui/x-date-pickers/DateTimePicker';
 import dayjs from 'dayjs';
-import {CharacterType, ChatMessage, formatDate, getChatHistory, getPlayers, PlayerData} from "../../lib/Evos";
+import {
+    CharacterType,
+    ChatMessage,
+    chatTypeColors,
+    formatDate,
+    getChatHistory,
+    getPlayers,
+    PlayerData
+} from "../../lib/Evos";
 import {useAuthHeader} from "react-auth-kit";
 import {EvosError, processError} from "../../lib/Error";
 import {useNavigate, useSearchParams} from "react-router-dom";
@@ -140,11 +148,7 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({accountId}: ChatHistory
     }, [accountId, authHeader, date, isBefore, isWithGeneralChat, navigate]);
 
     function getBackgroundColor(msg: ChatMessage) {
-        return msg.recipients.length === 0 && msg.blockedRecipients.length === 0
-                ? 'rgba(255, 0, 0, 0.1)'
-                : accountId in msg.blockedRecipients
-                        ? 'rgba(0, 0, 0, 1)'
-                        : undefined;
+        return chatTypeColors.get(msg.type) ?? 'rgba(0,0,0,0)';
     }
 
     function getTextColor(msg: ChatMessage) {
@@ -256,7 +260,12 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({accountId}: ChatHistory
                                             msg.isMuted ? {textDecorationLine: "strikethrough"} : {}
                                         )
                                     }</TableCell>
-                                    <TableCell sx={{color: getTextColor(msg)}}>{msg.message}</TableCell>
+                                    <TableCell sx={{
+                                        color: getTextColor(msg),
+                                        textDecorationLine: msg.isMuted || accountId in msg.blockedRecipients ? "strikethrough" : "none"
+                                    }}>
+                                        {msg.message}
+                                    </TableCell>
                                     <TableCell sx={{fontSize: "0.8em"}}>{[
                                         ...msg.recipients.map(it =>
                                             plainAccountLink(
