@@ -1,6 +1,7 @@
 import React, {useEffect, useState} from 'react';
 import {
     Box,
+    Button,
     CircularProgress,
     FormControlLabel,
     Switch,
@@ -77,6 +78,30 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({accountId}: ChatHistory
         const newParams = new URLSearchParams(searchParams);
         newParams.set('generalChat', newValue.toString());
         setSearchParams(newParams);
+    };
+
+    const handleBackward = () => {
+        if (messages.length > 0) {
+            const oldestMessageTime = dayjs(messages[0].time);
+            setDate(oldestMessageTime);
+            setIsBefore(true);
+            const newParams = new URLSearchParams(searchParams);
+            newParams.set('start', Math.floor(oldestMessageTime.unix()).toString());
+            setSearchParams(newParams);
+        }
+    };
+
+    const handleForward = () => {
+        if (messages.length > 0) {
+            console.log(messages[messages.length - 1].time)
+            console.log(new Date(messages[messages.length - 1].time))
+            const newestMessageTime = dayjs(messages[messages.length - 1].time);
+            setDate(newestMessageTime);
+            setIsBefore(false);
+            const newParams = new URLSearchParams(searchParams);
+            newParams.set('start', Math.floor(newestMessageTime.unix()).toString());
+            setSearchParams(newParams);
+        }
     };
 
     useEffect(() => {
@@ -160,6 +185,22 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({accountId}: ChatHistory
                     label="Include general chat"
                 />
 
+            </Box>
+            <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2, my: 2 }}>
+                <Button
+                    variant="contained"
+                    onClick={handleBackward}
+                    disabled={loading || messages.length === 0}
+                >
+                    ← Older
+                </Button>
+                <Button
+                    variant="contained"
+                    onClick={handleForward}
+                    disabled={loading || messages.length === 0}
+                >
+                    Newer →
+                </Button>
             </Box>
 
             { loading &&
