@@ -414,9 +414,9 @@ export enum ChatType {
 }
 
 export const chatTypeColors = new Map<ChatType, string>([
-    [ChatType.GlobalChat, '#505050'],
+    [ChatType.GlobalChat, 'rgba(80,80,80,0)'],
     [ChatType.GameChat, '#655a01'],
-    [ChatType.TeamChat, '#04014c'],
+    [ChatType.TeamChat, '#004f6a'],
     [ChatType.GroupChat, '#146700'],
     [ChatType.WhisperChat, '#5a015a'],
     [ChatType.CombatLog, '#006053'],
