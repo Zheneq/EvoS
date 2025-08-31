@@ -68,6 +68,16 @@ namespace EvoS.Framework.DataAccess.Daos
             }
         }
 
+        public PersistedCharacterMatchData FindByProcessCode(long accountId, string processCode)
+        {
+            return dao.FindByProcessCode(accountId, processCode);
+        }
+
+        public PersistedCharacterMatchData FindByTimestamp(long accountId, string timestamp)
+        {
+            return dao.FindByTimestamp(accountId, timestamp);
+        }
+
         private List<PersistedCharacterMatchData> Fetch(long accountId)
         {
             List<PersistedCharacterMatchData> dbMatches = dao.Find(accountId);

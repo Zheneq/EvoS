@@ -12,6 +12,16 @@ namespace EvoS.Framework.DataAccess.Mock
             return new List<PersistedCharacterMatchData>();
         }
 
+        public PersistedCharacterMatchData FindByProcessCode(long accountId, string processCode)
+        {
+            return null;
+        }
+
+        public PersistedCharacterMatchData FindByTimestamp(long accountId, string timestamp)
+        {
+            return null;
+        }
+
         public void Save(ICollection<MatchHistoryDao.MatchEntry> matchEntries)
         {
         }

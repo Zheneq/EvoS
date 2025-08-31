@@ -71,6 +71,7 @@ public class AdminApiServer : ApiServer
         app.MapGet("/api/admin/moderation/chatHistory", ModerationController.GetChatHistory).RequireAuthorization("api_admin");
         app.MapGet("/api/admin/moderation/sentFeedback", ModerationController.GetSentFeedback).RequireAuthorization("api_admin");
         app.MapGet("/api/admin/moderation/receivedFeedback", ModerationController.GetReceivedFeedback).RequireAuthorization("api_admin");
+        app.MapGet("/api/admin/match", MatchController.GetMatch).RequireAuthorization("api_admin");
         app.UseAuthorization();
     }
 

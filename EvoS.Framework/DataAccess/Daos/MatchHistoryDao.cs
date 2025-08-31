@@ -11,6 +11,8 @@ namespace EvoS.Framework.DataAccess.Daos
         public const int LIMIT = 100;
         
         public List<PersistedCharacterMatchData> Find(long accountId);
+        public PersistedCharacterMatchData FindByProcessCode(long accountId, string processCode);
+        public PersistedCharacterMatchData FindByTimestamp(long accountId, string timestamp);
         public void Save(ICollection<MatchEntry> matchEntries);
 
         public class MatchEntry
