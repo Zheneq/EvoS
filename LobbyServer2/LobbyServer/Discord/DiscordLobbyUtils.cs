@@ -2,10 +2,10 @@ using System.Collections.Generic;
 using System.Linq;
 using CentralServer.LobbyServer.Group;
 using CentralServer.LobbyServer.Session;
-using CentralServer.LobbyServer.Utils;
 using Discord;
 using EvoS.Framework.Constants.Enums;
 using EvoS.Framework.DataAccess;
+using EvoS.Framework.Misc;
 using EvoS.Framework.Network.NetworkMessages;
 using EvoS.Framework.Network.Static;
 
@@ -34,7 +34,7 @@ namespace CentralServer.LobbyServer.Discord
                     if (conn.CurrentGame != null)
                     {
                         serverInfo = $"{conn.CurrentGame.Server?.Name ?? "<no server>"} " +
-                                     $"{LobbyServerUtils.GameIdString(conn.CurrentGame.GameInfo)}\n" +
+                                     $"{GameUtils.GameIdString(conn.CurrentGame.GameInfo)}\n" +
                                      $"{conn.CurrentGame.GameInfo.GameConfig.Map} " +
                                      $"{conn.CurrentGame.GameInfo.GameConfig.GameType} ";
                         playerInfo = conn.CurrentGame.GetPlayerInfo(notification.SenderAccountId);

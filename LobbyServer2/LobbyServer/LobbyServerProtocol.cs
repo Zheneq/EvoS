@@ -20,6 +20,7 @@ using EvoS.Framework.Constants.Enums;
 using EvoS.Framework.DataAccess;
 using EvoS.Framework.DataAccess.Daos;
 using EvoS.Framework.Exceptions;
+using EvoS.Framework.Misc;
 using EvoS.Framework.Network.NetworkMessages;
 using EvoS.Framework.Network.Static;
 using LobbyGameClientMessages;
@@ -27,6 +28,7 @@ using log4net;
 using Newtonsoft.Json;
 using Prometheus;
 using WebSocketSharp;
+using static EvoS.Framework.Misc.GameUtils;
 using CharacterManager = EvoS.DirectoryServer.Character.CharacterManager;
 
 namespace CentralServer.LobbyServer
@@ -2399,7 +2401,7 @@ namespace CentralServer.LobbyServer
 
         private void HandleClientFeedbackReport(ClientFeedbackReport message)
         {
-            string context = CurrentGame is not null ? LobbyServerUtils.GameIdString(CurrentGame.GameInfo) : "";
+            string context = CurrentGame is not null ? GameIdString(CurrentGame.GameInfo) : "";
             DB.Get().UserFeedbackDao.Save(new UserFeedbackDao.UserFeedback(AccountId, message, context));
             DiscordManager.Get().SendPlayerFeedback(AccountId, message);
         }
@@ -2543,9 +2545,9 @@ namespace CentralServer.LobbyServer
 
         public void OnGameAssigned(Game game)
         {
-            var serverName = game.Server.Name.IsNullOrEmpty() ? "an unknown server" : game.Server.Name;
-            var serverVersion = game.Server.BuildVersion.IsNullOrEmpty() ? "" : $" v{game.Server.BuildVersion}";
-            SendSystemMessage($"You are about to join {serverName}{serverVersion} for game {LobbyServerUtils.GameIdString(game.GameInfo)}.");
+            var serverName = CompilerExtensions.IsNullOrEmpty(game.Server.Name) ? "an unknown server" : game.Server.Name;
+            var serverVersion = CompilerExtensions.IsNullOrEmpty(game.Server.BuildVersion) ? "" : $" v{game.Server.BuildVersion}";
+            SendSystemMessage($"You are about to join {serverName}{serverVersion} for game {GameIdString(game.GameInfo)}.");
         }
 
         public void SendSystemMessage(string text)

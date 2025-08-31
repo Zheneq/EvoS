@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -46,13 +45,6 @@ namespace CentralServer.LobbyServer.Utils
         {
             PersistedAccountData account = DB.Get().AccountDao.GetAccount(accountId);
             return account is not null ? $"{account.UserName}#{accountId}" : "UNKNOWN";
-        }
-
-        public static string GameIdString(LobbyGameInfo gameInfo)
-        {
-            return gameInfo != null
-                ? $"{new DateTime(gameInfo.CreateTimestamp):yyyy_MM_dd__HH_mm_ss}"
-                : "N/A";
         }
         
         public static IPAddress GetIpAddress(HttpContext context, ICollection<IPAddress> proxies)

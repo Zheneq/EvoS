@@ -19,7 +19,6 @@ using EvoS.Framework.Network.Static;
 using LobbyGameClientMessages;
 using log4net;
 using log4net.Core;
-using static EvoS.Framework.Network.Static.GameSubType;
 using Game = CentralServer.BridgeServer.Game;
 
 namespace CentralServer.LobbyServer.Discord
@@ -773,7 +772,7 @@ namespace CentralServer.LobbyServer.Discord
 
             EmbedFooterBuilder footer = new EmbedFooterBuilder
             {
-                Text = $"{serverName} - {serverVersion} - {LobbyServerUtils.GameIdString(gameInfo)} - {gameInfo.GameServerProcessCode}"
+                Text = $"{serverName} - {serverVersion} - {GameUtils.GameIdString(gameInfo)} - {gameInfo.GameServerProcessCode}"
             };
             eb.Footer = footer;
             return eb.Build();
@@ -814,7 +813,7 @@ namespace CentralServer.LobbyServer.Discord
                 Game game = SessionManager.GetClientConnection(accountId)?.CurrentGame;
                 if (game != null)
                 {
-                    eb.AddField("Game", $"{game.Server?.Name} {LobbyServerUtils.GameIdString(game.GameInfo)} Turn {game.GameMetrics.CurrentTurn}", true);
+                    eb.AddField("Game", $"{game.Server?.Name} {GameUtils.GameIdString(game.GameInfo)} Turn {game.GameMetrics.CurrentTurn}", true);
                 }
                 await adminUserReportChannel.SendMessageAsync(
                     null,

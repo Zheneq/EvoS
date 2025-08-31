@@ -80,7 +80,7 @@ public abstract class Game
             Server.OnServerDisconnect += OnServerDisconnect;
         }
 
-        log.Info($"{GetType().Name} {LobbyServerUtils.GameIdString(GameInfo)} is assigned to server {Server?.Name}");
+        log.Info($"{GetType().Name} {GameUtils.GameIdString(GameInfo)} is assigned to server {Server?.Name}");
     }
 
     public virtual void DisconnectPlayer(long accountId)
