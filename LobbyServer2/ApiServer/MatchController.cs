@@ -254,6 +254,45 @@ public static class MatchController
         public bool HasDashPhase { get; set; }
         public bool HasBlastPhase { get; set; }
     }
+    
+    public class MatchFreelancerStatsResponseModel
+    {
+        public CharacterType CharacterType { get; set; }
+        public float TotalAssists { get; set; }
+        public float TotalDeaths { get; set; }
+        public float? TotalBadgePoints { get; set; }
+        public float EnergyGainPerTurn { get; set; }
+        public float DamagePerTurn { get; set; }
+        public float DamageEfficiency { get; set; }
+        public float KillParticipation { get; set; }
+        public float SupportPerTurn { get; set; }
+        public float DamageTakenPerTurn { get; set; }
+        public float DamageDonePerLife { get; set; }
+        public float MMR { get; set; }
+        public float TeamMitigation { get; set; }
+        public float TotalTurns { get; set; }
+
+        public static MatchFreelancerStatsResponseModel Of(MatchFreelancerStats stats)
+        {
+            return new MatchFreelancerStatsResponseModel
+            {
+                CharacterType = stats.CharacterType,
+                TotalAssists = stats.TotalAssists,
+                TotalDeaths = stats.TotalDeaths,
+                TotalBadgePoints = stats.TotalBadgePoints,
+                EnergyGainPerTurn = stats.EnergyGainPerTurn,
+                DamagePerTurn = stats.DamagePerTurn ?? 0,
+                DamageEfficiency = stats.DamageEfficiency,
+                KillParticipation = stats.KillParticipation,
+                SupportPerTurn = stats.SupportPerTurn ?? 0,
+                DamageTakenPerTurn = stats.DamageTakenPerTurn ?? 0,
+                DamageDonePerLife = stats.DamageDonePerLife ?? 0,
+                MMR = stats.MMR ?? 0,
+                TeamMitigation = stats.TeamMitigation ?? 0,
+                TotalTurns = stats.TotalTurns
+            };
+        }
+    }
 
     public class MatchDataResponseModel
     {
@@ -262,7 +301,7 @@ public static class MatchController
         public string GameServerProcessCode { get; set; }
         public MatchComponentResponseModel MatchComponent { get; set; }
         public MatchDetailsResponseModel MatchDetailsComponent { get; set; }
-        // public MatchFreelancerStatsResponseModel MatchFreelancerStats { get; set; }
+        public MatchFreelancerStatsResponseModel MatchFreelancerStats { get; set; }
 
         public static MatchDataResponseModel Of(PersistedCharacterMatchData data)
         {
@@ -272,7 +311,8 @@ public static class MatchController
                 UpdateDate = data.UpdateDate,
                 GameServerProcessCode = data.GameServerProcessCode,
                 MatchComponent = MatchComponentResponseModel.Of(data.MatchComponent),
-                MatchDetailsComponent = MatchDetailsResponseModel.Of(data.MatchDetailsComponent)
+                MatchDetailsComponent = MatchDetailsResponseModel.Of(data.MatchDetailsComponent),
+                MatchFreelancerStats = MatchFreelancerStatsResponseModel.Of(data.MatchFreelancerStats)
             };
         }
     }
