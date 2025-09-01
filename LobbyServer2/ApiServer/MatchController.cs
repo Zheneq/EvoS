@@ -260,7 +260,7 @@ public static class MatchController
         public CharacterType CharacterType { get; set; }
         public float TotalAssists { get; set; }
         public float TotalDeaths { get; set; }
-        public float? TotalBadgePoints { get; set; }
+        public float TotalBadgePoints { get; set; }
         public float EnergyGainPerTurn { get; set; }
         public float DamagePerTurn { get; set; }
         public float DamageEfficiency { get; set; }
@@ -279,7 +279,7 @@ public static class MatchController
                 CharacterType = stats.CharacterType,
                 TotalAssists = stats.TotalAssists,
                 TotalDeaths = stats.TotalDeaths,
-                TotalBadgePoints = stats.TotalBadgePoints,
+                TotalBadgePoints = stats.TotalBadgePoints ?? 0,
                 EnergyGainPerTurn = stats.EnergyGainPerTurn,
                 DamagePerTurn = stats.DamagePerTurn ?? 0,
                 DamageEfficiency = stats.DamageEfficiency,

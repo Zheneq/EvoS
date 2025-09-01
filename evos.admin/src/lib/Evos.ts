@@ -513,3 +513,148 @@ export function getReceivedFeedback(
         }
     );
 }
+
+export enum PlayerGameResult {
+    NoResult = 'NoResult',
+    Tie = 'Tie',
+    Win = 'Win',
+    Lose = 'Lose'
+}
+
+export interface MatchActor {
+    character: CharacterType;
+    team: Team;
+    isPlayer: boolean;
+}
+
+export interface MatchComponent {
+    matchTime: string;
+    result: PlayerGameResult;
+    kills: number;
+    characterUsed: CharacterType;
+    gameType: string;
+    mapName: string;
+    turnsPlayed: number;
+    gameMode: string;
+    participants: MatchActor[];
+}
+
+export interface MatchDetails {
+    deaths: number;
+    takedowns: number;
+    damageDealt: number;
+    damageTaken: number;
+    healing: number;
+    contribution: number;
+    matchResults: MatchResultsStats;
+    groupSize: number;
+    tier: string;
+    points: number;
+}
+
+export interface TeamStatline {
+    player: PlayerIdentity;
+    character: CharacterInfo;
+    combatStats: CombatStats;
+    performance: PerformanceStats;
+    customization: PlayerCustomization;
+    abilityMods: number[];
+    unusedCatalysts: CatalystPhaseInfo;
+}
+
+export interface PlayerIdentity {
+    playerId: number;
+    accountId: number;
+    displayName: string;
+    isPerspectivePlayer: boolean;
+    isAlly: boolean;
+    playerType: string;
+}
+
+export interface CharacterInfo {
+    type: CharacterType;
+}
+
+export interface CombatStats {
+    kills: number;
+    deaths: number;
+    damageDealt: number;
+    damageTaken: number;
+    healing: number;
+    assists: number;
+    absorbedDamage: number;
+}
+
+export interface PerformanceStats {
+    turnsPlayed: number;
+    averageLockInTime: number;
+    contributionScore: number;
+}
+
+export interface PlayerCustomization {
+    titleId: number;
+    titleLevel: number;
+    bannerId: number;
+    emblemId: number;
+    ribbonId: number;
+}
+
+export interface CatalystPhaseInfo {
+    hasPrepPhase: boolean;
+    hasDashPhase: boolean;
+    hasBlastPhase: boolean;
+}
+
+export interface Score {
+    redTeam: number;
+    blueTeam: number;
+}
+
+export interface MatchResultsStats {
+    friendlyTeamStats: TeamStatline[];
+    enemyTeamStats: TeamStatline[];
+    score: Score;
+    victoryCondition: string;
+    victoryConditionTurns: number;
+    gameDuration: number;
+}
+
+export interface MatchFreelancerStats {
+    characterType: CharacterType;
+    totalAssists: number;
+    totalDeaths: number;
+    totalBadgePoints: number;
+    energyGainPerTurn: number;
+    damagePerTurn: number;
+    damageEfficiency: number;
+    killParticipation: number;
+    supportPerTurn: number;
+    damageTakenPerTurn: number;
+    damageDonePerLife: number;
+    mmr: number;
+    teamMitigation: number;
+    totalTurns: number;
+}
+
+export interface MatchData {
+    createDate: string;
+    updateDate: string;
+    gameServerProcessCode: string;
+    matchComponent: MatchComponent;
+    matchDetailsComponent: MatchDetails;
+    matchFreelancerStats: MatchFreelancerStats;
+}
+
+export function getMatch(abort: AbortController, authHeader: string, accountId: number, matchId: string) {
+    return axios.get<MatchData>(
+        baseUrl + "/api/admin/match",
+        {
+            params: {
+                accountId: accountId,
+                matchId: matchId
+            },
+            headers: { 'Authorization': authHeader },
+            signal: abort.signal
+        }
+    );
+}

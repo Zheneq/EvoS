@@ -10,6 +10,7 @@ import {colors, createTheme, CssBaseline, Paper, ThemeProvider} from "@mui/mater
 import ProfileSearchPage from "./components/pages/ProfileSearchPage";
 import CodesPage from './components/pages/CodesPage';
 import ChatHistoryPage from "./components/pages/ChatHistoryPage";
+import MatchPage from "./components/pages/MatchPage";
 
 const theme = createTheme({
     components: {
@@ -118,6 +119,7 @@ function App() {
                         <Route path="/account" element={page("Search", <ProfileSearchPage/>)}/>
                         <Route path="/account/:accountId" element={page("Account", <ProfilePage/>)}/>
                         <Route path="/account/:accountId/chat" element={page("Chat History", <ChatHistoryPage/>)}/>
+                        <Route path="/account/:accountId/matches/:matchId" element={page("Match", <MatchPage/>)}/>
                     </Routes>
                 </Paper>
             </BrowserRouter>
