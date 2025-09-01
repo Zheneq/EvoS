@@ -1,22 +1,12 @@
-import { useEffect, useState } from 'react';
-import { useAuthHeader } from 'react-auth-kit';
+import React, {useEffect, useState} from 'react';
+import {useAuthHeader} from 'react-auth-kit';
 import {useNavigate, useParams} from 'react-router-dom';
 import {getMatch, getPlayers, MatchData, PlayerData} from '../../lib/Evos';
-import {
-    CircularProgress,
-    Container,
-    Paper,
-    Typography,
-    Grid,
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableRow
-} from '@mui/material';
-import { EvosCard } from '../generic/BasicComponents';
+import {Container, LinearProgress, Paper, Typography} from '@mui/material';
+import {FlexBox} from '../generic/BasicComponents';
 import {Match} from "../atlas/Match";
 import {EvosError, processError} from "../../lib/Error";
+import ErrorDialog from "../generic/ErrorDialog";
 
 export default function MatchPage() {
     const { accountId, matchId } = useParams();
@@ -34,8 +24,12 @@ export default function MatchPage() {
 
         if (!accountId || !matchId) {
             setError({text: 'Account ID or Match ID not provided'});
+            setLoading(false);
             return;
         }
+
+        setLoading(true);
+
         getMatch(abort, authHeader, parseInt(accountId), matchId)
             .then((resp) => {
                 setMatch(resp.data);
@@ -61,43 +55,19 @@ export default function MatchPage() {
         };
     }, [accountId, matchId, authHeader, navigate]);
 
-
-
-    if (loading) {
-        return (
-            <Container sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
-                <CircularProgress />
-            </Container>
-        );
-    }
-
-
-    // TODO error popup
-    // if (error) {
-    //     return (
-    //         <Container>
-    //             <Paper sx={{ p: 2, mt: 2 }}>
-    //                 <Typography color="error">{`Error: ${error.text}`}</Typography>
-    //             </Paper>
-    //         </Container>
-    //     );
-    // }
-
-    if (!match) {
-        return (
+    return (
+        <FlexBox style={{flexDirection: 'column'}}>
+            {error && <ErrorDialog error={error} onDismiss={() => setError(undefined)}/>}
             <Container>
-                <Paper sx={{ p: 2, mt: 2 }}>
-                    <Typography>No match data found</Typography>
+                <Paper>
+                    {match
+                        ? <Match match={match} playerData={players} />
+                        : loading
+                            ? <LinearProgress />
+                            : <Typography>No match data found</Typography>
+                    }
                 </Paper>
             </Container>
-        );
-    }
-
-    return (
-        <Container>
-            <Paper>
-                <Match match={match} playerData={players} />
-            </Paper>
-        </Container>
+        </FlexBox>
     );
 }
