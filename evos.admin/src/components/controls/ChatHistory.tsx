@@ -28,6 +28,7 @@ import {FlexBox, plainAccountLink, plainMatchLink} from "../generic/BasicCompone
 import {CharacterIcon} from "../atlas/CharacterIcon";
 import HistoryNavButtons from "../generic/HistoryNavButtons";
 import {useBeforeParamState, useDateParamState} from "../../lib/Lib";
+import dayjs from "dayjs";
 
 interface ChatHistoryProps {
     accountId: number;
@@ -75,10 +76,16 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({accountId}: ChatHistory
         setLoading(true);
         const abort = new AbortController();
         const timestamp = Math.floor(date.unix());
-
+        const limit = searchParams.get('limit');
+        const limitTs = limit ? dayjs(parseInt(limit) * 1000) : undefined;
         getChatHistory(abort, authHeader, accountId, timestamp, isBefore, true, isWithGeneralChat, LIMIT)
             .then((resp) => {
-                setMessages(resp.data.messages);
+                const respMessages = limitTs
+                    ? isBefore
+                        ? resp.data.messages.filter(m => dayjs(m.time).isAfter(limitTs))
+                        : resp.data.messages.filter(m => dayjs(m.time).isBefore(limitTs))
+                    : resp.data.messages;
+                setMessages(respMessages);
 
                 const accountIds = Array.from(
                     new Set([
@@ -117,6 +124,11 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({accountId}: ChatHistory
             setIsBefore={setIsBefore}
             disabled={loading}
             datePicker={withDatePicker}
+            onChange={() => {
+                const newParams = new URLSearchParams(searchParams);
+                newParams.delete('limit');
+                setSearchParams(newParams);
+            }}
         />;
     }
 

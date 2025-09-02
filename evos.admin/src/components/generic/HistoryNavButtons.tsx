@@ -15,10 +15,11 @@ interface HistoryNavButtonsProps<T> {
     setIsBefore: (isBefore: boolean) => void;
     disabled: boolean;
     datePicker: boolean;
+    onChange?: () => void;
 }
 
 export default function HistoryNavButtons<T>(
-    {items, dateFunction, date, setDate, isBefore, setIsBefore, disabled, datePicker}: HistoryNavButtonsProps<T>
+    {items, dateFunction, date, setDate, isBefore, setIsBefore, disabled, datePicker, onChange}: HistoryNavButtonsProps<T>
 ) {
     const handleBackward = () => {
         if (items.length > 0) {
@@ -26,6 +27,7 @@ export default function HistoryNavButtons<T>(
             setDate(oldestMessageTime);
             setIsBefore(true);
         }
+        onChange && onChange();
     };
 
     const handleForward = () => {
@@ -34,23 +36,27 @@ export default function HistoryNavButtons<T>(
             setDate(newestMessageTime);
             setIsBefore(false);
         }
+        onChange && onChange();
     };
 
     const handleLatest = () => {
         const now = dayjs().add(1, 'minute');
         setDate(now);
         setIsBefore(true);
+        onChange && onChange();
     };
 
     const handleDateChange = (newValue: dayjs.Dayjs | null) => {
         if (newValue) {
             setDate(newValue);
         }
+        onChange && onChange();
     };
 
     const handleBeforeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const newValue = event.target.checked;
         setIsBefore(newValue);
+        onChange && onChange();
     };
 
     return <Box sx={{margin: '1em'}}>

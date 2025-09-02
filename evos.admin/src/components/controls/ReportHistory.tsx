@@ -1,5 +1,5 @@
 import React, {useEffect, useState} from 'react';
-import {Box, LinearProgress, Table, TableBody, TableCell, TableHead, TableRow, Typography} from '@mui/material';
+import {Box, Button, LinearProgress, Table, TableBody, TableCell, TableHead, TableRow, Typography} from '@mui/material';
 import {formatDate, getPlayers, getReceivedFeedback, getSentFeedback, PlayerData, UserFeedback} from "../../lib/Evos";
 import {useAuthHeader} from "react-auth-kit";
 import {EvosError, processError} from "../../lib/Error";
@@ -81,6 +81,11 @@ export const ReportHistory: React.FC<ReportHistoryProps> = ({accountId, setError
         return msg.reportedPlayerAccountId === accountId ? '#633' : '#363';
     }
 
+    function chatLink(msg: UserFeedback) {
+        const ts = Math.floor(new Date(msg.time).getTime() / 1000);
+        return `/account/${msg.reportedPlayerAccountId}/chat?before=false&ts=${ts - 300}&limit=${ts + 300}`;
+    }
+
     return (
         <FlexBox style={{flexDirection: 'column', margin: '1em'}}>
             {loading &&
@@ -106,6 +111,7 @@ export const ReportHistory: React.FC<ReportHistoryProps> = ({accountId, setError
                                 <TableCell>Reason</TableCell>
                                 <TableCell>From</TableCell>
                                 <TableCell>To</TableCell>
+                                <TableCell>Chat</TableCell>
                             </TableRow>
                         </TableHead>
                         <TableBody>
@@ -118,7 +124,7 @@ export const ReportHistory: React.FC<ReportHistoryProps> = ({accountId, setError
                                     }}
                                 >
                                     <TableCell>{formatDate(msg.time)}</TableCell>
-                                    <TableCell>{plainMatchLink(accountId, msg.context, navigate, "Game")}</TableCell>
+                                    <TableCell>{msg.context && plainMatchLink(accountId, msg.context, navigate, "Game")}</TableCell>
                                     <TableCell>{msg.message}</TableCell>
                                     <TableCell>{msg.reason}</TableCell>
                                     <TableCell>
@@ -126,6 +132,9 @@ export const ReportHistory: React.FC<ReportHistoryProps> = ({accountId, setError
                                     </TableCell>
                                     <TableCell>
                                         {plainAccountLink(msg.reportedPlayerAccountId, msg.reportedPlayerHandle, navigate)}
+                                    </TableCell>
+                                    <TableCell>
+                                        <Button onClick={() => navigate(chatLink(msg))}>Chat</Button>
                                     </TableCell>
                                 </TableRow>
                             ))}
