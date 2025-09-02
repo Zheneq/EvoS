@@ -337,4 +337,68 @@ public static class MatchController
 
         return Results.Ok(MatchDataResponseModel.Of(match));
     }
+
+    public class MatchHistoryEntryModel
+    {
+        public string MatchId { get; set; }
+        public string Character { get; set; }
+        public string MapName { get; set; }
+        public int NumOfTurns { get; set; }
+        public int FriendlyScore { get; set; }
+        public int EnemyScore { get; set; }
+        public string Result { get; set; }
+
+        public static MatchHistoryEntryModel From(PersistedCharacterMatchData data)
+        {
+            return new MatchHistoryEntryModel
+            {
+                MatchId = data.GameServerProcessCode,
+                Character = data.MatchComponent.CharacterUsed.ToString(),
+                MapName = data.MatchComponent.MapName,
+                NumOfTurns = data.MatchComponent.NumOfTurns,
+                FriendlyScore = data.MatchDetailsComponent.MatchResults.BlueScore,
+                EnemyScore = data.MatchDetailsComponent.MatchResults.RedScore,
+                Result = data.MatchComponent.Result.ToString()
+            };
+        }
+    }
+
+    public class MatchHistoryResponseModel
+    {
+        public List<MatchHistoryEntryModel> Matches { get; set; }
+    }
+    
+    public static IResult GetMatchHistory(
+        long accountId,
+        long? after,
+        long? before,
+        int? limit,
+        ClaimsPrincipal user)
+    {
+        if (!AdminController.ValidateAdmin(user, out IResult error, out long adminAccountId, out string adminHandle))
+        {
+            return error;
+        }
+
+        if (before is null == after is null)
+        {
+            return Results.BadRequest(new { message = "Either specify 'before' or 'after'" });
+        }
+        
+        int finalLimit = limit ?? 100;
+
+        DateTime time = DateTimeOffset.FromUnixTimeSeconds(after ?? (long)before).UtcDateTime;
+        List<PersistedCharacterMatchData> matches = DB.Get()
+            .MatchHistoryDao.Find(
+                accountId,
+                after is not null,
+                time,
+                finalLimit);
+
+        return Results.Ok(
+            new MatchHistoryResponseModel
+            {
+                Matches = matches.Select(MatchHistoryEntryModel.From).ToList()
+            });
+    }
 }

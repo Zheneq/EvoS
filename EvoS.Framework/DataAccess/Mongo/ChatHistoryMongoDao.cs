@@ -30,41 +30,40 @@ namespace EvoS.Framework.DataAccess.Mongo
         {
         }
 
-        public List<ChatHistoryDao.Entry> GetRelevantMessagesAfter(
+        public List<ChatHistoryDao.Entry> GetRelevantMessages(
             long accountId,
             bool includeBlocked,
             bool includeGeneral,
-            DateTime afterTime,
+            bool isAfter,
+            DateTime time,
             int limit)
         {
-            return c
-                .Find(f.And(
-                    f.Gte(e => e.time, afterTime),
-                    MakeBaseCondition(accountId, includeBlocked, includeGeneral)
-                ))
-                .Sort(s.Ascending(e => e.time))
-                .Limit(limit)
-                .ToList();
+            if (isAfter)
+            {
+                return c
+                    .Find(f.And(
+                        f.Gte(e => e.time, time),
+                        MakeBaseCondition(accountId, includeBlocked, includeGeneral)
+                    ))
+                    .Sort(s.Ascending(e => e.time))
+                    .Limit(limit)
+                    .ToList();
+            }
+            else
+            {
+                List<ChatHistoryDao.Entry> entries = c
+                    .Find(f.And(
+                        f.Lte(e => e.time, time),
+                        MakeBaseCondition(accountId, includeBlocked, includeGeneral)
+                    ))
+                    .Sort(s.Descending(e => e.time))
+                    .Limit(limit)
+                    .ToList();
+                entries.Reverse();
+                return entries;
+            }
         }
 
-        public List<ChatHistoryDao.Entry> GetRelevantMessagesBefore(
-            long accountId,
-            bool includeBlocked,
-            bool includeGeneral,
-            DateTime beforeTime,
-            int limit)
-        {
-            List<ChatHistoryDao.Entry> entries = c
-                .Find(f.And(
-                    f.Lte(e => e.time, beforeTime),
-                    MakeBaseCondition(accountId, includeBlocked, includeGeneral)
-                ))
-                .Sort(s.Descending(e => e.time))
-                .Limit(limit)
-                .ToList();
-            entries.Reverse();
-            return entries;
-        }
 
         private static FilterDefinition<ChatHistoryDao.Entry> MakeBaseCondition(long accountId, bool includeBlocked, bool includeGeneral)
         {

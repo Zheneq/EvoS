@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using EvoS.Framework.DataAccess.Daos;
 using EvoS.Framework.Network.Static;
@@ -8,6 +9,11 @@ namespace EvoS.Framework.DataAccess.Mock
     {
 
         public List<PersistedCharacterMatchData> Find(long accountId)
+        {
+            return new List<PersistedCharacterMatchData>();
+        }
+
+        public List<PersistedCharacterMatchData> Find(long accountId, bool isAfter, DateTime afterTime, int limit)
         {
             return new List<PersistedCharacterMatchData>();
         }

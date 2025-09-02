@@ -77,30 +77,16 @@ public static class ModerationController
         bool finalIncludeGeneral = includeGeneral ?? false;
         int finalLimit = limit ?? 100;
 
-        List<ChatHistoryDao.Entry> messages;
-        if (after is not null)
-        {
-            var afterTime = DateTimeOffset.FromUnixTimeSeconds((long)after).UtcDateTime;
-            messages = DB.Get().ChatHistoryDao.GetRelevantMessagesAfter(
+        DateTime time = DateTimeOffset.FromUnixTimeSeconds(after ?? (long)before).UtcDateTime;
+        List<ChatHistoryDao.Entry> messages = DB.Get()
+            .ChatHistoryDao.GetRelevantMessages(
                 accountId,
                 finalIncludeBlocked,
                 finalIncludeGeneral,
-                afterTime,
-                finalLimit
-            );
-        }
-        else
-        {
-            var beforeTime = DateTimeOffset.FromUnixTimeSeconds((long)before).UtcDateTime;
-            messages = DB.Get().ChatHistoryDao.GetRelevantMessagesBefore(
-                accountId,
-                finalIncludeBlocked,
-                finalIncludeGeneral,
-                beforeTime,
-                finalLimit
-            );
-        }
-        
+                after is not null,
+                time,
+                finalLimit);
+
         return Results.Ok(
             new ChatHistoryResponseModel
             {

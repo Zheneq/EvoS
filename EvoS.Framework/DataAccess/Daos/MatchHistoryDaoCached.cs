@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
@@ -66,6 +67,11 @@ namespace EvoS.Framework.DataAccess.Daos
 
                 return Fetch(accountId);
             }
+        }
+
+        public List<PersistedCharacterMatchData> Find(long accountId, bool isAfter, DateTime afterTime, int limit)
+        {
+            return dao.Find(accountId, isAfter, afterTime, limit);
         }
 
         public PersistedCharacterMatchData FindByProcessCode(long accountId, string processCode)
