@@ -1,10 +1,10 @@
 import React, {useEffect, useState} from 'react';
-import {Box, Button, LinearProgress, Table, TableBody, TableCell, TableHead, TableRow, Typography} from '@mui/material';
+import {Box, LinearProgress, Table, TableBody, TableCell, TableHead, TableRow, Typography} from '@mui/material';
 import {formatDate, getPlayers, getReceivedFeedback, getSentFeedback, PlayerData, UserFeedback} from "../../lib/Evos";
 import {useAuthHeader} from "react-auth-kit";
 import {EvosError, processError} from "../../lib/Error";
 import {useNavigate} from "react-router-dom";
-import {FlexBox, plainAccountLink, plainMatchLink} from "../generic/BasicComponents";
+import {FlexBox, plainAccountLink, plainMatchLink, StyledLink} from "../generic/BasicComponents";
 
 interface ReportHistoryProps {
     accountId: number;
@@ -134,7 +134,7 @@ export const ReportHistory: React.FC<ReportHistoryProps> = ({accountId, setError
                                         {plainAccountLink(msg.reportedPlayerAccountId, msg.reportedPlayerHandle, navigate)}
                                     </TableCell>
                                     <TableCell>
-                                        <Button onClick={() => navigate(chatLink(msg))}>Chat</Button>
+                                        <StyledLink target={'_blank'} href={chatLink(msg)}>Chat</StyledLink>
                                     </TableCell>
                                 </TableRow>
                             ))}

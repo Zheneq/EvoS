@@ -31,7 +31,7 @@ export const StackWrapper = styled(Stack)(({theme}) => ({
     maxWidth: theme.size.basicWidth,
 }));
 
-const StyledLink = styled(Link)(({ theme }) => ({
+export const StyledLink = styled(Link)(({ theme }) => ({
     color: '#94cef6',
     cursor: 'pointer',
     border: 'none',
