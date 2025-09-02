@@ -67,6 +67,8 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({accountId}: ChatHistory
         setSearchParams(newParams);
     }, [date, isBefore, isWithGeneralChat]);
 
+    const limit = searchParams.get('limit');
+    
     useEffect(() => {
         if (accountId === 0) {
             setLoading(false);
@@ -76,7 +78,6 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({accountId}: ChatHistory
         setLoading(true);
         const abort = new AbortController();
         const timestamp = Math.floor(date.unix());
-        const limit = searchParams.get('limit');
         const limitTs = limit ? dayjs(parseInt(limit) * 1000) : undefined;
         getChatHistory(abort, authHeader, accountId, timestamp, isBefore, true, isWithGeneralChat, LIMIT)
             .then((resp) => {
@@ -104,7 +105,7 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({accountId}: ChatHistory
             .finally(() => setLoading(false));
 
         return () => abort.abort()
-    }, [accountId, authHeader, date, isBefore, isWithGeneralChat, navigate]);
+    }, [accountId, authHeader, date, isBefore, isWithGeneralChat, limit, navigate]);
 
     function getBackgroundColor(msg: ChatMessage) {
         return chatTypeColors.get(msg.type) ?? 'rgba(0,0,0,0)';

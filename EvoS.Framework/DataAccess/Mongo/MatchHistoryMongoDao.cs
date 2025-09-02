@@ -55,8 +55,9 @@ namespace EvoS.Framework.DataAccess.Mongo
             
             return c.Find(
                     f.And(
-                        f.Eq("AccountId", accountId),
-                        f.Eq("Data.CreateDate", date)))
+                        f.Eq(e => e.AccountId, accountId),
+                        f.Gte(e => e.Data.CreateDate, date)))
+                .SortBy(e => e.Data.CreateDate)
                 .Project(m => m.Data)
                 .FirstOrDefault();
         }
