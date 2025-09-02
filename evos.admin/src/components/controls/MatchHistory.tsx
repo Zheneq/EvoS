@@ -1,20 +1,5 @@
 import React, {useEffect, useState} from 'react';
-import {
-    Box,
-    Button,
-    FormControlLabel,
-    LinearProgress,
-    Switch,
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableRow,
-    Typography
-} from '@mui/material';
-import {LocalizationProvider} from '@mui/x-date-pickers/LocalizationProvider';
-import {AdapterDayjs} from '@mui/x-date-pickers/AdapterDayjs';
-import {DateTimePicker} from '@mui/x-date-pickers/DateTimePicker';
+import {Box, LinearProgress, Table, TableBody, TableCell, TableHead, TableRow, Typography} from '@mui/material';
 import dayjs from 'dayjs';
 import {formatDate, getMatchHistory, MatchHistoryEntry, Team} from "../../lib/Evos";
 import {useAuthHeader} from "react-auth-kit";
@@ -44,17 +29,19 @@ export const MatchHistory: React.FC<MatchHistoryProps> = ({accountId}: MatchHist
     const navigate = useNavigate();
 
     useEffect(() => {
+        const newParams = new URLSearchParams(searchParams);
+        newParams.set('before', isBefore.toString());
+        newParams.set('ts', Math.floor(date.unix()).toString());
+        setSearchParams(newParams);
+    }, [date, isBefore]);
+
+    useEffect(() => {
         if (accountId === 0) {
             setLoading(false);
             return;
         }
 
         setLoading(true);
-
-        const newParams = new URLSearchParams(searchParams);
-        newParams.set('before', isBefore.toString());
-        newParams.set('ts', Math.floor(date.unix()).toString());
-        setSearchParams(newParams);
 
         const abort = new AbortController();
         
@@ -66,7 +53,7 @@ export const MatchHistory: React.FC<MatchHistoryProps> = ({accountId}: MatchHist
             .finally(() => setLoading(false));
 
         return () => abort.abort();
-    }, [accountId, authHeader, date, isBefore, navigate, searchParams, setSearchParams]);
+    }, [accountId, authHeader, date, isBefore, navigate]);
 
     function renderNavigation(withDatePicker: boolean) {
         return <HistoryNavButtons

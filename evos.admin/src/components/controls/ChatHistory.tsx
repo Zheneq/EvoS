@@ -65,10 +65,15 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({accountId}: ChatHistory
     const handleGeneralChatChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const newValue = event.target.checked;
         setIsWithGeneralChat(newValue);
-        const newParams = new URLSearchParams(searchParams);
-        newParams.set('generalChat', newValue.toString());
-        setSearchParams(newParams);
     };
+
+    useEffect(() => {
+        const newParams = new URLSearchParams(searchParams);
+        newParams.set('before', isBefore.toString());
+        newParams.set('generalChat', isWithGeneralChat.toString());
+        newParams.set('ts', Math.floor(date.unix()).toString());
+        setSearchParams(newParams);
+    }, [date, isBefore, isWithGeneralChat]);
 
     useEffect(() => {
         if (accountId === 0) {
@@ -77,12 +82,6 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({accountId}: ChatHistory
         }
 
         setLoading(true);
-
-        const newParams = new URLSearchParams(searchParams);
-        newParams.set('before', isBefore.toString());
-        newParams.set('generalChat', isWithGeneralChat.toString());
-        newParams.set('ts', Math.floor(date.unix()).toString());
-        setSearchParams(newParams);
 
         const abort = new AbortController();
         
@@ -108,8 +107,8 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({accountId}: ChatHistory
             .catch((error) => processError(error, setError, navigate))
             .finally(() => setLoading(false));
 
-        return () => abort.abort();
-    }, [accountId, authHeader, date, isBefore, isWithGeneralChat, navigate, searchParams, setSearchParams]);
+        return () => abort.abort()
+    }, [accountId, authHeader, date, isBefore, isWithGeneralChat, navigate]);
 
     function getBackgroundColor(msg: ChatMessage) {
         return chatTypeColors.get(msg.type) ?? 'rgba(0,0,0,0)';

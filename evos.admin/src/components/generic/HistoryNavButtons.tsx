@@ -1,12 +1,10 @@
 import {Box, Button, FormControlLabel, Switch} from "@mui/material";
 import dayjs from "dayjs";
-import {useSearchParams} from "react-router-dom";
 import React from "react";
 import {LocalizationProvider} from "@mui/x-date-pickers/LocalizationProvider";
 import {AdapterDayjs} from "@mui/x-date-pickers/AdapterDayjs";
 import {DateTimePicker} from "@mui/x-date-pickers/DateTimePicker";
 
-export const PARAM_TS = 'ts'
 
 interface HistoryNavButtonsProps<T> {
     items: T[];
@@ -22,16 +20,11 @@ interface HistoryNavButtonsProps<T> {
 export default function HistoryNavButtons<T>(
     {items, dateFunction, date, setDate, isBefore, setIsBefore, disabled, datePicker}: HistoryNavButtonsProps<T>
 ) {
-    const [searchParams, setSearchParams] = useSearchParams();
-
     const handleBackward = () => {
         if (items.length > 0) {
             const oldestMessageTime = dayjs(dateFunction(items[0])).subtract(1, 'ms');
             setDate(oldestMessageTime);
             setIsBefore(true);
-            const newParams = new URLSearchParams(searchParams);
-            newParams.set(PARAM_TS, Math.floor(oldestMessageTime.unix()).toString());
-            setSearchParams(newParams);
         }
     };
 
@@ -40,9 +33,6 @@ export default function HistoryNavButtons<T>(
             const newestMessageTime = dayjs(dateFunction(items[items.length - 1])).add(1, 'ms');
             setDate(newestMessageTime);
             setIsBefore(false);
-            const newParams = new URLSearchParams(searchParams);
-            newParams.set(PARAM_TS, Math.floor(newestMessageTime.unix()).toString());
-            setSearchParams(newParams);
         }
     };
 
@@ -50,26 +40,17 @@ export default function HistoryNavButtons<T>(
         const now = dayjs().add(1, 'minute');
         setDate(now);
         setIsBefore(true);
-        const newParams = new URLSearchParams(searchParams);
-        newParams.set(PARAM_TS, Math.floor(now.unix()).toString());
-        setSearchParams(newParams);
     };
 
     const handleDateChange = (newValue: dayjs.Dayjs | null) => {
         if (newValue) {
             setDate(newValue);
-            const newParams = new URLSearchParams(searchParams);
-            newParams.set(PARAM_TS, Math.floor(newValue.unix()).toString());
-            setSearchParams(newParams);
         }
     };
 
     const handleBeforeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const newValue = event.target.checked;
         setIsBefore(newValue);
-        const newParams = new URLSearchParams(searchParams);
-        newParams.set('before', newValue.toString());
-        setSearchParams(newParams);
     };
 
     return <Box>
