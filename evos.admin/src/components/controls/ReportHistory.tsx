@@ -54,13 +54,9 @@ export const ReportHistory: React.FC<ReportHistoryProps> = ({accountId, setError
         }
 
         const abort = new AbortController();
-        const accountIds = Array.from(new Set([...receivedFeedback, ...sentFeedback]
-            .flatMap(it => [it.accountId, it.reportedPlayerAccountId])))
+        const accountIds = Array.from(new Set([...receivedFeedback
+            .map(it => it.accountId), accountId]))
             .filter(it => !!it);
-
-        console.log(receivedFeedback);
-        console.log(sentFeedback);
-        console.log(accountIds);
 
         if (accountIds.length === 0) {
             setLoading(false);
@@ -76,7 +72,7 @@ export const ReportHistory: React.FC<ReportHistoryProps> = ({accountId, setError
                 setLoading(false);
             })
             .catch((error) => processError(error, setError, navigate))
-    }, [authHeader, loading, loadingReceived, loadingSent]);
+    }, [accountId, authHeader, loading, loadingReceived, loadingSent, navigate, receivedFeedback, setError]);
     
     const feedback = [...receivedFeedback, ...sentFeedback]
         .sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
