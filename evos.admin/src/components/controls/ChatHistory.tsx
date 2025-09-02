@@ -11,7 +11,6 @@ import {
     TableRow,
     Typography
 } from '@mui/material';
-import dayjs from 'dayjs';
 import {
     CharacterType,
     ChatMessage,
@@ -28,6 +27,7 @@ import ErrorDialog from "../generic/ErrorDialog";
 import {FlexBox, plainAccountLink, plainMatchLink} from "../generic/BasicComponents";
 import {CharacterIcon} from "../atlas/CharacterIcon";
 import HistoryNavButtons from "../generic/HistoryNavButtons";
+import {useBeforeParamState, useDateParamState} from "../../lib/Lib";
 
 interface ChatHistoryProps {
     accountId: number;
@@ -41,15 +41,8 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({accountId}: ChatHistory
     const [players, setPlayers] = useState<Map<number, PlayerData>>(new Map());
     const [loading, setLoading] = useState(true);
 
-    const [date, setDate] = useState(() => {
-        const tsParam = searchParams.get('ts');
-        return tsParam ? dayjs(parseInt(tsParam) * 1000) : dayjs();
-    });
-
-    const [isBefore, setIsBefore] = useState(() => {
-        const beforeParam = searchParams.get('before');
-        return beforeParam === null ? true : beforeParam === 'true';
-    });
+    const [date, setDate] = useDateParamState(searchParams);
+    const [isBefore, setIsBefore] = useBeforeParamState(searchParams);
 
     const [isWithGeneralChat, setIsWithGeneralChat] = useState(() => {
         const generalChatParam = searchParams.get('generalChat');
@@ -80,9 +73,7 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({accountId}: ChatHistory
         }
 
         setLoading(true);
-
         const abort = new AbortController();
-        
         const timestamp = Math.floor(date.unix());
 
         getChatHistory(abort, authHeader, accountId, timestamp, isBefore, true, isWithGeneralChat, LIMIT)
@@ -152,7 +143,6 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({accountId}: ChatHistory
                     <CircularProgress/>
                 </Box>
             }
-
             {!loading &&
                 <Box style={{margin: "0 auto"}}>
                     <Table
@@ -236,7 +226,6 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({accountId}: ChatHistory
                     </Table>
                 </Box>
             }
-
             {!loading && messages.length === 0 && (
                 <Typography variant="body1" textAlign="center" mt={2}>
                     No messages found

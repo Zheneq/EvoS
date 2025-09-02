@@ -1,6 +1,5 @@
 import React, {useEffect, useState} from 'react';
 import {Box, LinearProgress, Table, TableBody, TableCell, TableHead, TableRow, Typography} from '@mui/material';
-import dayjs from 'dayjs';
 import {formatDate, getMatchHistory, MatchHistoryEntry, Team} from "../../lib/Evos";
 import {useAuthHeader} from "react-auth-kit";
 import {EvosError, processError} from "../../lib/Error";
@@ -9,6 +8,7 @@ import ErrorDialog from "../generic/ErrorDialog";
 import {FlexBox} from "../generic/BasicComponents";
 import {CharacterIcon} from "../atlas/CharacterIcon";
 import HistoryNavButtons from "../generic/HistoryNavButtons";
+import {useBeforeParamState, useDateParamState} from "../../lib/Lib";
 
 interface MatchHistoryProps {
     accountId: number;
@@ -21,15 +21,8 @@ export const MatchHistory: React.FC<MatchHistoryProps> = ({accountId}: MatchHist
     const [matches, setMatches] = useState<MatchHistoryEntry[]>([]);
     const [loading, setLoading] = useState(true);
 
-    const [date, setDate] = useState(() => {
-        const tsParam = searchParams.get('ts');
-        return tsParam ? dayjs(parseInt(tsParam) * 1000) : dayjs();
-    });
-
-    const [isBefore, setIsBefore] = useState(() => {
-        const beforeParam = searchParams.get('before');
-        return beforeParam === null ? true : beforeParam === 'true';
-    });
+    const [date, setDate] = useDateParamState(searchParams);
+    const [isBefore, setIsBefore] = useBeforeParamState(searchParams);
 
     const [error, setError] = useState<EvosError>();
     const authHeader = useAuthHeader()();
@@ -49,9 +42,7 @@ export const MatchHistory: React.FC<MatchHistoryProps> = ({accountId}: MatchHist
         }
 
         setLoading(true);
-
         const abort = new AbortController();
-        
         const timestamp = Math.floor(date.unix());
 
         getMatchHistory(abort, authHeader, accountId, timestamp, isBefore, LIMIT)
@@ -78,15 +69,12 @@ export const MatchHistory: React.FC<MatchHistoryProps> = ({accountId}: MatchHist
     return (
         <FlexBox style={{flexDirection: 'column'}}>
             {error && <ErrorDialog error={error} onDismiss={() => setError(undefined)}/>}
-
             {renderNavigation(true)}
-
             {loading &&
                 <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
                     <LinearProgress/>
                 </Box>
             }
-
             {!loading &&
                 <Box style={{margin: "0 auto"}}>
                     <Table
@@ -135,7 +123,6 @@ export const MatchHistory: React.FC<MatchHistoryProps> = ({accountId}: MatchHist
                     </Table>
                 </Box>
             }
-
             {!loading && matches.length === 0 && (
                 <Typography variant="body1" textAlign="center" mt={2}>
                     No matches found
