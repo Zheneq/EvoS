@@ -3,13 +3,13 @@ import {EvosError, processError} from "../../lib/Error";
 import {useNavigate, useParams} from "react-router-dom";
 import {Paper} from "@mui/material";
 import ErrorDialog from "../generic/ErrorDialog";
-import {MatchHistory} from "../controls/MatchHistory";
 import Player from "../atlas/Player";
 import {getPlayer, PlayerData} from "../../lib/Evos";
 import {useAuthHeader} from "react-auth-kit";
+import {ReportHistory} from "../controls/ReportHistory";
 
 
-export default function MatchHistoryPage() {
+export default function ReportHistoryPage() {
     const {accountId} = useParams();
     
     const [player, setPlayer] = useState<PlayerData>();
@@ -38,7 +38,7 @@ export default function MatchHistoryPage() {
         <Paper>
             {error && <ErrorDialog error={error} onDismiss={() => setError(undefined)} />}
             <Player info={player} />
-            <MatchHistory accountId={accountId ? parseInt(accountId) : 0}/>
+            <ReportHistory accountId={accountId ? parseInt(accountId) : 0} setError={setError}/>
         </Paper>
     );
 }

@@ -101,10 +101,11 @@ public static class ModerationController
 
     public class UserFeedbackModel
     {
+        public long AccountId { get; set; }
         public DateTime Time { get; set; }
         public string Context { get; set; }
         public string Message { get; set; }
-        public ClientFeedbackReport.FeedbackReason Reason { get; set; }
+        public string Reason { get; set; }
         public long ReportedPlayerAccountId { get; set; }
         public string ReportedPlayerHandle { get; set; }
 
@@ -112,10 +113,11 @@ public static class ModerationController
         {
             return new UserFeedbackModel
             {
+                AccountId = feedback.accountId,
                 Time = feedback.time,
                 Context = feedback.context,
                 Message = feedback.message,
-                Reason = feedback.reason,
+                Reason = feedback.reason.ToString(),
                 ReportedPlayerAccountId = feedback.reportedPlayerAccountId,
                 ReportedPlayerHandle = feedback.reportedPlayerHandle
             };

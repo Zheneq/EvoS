@@ -52,12 +52,12 @@ export function plainAccountLink(accountId: number, text: string, navigate: Navi
     );
 }
 
-export function plainMatchLink(accountId: number, matchId: string, navigate: NavigateFunction, sx?: any) {
+export function plainMatchLink(accountId: number, matchId: string, navigate: NavigateFunction, text?: string, sx?: any) {
     const uri = `/account/${accountId}/matches/${matchId}`;
-    const text = matchId.substring(matchId.length - 4, matchId.length);
+    const finalText = text || matchId.substring(matchId.length - 4, matchId.length);
     return (
         <StyledLink onClick={() => navigate(uri)} sx={sx} title={matchId}>
-            {text}
+            {finalText}
         </StyledLink>
     );
 }

@@ -12,6 +12,7 @@ import CodesPage from './components/pages/CodesPage';
 import ChatHistoryPage from "./components/pages/ChatHistoryPage";
 import MatchPage from "./components/pages/MatchPage";
 import MatchHistoryPage from "./components/pages/MatchHistoryPage";
+import ReportHistoryPage from "./components/pages/ReportHistoryPage";
 
 const theme = createTheme({
     components: {
@@ -122,6 +123,7 @@ function App() {
                         <Route path="/account/:accountId/chat" element={page("Chat History", <ChatHistoryPage/>)}/>
                         <Route path="/account/:accountId/matches/:matchId" element={page("Match", <MatchPage/>)}/>
                         <Route path="/account/:accountId/matches" element={page("Match History", <MatchHistoryPage/>)}/>
+                        <Route path="/account/:accountId/feedback" element={page("Report History", <ReportHistoryPage/>)}/>
                     </Routes>
                 </Paper>
             </BrowserRouter>

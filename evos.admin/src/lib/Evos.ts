@@ -430,6 +430,7 @@ export const chatTypeColors = new Map<ChatType, string>([
 
 
 export interface UserFeedback {
+    accountId: number;
     time: string;
     context: string;
     message: string;
