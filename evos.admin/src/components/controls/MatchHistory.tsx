@@ -43,23 +43,6 @@ export const MatchHistory: React.FC<MatchHistoryProps> = ({accountId}: MatchHist
     const authHeader = useAuthHeader()();
     const navigate = useNavigate();
 
-    const handleDateChange = (newValue: dayjs.Dayjs | null) => {
-        if (newValue) {
-            setDate(newValue);
-            const newParams = new URLSearchParams(searchParams);
-            newParams.set('ts', Math.floor(newValue.unix()).toString());
-            setSearchParams(newParams);
-        }
-    };
-
-    const handleBeforeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-        const newValue = event.target.checked;
-        setIsBefore(newValue);
-        const newParams = new URLSearchParams(searchParams);
-        newParams.set('before', newValue.toString());
-        setSearchParams(newParams);
-    };
-
     useEffect(() => {
         if (accountId === 0) {
             setLoading(false);
@@ -85,13 +68,16 @@ export const MatchHistory: React.FC<MatchHistoryProps> = ({accountId}: MatchHist
         return () => abort.abort();
     }, [accountId, authHeader, date, isBefore, navigate, searchParams, setSearchParams]);
 
-    function renderNavigation() {
+    function renderNavigation(withDatePicker: boolean) {
         return <HistoryNavButtons
             items={matches}
             dateFunction={(m: MatchHistoryEntry) => m.matchTime}
+            date={date}
             setDate={setDate}
+            isBefore={isBefore}
             setIsBefore={setIsBefore}
             disabled={loading}
+            datePicker={withDatePicker}
         />;
     }
 
@@ -99,28 +85,7 @@ export const MatchHistory: React.FC<MatchHistoryProps> = ({accountId}: MatchHist
         <FlexBox style={{flexDirection: 'column'}}>
             {error && <ErrorDialog error={error} onDismiss={() => setError(undefined)}/>}
 
-            <Box sx={{display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center'}}>
-                <FormControlLabel
-                    control={
-                        <Switch
-                            checked={isBefore}
-                            onChange={handleBeforeChange}
-                            size="small"
-                        />
-                    }
-                    label={isBefore ? "Showing messages before" : "Showing messages after"}
-                />
-                <LocalizationProvider dateAdapter={AdapterDayjs}>
-                    <DateTimePicker
-                        label="Date"
-                        value={date}
-                        onChange={handleDateChange}
-                        slotProps={{textField: {size: 'small'}}}
-                    />
-                </LocalizationProvider>
-
-            </Box>
-            {renderNavigation()}
+            {renderNavigation(true)}
 
             {loading &&
                 <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
@@ -182,7 +147,7 @@ export const MatchHistory: React.FC<MatchHistoryProps> = ({accountId}: MatchHist
                     No matches found
                 </Typography>
             )}
-            {!loading && matches.length > 0 && renderNavigation()}
+            {!loading && matches.length > 0 && renderNavigation(false)}
         </FlexBox>
     );
 };

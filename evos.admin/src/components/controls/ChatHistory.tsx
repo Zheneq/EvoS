@@ -1,7 +1,6 @@
 import React, {useEffect, useState} from 'react';
 import {
     Box,
-    Button,
     CircularProgress,
     FormControlLabel,
     Switch,
@@ -12,9 +11,6 @@ import {
     TableRow,
     Typography
 } from '@mui/material';
-import {LocalizationProvider} from '@mui/x-date-pickers/LocalizationProvider';
-import {AdapterDayjs} from '@mui/x-date-pickers/AdapterDayjs';
-import {DateTimePicker} from '@mui/x-date-pickers/DateTimePicker';
 import dayjs from 'dayjs';
 import {
     CharacterType,
@@ -22,14 +18,14 @@ import {
     chatTypeColors,
     formatDate,
     getChatHistory,
-    getPlayers, MatchHistoryEntry,
+    getPlayers,
     PlayerData
 } from "../../lib/Evos";
 import {useAuthHeader} from "react-auth-kit";
 import {EvosError, processError} from "../../lib/Error";
 import {useNavigate, useSearchParams} from "react-router-dom";
 import ErrorDialog from "../generic/ErrorDialog";
-import {FlexBox, plainAccountLink} from "../generic/BasicComponents";
+import {FlexBox, plainAccountLink, plainMatchLink} from "../generic/BasicComponents";
 import {CharacterIcon} from "../atlas/CharacterIcon";
 import HistoryNavButtons from "../generic/HistoryNavButtons";
 
@@ -65,23 +61,6 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({accountId}: ChatHistory
     const [error, setError] = useState<EvosError>();
     const authHeader = useAuthHeader()();
     const navigate = useNavigate();
-
-    const handleDateChange = (newValue: dayjs.Dayjs | null) => {
-        if (newValue) {
-            setDate(newValue);
-            const newParams = new URLSearchParams(searchParams);
-            newParams.set('ts', Math.floor(newValue.unix()).toString());
-            setSearchParams(newParams);
-        }
-    };
-
-    const handleBeforeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-        const newValue = event.target.checked;
-        setIsBefore(newValue);
-        const newParams = new URLSearchParams(searchParams);
-        newParams.set('before', newValue.toString());
-        setSearchParams(newParams);
-    };
 
     const handleGeneralChatChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const newValue = event.target.checked;
@@ -140,13 +119,16 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({accountId}: ChatHistory
         return msg.senderId === accountId ? 'white' : 'grey.400'
     }
 
-    function renderNavigation() {
+    function renderNavigation(withDatePicker: boolean) {
         return <HistoryNavButtons
             items={messages}
             dateFunction={(m: ChatMessage) => m.time}
+            date={date}
             setDate={setDate}
+            isBefore={isBefore}
             setIsBefore={setIsBefore}
             disabled={loading}
+            datePicker={withDatePicker}
         />;
     }
 
@@ -158,24 +140,6 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({accountId}: ChatHistory
                 <FormControlLabel
                     control={
                         <Switch
-                            checked={isBefore}
-                            onChange={handleBeforeChange}
-                            size="small"
-                        />
-                    }
-                    label={isBefore ? "Showing messages before" : "Showing messages after"}
-                />
-                <LocalizationProvider dateAdapter={AdapterDayjs}>
-                    <DateTimePicker
-                        label="Date"
-                        value={date}
-                        onChange={handleDateChange}
-                        slotProps={{textField: {size: 'small'}}}
-                    />
-                </LocalizationProvider>
-                <FormControlLabel
-                    control={
-                        <Switch
                             checked={isWithGeneralChat}
                             onChange={handleGeneralChatChange}
                             size="small"
@@ -183,9 +147,8 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({accountId}: ChatHistory
                     }
                     label="Include general chat"
                 />
-
             </Box>
-            {renderNavigation()}
+            {renderNavigation(true)}
 
             {loading &&
                 <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
@@ -269,7 +232,7 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({accountId}: ChatHistory
                                         </React.Fragment>
                                     ))}</TableCell>
 
-                                    <TableCell>{"TODO"}</TableCell>
+                                    <TableCell>{msg.game && plainMatchLink(accountId, msg.game, navigate)}</TableCell>
                                 </TableRow>
                             ))}
                         </TableBody>
@@ -282,7 +245,7 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({accountId}: ChatHistory
                     No messages found
                 </Typography>
             )}
-            {!loading && messages.length > 0 && renderNavigation()}
+            {!loading && messages.length > 0 && renderNavigation(false)}
         </FlexBox>
     );
 };

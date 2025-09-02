@@ -1,19 +1,27 @@
-import {Box, Button} from "@mui/material";
+import {Box, Button, FormControlLabel, Switch} from "@mui/material";
 import dayjs from "dayjs";
 import {useSearchParams} from "react-router-dom";
 import React from "react";
+import {LocalizationProvider} from "@mui/x-date-pickers/LocalizationProvider";
+import {AdapterDayjs} from "@mui/x-date-pickers/AdapterDayjs";
+import {DateTimePicker} from "@mui/x-date-pickers/DateTimePicker";
 
 export const PARAM_TS = 'ts'
 
 interface HistoryNavButtonsProps<T> {
     items: T[];
     dateFunction: (item: T) => string;
+    date: dayjs.Dayjs;
     setDate: (date: dayjs.Dayjs) => void;
+    isBefore: boolean;
     setIsBefore: (isBefore: boolean) => void;
     disabled: boolean;
+    datePicker: boolean;
 }
 
-export default function HistoryNavButtons<T>({items, dateFunction, setDate, setIsBefore, disabled}: HistoryNavButtonsProps<T>) {
+export default function HistoryNavButtons<T>(
+    {items, dateFunction, date, setDate, isBefore, setIsBefore, disabled, datePicker}: HistoryNavButtonsProps<T>
+) {
     const [searchParams, setSearchParams] = useSearchParams();
 
     const handleBackward = () => {
@@ -47,27 +55,69 @@ export default function HistoryNavButtons<T>({items, dateFunction, setDate, setI
         setSearchParams(newParams);
     };
 
-    return <Box sx={{display: 'flex', justifyContent: 'center', gap: 2, my: 2}}>
-        <Button
-            variant="contained"
-            onClick={handleBackward}
-            disabled={disabled || items.length === 0}
-        >
-            ← Older
-        </Button>
-        <Button
-            variant="contained"
-            onClick={handleLatest}
-            disabled={disabled}
-        >
-            Latest
-        </Button>
-        <Button
-            variant="contained"
-            onClick={handleForward}
-            disabled={disabled || items.length === 0}
-        >
-            Newer →
-        </Button>
+    const handleDateChange = (newValue: dayjs.Dayjs | null) => {
+        if (newValue) {
+            setDate(newValue);
+            const newParams = new URLSearchParams(searchParams);
+            newParams.set(PARAM_TS, Math.floor(newValue.unix()).toString());
+            setSearchParams(newParams);
+        }
+    };
+
+    const handleBeforeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const newValue = event.target.checked;
+        setIsBefore(newValue);
+        const newParams = new URLSearchParams(searchParams);
+        newParams.set('before', newValue.toString());
+        setSearchParams(newParams);
+    };
+
+    return <Box>
+        {datePicker &&
+            <Box sx={{display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center'}}>
+                <FormControlLabel
+                    control={
+                        <Switch
+                            checked={isBefore}
+                            onChange={handleBeforeChange}
+                            size="small"
+                        />
+                    }
+                    label={isBefore ? "Showing items before" : "Showing items after"}
+                />
+                <LocalizationProvider dateAdapter={AdapterDayjs}>
+                    <DateTimePicker
+                        label="Date"
+                        value={date}
+                        onChange={handleDateChange}
+                        slotProps={{textField: {size: 'small'}}}
+                    />
+                </LocalizationProvider>
+
+            </Box>
+        }
+        <Box sx={{display: 'flex', justifyContent: 'center', gap: 2, my: 2}}>
+            <Button
+                variant="contained"
+                onClick={handleBackward}
+                disabled={disabled || items.length === 0}
+            >
+                ← Older
+            </Button>
+            <Button
+                variant="contained"
+                onClick={handleLatest}
+                disabled={disabled}
+            >
+                Latest
+            </Button>
+            <Button
+                variant="contained"
+                onClick={handleForward}
+                disabled={disabled || items.length === 0}
+            >
+                Newer →
+            </Button>
+        </Box>
     </Box>;
 }
