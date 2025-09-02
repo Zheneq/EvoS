@@ -53,7 +53,7 @@ export default function HistoryNavButtons<T>(
         setIsBefore(newValue);
     };
 
-    return <Box>
+    return <Box sx={{margin: '1em'}}>
         {datePicker &&
             <Box sx={{display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center'}}>
                 <FormControlLabel

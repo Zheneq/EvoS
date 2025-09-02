@@ -67,7 +67,7 @@ export const MatchHistory: React.FC<MatchHistoryProps> = ({accountId}: MatchHist
     }
 
     return (
-        <FlexBox style={{flexDirection: 'column'}}>
+        <FlexBox style={{flexDirection: 'column', margin: '1em'}}>
             {error && <ErrorDialog error={error} onDismiss={() => setError(undefined)}/>}
             {renderNavigation(true)}
             {loading &&
