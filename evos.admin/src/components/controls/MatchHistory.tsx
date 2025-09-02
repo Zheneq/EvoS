@@ -19,10 +19,17 @@ const LIMIT = 50;
 export const MatchHistory: React.FC<MatchHistoryProps> = ({accountId}: MatchHistoryProps) => {
     const [searchParams, setSearchParams] = useSearchParams();
     const [matches, setMatches] = useState<MatchHistoryEntry[]>([]);
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(true);
 
-    const [date, setDate] = useState(dayjs());
-    const [isBefore, setIsBefore] = useState(false);
+    const [date, setDate] = useState(() => {
+        const tsParam = searchParams.get('ts');
+        return tsParam ? dayjs(parseInt(tsParam) * 1000) : dayjs();
+    });
+
+    const [isBefore, setIsBefore] = useState(() => {
+        const beforeParam = searchParams.get('before');
+        return beforeParam === null ? true : beforeParam === 'true';
+    });
 
     const [error, setError] = useState<EvosError>();
     const authHeader = useAuthHeader()();

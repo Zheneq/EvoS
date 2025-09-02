@@ -39,13 +39,11 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({accountId}: ChatHistory
     const [searchParams, setSearchParams] = useSearchParams();
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [players, setPlayers] = useState<Map<number, PlayerData>>(new Map());
-    const [loading, setLoading] = useState(false);
-
-    const defaultTs = dayjs();
+    const [loading, setLoading] = useState(true);
 
     const [date, setDate] = useState(() => {
         const tsParam = searchParams.get('ts');
-        return tsParam ? dayjs(parseInt(tsParam) * 1000) : defaultTs;
+        return tsParam ? dayjs(parseInt(tsParam) * 1000) : dayjs();
     });
 
     const [isBefore, setIsBefore] = useState(() => {
