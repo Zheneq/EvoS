@@ -4,7 +4,7 @@ import {EvosError, processError} from "../../lib/Error";
 import {useAuthHeader} from "react-auth-kit";
 import {useNavigate, useParams} from "react-router-dom";
 import Player from "../atlas/Player";
-import {LinearProgress, Paper} from "@mui/material";
+import {Button, LinearProgress, Paper} from "@mui/material";
 import ErrorDialog from "../generic/ErrorDialog";
 import MuteBanPlayer from "../controls/MuteBanPlayer";
 import {EvosCard, StackWrapper} from "../generic/BasicComponents";
@@ -51,6 +51,11 @@ export default function ProfilePage() {
             <StackWrapper>
                 <EvosCard variant="outlined"><Player info={playerDetails?.player} /></EvosCard>
                 {loading && <LinearProgress />}
+                <EvosCard variant="outlined">
+                    <Button onClick={() => navigate(`/account/${accountIdNumber}/matches`)}>Match History</Button>
+                    <Button onClick={() => navigate(`/account/${accountIdNumber}/chat`)}>Chat History</Button>
+                    <Button onClick={() => navigate(`/account/${accountIdNumber}/feedback`)}>Feedback History</Button>
+                </EvosCard>
                 <MuteBanPlayer
                     disabled={loading}
                     deadline={asDate(playerDetails?.mutedUntil)}
