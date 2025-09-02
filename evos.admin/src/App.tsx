@@ -11,6 +11,7 @@ import ProfileSearchPage from "./components/pages/ProfileSearchPage";
 import CodesPage from './components/pages/CodesPage';
 import ChatHistoryPage from "./components/pages/ChatHistoryPage";
 import MatchPage from "./components/pages/MatchPage";
+import MatchHistoryPage from "./components/pages/MatchHistoryPage";
 
 const theme = createTheme({
     components: {
@@ -120,6 +121,7 @@ function App() {
                         <Route path="/account/:accountId" element={page("Account", <ProfilePage/>)}/>
                         <Route path="/account/:accountId/chat" element={page("Chat History", <ChatHistoryPage/>)}/>
                         <Route path="/account/:accountId/matches/:matchId" element={page("Match", <MatchPage/>)}/>
+                        <Route path="/account/:accountId/matches" element={page("Match History", <MatchHistoryPage/>)}/>
                     </Routes>
                 </Paper>
             </BrowserRouter>

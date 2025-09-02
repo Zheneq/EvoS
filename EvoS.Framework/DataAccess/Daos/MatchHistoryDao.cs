@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using EvoS.Framework.Constants.Enums;
 using EvoS.Framework.Network.Static;
+using MongoDB.Bson.Serialization.Attributes;
 
 namespace EvoS.Framework.DataAccess.Daos
 {
@@ -16,6 +17,7 @@ namespace EvoS.Framework.DataAccess.Daos
         public PersistedCharacterMatchData FindByTimestamp(long accountId, string timestamp);
         public void Save(ICollection<MatchEntry> matchEntries);
 
+        [BsonIgnoreExtraElements]
         public class MatchEntry
         {
             public long AccountId;

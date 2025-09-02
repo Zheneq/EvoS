@@ -22,7 +22,7 @@ import {
     chatTypeColors,
     formatDate,
     getChatHistory,
-    getPlayers,
+    getPlayers, MatchHistoryEntry,
     PlayerData
 } from "../../lib/Evos";
 import {useAuthHeader} from "react-auth-kit";
@@ -31,6 +31,7 @@ import {useNavigate, useSearchParams} from "react-router-dom";
 import ErrorDialog from "../generic/ErrorDialog";
 import {FlexBox, plainAccountLink} from "../generic/BasicComponents";
 import {CharacterIcon} from "../atlas/CharacterIcon";
+import HistoryNavButtons from "../generic/HistoryNavButtons";
 
 interface ChatHistoryProps {
     accountId: number;
@@ -90,30 +91,6 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({accountId}: ChatHistory
         setSearchParams(newParams);
     };
 
-    const handleBackward = () => {
-        if (messages.length > 0) {
-            const oldestMessageTime = dayjs(messages[0].time);
-            setDate(oldestMessageTime);
-            setIsBefore(true);
-            const newParams = new URLSearchParams(searchParams);
-            newParams.set('ts', Math.floor(oldestMessageTime.unix()).toString());
-            setSearchParams(newParams);
-        }
-    };
-
-    const handleForward = () => {
-        if (messages.length > 0) {
-            console.log(messages[messages.length - 1].time)
-            console.log(new Date(messages[messages.length - 1].time))
-            const newestMessageTime = dayjs(messages[messages.length - 1].time);
-            setDate(newestMessageTime);
-            setIsBefore(false);
-            const newParams = new URLSearchParams(searchParams);
-            newParams.set('ts', Math.floor(newestMessageTime.unix()).toString());
-            setSearchParams(newParams);
-        }
-    };
-
     useEffect(() => {
         if (accountId === 0) {
             setLoading(false);
@@ -164,22 +141,13 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({accountId}: ChatHistory
     }
 
     function renderNavigation() {
-        return <Box sx={{display: 'flex', justifyContent: 'center', gap: 2, my: 2}}>
-            <Button
-                variant="contained"
-                onClick={handleBackward}
-                disabled={loading || messages.length === 0}
-            >
-                ← Older
-            </Button>
-            <Button
-                variant="contained"
-                onClick={handleForward}
-                disabled={loading || messages.length === 0}
-            >
-                Newer →
-            </Button>
-        </Box>;
+        return <HistoryNavButtons
+            items={messages}
+            dateFunction={(m: ChatMessage) => m.time}
+            setDate={setDate}
+            setIsBefore={setIsBefore}
+            disabled={loading}
+        />;
     }
 
     return (

@@ -658,3 +658,41 @@ export function getMatch(abort: AbortController, authHeader: string, accountId: 
         }
     );
 }
+
+export interface MatchHistoryEntry {
+    matchId: string;
+    matchTime: string;
+    character: CharacterType;
+    mapName: string;
+    numOfTurns: number;
+    friendlyScore: number;
+    enemyScore: number;
+    result: PlayerGameResult;
+}
+
+export interface MatchHistoryResponse {
+    matches: MatchHistoryEntry[];
+}
+
+export function getMatchHistory(
+    abort: AbortController,
+    authHeader: string,
+    accountId: number,
+    date: number,
+    before: boolean,
+    limit?: number
+) {
+    return axios.get<MatchHistoryResponse>(
+        baseUrl + "/api/admin/player/matches",
+        {
+            params: {
+                accountId: accountId,
+                after: before ? undefined : date,
+                before: before ? date : undefined,
+                limit: limit
+            },
+            headers: { 'Authorization': authHeader },
+            signal: abort.signal
+        }
+    );
+}

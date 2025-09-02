@@ -341,6 +341,7 @@ public static class MatchController
     public class MatchHistoryEntryModel
     {
         public string MatchId { get; set; }
+        public DateTime MatchTime { get; set; }
         public string Character { get; set; }
         public string MapName { get; set; }
         public int NumOfTurns { get; set; }
@@ -353,6 +354,7 @@ public static class MatchController
             return new MatchHistoryEntryModel
             {
                 MatchId = data.GameServerProcessCode,
+                MatchTime = data.MatchComponent.MatchTime,
                 Character = data.MatchComponent.CharacterUsed.ToString(),
                 MapName = data.MatchComponent.MapName,
                 NumOfTurns = data.MatchComponent.NumOfTurns,
