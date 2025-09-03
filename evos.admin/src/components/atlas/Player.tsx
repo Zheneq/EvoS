@@ -8,6 +8,7 @@ import {useNavigate} from "react-router-dom";
 interface Props {
     info?: PlayerData;
     greyOut?: boolean;
+    bot?: boolean;
 }
 
 const ImageTextWrapper = styled('span')(({ theme }) => ({
@@ -20,17 +21,32 @@ const ImageTextWrapper = styled('span')(({ theme }) => ({
     textShadow: '1px 1px 2px black, -1px -1px 2px black, 1px -1px 2px black, -1px 1px 2px black',
 }));
 
-function Player({info, greyOut}: Props) {
+function Player({info, greyOut, bot}: Props) {
     let username = 'OFFLINE', discriminator;
     if (info) {
         [username, discriminator] = info.handle.split('#', 2)
+    } else if (bot) {
+        username = 'Bot'
+        info = {
+            accountId: 0,
+            handle: 'Bot',
+            bannerBg: 95,
+            bannerFg: 65,
+            status: '',
+            titleId: 0,
+            factionData: {
+                factions: [],
+                selectedRibbonID: -1
+            },
+            buildVersion: '',
+        }
     }
 
     const navigate = useNavigate();
     const theme = useTheme();
 
     const handleClick = () => {
-        if (!info) {
+        if (!info || bot) {
             return;
         }
         navigate(`/account/${info.accountId}`);
@@ -99,7 +115,7 @@ function Player({info, greyOut}: Props) {
                     bottom: '8%',
                     fontSize: '1.7em',
                 }}>
-                <Typography component={'span'} style={{ fontSize: '1em' }}>{info.status === "" ? "Online" : info.status}</Typography>
+                <Typography component={'span'} style={{ fontSize: '1em' }}>{info.status === "" && !bot ? "Online" : info.status}</Typography>
             </ImageTextWrapper>}
             {info && info.buildVersion &&
                 <ImageTextWrapper style={{bottom: '2%', width: '69%', textAlign: 'right'}}>

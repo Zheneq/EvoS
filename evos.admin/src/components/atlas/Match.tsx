@@ -125,7 +125,7 @@ export const Match: React.FC<MatchProps> = ({match, playerData}: MatchProps) => 
                                         >
                                             <TableCell>
                                                 <Stack direction={'row'}>
-                                                    <Player info={info} />
+                                                    <Player info={info} bot={player.player.accountId === 0} />
                                                     <CharacterIcon
                                                         characterType={player.character.type}
                                                         data={info}
