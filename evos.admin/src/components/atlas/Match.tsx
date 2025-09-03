@@ -113,7 +113,7 @@ export const Match: React.FC<MatchProps> = ({match, playerData}: MatchProps) => 
                                     const info = playerData.get(player.player.accountId); // TODO use PlayerCustomization
                                     return (
                                         <TableRow
-                                            key={player.player.accountId}
+                                            key={player.player.playerId}
                                             sx={{
                                                 marginBottom: '1em',
                                                 backgroundColor:
