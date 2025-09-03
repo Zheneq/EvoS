@@ -343,6 +343,8 @@ public static class MatchController
         public string MatchId { get; set; }
         public DateTime MatchTime { get; set; }
         public string Character { get; set; }
+        public string GameType { get; set; }
+        public string SubType { get; set; }
         public string MapName { get; set; }
         public int NumOfTurns { get; set; }
         public int FriendlyScore { get; set; }
@@ -356,6 +358,8 @@ public static class MatchController
                 MatchId = data.GameServerProcessCode,
                 MatchTime = data.MatchComponent.MatchTime,
                 Character = data.MatchComponent.CharacterUsed.ToString(),
+                GameType = data.MatchComponent.GameType.ToString(),
+                SubType = data.MatchComponent.SubTypeLocTag,
                 MapName = data.MatchComponent.MapName,
                 NumOfTurns = data.MatchComponent.NumOfTurns,
                 FriendlyScore = data.MatchDetailsComponent.MatchResults.BlueScore,

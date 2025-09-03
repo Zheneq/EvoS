@@ -664,6 +664,8 @@ export interface MatchHistoryEntry {
     matchId: string;
     matchTime: string;
     character: CharacterType;
+    gameType: string;
+    subType: string;
     mapName: string;
     numOfTurns: number;
     friendlyScore: number;

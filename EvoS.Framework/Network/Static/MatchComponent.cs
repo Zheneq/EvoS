@@ -33,7 +33,7 @@ namespace EvoS.Framework.Network.Static
             GameType = gameInfo.GameConfig.GameType;
             MapName = gameInfo.GameConfig.Map;
             NumOfTurns = gameSummary.NumOfTurns;
-            SubTypeLocTag = null; // TODO
+            SubTypeLocTag = gameInfo.GameConfig.SelectedSubType.LocalizedName;
             Actors = gameSummary.PlayerGameSummaryList.Select(pgs => new Actor
             {
                 Character = pgs.CharacterPlayed,
