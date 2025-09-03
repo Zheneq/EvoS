@@ -65,6 +65,7 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({accountId}: ChatHistory
         newParams.set('generalChat', isWithGeneralChat.toString());
         newParams.set('ts', Math.floor(date.unix()).toString());
         setSearchParams(newParams);
+    // eslint-disable-next-line
     }, [date, isBefore, isWithGeneralChat]);
 
     const limit = searchParams.get('limit');

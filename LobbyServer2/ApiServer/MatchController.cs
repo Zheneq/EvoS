@@ -110,8 +110,8 @@ public static class MatchController
                     .ToList() ?? new(),
                 Score = new ScoreModel
                 {
-                    RedTeam = stats.RedScore,
-                    BlueTeam = stats.BlueScore
+                    TeamAScore = stats.RedScore,
+                    TeamBScore = stats.BlueScore
                 },
                 VictoryCondition = stats.VictoryCondition,
                 VictoryConditionTurns = stats.VictoryConditionTurns,
@@ -122,8 +122,8 @@ public static class MatchController
 
     public class ScoreModel
     {
-        public int RedTeam { get; set; }
-        public int BlueTeam { get; set; }
+        public int TeamAScore { get; set; }
+        public int TeamBScore { get; set; }
     }
 
     public class TeamStatlineModel
@@ -347,8 +347,9 @@ public static class MatchController
         public string SubType { get; set; }
         public string MapName { get; set; }
         public int NumOfTurns { get; set; }
-        public int FriendlyScore { get; set; }
-        public int EnemyScore { get; set; }
+        public int TeamAScore { get; set; }
+        public int TeamBScore { get; set; }
+        public string Team { get; set; }
         public string Result { get; set; }
 
         public static MatchHistoryEntryModel From(PersistedCharacterMatchData data)
@@ -362,8 +363,9 @@ public static class MatchController
                 SubType = data.MatchComponent.SubTypeLocTag,
                 MapName = data.MatchComponent.MapName,
                 NumOfTurns = data.MatchComponent.NumOfTurns,
-                FriendlyScore = data.MatchDetailsComponent.MatchResults.BlueScore,
-                EnemyScore = data.MatchDetailsComponent.MatchResults.RedScore,
+                TeamAScore = data.MatchDetailsComponent.MatchResults.RedScore,
+                TeamBScore = data.MatchDetailsComponent.MatchResults.BlueScore,
+                Team = data.MatchComponent.Actors.Find(player => player.IsPlayer).Team.ToString(),
                 Result = data.MatchComponent.Result.ToString()
             };
         }

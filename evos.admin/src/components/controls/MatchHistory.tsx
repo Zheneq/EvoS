@@ -1,6 +1,6 @@
 import React, {useEffect, useState} from 'react';
 import {Box, LinearProgress, Table, TableBody, TableCell, TableHead, TableRow, Typography} from '@mui/material';
-import {formatDate, getMatchHistory, MatchHistoryEntry, Team} from "../../lib/Evos";
+import {formatDate, getMatchHistory, MatchHistoryEntry, resultColors, Team} from "../../lib/Evos";
 import {useAuthHeader} from "react-auth-kit";
 import {EvosError, processError} from "../../lib/Error";
 import {useNavigate, useSearchParams} from "react-router-dom";
@@ -33,6 +33,7 @@ export const MatchHistory: React.FC<MatchHistoryProps> = ({accountId}: MatchHist
         newParams.set('before', isBefore.toString());
         newParams.set('ts', Math.floor(date.unix()).toString());
         setSearchParams(newParams);
+    // eslint-disable-next-line
     }, [date, isBefore]);
 
     useEffect(() => {
@@ -102,6 +103,7 @@ export const MatchHistory: React.FC<MatchHistoryProps> = ({accountId}: MatchHist
                                     key={index}
                                     sx={{
                                         '&:last-child td, &:last-child th': {border: 0},
+                                        backgroundColor: resultColors.get(match.result),
                                         '&:hover': {
                                             backgroundColor: 'rgba(255, 255, 255, 0.08)',
                                             cursor: 'pointer'
@@ -121,7 +123,11 @@ export const MatchHistory: React.FC<MatchHistoryProps> = ({accountId}: MatchHist
                                     <TableCell>{match.gameType} {match.subType?.split('@')[0]}</TableCell>
                                     <TableCell>{match.mapName}</TableCell>
                                     <TableCell>{match.numOfTurns}</TableCell>
-                                    <TableCell>{match.friendlyScore}-{match.enemyScore}</TableCell>
+                                    <TableCell>{
+                                        match.team === Team.TeamA
+                                            ? `${match.teamAScore}-${match.teamBScore}`
+                                            : `${match.teamBScore}-${match.teamAScore}`
+                                    }</TableCell>
                                     <TableCell>{match.result}</TableCell>
                                 </TableRow>
                             ))}

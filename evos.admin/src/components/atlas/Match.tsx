@@ -51,10 +51,7 @@ interface MatchProps {
 export const Match: React.FC<MatchProps> = ({match, playerData}: MatchProps) => {
     const povTeam = getPovTeam(match);
     const otherTeam = povTeam === Team.TeamA ? Team.TeamB : Team.TeamA;
-
-    const povTeamScore = match.matchDetailsComponent.matchResults.score.blueTeam;
-    const otherTeamScore = match.matchDetailsComponent.matchResults.score.redTeam;
-    const score = `${povTeam === Team.TeamA ? povTeamScore : otherTeamScore}-${povTeam === Team.TeamA ? otherTeamScore : povTeamScore }`
+    const score = `${match.matchDetailsComponent.matchResults.score.teamAScore}-${match.matchDetailsComponent.matchResults.score.teamBScore}`
 
     return (
         <Box>

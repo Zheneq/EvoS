@@ -428,7 +428,6 @@ export const chatTypeColors = new Map<ChatType, string>([
     [ChatType.ScriptedChat, '#006053'],
 ]);
 
-
 export interface UserFeedback {
     accountId: number;
     time: string;
@@ -522,6 +521,13 @@ export enum PlayerGameResult {
     Lose = 'Lose'
 }
 
+export const resultColors = new Map<PlayerGameResult, string>([
+    [PlayerGameResult.NoResult, 'rgba(0,0,0,0)'],
+    [PlayerGameResult.Tie, 'rgba(255,255,0,0.16)'],
+    [PlayerGameResult.Win, 'rgba(0,255,0,0.1)'],
+    [PlayerGameResult.Lose, 'rgba(255,0,0,0.1)'],
+]);
+
 export interface MatchActor {
     character: CharacterType;
     team: Team;
@@ -607,8 +613,8 @@ export interface CatalystPhaseInfo {
 }
 
 export interface Score {
-    redTeam: number;
-    blueTeam: number;
+    teamAScore: number;
+    teamBScore: number;
 }
 
 export interface MatchResultsStats {
@@ -668,8 +674,9 @@ export interface MatchHistoryEntry {
     subType: string;
     mapName: string;
     numOfTurns: number;
-    friendlyScore: number;
-    enemyScore: number;
+    teamAScore: number;
+    teamBScore: number;
+    team: Team;
     result: PlayerGameResult;
 }
 
