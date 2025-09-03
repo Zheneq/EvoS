@@ -114,7 +114,7 @@ export const MatchHistory: React.FC<MatchHistoryProps> = ({accountId}: MatchHist
                                             noTooltip
                                         />
                                     </TableCell>
-                                    <TableCell>{match.gameType} {match.subType}</TableCell>
+                                    <TableCell>{match.gameType} {match.subType?.split('@')[0]}</TableCell>
                                     <TableCell>{match.mapName}</TableCell>
                                     <TableCell>{match.numOfTurns}</TableCell>
                                     <TableCell>{match.friendlyScore}-{match.enemyScore}</TableCell>
