@@ -102,6 +102,10 @@ export const MatchHistory: React.FC<MatchHistoryProps> = ({accountId}: MatchHist
                                     key={index}
                                     sx={{
                                         '&:last-child td, &:last-child th': {border: 0},
+                                        '&:hover': {
+                                            backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                                            cursor: 'pointer'
+                                        }
                                     }}
                                     onClick={() => navigate(`/account/${accountId}/matches/${match.matchId}`)}
                                 >
