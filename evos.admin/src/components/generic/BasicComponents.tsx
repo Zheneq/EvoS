@@ -32,7 +32,7 @@ export const StackWrapper = styled(Stack)(({theme}) => ({
 }));
 
 export const StyledLink = styled(Link)(({ theme }) => ({
-    color: '#94cef6',
+    color: '#7ae',
     cursor: 'pointer',
     border: 'none',
     background: 'none',
