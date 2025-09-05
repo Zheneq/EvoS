@@ -94,12 +94,15 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({accountId}: ChatHistory
                         ...resp.data.messages.map(msg => msg.senderId),
                         ...resp.data.messages.flatMap(msg => msg.recipients)
                     ]));
+                if (accountIds.length === 0) {
+                    return Promise.resolve(undefined);
+                }
                 return getPlayers(abort, authHeader, accountIds);
             })
             .then((playersResp) => {
-                const playersMap = new Map(
-                    playersResp.data.players.map(player => [player.accountId, player])
-                );
+                const playersMap = playersResp
+                    ? new Map(playersResp.data.players.map(player => [player.accountId, player]))
+                    : new Map();
                 setPlayers(playersMap);
             })
             .catch((error) => processError(error, setError, navigate))
