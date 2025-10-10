@@ -360,7 +360,7 @@ namespace CentralServer.LobbyServer.Discord
                             ? $"to {DiscordLobbyUtils.FormatMessageRecipients(notification.SenderAccountId, recipients)}"
                             : fallback,
                         Color = DiscordLobbyUtils.GetColor(notification.ConsoleMessageType),
-                        Footer = new EmbedFooterBuilder { Text = isMuted ? $"MUTED ({context})" : context }
+                        Footer = footer(isMuted ? $"MUTED ({context})" : context)
                     }.Build() },
                     threadIdOverride: conf.AdminChatAuditThreadId);
             }
@@ -696,7 +696,7 @@ namespace CentralServer.LobbyServer.Discord
                         Description = $"{handle} has encountered error `{stackTraceHash}`{
                             (count > 1 ? $" {count} times" : "")} on version `{clientVersion}`",
                         Color = DiscordUtils.GetLogColor(Level.Warn),
-                        Footer = new EmbedFooterBuilder { Text = $"{error.LogString}\n{error.StackTrace}" }
+                        Footer = footer($"{error.LogString}\n{error.StackTrace}")
                     }.Build() });
             }
             catch (Exception e)
@@ -770,11 +770,8 @@ namespace CentralServer.LobbyServer.Discord
                 GameReportAddPlayer(eb, teamB.ElementAtOrDefault(i));
             }
 
-            EmbedFooterBuilder footer = new EmbedFooterBuilder
-            {
-                Text = $"{serverName} - {serverVersion} - {GameUtils.GameIdString(gameInfo)} - {gameInfo.GameServerProcessCode}"
-            };
-            eb.Footer = footer;
+            eb.Footer = footer(
+                $"{serverName} - {serverVersion} - {GameUtils.GameIdString(gameInfo)} - {gameInfo.GameServerProcessCode}");
             return eb.Build();
         }
 
@@ -901,6 +898,18 @@ namespace CentralServer.LobbyServer.Discord
             }
 
             return false;
+        }
+
+        private const int FOOTER_MAX_LENGTH = 2048;
+        
+        private static EmbedFooterBuilder footer(String text)
+        {
+            if (text.Length > FOOTER_MAX_LENGTH)
+            {
+                text = text[..(FOOTER_MAX_LENGTH - 3)] + "...";
+            }
+
+            return new EmbedFooterBuilder { Text = text };
         }
     }
 }
