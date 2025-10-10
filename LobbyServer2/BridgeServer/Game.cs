@@ -331,8 +331,11 @@ public abstract class Game
 
     public void OnPlayerUsedGGPack(long accountId)
     {
-        GameInfo.ggPackUsedAccountIDs.TryGetValue(accountId, out int ggPackUsedAccountIDs);
-        GameInfo.ggPackUsedAccountIDs[accountId] = ggPackUsedAccountIDs + 1;
+        lock (GameInfo.ggPackUsedAccountIDs)
+        {
+            GameInfo.ggPackUsedAccountIDs.TryGetValue(accountId, out int ggPackUsedAccountIDs);
+            GameInfo.ggPackUsedAccountIDs[accountId] = ggPackUsedAccountIDs + 1;
+        }
     }
 
     public void SendGameAssignmentNotification(LobbyServerProtocol client, bool reconnection = false)
