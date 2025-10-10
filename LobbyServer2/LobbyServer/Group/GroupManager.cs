@@ -33,6 +33,12 @@ namespace CentralServer.LobbyServer.Group
             return ActiveGroups.GetValueOrDefault(groupId);
         }
         
+        public static List<long> GetGroupMembers(long groupId)
+        {
+            GroupInfo groupInfo = GetGroup(groupId);
+            return groupInfo is null ? new List<long>() : groupInfo.Members;
+        }
+        
         public static List<GroupInfo> GetGroups()
         {
             return ActiveGroups.Values.ToList();

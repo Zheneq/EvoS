@@ -37,8 +37,8 @@ public abstract class Matchmaker
             QueueTime = queueTime;
         }
 
-        public MatchmakingGroup(long groupID, DateTime queueTime = default)
-            : this(groupID, GroupManager.GetGroup(groupID).Members.ToList(), queueTime)
+        public MatchmakingGroup(GroupInfo groupInfo, DateTime queueTime = default)
+            : this(groupInfo.GroupId, groupInfo.Members.ToList(), queueTime)
         {
         }
 

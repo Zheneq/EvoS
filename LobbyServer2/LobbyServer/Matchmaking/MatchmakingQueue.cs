@@ -104,7 +104,7 @@ namespace CentralServer.LobbyServer.Matchmaking
             for (int i = 0; i < MatchmakingQueueInfo.GameConfig.SubTypes.Count; i++)
             {
                 res.Add(GetQueuedGroups(i)
-                    .SelectMany(g => GroupManager.GetGroup(g).Members)
+                    .SelectMany(GroupManager.GetGroupMembers)
                     .ToList());
             }
 
@@ -297,10 +297,19 @@ namespace CentralServer.LobbyServer.Matchmaking
                             if (!GetQueueTime(groupId, out DateTime queueTime))
                             {
                                 log.Error($"Cannon fetch queue time for group {groupId}");
+                                queueTime = DateTime.UtcNow;
                             }
 
-                            return new Matchmaker.MatchmakingGroup(groupId, queueTime);
+                            GroupInfo group = GroupManager.GetGroup(groupId);
+                            if (group is null)
+                            {
+                                log.Error($"Group {groupId} is both queued and disbanded");
+                                return null;
+                            }
+
+                            return new Matchmaker.MatchmakingGroup(group, queueTime);
                         })
+                        .Where(g => g is not null)
                         .ToList();
                 }
                 queuedGroupsBySubtype[i] = queuedGroups;
@@ -335,8 +344,7 @@ namespace CentralServer.LobbyServer.Matchmaking
                                         $"[{string.Join(
                                             ", ",
                                             GroupManager
-                                                .GetGroup(g.GroupID)
-                                                .Members
+                                                .GetGroupMembers(g.GroupID)
                                                 .Select(LobbyServerUtils.GetHandle)
                                         )}] ({
                                         (matchmakingIterationStartTime - g.QueueTime).FormatMinutesSeconds()
@@ -475,7 +483,7 @@ namespace CentralServer.LobbyServer.Matchmaking
 
         private void SendQueueStatusNotifications()
         {
-            List<long> queuedAccountIds = QueuedGroups.Keys.SelectMany(g => GroupManager.GetGroup(g).Members).ToList();
+            List<long> queuedAccountIds = QueuedGroups.Keys.SelectMany(GroupManager.GetGroupMembers).ToList();
             var notify = new MatchmakingQueueStatusNotification
             {
                 MatchmakingQueueInfo = MatchmakingQueueInfo
