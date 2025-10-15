@@ -79,20 +79,14 @@ namespace EvoS.DirectoryServer
             var serverAddressesFeature = app.ServerFeatures.Get<IServerAddressesFeature>();
             log.Info($"Started DirectoryServer on '0.0.0.0:{EvosConfiguration.GetDirectoryServerPort()}'");
 
-            app.Run(async (context) =>
+            app.Run(async context =>
             {
-                var syncIOFeature = context.Features.Get<IHttpBodyControlFeature>();
-                if (syncIOFeature != null)
-                {
-                    syncIOFeature.AllowSynchronousIO = true;
-                }
-
                 context.Response.ContentType = "application/json";
                 MemoryStream ms = new MemoryStream();
-                context.Request.Body.CopyTo(ms);
+                await context.Request.Body.CopyToAsync(ms);
                 ms.Position = 0;
-                string requestBody = new StreamReader(ms).ReadToEnd();
-                ms.Dispose();
+                string requestBody = await new StreamReader(ms).ReadToEndAsync();
+                await ms.DisposeAsync();
 
                 AssignGameClientRequest request = JsonConvert.DeserializeObject<AssignGameClientRequest>(requestBody);
                 log.Debug($"< {request?.GetType().Name} {DefaultJsonSerializer.Serialize(request)}");
