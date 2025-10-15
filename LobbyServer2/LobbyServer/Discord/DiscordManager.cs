@@ -904,7 +904,7 @@ namespace CentralServer.LobbyServer.Discord
         
         private static EmbedFooterBuilder footer(String text)
         {
-            if (text.Length > FOOTER_MAX_LENGTH)
+            if (text is not null && text.Length > FOOTER_MAX_LENGTH)
             {
                 text = text[..(FOOTER_MAX_LENGTH - 3)] + "...";
             }
