@@ -128,6 +128,12 @@ namespace CentralServer
                     log.Error("No handler for " + deserialized.GetType().Name + ": " + DefaultJsonSerializer.Serialize(deserialized));
                 }
             }
+            else if (e.RawData.Length > 0)
+            {
+                log.Error("Request deserialized to null, "
+                          + $"size={e.RawData.Length} "
+                          + $"data=\"{System.Text.Encoding.Default.GetString(e.RawData)}\"");
+            }
         }
 
         protected void RegisterHandler<T>(Action<T, int> handler) where T : TMessage
