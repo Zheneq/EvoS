@@ -165,6 +165,8 @@ namespace CentralServer.LobbyServer
             RegisterHandler<UpdateRemoteCharacterRequest>(HandleUpdateRemoteCharacterRequest);
 
             RegisterHandler<FriendUpdateRequest>(HandleFriendUpdate);
+            
+            RegisterHandler<EvosOptionsNotification>(HandleEvosOptionsNotification);
         }
 
         private void HandleRankedTradeRequest(RankedTradeRequest request)
@@ -1028,6 +1030,10 @@ namespace CentralServer.LobbyServer
         }
 
         public void HandleOptionsNotification(OptionsNotification notification)
+        {
+        }
+
+        public void HandleEvosOptionsNotification(EvosOptionsNotification notification)
         {
         }
 

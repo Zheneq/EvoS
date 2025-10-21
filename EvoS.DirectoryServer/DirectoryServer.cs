@@ -25,9 +25,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Primitives;
 using Microsoft.IdentityModel.Tokens;
 using Newtonsoft.Json;
 
@@ -67,7 +65,11 @@ namespace EvoS.DirectoryServer
 
     public class DirectoryServer
     {
-        public const string SUPPORTED_PROTO_VERSION = "b486c83d8a8950340936d040e1953493";
+        public static readonly ISet<string> SUPPORTED_PROTO_VERSIONS = new HashSet<string>
+        {
+            "b486c83d8a8950340936d040e1953493", // vanilla
+            "6f13794bfd0bd8611eb312f456292eb3", // beta
+        };
         public const string BUILD_VERSION = "STABLE-122-100";
         public const string ERROR_INVALID_PROTOCOL_VERSION = "INVALID_PROTOCOL_VERSION";
 
@@ -115,7 +117,7 @@ namespace EvoS.DirectoryServer
 
         private static AssignGameClientResponse ProcessRequest(AssignGameClientRequest request, HttpContext context)
         {
-            if (request.SessionInfo.ProtocolVersion != SUPPORTED_PROTO_VERSION)
+            if (!SUPPORTED_PROTO_VERSIONS.Contains(request.SessionInfo.ProtocolVersion))
             {
                 return Fail(request, ERROR_INVALID_PROTOCOL_VERSION);
             }
