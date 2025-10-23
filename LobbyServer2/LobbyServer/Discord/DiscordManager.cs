@@ -356,9 +356,9 @@ namespace CentralServer.LobbyServer.Discord
                     embeds: new[] { new EmbedBuilder
                     {
                         Title = notification.Text,
-                        Description = !recipients.IsNullOrEmpty()
+                        Description = description(!recipients.IsNullOrEmpty()
                             ? $"to {DiscordLobbyUtils.FormatMessageRecipients(notification.SenderAccountId, recipients)}"
-                            : fallback,
+                            : fallback),
                         Color = DiscordLobbyUtils.GetColor(notification.ConsoleMessageType),
                         Footer = footer(isMuted ? $"MUTED ({context})" : context)
                     }.Build() },
@@ -389,7 +389,7 @@ namespace CentralServer.LobbyServer.Discord
                     embeds: new[] { new EmbedBuilder
                     {
                         Title = $"{record.ActionType} {account.Handle ?? $"#{accountId}"} for {record.Duration}",
-                        Description = record.Description,
+                        Description = description(record.Description),
                         Color = DiscordUtils.GetLogColor(Level.Warn),
                     }.Build() });
             }
@@ -418,7 +418,7 @@ namespace CentralServer.LobbyServer.Discord
                     embeds: new[] { new EmbedBuilder
                     {
                         Title = $"Admin message for {account.Handle ?? $"#{accountId}"}",
-                        Description = msg,
+                        Description = description(msg),
                         Color = DiscordUtils.GetLogColor(Level.Warn),
                     }.Build() });
             }
@@ -567,7 +567,7 @@ namespace CentralServer.LobbyServer.Discord
                     username: "Atlas Reactor",
                     embeds: new[] { new EmbedBuilder
                     {
-                        Description = msg,
+                        Description = description(msg),
                         Color = DiscordUtils.GetLogColor(severity)
                     }.Build() },
                     threadIdOverride: conf.AdminLogThreadId);
@@ -633,12 +633,14 @@ namespace CentralServer.LobbyServer.Discord
                     username: "Atlas Reactor",
                     embeds: new[] { new EmbedBuilder
                     {
-                        Description = $"{report.Status} report from {handle}\n"
-                                      + $"Device identifier: {report.DeviceIdentifier}\n"
-                                      + $"File date time: {report.FileDateTime}\n"
-                                      + $"Sent from version {sessionInfo?.BuildVersion}\n"
-                                      + $"Status details: {report.StatusDetails}\n"
-                                      + $"User message: {report.UserMessage}\n",
+                        Description = description(
+                            $"{report.Status} report from {handle}\n"
+                            + $"Device identifier: {report.DeviceIdentifier}\n"
+                            + $"File date time: {report.FileDateTime}\n"
+                            + $"Sent from version {sessionInfo?.BuildVersion}\n"
+                            + $"Status details: {report.StatusDetails}\n"
+                            + $"User message: {report.UserMessage}\n"
+                            ),
                         Color = DiscordUtils.GetLogColor(
                             report.Status is ClientStatusReport.ClientStatusReportType.Crash
                                 or ClientStatusReport.ClientStatusReportType.CrashUserMessage
@@ -693,8 +695,8 @@ namespace CentralServer.LobbyServer.Discord
                     username: "Atlas Reactor",
                     embeds: new[] { new EmbedBuilder
                     {
-                        Description = $"{handle} has encountered error `{stackTraceHash}`{
-                            (count > 1 ? $" {count} times" : "")} on version `{clientVersion}`",
+                        Description = description($"{handle} has encountered error `{stackTraceHash}`{
+                            (count > 1 ? $" {count} times" : "")} on version `{clientVersion}`"),
                         Color = DiscordUtils.GetLogColor(Level.Warn),
                         Footer = footer($"{error.LogString}\n{error.StackTrace}")
                     }.Build() });
@@ -731,7 +733,7 @@ namespace CentralServer.LobbyServer.Discord
                     text: $"New error encountered by {handle}",
                     embeds: new[] { new EmbedBuilder
                     {
-                        Description = $"ID `{error.StackTraceHash}`\n{error.LogString}\n{error.StackTrace}",
+                        Description = description($"ID `{error.StackTraceHash}`\n{error.LogString}\n{error.StackTrace}"),
                         Color = DiscordUtils.GetLogColor(Level.Warn)
                     }.Build() });
             }
@@ -750,9 +752,10 @@ namespace CentralServer.LobbyServer.Discord
             EmbedBuilder eb = new EmbedBuilder
             {
                 Title = $"Game Result for {gameType} {map ?? gameInfo.GameConfig.Map}",
-                Description =
+                Description = description(
                     $"{RenderGameResult(gameSummary.GameResult)} " +
-                    $"{gameSummary.TeamAPoints}-{gameSummary.TeamBPoints} ({gameSummary.NumOfTurns} turns)",
+                    $"{gameSummary.TeamAPoints}-{gameSummary.TeamBPoints} ({gameSummary.NumOfTurns} turns)"
+                    ),
                 Color = gameSummary.GameResult.ToString() == "TeamAWon" ? Color.Green : Color.Red
             };
 
@@ -798,7 +801,7 @@ namespace CentralServer.LobbyServer.Discord
                 EmbedBuilder eb = new EmbedBuilder
                 {
                     Title = $"User Report From: {account.Handle}",
-                    Description = message.Message,
+                    Description = description(message.Message),
                     Color = 16711680
                 };
                 eb.AddField("Reason", message.Reason, true);
@@ -901,15 +904,26 @@ namespace CentralServer.LobbyServer.Discord
         }
 
         private const int FOOTER_MAX_LENGTH = 2048;
+        private const int DESCRIPTION_MAX_LENGTH = 4096;
         
         private static EmbedFooterBuilder footer(String text)
         {
-            if (text is not null && text.Length > FOOTER_MAX_LENGTH)
+            return new EmbedFooterBuilder { Text = limitLength(text, FOOTER_MAX_LENGTH) };
+        }
+
+        private static string description(string text)
+        {
+            return limitLength(text, DESCRIPTION_MAX_LENGTH);
+        }
+
+        private static string limitLength(string text, int length)
+        {
+            if (text is not null && text.Length > length)
             {
-                text = text[..(FOOTER_MAX_LENGTH - 3)] + "...";
+                text = text[..(length - 3)] + "...";
             }
 
-            return new EmbedFooterBuilder { Text = text };
+            return text;
         }
     }
 }
