@@ -63,7 +63,15 @@ namespace CentralServer.BridgeServer
             }
 
             Type type = messageTypes[messageType];
-            return Deserialize(type, networkReader);
+            try
+            {
+                return Deserialize(type, networkReader);
+            }
+            catch
+            {
+                log.Error($"Failed to deserialize bridge message type {messageType}");
+                throw;
+            }
         }
         
         public static byte[] SerializeMessage(short msgType, AllianceMessageBase msg, int originalCallbackId = 0)

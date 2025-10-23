@@ -37,10 +37,10 @@ public class AllianceMessageBase : MessageBase
 			MethodInfo methodInfo = o.GetType().GetMethod("Serialize");
 			if (methodInfo != null)
 			{
-				methodInfo.Invoke(o, new object[]
-				{
+				methodInfo.Invoke(o,
+				[
 					writer
-				});
+				]);
 			}
 			else
 			{
@@ -54,11 +54,11 @@ public class AllianceMessageBase : MessageBase
 	{
 		if (!reader.ReadBoolean())
 		{
-			o = default(T);
+			o = default;
 			return;
 		}
 		ConstructorInfo constructor = typeof(T).GetConstructor(Type.EmptyTypes);
-		o = (T)((object)constructor.Invoke(Array.Empty<object>()));
+		o = (T)constructor.Invoke([]);
 		string name = "Deserialize";
 		if (typeof(T).IsSubclassOf(typeof(AllianceMessageBase)))
 		{
@@ -67,10 +67,10 @@ public class AllianceMessageBase : MessageBase
 		MethodInfo methodInfo = o.GetType().GetMethod(name);
 		if (methodInfo != null)
 		{
-			methodInfo.Invoke(o, new object[]
-			{
+			methodInfo.Invoke(o,
+			[
 				reader
-			});
+			]);
 		}
 		else
 		{
@@ -82,7 +82,7 @@ public class AllianceMessageBase : MessageBase
 			}
 			catch (Exception e)
 			{
-				log.Error($"Deserialize Error: Couldn't find method {name} of {o.GetType().Name}", e);
+				throw new Exception($"Deserialize Error: Couldn't find method {name} of {o.GetType().Name}", e);
 			}
 			
 		}
