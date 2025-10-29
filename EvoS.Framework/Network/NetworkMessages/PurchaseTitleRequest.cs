@@ -4,6 +4,7 @@ using System;
 
 namespace EvoS.Framework.Network.NetworkMessages;
 
+[EvosMessage(295)]
 [Serializable]
 public class PurchaseTitleRequest : WebSocketMessage
 {
