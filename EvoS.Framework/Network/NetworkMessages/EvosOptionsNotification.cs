@@ -50,6 +50,6 @@ namespace EvoS.Framework.Network.NetworkMessages
 		
         // Evos options
         public bool AllowResettingWaypoints;
-        public bool ShowCooldowns;
+        public bool ExtendedCooldownView;
     }
 }
