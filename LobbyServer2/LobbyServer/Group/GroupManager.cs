@@ -328,7 +328,7 @@ namespace CentralServer.LobbyServer.Group
             {
                 response = new LobbyPlayerGroupInfo
                 {
-                    SelectedQueueType = client.SelectedGameType,
+                    SelectedQueueType = client?.SelectedGameType ?? GameType.None,
                     MemberDisplayName = account.Handle,
                     InAGroup = false,
                     // IsLeader = true,
@@ -340,8 +340,8 @@ namespace CentralServer.LobbyServer.Group
                 LobbyServerProtocol leader = SessionManager.GetClientConnection(groupInfo.Leader);
                 response = new LobbyPlayerGroupInfo
                 {
-                    SelectedQueueType = leader.SelectedGameType,
-                    SubTypeMask = leader.SelectedSubTypeMask,
+                    SelectedQueueType = leader?.SelectedGameType ?? GameType.None,
+                    SubTypeMask = leader?.SelectedSubTypeMask ?? 0,
                     MemberDisplayName = account.Handle,
                     InAGroup = true,
                     IsLeader = groupInfo.IsLeader(account.AccountId),
