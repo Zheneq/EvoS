@@ -2408,6 +2408,10 @@ namespace CentralServer.LobbyServer
         private void HandleClientFeedbackReport(ClientFeedbackReport message)
         {
             string context = CurrentGame is not null ? GameIdString(CurrentGame.GameInfo) : "";
+            if (message.ReportedPlayerAccountId == 0 && message.ReportedPlayerHandle is not null)
+            {
+                message.ReportedPlayerAccountId = LobbyServerUtils.ResolveAccountId(message.ReportedPlayerHandle);
+            }
             DB.Get().UserFeedbackDao.Save(new UserFeedbackDao.UserFeedback(AccountId, message, context));
             DiscordManager.Get().SendPlayerFeedback(AccountId, message);
         }

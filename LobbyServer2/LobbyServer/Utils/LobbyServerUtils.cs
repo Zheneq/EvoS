@@ -21,7 +21,12 @@ namespace CentralServer.LobbyServer.Utils
             {
                 return accountId;
             }
-            
+
+            return ResolveAccountId(handle);
+        }
+
+        public static long ResolveAccountId(string handle)
+        {
             int hashPos = handle.IndexOf('#');
             string username = hashPos >= 0
                 ? handle.Substring(0, hashPos)
