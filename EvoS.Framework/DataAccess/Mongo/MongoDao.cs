@@ -17,7 +17,7 @@ namespace EvoS.Framework.DataAccess.Mongo
         
         protected MongoDao(string collectionName, params CreateIndexModel<TEntry>[] indices)
         {
-            IMongoDatabase mongo = MongoDB.GetInstance();
+            IMongoDatabase mongo = MongoDB.GetDatabase();
             List<string> collections = mongo.ListCollectionNames().ToList();
             bool init = !collections.Contains(collectionName);
             if (init)
@@ -25,7 +25,7 @@ namespace EvoS.Framework.DataAccess.Mongo
                 log.Info($"Collection {collectionName} not found in [{string.Join(", ", collections)}], creating...");
                 try
                 {
-                    MongoDB.GetInstance().CreateCollection(collectionName); // TODO MONGO settings
+                    mongo.CreateCollection(collectionName); // TODO MONGO settings
                 }
                 catch (Exception e)
                 {
@@ -64,8 +64,15 @@ namespace EvoS.Framework.DataAccess.Mongo
         protected UpdateResult UpdateField<TField>(TKey id, TEntry entry, FieldDefinition<TField> field)
         {
             return c.UpdateOne(
-                    Key(id), 
-                    u.Set(field._expr, field._compiled.Invoke(entry)));
+                Key(id), 
+                u.Set(field._expr, field._compiled.Invoke(entry)));
+        }
+
+        protected UpdateResult UpdateField<TField>(TKey id, TField entry, FieldDefinition<TField> field)
+        {
+            return c.UpdateOne(
+                Key(id), 
+                u.Set(field._expr, entry));
         }
         
         protected static FilterDefinitionBuilder<TEntry> f => Builders<TEntry>.Filter;

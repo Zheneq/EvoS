@@ -20,6 +20,7 @@ namespace EvoS.Framework.DataAccess
         public readonly ChatHistoryDao ChatHistoryDao;
         public readonly ClientErrorDao ClientErrorDao;
         public readonly ClientErrorReportDao ClientErrorReportDao;
+        public readonly UserMetadataDao UserMetadataDao;
 
         private DB()
         {
@@ -37,6 +38,7 @@ namespace EvoS.Framework.DataAccess
                     ChatHistoryDao = new ChatHistoryMongoDao();
                     ClientErrorDao = new ClientErrorDaoCached(new ClientErrorMongoDao());
                     ClientErrorReportDao = new ClientErrorReportMongoDao();
+                    UserMetadataDao = new UserMetadataMongoDao();
                     break;
                 case EvosConfiguration.DBType.None:
                     log.Info("Not using any database, no data will be persisted");
@@ -50,6 +52,7 @@ namespace EvoS.Framework.DataAccess
                     ChatHistoryDao = new ChatHistoryMockDao();
                     ClientErrorDao = new ClientErrorDaoCached(new ClientErrorMockDao());
                     ClientErrorReportDao = new ClientErrorReportMockDao();
+                    UserMetadataDao = new UserMetadataMockDao();
                     break;
             }
         }

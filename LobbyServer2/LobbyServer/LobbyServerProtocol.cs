@@ -1031,10 +1031,12 @@ namespace CentralServer.LobbyServer
 
         public void HandleOptionsNotification(OptionsNotification notification)
         {
+            HandleEvosOptionsNotification(EvosOptionsNotification.Of(notification));
         }
 
         public void HandleEvosOptionsNotification(EvosOptionsNotification notification)
         {
+            DB.Get().UserMetadataDao.UpsertOptions(AccountId, notification);
         }
 
         public void HandleCustomKeyBindNotification(CustomKeyBindNotification notification)

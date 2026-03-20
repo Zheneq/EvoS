@@ -16,9 +16,14 @@ namespace EvoS.Framework.DataAccess.Mongo
     {
         private static MongoDB Instance;
 
-        private readonly IMongoDatabase database;
+        private IMongoDatabase database;
         
         private MongoDB()
+        {
+            ConfigureSerializers();
+        }
+
+        private void ConfigureSerializers()
         {
             ConventionRegistry.Register(
                 "DictionaryRepresentationConvention",
@@ -29,20 +34,39 @@ namespace EvoS.Framework.DataAccess.Mongo
                 typeof(float),
                 new SingleSerializer(BsonType.Double, new RepresentationConverter(true, true))
             );
-            
+        }
+
+        private static IMongoDatabase ConfigureDatabase()
+        {
             EvosConfiguration.DBConfig dbConfig = EvosConfiguration.GetDBConfig();
             string credentials = dbConfig.UseCredentials ? $"{dbConfig.User}:{dbConfig.Password}@" : "";
             string conn = $"mongodb{(dbConfig.MongoDbSrv ? "+srv" : "")}://{credentials}{dbConfig.URI}";
             MongoClientSettings settings = MongoClientSettings.FromConnectionString(conn);
             settings.ServerApi = new ServerApi(ServerApiVersion.V1);
             MongoClient client = new MongoClient(settings);
-            database = client.GetDatabase(dbConfig.Database);
+            return client.GetDatabase(dbConfig.Database);
         }
 
-        public static IMongoDatabase GetInstance()
+        public static MongoDB GetInstance()
         {
             Instance ??= new MongoDB();
-            return Instance.database;
+            return Instance;
+        }
+
+        public static IMongoDatabase GetDatabase()
+        {
+            MongoDB mongoDb = GetInstance();
+            mongoDb.database ??= ConfigureDatabase();
+            return mongoDb.database;
+        }
+
+        public void SetDatabase(IMongoDatabase db)
+        {
+            if (database is not null)
+            {
+                throw new InvalidOperationException("MongoDB database is already initialized");
+            }
+            database = db;
         }
 
         public class DictionaryRepresentationConvention : ConventionBase, IMemberMapConvention

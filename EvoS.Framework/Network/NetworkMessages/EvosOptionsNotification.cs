@@ -51,5 +51,52 @@ namespace EvoS.Framework.Network.NetworkMessages
         // Evos options
         public bool AllowResettingWaypoints;
         public bool ExtendedCooldownView;
+
+        public static EvosOptionsNotification Of(OptionsNotification notify)
+        {
+	        return new EvosOptionsNotification
+	        {
+		        UserDialog = notify.UserDialog,
+		        DeviceIdentifier = notify.DeviceIdentifier,
+
+		        GraphicsQuality = notify.GraphicsQuality,
+		        WindowMode = notify.WindowMode,
+		        ResolutionWidth = notify.ResolutionWidth,
+		        ResolutionHeight = notify.ResolutionHeight,
+		        GameWindowMode = notify.GameWindowMode,
+		        GameResolutionWidth = notify.GameResolutionWidth,
+		        GameResolutionHeight = notify.GameResolutionHeight,
+		        LockWindowSize = notify.LockWindowSize,
+
+		        MasterVolume = notify.MasterVolume,
+		        MusicVolume = notify.MusicVolume,
+		        AmbianceVolume = notify.AmbianceVolume,
+
+		        LockCursorMode = notify.LockCursorMode,
+		        EnableChatter = notify.EnableChatter,
+		        RightClickingConfirmsAbilityTargets = notify.RightClickingConfirmsAbilityTargets,
+		        ShiftClickForMovementWaypoints = notify.ShiftClickForMovementWaypoints,
+
+		        ShowGlobalChat = notify.ShowGlobalChat,
+		        ShowAllChat = notify.ShowAllChat,
+		        EnableProfanityFilter = notify.EnableProfanityFilter,
+		        AutoJoinDiscord = notify.AutoJoinDiscord,
+		        VoicePushToTalk = notify.VoicePushToTalk,
+		        VoiceMute = notify.VoiceMute,
+		        VoiceVolume = notify.VoiceVolume,
+		        MicVolume = notify.MicVolume,
+		        GameModeVoiceChat = notify.GameModeVoiceChat,
+
+		        HideTutorialVideos = notify.HideTutorialVideos,
+		        AllowCancelActionWhileConfirmed = notify.AllowCancelActionWhileConfirmed,
+
+		        Region = notify.Region,
+		        OverrideGlyphLanguageCode = notify.OverrideGlyphLanguageCode,
+
+		        // Evos options
+		        AllowResettingWaypoints = false,
+		        ExtendedCooldownView = false,
+	        };
+        }
     }
 }
