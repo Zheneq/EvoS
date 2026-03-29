@@ -170,7 +170,7 @@ public abstract class ApiServer
         }
         catch (Exception)
         {
-            log.Info($"Failed to authorize {authInfo.UserName} from {LobbyServerUtils.GetIpAddress(httpContext)} for {authContext} access");
+            log.Info($"Failed to authorize {authInfo.UserName} from {LobbyServerUtils.GetActualClientIpAddress(httpContext)} for {authContext} access");
             return Results.Unauthorized();
         }
         PersistedAccountData account = DB.Get().AccountDao.GetAccount(accountId);

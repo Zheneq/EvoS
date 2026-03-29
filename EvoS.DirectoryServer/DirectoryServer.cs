@@ -228,7 +228,7 @@ namespace EvoS.DirectoryServer
             }
             catch (Exception e) when (e is ArgumentException or ApplicationException or EvosException or ConflictException)
             {
-                log.Warn($"Failed login attempt from {GetIpAddress(context)}");
+                log.Warn($"Failed login attempt from {LobbyServerUtils.GetActualClientIpAddress(context)}");
                 return Fail(request, e.Message);
             }
 
@@ -279,7 +279,7 @@ namespace EvoS.DirectoryServer
                 DB.Get().AccountDao.UpdateAccount(account);
             }
 
-            response.SessionInfo = SessionManager.CreateSession(accountId, request.SessionInfo, GetIpAddress(context));
+            response.SessionInfo = SessionManager.CreateSession(accountId, request.SessionInfo, LobbyServerUtils.GetActualClientIpAddress(context));
             response.LobbyServerAddress = GetLobbyServerAddress(accountId, context);
 
             LobbyGameClientProxyInfo proxyInfo = new LobbyGameClientProxyInfo
@@ -297,7 +297,7 @@ namespace EvoS.DirectoryServer
 
         private static string GetLobbyServerAddress(long accountId, HttpContext context)
         {
-            var proxy = LobbyServerUtils.DetectProxy(context.Connection.RemoteIpAddress);
+            ProxyConfiguration.Proxy proxy = LobbyServerUtils.DetectProxyHttp(context);
 
             if (proxy != null)
             {
@@ -331,7 +331,7 @@ namespace EvoS.DirectoryServer
             // TODO extra security? Reconnect tokens are possible to hijack
 
             // SessionManager.CleanSessionAfterReconnect(request.SessionInfo.AccountId);
-            session = SessionManager.CreateSession(request.SessionInfo.AccountId, request.SessionInfo, GetIpAddress(context));
+            session = SessionManager.CreateSession(request.SessionInfo.AccountId, request.SessionInfo, LobbyServerUtils.GetActualClientIpAddress(context));
 
             return new AssignGameClientResponse
             {
@@ -503,11 +503,6 @@ namespace EvoS.DirectoryServer
                 Success = false,
                 ErrorMessage = reason
             };
-        }
-
-        public static IPAddress GetIpAddress(HttpContext context)
-        {
-            return LobbyServerUtils.GetIpAddress(context, ProxyConfiguration.GetProxies()?.Keys);
         }
     }
 }

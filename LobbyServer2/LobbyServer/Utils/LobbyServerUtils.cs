@@ -1,13 +1,16 @@
-using System.Collections.Generic;
+using System;
 using System.Linq;
 using System.Net;
 using CentralServer.Proxy;
+using EvoS.Framework;
 using EvoS.Framework.DataAccess;
 using EvoS.Framework.DataAccess.Daos;
+using EvoS.Framework.Misc;
 using EvoS.Framework.Network.Static;
 using log4net;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Primitives;
+using WebSocketSharp.Net.WebSockets;
 
 namespace CentralServer.LobbyServer.Utils
 {
@@ -51,10 +54,19 @@ namespace CentralServer.LobbyServer.Utils
             PersistedAccountData account = DB.Get().AccountDao.GetAccount(accountId);
             return account is not null ? $"{account.UserName}#{accountId}" : "UNKNOWN";
         }
-        
-        public static IPAddress GetIpAddress(HttpContext context, ICollection<IPAddress> proxies)
+
+        /**
+         * Get the actual ip address of the client, taking all configured proxy servers into account
+         */
+        public static IPAddress GetActualClientIpAddress(HttpContext context)
         {
-            IPAddress ipAddress = context.Connection.RemoteIpAddress;
+            var proxies = ProxyConfiguration.GetProxies()?.Keys;
+            IPAddress ipAddress = GetRealRemoteIpAddress(context);
+            if (ipAddress is null)
+            {
+                log.Error("Remote IP address is not detected!");
+                return null;
+            }
 
             if (proxies is not null && proxies.Contains(ipAddress))
             {
@@ -83,14 +95,55 @@ namespace CentralServer.LobbyServer.Utils
 
             return ipAddress;
         }
-
-        public static IPAddress GetIpAddress(HttpContext context)
+        
+        /**
+         * Get the ip address request is coming from, according to local reverse proxy (if it exists)
+         */
+        private static IPAddress GetRealRemoteIpAddress(Func<string, string> requestHeaders, IPAddress requestAddress)
         {
-            return GetIpAddress(context, ProxyConfiguration.GetProxies()?.Keys);
+            var headerName = EvosConfiguration.GetClientIpHeader();
+            if (!headerName.IsNullOrEmpty())
+            {
+                var headerValue = requestHeaders.Invoke(headerName);
+                if (headerValue is null)
+                {
+                    log.Error($"Expected header {headerName} not present!");
+                }
+                else if (!IPAddress.TryParse(headerValue, out var ipAddress))
+                {
+                    log.Error($"Header {headerName} has incorrect value {headerValue}!");
+                }
+                else
+                {
+                    return ipAddress;
+                }
+            }
+
+            return requestAddress;
         }
 
-        public static ProxyConfiguration.Proxy DetectProxy(IPAddress clientIpAddress)
+        private static IPAddress GetRealRemoteIpAddress(HttpContext context)
         {
+            return GetRealRemoteIpAddress(
+                key => context.Request.Headers[key],
+                context.Connection.RemoteIpAddress);
+        }
+
+        public static ProxyConfiguration.Proxy DetectProxyWs(WebSocketContext context)
+        {
+            IPAddress clientIpAddress = GetRealRemoteIpAddress(context.Headers.Get, context.UserEndPoint.Address);
+            return DetectProxy(clientIpAddress);
+        }
+
+        public static ProxyConfiguration.Proxy DetectProxyHttp(HttpContext context)
+        {
+            return DetectProxy(GetRealRemoteIpAddress(context));
+        }
+
+        private static ProxyConfiguration.Proxy DetectProxy(IPAddress clientIpAddress)
+        {
+            log.Info($"Connecting from {clientIpAddress}");
+            
             ProxyConfiguration.Proxy proxy = null;
             if (clientIpAddress is not null)
             {

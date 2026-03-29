@@ -49,34 +49,9 @@ namespace CentralServer.LobbyServer
             return "C " + AccountId;
         }
 
-        private IPAddress GetIpAddress()
-        {
-            var headerName = EvosConfiguration.GetClientIpHeader();
-            if (!headerName.IsNullOrEmpty())
-            {
-                var headerValue = Context.Headers[headerName];
-                if (headerValue is null)
-                {
-                    log.Error($"Expected header {headerName} not present!");
-                }
-                else if (!IPAddress.TryParse(headerValue, out var ipAddress))
-                {
-                    log.Error($"Header {headerName} has incorrect value {headerValue}!");
-                }
-                else
-                {
-                    return ipAddress;
-                }
-            }
-
-            return Context.UserEndPoint.Address;
-        }
-
         protected override void HandleOpen()
         {
-            IPAddress clientIpAddress = GetIpAddress();
-            log.Info($"Connecting from {clientIpAddress}");
-            Proxy = LobbyServerUtils.DetectProxy(clientIpAddress);
+            Proxy = LobbyServerUtils.DetectProxyWs(Context);
             if (Proxy != null)
             {
                 log.Info($"Detected proxy {Proxy.GetName()}");
