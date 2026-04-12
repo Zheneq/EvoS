@@ -68,7 +68,8 @@ namespace EvoS.DirectoryServer
         public static readonly ISet<string> SUPPORTED_PROTO_VERSIONS = new HashSet<string>
         {
             "b486c83d8a8950340936d040e1953493", // vanilla
-            "15e77d6ee51844cc02507b3e73c5aa3c", // beta 1.4
+            "15e77d6ee51844cc02507b3e73c5aa3c", // 1.4
+            "89945cd84ac637ac678c60dd840acbda", // 1.5
         };
         public const string BUILD_VERSION = "STABLE-122-100";
         public const string ERROR_INVALID_PROTOCOL_VERSION = "INVALID_PROTOCOL_VERSION";

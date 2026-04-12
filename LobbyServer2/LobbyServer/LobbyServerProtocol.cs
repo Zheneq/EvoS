@@ -166,6 +166,7 @@ namespace CentralServer.LobbyServer
 
             RegisterHandler<FriendUpdateRequest>(HandleFriendUpdate);
             
+            RegisterHandler<EvosOptionsNotificationLegacy>(HandleEvosOptionsNotificationLegacy);
             RegisterHandler<EvosOptionsNotification>(HandleEvosOptionsNotification);
         }
 
@@ -1037,6 +1038,11 @@ namespace CentralServer.LobbyServer
         public void HandleEvosOptionsNotification(EvosOptionsNotification notification)
         {
             DB.Get().UserMetadataDao.UpsertOptions(AccountId, notification);
+        }
+
+        public void HandleEvosOptionsNotificationLegacy(EvosOptionsNotificationLegacy notification)
+        {
+            DB.Get().UserMetadataDao.UpsertOptions(AccountId, notification.ToCurrent());
         }
 
         public void HandleCustomKeyBindNotification(CustomKeyBindNotification notification)

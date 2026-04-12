@@ -5,7 +5,7 @@ using EvoS.Framework.Network.WebSocket;
 namespace EvoS.Framework.Network.NetworkMessages
 {
     [Serializable]
-    [EvosMessage(798)]
+    [EvosMessage(799)]
     public class EvosOptionsNotification : WebSocketMessage
     {
         [NonSerialized]
@@ -51,6 +51,8 @@ namespace EvoS.Framework.Network.NetworkMessages
         // Evos options
         public bool AllowResettingWaypoints;
         public bool ExtendedCooldownView;
+        public bool EnableGamepadControls;
+        public bool EnableUniqueStatusEffectIcons;
 
         public static EvosOptionsNotification Of(OptionsNotification notify)
         {
@@ -96,6 +98,8 @@ namespace EvoS.Framework.Network.NetworkMessages
 		        // Evos options
 		        AllowResettingWaypoints = false,
 		        ExtendedCooldownView = false,
+		        EnableGamepadControls = true,
+		        EnableUniqueStatusEffectIcons = false,
 	        };
         }
     }
