@@ -1,5 +1,6 @@
 using EvoS.Framework.DataAccess.Daos;
 using EvoS.Framework.Network.NetworkMessages;
+using EvoS.Framework.Network.Static;
 
 namespace EvoS.Framework.DataAccess.Mongo;
 
@@ -27,6 +28,24 @@ public class UserMetadataMongoDao() : MongoDao<long, UserMetadataDao.UserMetadat
                 Options = options,
             });
         }
+    }
         
+    private static readonly FieldDefinition<UserMetadataDao.LastSessionInfo> FLastSession = new(x => x.LastSessionInfo);
+    public void UpsertLastSession(long accountId, string proxy, BuildVersionInfo version)
+    {
+        var value = new UserMetadataDao.LastSessionInfo
+        {
+            Proxy = proxy,
+            Version = version,
+        };
+        var result = UpdateField(accountId, value, FLastSession);
+        if (result.MatchedCount == 0)
+        {
+            Update(new UserMetadataDao.UserMetadata
+            {
+                AccountId = accountId,
+                LastSessionInfo = value,
+            });
+        }
     }
 }

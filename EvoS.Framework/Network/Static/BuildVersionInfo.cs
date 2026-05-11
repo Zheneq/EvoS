@@ -4,7 +4,7 @@ using EvoS.Framework.Misc;
 
 namespace EvoS.Framework.Network.Static;
 
-public readonly struct BuildVersionInfo
+public readonly record struct BuildVersionInfo
 {
     private static readonly Regex versionRegex = new(@"^([\w-]+-\d+-\d+)(?:_(\d)+.(\d)+(?:\.(\d+))?(?:-([\w-]+))?)?$");
     
@@ -30,6 +30,15 @@ public readonly struct BuildVersionInfo
                 Branch = IsPatched ? match.Groups[5].Value : "vanilla";
             }
         }
+    }
+
+    public BuildVersionInfo(string atlasVersion, int major, int minor, int patch, string branch)
+    {
+        AtlasVersion = atlasVersion;
+        Major = major;
+        Minor = minor;
+        Patch = patch;
+        Branch = branch;
     }
 
     private static int V(string s)

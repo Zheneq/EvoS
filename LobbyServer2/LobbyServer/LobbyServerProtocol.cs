@@ -330,6 +330,7 @@ namespace CentralServer.LobbyServer
                     existingPlayersOnDeck.OnDeckness = RankedResolutionPlayerState.ReadyState.Unselected;
                     playersOnDeck[deckIndex] = existingPlayersOnDeck;
 
+                    // TODO can be already present?
                     teamSelections.Add(player.PlayerId, characterType);
 
                     CurrentGame.UpdatePlayersInDeck();
@@ -1013,6 +1014,8 @@ namespace CentralServer.LobbyServer
                         player.SendSystemMessage($"<link=name>{sessionInfo.Handle}</link> connected to lobby server");
                     }
                 }
+                
+                DB.Get().UserMetadataDao.UpsertLastSession(AccountId, Proxy?.Name, sessionInfo.BuildVersionInfo);
             }
             catch (RegisterGameException e)
             {

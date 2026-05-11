@@ -1,7 +1,6 @@
 using EvoS.Framework.DataAccess.Mongo;
 using EvoS.Framework.Network.NetworkMessages;
-using Mongo2Go;
-using MongoDB.Driver;
+using EvoS.Framework.Network.Static;
 using Tests.Lib;
 using Xunit.Abstractions;
 
@@ -12,10 +11,6 @@ public class UserMetadataMongoDaoTest(ITestOutputHelper testOutputHelper) : Evos
     [Fact]
     public void TestPartialUpsert()
     {
-        using MongoDbRunner runner = MongoDbRunner.Start();
-        MongoClient client = new MongoClient(runner.ConnectionString);
-        var database = client.GetDatabase("IntegrationTest");
-        EvoS.Framework.DataAccess.Mongo.MongoDB.GetInstance().SetDatabase(database);
         UserMetadataMongoDao dao = new UserMetadataMongoDao();
         
         dao.UpsertOptions(1, new EvosOptionsNotification());
@@ -25,4 +20,27 @@ public class UserMetadataMongoDaoTest(ITestOutputHelper testOutputHelper) : Evos
         Assert.NotNull(result);
     }
     
+    [Fact]
+    public void TestNullUpsert()
+    {
+        UserMetadataMongoDao dao = new UserMetadataMongoDao();
+
+        var expectedProxy = "proxy";
+        var expectedVersion = new BuildVersionInfo("STABLE-122-100_1.5-Beta");
+        
+        dao.UpsertLastSession(2, "proxy", expectedVersion);
+
+        var result = dao.Get(2);
+        
+        Assert.NotNull(result);
+        Assert.Equal(expectedProxy, result.LastSessionInfo.Proxy);
+        Assert.Equal(expectedVersion, result.LastSessionInfo.Version);
+        
+        dao.UpsertLastSession(2, null, expectedVersion);
+        result = dao.Get(2);
+        
+        Assert.NotNull(result);
+        Assert.Null(result.LastSessionInfo.Proxy);
+        Assert.Equal(expectedVersion, result.LastSessionInfo.Version);
+    }
 }
