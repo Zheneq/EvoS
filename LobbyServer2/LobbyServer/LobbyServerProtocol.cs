@@ -1674,7 +1674,7 @@ namespace CentralServer.LobbyServer
                 return;
             }
 
-            long friendAccountId = SessionManager.GetOnlinePlayerByHandle(request.FriendHandle) ?? 0;
+            long friendAccountId = SessionManager.GetOnlinePlayerByHandleOrUsername(request.FriendHandle) ?? 0;
             if (friendAccountId == 0)
             {
                 log.Info($"Failed to find player {request.FriendHandle} to request to join their group.");

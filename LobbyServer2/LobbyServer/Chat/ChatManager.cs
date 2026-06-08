@@ -125,7 +125,7 @@ namespace CentralServer.LobbyServer.Chat
                         // Clean the recipient handle by removing (mentor icon) and (Dev) tag
                         notification.RecipientHandle = Regex.Replace(notification.RecipientHandle, @"\p{C}|\(.*?\)", "");
 
-                        long? accountId = SessionManager.GetOnlinePlayerByHandle(notification.RecipientHandle);
+                        long? accountId = SessionManager.GetOnlinePlayerByHandleOrUsername(notification.RecipientHandle);
                         if (accountId.HasValue && accountId.Value != conn.AccountId)
                         {
                             message.RecipientHandle = notification.RecipientHandle;
@@ -136,6 +136,12 @@ namespace CentralServer.LobbyServer.Chat
                         else
                         {
                             log.Warn($"{conn.AccountId} {account.Handle} failed to whisper to {notification.RecipientHandle}");
+                            conn.SendSystemMessage(
+                                LocalizationPayload.Create(
+                                    "FailedMessage", 
+                                    "Global",
+                                    LocalizationArg_LocalizationPayload.Create(
+                                        GroupMessages.PlayerNotFound(notification.RecipientHandle))));
                         }
                         break;
                     }

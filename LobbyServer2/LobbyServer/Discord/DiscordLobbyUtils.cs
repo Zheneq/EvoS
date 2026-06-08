@@ -23,7 +23,7 @@ namespace CentralServer.LobbyServer.Discord
                     return null;
                 case ConsoleMessageType.WhisperChat:
                     fallback = notification.RecipientHandle;
-                    long? accountId = SessionManager.GetOnlinePlayerByHandle(notification.RecipientHandle);
+                    long? accountId = SessionManager.GetOnlinePlayerByHandleOrUsername(notification.RecipientHandle);
                     return accountId.HasValue ? new List<long> { accountId.Value } : null;
                 case ConsoleMessageType.GameChat:
                 case ConsoleMessageType.TeamChat:
