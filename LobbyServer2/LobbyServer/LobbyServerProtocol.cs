@@ -110,6 +110,9 @@ namespace CentralServer.LobbyServer
             RegisterHandler<GroupLeaveRequest>(HandleGroupLeaveRequest);
             RegisterHandler<GroupKickRequest>(HandleGroupKickRequest);
             RegisterHandler<GroupPromoteRequest>(HandleGroupPromoteRequest);
+            RegisterHandler<GameInvitationRequest>(HandleGameInvitationRequest);
+            RegisterHandler<GameInviteConfirmationResponse>(HandleGameInviteConfirmationResponse);
+            
             RegisterHandler<SelectBannerRequest>(HandleSelectBannerRequest);
             RegisterHandler<SelectTitleRequest>(HandleSelectTitleRequest);
             RegisterHandler<UseOverconRequest>(HandleUseOverconRequest);
@@ -1973,9 +1976,20 @@ namespace CentralServer.LobbyServer
             BroadcastRefreshFriendList();
         }
 
-        // TODO
-        // No message handler registered for GameInvitationRequest
+        public void HandleGameInvitationRequest(GameInvitationRequest request)
+        {
+            Send(new GameInvitationResponse
+            {
+                Success = false,
+                InviteeHandle = request.InviteeHandle,
+                ResponseId = request.RequestId
+            });
+        }
 
+        public void HandleGameInviteConfirmationResponse(GameInviteConfirmationResponse response)
+        {
+        }
+        
         private void OnAccountVisualsUpdated()
         {
             BroadcastRefreshFriendList();
