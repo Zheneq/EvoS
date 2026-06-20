@@ -11,12 +11,14 @@ namespace CentralServer.LobbyServer.Group
         public readonly long GroupId;
         public readonly List<long> Members;
         public long Leader { get; private set; }
+        public ushort SubTypeMask { get; set; }
 
         public GroupInfo(long id)
         {
             this.GroupId = id;
             this.Members = new List<long>();
             this.Leader = -1;
+            this.SubTypeMask = 1;
         }
 
         public bool IsEmpty()

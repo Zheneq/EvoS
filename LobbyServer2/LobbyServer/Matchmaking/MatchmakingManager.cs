@@ -81,18 +81,27 @@ namespace CentralServer.LobbyServer.Matchmaking
             if (added)
             {
                 // Send 'Assigned to queue notification' to the players
-                GroupManager.Broadcast(group, new MatchmakingQueueAssignmentNotification() { MatchmakingQueueInfo = info });
+                GroupManager.Broadcast(group, new MatchmakingQueueAssignmentNotification { MatchmakingQueueInfo = info });
 
                 foreach (long member in group.Members)
                 {
                     SessionManager.GetClientConnection(member)?.BroadcastRefreshFriendList();
-                    SessionManager.GetClientConnection(member)?.Send(new MatchmakingQueueToPlayersNotification()
+                    SessionManager.GetClientConnection(member)?.Send(new MatchmakingQueueToPlayersNotification
                     {
                         AccountId = member,
                         MessageToSend = MatchmakingQueueToPlayersNotification.MatchmakingQueueMessage.QueueConfirmed,
                         GameType = gameType,
                         SubTypeMask = GroupManager.GetGroupSubTypeMask(group)
                     });
+                }
+            }
+            else
+            {
+                GroupManager.Broadcast(group, new MatchmakingQueueAssignmentNotification { MatchmakingQueueInfo = null });
+                SessionManager.GetClientConnection(group.Leader)?.BroadcastRefreshGroup(true);
+                foreach (long member in group.Members)
+                {
+                    SessionManager.GetClientConnection(member)?.BroadcastRefreshFriendList();
                 }
             }
 
