@@ -444,15 +444,26 @@ namespace CentralServer.LobbyServer.Group
             if (leaderConn is null)
             {
                 log.Error($"UpdateSelectedSubTypes for group {groupInfo.GroupId} with missing leader {groupInfo.Leader}");
+                return;
+            }
+
+            MatchmakingQueue queue = MatchmakingManager.GetQueue(leaderConn.SelectedGameType);
+            if (queue is null)
+            {
+                log.Error($"UpdateSelectedSubTypes for group {groupInfo.GroupId} with unavailable queue {leaderConn.SelectedGameType}");
+                return;
             }
             
-            ushort newMask = leaderConn?.GetSubTypeMask() ?? 0;
-            
-            if (resetReadyStateIfUpdated && groupInfo.SubTypeMask != newMask)
+            ushort newMask = queue.FilterSubTypeMaskForGroup(groupInfo, leaderConn.GetSubTypeMask());
+
+            if (groupInfo.SubTypeMask != newMask)
             {
-                log.Info($"UpdateSelectedSubTypes resetting group {groupInfo.GroupId} ready state");
                 groupInfo.SubTypeMask = newMask;
-                leaderConn?.BroadcastRefreshGroup(true);
+                if (resetReadyStateIfUpdated)
+                {
+                    log.Info($"UpdateSelectedSubTypes resetting group {groupInfo.GroupId} ready state");
+                    leaderConn.BroadcastRefreshGroup(true);
+                }
             }
         }
 

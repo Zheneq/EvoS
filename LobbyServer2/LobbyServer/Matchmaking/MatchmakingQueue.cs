@@ -209,30 +209,7 @@ namespace CentralServer.LobbyServer.Matchmaking
             var groupInfo = GroupManager.GetGroup(groupId);
             GroupManager.UpdateSelectedSubTypes(groupInfo, false);
             log.Info($"Selected sub type mask: {DebugFormatSubTypeMask(groupInfo.SubTypeMask)}");
-            if (!groupInfo.IsSolo())
-            {
-                ushort allowedSubTypeMask = GetSubTypeMaskAllowedForGroups();
-                log.Info($"Allowed for groups: {DebugFormatSubTypeMask(allowedSubTypeMask)}");
-                ushort selectedSubTypeMask = groupInfo.SubTypeMask;
-                ushort finalSubTypeMask = (ushort)(allowedSubTypeMask & selectedSubTypeMask);
 
-                if (finalSubTypeMask != 0)
-                {
-                    groupInfo.SubTypeMask = finalSubTypeMask;
-                }
-                else
-                {
-                    groupInfo.SubTypeMask = GetFallbackSubTypeMaskAllowedForGroups(selectedSubTypeMask);
-                    log.Info($"No valid subqueues selected for group {groupId}, "
-                             + $"falling back to subtype mask {DebugFormatSubTypeMask(groupInfo.SubTypeMask)}");
-                }
-
-                if (selectedSubTypeMask != groupInfo.SubTypeMask)
-                {
-                    SessionManager.GetClientConnection(groupInfo.Leader)?.BroadcastRefreshGroup(false);
-                }
-            }
-            
             // TODO also check QueueRequirement
             
             added = QueuedGroups.TryAdd(groupId, DateTime.UtcNow);
@@ -531,15 +508,37 @@ namespace CentralServer.LobbyServer.Matchmaking
                 SessionManager.GetClientConnection(accountId)?.Send(notify);
             }
         }
+        
+        public ushort FilterSubTypeMaskForGroup(GroupInfo groupInfo, ushort selectedSubTypeMask)
+        {
+            if (groupInfo.IsSolo())
+            {
+                return selectedSubTypeMask;
+            }
+
+            ushort allowedSubTypeMask = GetSubTypeMaskAllowedForGroups();
+            log.Info($"Allowed for groups: {DebugFormatSubTypeMask(allowedSubTypeMask)}");
+            ushort finalSubTypeMask = (ushort)(allowedSubTypeMask & selectedSubTypeMask);
+            
+            if (finalSubTypeMask != 0)
+            {
+                return finalSubTypeMask;
+            }
+
+            ushort fallbackMask = GetFallbackSubTypeMaskAllowedForGroups(selectedSubTypeMask);
+            log.Info($"No valid subqueues selected for group {groupInfo.GroupId}, "
+                     + $"falling back to subtype mask {DebugFormatSubTypeMask(fallbackMask)}");
+            return fallbackMask;
+        }
 
         private ushort GetSubTypeMaskAllowedForGroups()
         {
             ushort allowedSubTypeMask = 0;
 
-            for (int i = 0; i < MatchmakingQueueInfo.GameConfig.SubTypes.Count; i++)
+            List<GameSubType> subTypes = MatchmakingQueueInfo.GameConfig.SubTypes;
+            for (int i = 0; i < subTypes.Count; i++)
             {
-                if (!MatchmakingQueueInfo.GameConfig.SubTypes[i].Mods
-                        .Contains(GameSubType.SubTypeMods.NotAllowedForGroups))
+                if (!subTypes[i].Mods.Contains(GameSubType.SubTypeMods.NotAllowedForGroups))
                 {
                     allowedSubTypeMask |= (ushort)(1u << i);
                 }
@@ -550,29 +549,30 @@ namespace CentralServer.LobbyServer.Matchmaking
 
         private ushort GetFallbackSubTypeMaskAllowedForGroups(ushort selectedSubTypeMask)
         {
+            List<GameSubType> subTypes = MatchmakingQueueInfo.GameConfig.SubTypes;
+            
             bool useAntiSocial = false;
             bool isAntiSocial = true;
-            if (MatchmakingQueueInfo.GameConfig.GameType == GameType.Coop)
+            if (GameType == GameType.Coop)
             {
                 // we need to keep the selected value of AI teammates flag in Coop
                 useAntiSocial = true;
-                for (int i = 0; i < MatchmakingQueueInfo.GameConfig.SubTypes.Count; i++)
+                for (int i = 0; i < subTypes.Count; i++)
                 {
                     if ((selectedSubTypeMask & (1u << i)) != 0)
                     {
-                        isAntiSocial = MatchmakingQueueInfo.GameConfig.SubTypes[i].Mods
-                            .Contains(GameSubType.SubTypeMods.AntiSocial);
+                        isAntiSocial = subTypes[i].Mods.Contains(GameSubType.SubTypeMods.AntiSocial);
                         break;
                     }
                 }
             }
 
             // find first valid subtype
-            for (int i = 0; i < MatchmakingQueueInfo.GameConfig.SubTypes.Count; i++)
+            for (int i = 0; i < subTypes.Count; i++)
             {
-                var mods = MatchmakingQueueInfo.GameConfig.SubTypes[i].Mods;
+                var mods = subTypes[i].Mods;
                 bool isAllowedForGroups = !mods.Contains(GameSubType.SubTypeMods.NotAllowedForGroups);
-                bool isCorrectAntiSocial = 
+                bool isCorrectAntiSocial =
                     !useAntiSocial || isAntiSocial == mods.Contains(GameSubType.SubTypeMods.AntiSocial);
                 if (isAllowedForGroups && isCorrectAntiSocial)
                 {

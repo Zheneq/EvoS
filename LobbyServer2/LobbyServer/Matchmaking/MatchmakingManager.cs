@@ -35,6 +35,11 @@ namespace CentralServer.LobbyServer.Matchmaking
             return Queues.Values.ToList();
         }
 
+        public static MatchmakingQueue GetQueue(GameType gameType)
+        {
+            return Queues[gameType];
+        }
+
         private static bool _enabled = true;
         public static bool Enabled
         {
