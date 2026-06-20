@@ -208,7 +208,7 @@ namespace CentralServer.LobbyServer.Matchmaking
         {
             var groupInfo = GroupManager.GetGroup(groupId);
             GroupManager.UpdateSelectedSubTypes(groupInfo, false);
-            log.Info($"Selected sub type mask: {DebugFormatSubTypeMask(groupInfo.SubTypeMask)}");
+            log.Info($"Selected sub type mask for group {groupId}: {DebugFormatSubTypeMask(groupInfo.SubTypeMask)}");
 
             // TODO also check QueueRequirement
             
@@ -517,7 +517,8 @@ namespace CentralServer.LobbyServer.Matchmaking
             }
 
             ushort allowedSubTypeMask = GetSubTypeMaskAllowedForGroups();
-            log.Info($"Allowed for groups: {DebugFormatSubTypeMask(allowedSubTypeMask)}");
+            log.Info($"Selected for group {groupInfo.GroupId}: {DebugFormatSubTypeMask(selectedSubTypeMask)}, "
+                     + $"allowed for groups: {DebugFormatSubTypeMask(allowedSubTypeMask)}");
             ushort finalSubTypeMask = (ushort)(allowedSubTypeMask & selectedSubTypeMask);
             
             if (finalSubTypeMask != 0)
@@ -590,7 +591,7 @@ namespace CentralServer.LobbyServer.Matchmaking
                 .ToList();
         }
 
-        private string DebugFormatSubTypeMask(ushort subTypeMask)
+        public string DebugFormatSubTypeMask(ushort subTypeMask)
         {
             return $"<{subTypeMask}> "
                    + string.Join(", ", GetSubTypesFromMask(subTypeMask).Select(st => st.LocalizedName));

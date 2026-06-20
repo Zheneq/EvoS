@@ -456,12 +456,14 @@ namespace CentralServer.LobbyServer.Group
             
             ushort newMask = queue.FilterSubTypeMaskForGroup(groupInfo, leaderConn.GetSubTypeMask());
 
-            if (groupInfo.SubTypeMask != newMask)
+            ushort oldMask = groupInfo.SubTypeMask;
+            if (oldMask != newMask)
             {
                 groupInfo.SubTypeMask = newMask;
                 if (resetReadyStateIfUpdated)
                 {
-                    log.Info($"UpdateSelectedSubTypes resetting group {groupInfo.GroupId} ready state");
+                    log.Info($"UpdateSelectedSubTypes resetting group {groupInfo.GroupId} ready state "
+                             + $"(was {queue.DebugFormatSubTypeMask(oldMask)}, now {queue.DebugFormatSubTypeMask(newMask)})");
                     leaderConn.BroadcastRefreshGroup(true);
                 }
             }
