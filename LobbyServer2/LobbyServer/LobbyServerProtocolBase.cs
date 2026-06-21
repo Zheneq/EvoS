@@ -274,10 +274,15 @@ namespace CentralServer.LobbyServer
         {
             AllyDifficulty = difficulty;
         }
+        
         protected void SetEnemyDifficulty(BotDifficulty difficulty)
         {
             EnemyDifficulty = difficulty;
         }
 
+        public ushort GetSubTypeMask()
+        {
+            return Math.Max((ushort)1, SelectedSubTypeMask);
+        }
     }
 }

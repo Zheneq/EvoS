@@ -274,6 +274,7 @@ namespace CentralServer.LobbyServer.Group
 
             if (success)
             {
+                UpdateSelectedSubTypes(groupInfo);
                 BroadcastSystemMessage(groupInfo, GroupMessages.NewLeader(accountId));
             }
 
@@ -341,7 +342,7 @@ namespace CentralServer.LobbyServer.Group
                 response = new LobbyPlayerGroupInfo
                 {
                     SelectedQueueType = leader?.SelectedGameType ?? GameType.None,
-                    SubTypeMask = leader?.SelectedSubTypeMask ?? 0,
+                    SubTypeMask = groupInfo.SubTypeMask,
                     MemberDisplayName = account.Handle,
                     InAGroup = true,
                     IsLeader = groupInfo.IsLeader(account.AccountId),
@@ -377,10 +378,12 @@ namespace CentralServer.LobbyServer.Group
 
         private static void OnGroupMembersUpdated(GroupInfo groupInfo)
         {
-            if (!MatchmakingManager.RemoveGroupFromQueue(groupInfo, true))
+            MatchmakingManager.RemoveGroupFromQueue(groupInfo, true);
+            if (!groupInfo.IsEmpty())
             {
-                SessionManager.GetClientConnection(groupInfo.Leader)?.BroadcastRefreshGroup(true);
+                UpdateSelectedSubTypes(groupInfo);
             }
+            SessionManager.GetClientConnection(groupInfo.Leader)?.BroadcastRefreshGroup(true);
         }
         
         public static void OnLeaveQueue(long groupId)
@@ -391,6 +394,7 @@ namespace CentralServer.LobbyServer.Group
                 log.Info($"Received OnLeaveQueue for group {groupId} that does not exist");
                 return;
             }
+            UpdateSelectedSubTypes(groupInfo, false);
             Broadcast(groupInfo, new MatchmakingQueueAssignmentNotification { MatchmakingQueueInfo = null });
             SessionManager.GetClientConnection(groupInfo.Leader)?.BroadcastRefreshGroup(false);
         }
@@ -431,13 +435,47 @@ namespace CentralServer.LobbyServer.Group
                 return 0;
             }
 
-            LobbyServerProtocol conn = SessionManager.GetClientConnection(groupInfo.Leader);
-            if (conn is null)
+            return groupInfo.SubTypeMask;
+        }
+
+        public static void UpdateSelectedSubTypes(GroupInfo groupInfo, bool resetReadyStateIfUpdated = true)
+        {
+            LobbyServerProtocol leaderConn = SessionManager.GetClientConnection(groupInfo.Leader);
+            if (leaderConn is null)
             {
-                return 0;
+                log.Error($"UpdateSelectedSubTypes for group {groupInfo.GroupId} with missing leader {groupInfo.Leader}");
+                return;
             }
 
-            return Math.Max((ushort)1, conn.SelectedSubTypeMask);
+            MatchmakingQueue queue = MatchmakingManager.GetQueue(leaderConn.SelectedGameType);
+            if (queue is null)
+            {
+                log.Error($"UpdateSelectedSubTypes for group {groupInfo.GroupId} with unavailable queue {leaderConn.SelectedGameType}");
+                return;
+            }
+            
+            ushort newMask = queue.FilterSubTypeMaskForGroup(groupInfo, leaderConn.GetSubTypeMask());
+
+            ushort oldMask = groupInfo.SubTypeMask;
+            if (oldMask != newMask)
+            {
+                groupInfo.SubTypeMask = newMask;
+                if (resetReadyStateIfUpdated)
+                {
+                    log.Info($"UpdateSelectedSubTypes resetting group {groupInfo.GroupId} ready state "
+                             + $"(was {queue.DebugFormatSubTypeMask(oldMask)}, now {queue.DebugFormatSubTypeMask(newMask)})");
+                    leaderConn.BroadcastRefreshGroup(true);
+                }
+            }
+        }
+
+        public static void UpdateSelectedSubTypesForAccount(long accountId)
+        {
+            var groupInfo = GetPlayerGroup(accountId);
+            if (groupInfo is not null)
+            {
+                UpdateSelectedSubTypes(groupInfo);
+            }
         }
     }
 }

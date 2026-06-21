@@ -88,7 +88,7 @@ namespace EvoS.Framework.Network.Static
             NotCheckedByDefault,
             HumansHaveFirstSlots,
             AFKPlayersAbortPreLoadGame,
-            CanBeConsolidated,
+            CanBeConsolidated, // all subtypes with this mod are consolidated into Reactor Roulette
             NotAllowedForGroups,
             ShowWithAITeammates,
             ControlAllBots,

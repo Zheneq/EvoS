@@ -1082,6 +1082,7 @@ namespace CentralServer.LobbyServer
         {
             // SubType update comes before GameType update in PlayerInfoUpdateRequest
             SelectedSubTypeMask = request.SubTypeMask;
+            GroupManager.UpdateSelectedSubTypesForAccount(AccountId);
             Send(new SetGameSubTypeResponse { ResponseId = request.RequestId });
         }
 
