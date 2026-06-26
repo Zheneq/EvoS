@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using CentralServer.LobbyServer.Group;
+using CentralServer.LobbyServer.Utils;
 using EvoS.Framework.DataAccess.Daos;
 using EvoS.Framework.Network.Static;
 using log4net;
@@ -135,14 +136,16 @@ public abstract class Matchmaker
 
     public class ScoredMatch : IComparable<ScoredMatch>
     {
-        public ScoredMatch(Match match, float score)
+        public ScoredMatch(Match match, float score, string description)
         {
             Match = match;
             Score = score;
+            Description = description;
         }
 
         public Match Match { get; }
         public float Score { get; }
+        public string Description { get; }
         
         public int CompareTo(ScoredMatch other)
         {
@@ -152,6 +155,11 @@ public abstract class Matchmaker
         public override string ToString()
         {
             return $"{Score} {Match}";
+        }
+
+        public string ToDetailedString()
+        {
+            return $"{Score} {Description} {Match}";
         }
     }
         
@@ -182,8 +190,24 @@ public abstract class Matchmaker
             if (filteredMatches.Count > 0)
             {
                 List<ScoredMatch> matches = RankMatches(filteredMatches, now);
-                log.Info($"Best match: {matches[0]}");
-                RankMatch(matches[0].Match, now, true);
+                HashSet<long> playersInQueue = queuedGroups.SelectMany(g => g.Members).ToHashSet();
+                foreach (ScoredMatch scoredMatch in matches)
+                {
+                    if (playersInQueue.Count == 0)
+                    {
+                        break;
+                    }
+                    foreach (long accountId in scoredMatch.Match.Groups.SelectMany(g => g.Members))
+                    {
+                        if (playersInQueue.Remove(accountId))
+                        {
+                            log.Debug($"Best match for {accountId}/{LobbyServerUtils.GetUserName(accountId)}: {scoredMatch.ToDetailedString()}");
+                        }
+                    }
+                }
+                
+                log.Info($"Best match: {matches[0].ToDetailedString()}");
+                
                 return matches;
             }
         }
@@ -216,13 +240,13 @@ public abstract class Matchmaker
     protected virtual List<ScoredMatch> RankMatches(List<Match> matches, DateTime now)
     {
         return matches
-            .Select(m => new ScoredMatch(m, RankMatch(m, now)))
+            .Select(m => RankMatch(m, now))
             .OrderByDescending(m => m.Score)
             .ToList();
     }
 
-    protected virtual float RankMatch(Match match, DateTime now, bool infoLog = false)
+    protected virtual ScoredMatch RankMatch(Match match, DateTime now)
     {
-        return 0;
+        return new ScoredMatch(match, 0, "no ranking");
     }
 }

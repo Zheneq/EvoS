@@ -74,7 +74,7 @@ public class MatchmakerRanked : MatchmakerBase
         return base.GetMatchesRanked(queuedGroups.Take(12).ToList(), now);
     }
 
-    protected override float RankMatch(Match match, DateTime now, bool infoLog = false)
+    protected override ScoredMatch RankMatch(Match match, DateTime now)
     {
         float teamEloDifferenceFactor = 1 - Cap(Math.Abs(match.TeamA.Elo - match.TeamB.Elo) / Conf.MaxTeamEloDifference);
         float teammateEloDifferenceAFactor = 1 - Cap((match.TeamA.MaxElo - match.TeamA.MinElo) / Conf.TeammateEloDifferenceWeightCap);
@@ -114,7 +114,7 @@ public class MatchmakerRanked : MatchmakerBase
             + teamConfidenceBalanceFactorWeighted
             + tieBreakerFactorWeighted;
         
-        string msg = $"Score {score:0.00} " +
+        string description = $"Score {score:0.00} " +
                   $"(tElo:{teamEloDifferenceFactorWeighted:0.00} [{teamEloDifferenceFactor:0.00}], " +
                   $"tmElo:{teammateEloDifferenceFactorWeighted:0.00} [{teammateEloDifferenceFactor:0.00}], " +
                   $"q:{waitTimeFactorWeighted:0.00} [{waitTimeFactor:0.00}], " +
@@ -123,16 +123,8 @@ public class MatchmakerRanked : MatchmakerBase
                   $"tConf:{teamConfidenceBalanceFactorWeighted:0.00} [{teamConfidenceBalanceFactor:0.00}], " +
                   $"tieBr:{tieBreakerFactorWeighted:0.00} [{tieBreakerFactor:0.00}]" +
                   $") {match}";
-        if (infoLog)
-        {
-            log.Info(msg);
-        }
-        else
-        {
-            log.Debug(msg);
-        }
 
-        return score;
+        return new ScoredMatch(match, score, description);
     }
 
     private static float Cap(float factor)

@@ -44,6 +44,6 @@ public class MatchmakerFifo : MatchmakerBase
         }
         
         log.Info($"Best match: {bestMatch}");
-        return new() { new ScoredMatch(bestMatch, Score) };
+        return new() { new ScoredMatch(bestMatch, Score, "first one") };
     }
 }

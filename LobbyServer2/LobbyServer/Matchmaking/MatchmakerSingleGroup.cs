@@ -40,6 +40,6 @@ public class MatchmakerSingleGroup : Matchmaker
         Match bestMatch = new Match(_accountDao, new() { group }, new(), string.Empty);
         
         log.Info($"Best match: {bestMatch}");
-        return new() { new ScoredMatch(bestMatch, Score) };
+        return new() { new ScoredMatch(bestMatch, Score, "first one") };
     }
 }
