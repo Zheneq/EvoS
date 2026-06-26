@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using CentralServer.LobbyServer.Session;
+using CentralServer.LobbyServer.Utils;
 using EvoS.Framework;
 using EvoS.Framework.Constants.Enums;
 using EvoS.Framework.DataAccess;
@@ -44,6 +45,7 @@ namespace CentralServer.LobbyServer.Friend
         public static FriendList GetFriendList(long accountId)
         {
             SocialComponent socialComponent = DB.Get().AccountDao.GetAccount(accountId)?.SocialComponent;
+            bool isVanilla = LobbyServerUtils.IsVanilla(accountId);
             FriendList friendList = new FriendList
             {
                 Friends = GetFriends(accountId)
@@ -58,7 +60,7 @@ namespace CentralServer.LobbyServer.Friend
                             {
                                 FriendAccountId = acc.AccountId,
                                 FriendHandle = acc.Handle,
-                                FriendStatus = GetFriendStatus(socialComponent, acc),
+                                FriendStatus = GetFriendStatus(socialComponent, acc, isVanilla),
                                 IsOnline = conn != null,
                                 StatusString = GetStatusString(conn),
                                 FriendNote = data?.LastSeenNote,
@@ -75,7 +77,7 @@ namespace CentralServer.LobbyServer.Friend
             return friendList;
         }
 
-        private static FriendStatus GetFriendStatus(SocialComponent socialComponent, PersistedAccountData otherAccount)
+        private static FriendStatus GetFriendStatus(SocialComponent socialComponent, PersistedAccountData otherAccount, bool isVanilla)
         {
             if (socialComponent is null)
             {
@@ -96,8 +98,13 @@ namespace CentralServer.LobbyServer.Friend
             {
                 return FriendStatus.RequestSent;
             }
-            
-            return FriendStatus.Friend;
+
+            if (isVanilla || socialComponent.FriendInfo.ContainsKey(otherAccount.AccountId))
+            {
+                return FriendStatus.Friend;
+            }
+
+            return FriendStatus.OnlineNonFriend;
         }
 
         public static HashSet<long> GetFriends(long accountId)

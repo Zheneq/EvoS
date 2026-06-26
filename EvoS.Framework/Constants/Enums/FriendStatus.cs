@@ -10,6 +10,7 @@ namespace EvoS.Framework.Constants.Enums
         RequestSent,
         RequestReceived,
         Removed,
-        Blocked
+        Blocked,
+        OnlineNonFriend
     }
 }

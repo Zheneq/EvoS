@@ -17,6 +17,7 @@ using EvoS.Framework.Auth;
 using EvoS.Framework.Constants.Enums;
 using EvoS.Framework.DataAccess;
 using EvoS.Framework.Misc;
+using EvoS.Framework.Network;
 using EvoS.Framework.Network.NetworkMessages;
 using EvoS.Framework.Network.Static;
 using log4net;
@@ -65,12 +66,6 @@ namespace EvoS.DirectoryServer
 
     public class DirectoryServer
     {
-        public static readonly ISet<string> SUPPORTED_PROTO_VERSIONS = new HashSet<string>
-        {
-            "b486c83d8a8950340936d040e1953493", // vanilla
-            "15e77d6ee51844cc02507b3e73c5aa3c", // 1.4
-            "89945cd84ac637ac678c60dd840acbda", // 1.5
-        };
         public const string BUILD_VERSION = "STABLE-122-100";
         public const string ERROR_INVALID_PROTOCOL_VERSION = "INVALID_PROTOCOL_VERSION";
 
@@ -118,7 +113,7 @@ namespace EvoS.DirectoryServer
 
         private static AssignGameClientResponse ProcessRequest(AssignGameClientRequest request, HttpContext context)
         {
-            if (!SUPPORTED_PROTO_VERSIONS.Contains(request.SessionInfo.ProtocolVersion))
+            if (!ProtocolVersion.SUPPORTED_PROTO_VERSIONS.Contains(request.SessionInfo.ProtocolVersion))
             {
                 return Fail(request, ERROR_INVALID_PROTOCOL_VERSION);
             }

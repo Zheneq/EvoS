@@ -1,11 +1,13 @@
 using System;
 using System.Linq;
 using System.Net;
+using CentralServer.LobbyServer.Session;
 using CentralServer.Proxy;
 using EvoS.Framework;
 using EvoS.Framework.DataAccess;
 using EvoS.Framework.DataAccess.Daos;
 using EvoS.Framework.Misc;
+using EvoS.Framework.Network;
 using EvoS.Framework.Network.Static;
 using log4net;
 using Microsoft.AspNetCore.Http;
@@ -151,6 +153,11 @@ namespace CentralServer.LobbyServer.Utils
             }
 
             return proxy;
+        }
+
+        public static bool IsVanilla(long accountId)
+        {
+            return SessionManager.GetSessionInfo(accountId)?.ProtocolVersion == ProtocolVersion.VANILLA;
         }
     }
 }
