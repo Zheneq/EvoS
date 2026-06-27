@@ -289,7 +289,10 @@ namespace CentralServer.LobbyServer
                 || (CurrentGame.PhaseSubType != FreelancerResolutionPhaseSubType.PICK_FREELANCER1
                     && CurrentGame.PhaseSubType != FreelancerResolutionPhaseSubType.PICK_FREELANCER2))
             {
-                Send(response); // TODO: error message
+                log.Warn($"Player {Handle} attempted to lock in draft selection in incorrect state "
+                         + $"(game = {CurrentGame}, is drafting = {CurrentGame?.IsDrafting}, phase = {CurrentGame?.PhaseSubType}");
+                response.LocalizedFailure = LocalizationPayload.Create("CannotReady@Global");
+                Send(response);
                 return;
             }
 
@@ -304,9 +307,17 @@ namespace CentralServer.LobbyServer
 
             lock (teamSelections)
             {
+                if (teamSelections.ContainsKey(player.PlayerId))
+                {
+                    log.Warn($"Player {player.PlayerId} {Handle} attempted to lock in draft selection twice");
+                    response.LocalizedFailure = LocalizationPayload.Create("CannotChangeCharactersOnceReadied@MonitorServer");
+                    Send(response);
+                    return;
+                }
+
                 HashSet<CharacterType> usedCharacterTypes = CurrentGame.GetUsedCharacterTypes();
-                if (characterType == CharacterType.PendingWillFill 
-                    || characterType == CharacterType.TestFreelancer1 
+                if (characterType == CharacterType.PendingWillFill
+                    || characterType == CharacterType.TestFreelancer1
                     || characterType == CharacterType.TestFreelancer2)
                 {
                     characterType = CurrentGame.AssignRandomCharacterForDraft(player, usedCharacterTypes, characterType);
@@ -314,7 +325,7 @@ namespace CentralServer.LobbyServer
 
                 List<RankedResolutionPlayerState> unselectedPlayerStates = rankedResolutionPhaseData.UnselectedPlayerStates;
                 int stateIndex = unselectedPlayerStates.FindIndex(p => p.PlayerId == player.PlayerId);
-                
+
                 if (stateIndex >= 0)
                 {
                     RankedResolutionPlayerState existingUnselectedPlayerStates = unselectedPlayerStates[stateIndex];
@@ -333,7 +344,6 @@ namespace CentralServer.LobbyServer
                     existingPlayersOnDeck.OnDeckness = RankedResolutionPlayerState.ReadyState.Unselected;
                     playersOnDeck[deckIndex] = existingPlayersOnDeck;
 
-                    // TODO can be already present?
                     teamSelections.Add(player.PlayerId, characterType);
 
                     CurrentGame.UpdatePlayersInDeck();
@@ -350,7 +360,10 @@ namespace CentralServer.LobbyServer
                 }
                 else
                 {
-                    // TODO: error message!
+                    response.LocalizedFailure = LocalizationPayload.Create(
+                        "CharacterTypeNotAllowed",
+                        "Global",
+                        LocalizationArg_Freelancer.Create(characterType));
                 }
             }
             
