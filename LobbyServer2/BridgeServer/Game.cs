@@ -230,7 +230,12 @@ public abstract class Game
 
     protected void SetGameStatus(GameStatus status)
     {
+        GameStatus oldStatus = GameInfo.GameStatus;
         GameInfo.GameStatus = status;
+        if (oldStatus <= GameStatus.FreelancerSelecting && status > GameStatus.FreelancerSelecting)
+        {
+            UpdateFriendStatuses();
+        }
     }
 
     protected virtual void SetSecondaryCharacter(long accountId, int playerId, LobbyCharacterInfo characterInfo)
@@ -487,6 +492,7 @@ public abstract class Game
             }
         }
 
+        UpdateFriendStatuses();
         Terminate();
     }
 
@@ -1551,5 +1557,16 @@ public abstract class Game
                 RankedData = rankedResolutionPhaseDataClone,
             });
         });
+    }
+
+    protected void UpdateFriendStatuses()
+    {
+        foreach (LobbyServerProtocol client in GetClients())
+        {
+            if (client is not null && client.IsConnected)
+            {
+                client.BroadcastRefreshFriendList();
+            }
+        }
     }
 }

@@ -88,15 +88,6 @@ public class PvpGame: Game
         {
             return;
         }
-        
-        foreach (LobbyServerProtocol client in GetClients())
-        {
-            if (client is not null && client.IsConnected)
-            {
-                client.BroadcastRefreshFriendList();
-                break;
-            }
-        }
 
         StartGame();
 
@@ -119,7 +110,7 @@ public class PvpGame: Game
 
         log.Info($"Game {gameType} started");
     }
-    
+
     public void BuildGameInfo(GameType gameType, List<GameSubType> gameSubTypes, int subTypeIndex)
     {
         GameSubType gameMode = gameSubTypes[subTypeIndex];

@@ -201,6 +201,7 @@ namespace CentralServer.LobbyServer.Group
                 if (leftGroup.IsSolo())
                 {
                     BroadcastSystemMessage(leftGroup, GroupMessages.GroupDisbanded);
+                    OnGroupDisbanded(leftGroup.Leader);
                 }
                 else if (wasLeader)
                 {
@@ -374,6 +375,11 @@ namespace CentralServer.LobbyServer.Group
         private static void OnLeaveGroup(long accountId)
         {
             SessionManager.GetClientConnection(accountId)?.OnLeaveGroup();
+        }
+
+        private static void OnGroupDisbanded(long accountId)
+        {
+            SessionManager.GetClientConnection(accountId)?.OnGroupDisbanded();
         }
 
         private static void OnGroupMembersUpdated(GroupInfo groupInfo)

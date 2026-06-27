@@ -2567,11 +2567,18 @@ namespace CentralServer.LobbyServer
         {
             IsReady = false;
             RefreshGroup();
+            BroadcastRefreshFriendList();
         }
 
         public void OnJoinGroup()
         {
             IsReady = false;
+            BroadcastRefreshFriendList();
+        }
+
+        public void OnGroupDisbanded()
+        {
+            BroadcastRefreshFriendList();
         }
 
         public void OnStartGame(Game game)
