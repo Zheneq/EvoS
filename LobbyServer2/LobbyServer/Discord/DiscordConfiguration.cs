@@ -35,6 +35,9 @@ namespace CentralServer.LobbyServer.Discord
         public bool LobbyChannelUpdateOnChangeOnly = true;
 
         public List<string> ClientStatusReportBlacklist = new();
+
+        public int RetryCount = 3;
+        public int RetryDelayMs = 1000;
     }
 
     public class DiscordChannel

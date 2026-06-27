@@ -1,7 +1,11 @@
+using System;
 using System.Collections.Generic;
+using System.Net;
+using System.Net.Http;
 using System.Threading.Tasks;
 using Discord;
 using Discord.Webhook;
+using DiscordHttpException = Discord.Net.HttpException;
 using EvoS.Framework.Misc;
 using log4net;
 
@@ -15,20 +19,46 @@ namespace CentralServer.LobbyServer.Discord
         private readonly ulong? threadId;
         private readonly ulong? pingRoleId;
         private readonly string pingRoleHandle;
+        private readonly int retryCount;
+        private readonly int retryDelayMs;
 
-        public DiscordClientWrapper(DiscordChannel conf)
+        public DiscordClientWrapper(DiscordChannel conf, int retryCount, int retryDelayMs)
         {
             client = new DiscordWebhookClient(conf.Webhook);
             client.Log += Log;
             threadId = conf.ThreadId;
             pingRoleId = conf.PingRoleId;
             pingRoleHandle = conf.PingRoleHandle;
+            this.retryCount = retryCount;
+            this.retryDelayMs = retryDelayMs;
         }
 
-        private static Task Log(LogMessage msg)
+        private static Task Log(LogMessage msg) => DiscordUtils.Log(log, msg);
+
+        private async Task<T> WithRetry<T>(Func<Task<T>> action)
         {
-            return DiscordUtils.Log(log, msg);
+            for (int attempt = 0;; attempt++)
+            {
+                try
+                {
+                    return await action();
+                }
+                catch (Exception e) when (attempt < retryCount && IsRetryable(e))
+                {
+                    log.Warn($"Discord API call failed (attempt {attempt + 1}/{retryCount + 1}), retrying in {retryDelayMs}ms: {e.Message}");
+                    await Task.Delay(retryDelayMs);
+                }
+            }
         }
+
+        private static bool IsRetryable(Exception e) => e switch
+        {
+            DiscordHttpException http =>
+                http.HttpCode == HttpStatusCode.TooManyRequests || (int)http.HttpCode >= 500,
+            HttpRequestException => true,
+            TimeoutException => true,
+            _ => false
+        };
 
         public Task<ulong> SendMessageAsync(
             string text = null,
@@ -57,8 +87,17 @@ namespace CentralServer.LobbyServer.Discord
                 }
             }
 
-            return client.SendMessageAsync(
-                text, isTTS, embeds, username, avatarUrl, options, allowedMentions, components, flags, _threadId);
+            return WithRetry(() => client.SendMessageAsync(
+                text,
+                isTTS,
+                embeds,
+                username,
+                avatarUrl,
+                options,
+                allowedMentions,
+                components,
+                flags,
+                _threadId));
         }
 
         public Task<ulong> SendFileAsync(
@@ -73,7 +112,7 @@ namespace CentralServer.LobbyServer.Discord
         {
             ulong? _threadId = threadIdOverride ?? threadId;
             if (_threadId == 0) _threadId = null;
-            return client.SendFileAsync(
+            return WithRetry(() => client.SendFileAsync(
                 attachment,
                 text,
                 isTTS,
@@ -81,7 +120,7 @@ namespace CentralServer.LobbyServer.Discord
                 username,
                 avatarUrl,
                 options,
-                threadId: _threadId);
+                threadId: _threadId));
         }
     }
 }

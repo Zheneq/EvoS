@@ -78,7 +78,7 @@ namespace CentralServer.LobbyServer.Discord
             lobbyChannel = MakeChannel("lobby", conf.LobbyChannel);
         }
 
-        private static DiscordClientWrapper MakeChannel(
+        private DiscordClientWrapper MakeChannel(
             string label,
             DiscordChannel channel,
             DiscordClientWrapper fallback = null)
@@ -86,7 +86,7 @@ namespace CentralServer.LobbyServer.Discord
             if (channel.IsChannel())
             {
                 log.Info($"Discord {label} channel is enabled");
-                return new DiscordClientWrapper(channel);
+                return new DiscordClientWrapper(channel, conf.RetryCount, conf.RetryDelayMs);
             }
 
             return fallback;
