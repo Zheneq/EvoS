@@ -141,7 +141,7 @@ namespace CentralServer.LobbyServer.Discord
             return status;
         }
 
-        public struct Status
+        public record struct Status
         {
             public int totalPlayers;
             public int inQueue;
