@@ -8,6 +8,7 @@ using CentralServer.LobbyServer.Group;
 using EvoS.Framework.Constants.Enums;
 using EvoS.Framework.DataAccess;
 using EvoS.Framework.Exceptions;
+using EvoS.Framework.Network;
 using EvoS.Framework.Network.NetworkMessages;
 using EvoS.Framework.Network.Static;
 using EvoS.Framework.Network.WebSocket;
@@ -238,7 +239,8 @@ namespace CentralServer.LobbyServer.Session
                     UserName = account.UserName,
                     ConnectionAddress = ipAddress.ToString(),
                     BuildVersion = connectingSessionInfo?.BuildVersion ?? "unknown",
-                    LanguageCode = connectingSessionInfo?.LanguageCode ??"",
+                    ProtocolVersion = connectingSessionInfo?.ProtocolVersion ?? ProtocolVersion.VANILLA,
+                    LanguageCode = connectingSessionInfo?.LanguageCode ?? "",
                     FakeEntitlements = "",
                     ProcessCode = connectingSessionInfo?.ProcessCode ?? "",
                     ProcessType = connectingSessionInfo?.ProcessType ?? ProcessType.AtlasReactor,
