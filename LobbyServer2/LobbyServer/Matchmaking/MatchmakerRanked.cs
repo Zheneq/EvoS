@@ -54,7 +54,6 @@ public class MatchmakerRanked : MatchmakerBase
 
         float eloDiff = Math.Abs(match.TeamA.Elo - match.TeamB.Elo);
         bool result = eloDiff <= maxEloDiff;
-        log.Debug($"{(result ? "A": "Disa")}llowed {match}, elo diff {eloDiff}/{maxEloDiff}, reference queue time {TimeSpan.FromSeconds(waitingTime)}");
         return result;
     }
 
