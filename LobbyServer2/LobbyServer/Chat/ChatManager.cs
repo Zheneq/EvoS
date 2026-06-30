@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -24,6 +25,22 @@ namespace CentralServer.LobbyServer.Chat
 
         public event Action<ChatNotification> OnGlobalChatMessage = delegate { };
         public event Action<ChatNotification, bool> OnChatMessage = delegate { };
+
+        public const string BotHandlePrefix = "<sprite=1>";
+
+        private record WhisperHandlerEntry(long SenderAccountId, string RecipientHandle, Action<ChatNotification> Callback);
+        private readonly ConcurrentDictionary<(long, string), WhisperHandlerEntry> _whisperHandlers = new();
+
+        public void RegisterWhisperHandler(long senderAccountId, string recipientHandle, Action<ChatNotification> callback = null)
+        {
+            string prefixedHandle = BotHandlePrefix + recipientHandle;
+            _whisperHandlers[(senderAccountId, prefixedHandle)] = new WhisperHandlerEntry(senderAccountId, prefixedHandle, callback);
+        }
+
+        public void UnregisterWhisperHandler(long senderAccountId, string recipientHandle)
+        {
+            _whisperHandlers.TryRemove((senderAccountId, BotHandlePrefix + recipientHandle), out _);
+        }
 
         public static ChatManager Get()
         {
@@ -126,6 +143,7 @@ namespace CentralServer.LobbyServer.Chat
                         notification.RecipientHandle = Regex.Replace(notification.RecipientHandle, @"\p{C}|\(.*?\)", "");
 
                         long? accountId = SessionManager.GetOnlinePlayerByHandleOrUsername(notification.RecipientHandle);
+
                         if (accountId.HasValue && accountId.Value != conn.AccountId)
                         {
                             message.RecipientHandle = notification.RecipientHandle;
@@ -133,12 +151,24 @@ namespace CentralServer.LobbyServer.Chat
                             conn.Send(message);
                             (isBlocked ? blockedRecipients : recipients).Add(accountId.Value);
                         }
+                        else if (notification.RecipientHandle.StartsWith(BotHandlePrefix))
+                        {
+                            message.RecipientHandle = notification.RecipientHandle;
+                            if (_whisperHandlers.TryGetValue(
+                                    (conn.AccountId, notification.RecipientHandle),
+                                    out WhisperHandlerEntry handlerEntry))
+                            {
+                                handlerEntry.Callback?.Invoke(message);
+                            }
+                            conn.Send(message);
+                            recipients.Add(0);
+                        }
                         else
                         {
                             log.Warn($"{conn.AccountId} {account.Handle} failed to whisper to {notification.RecipientHandle}");
                             conn.SendSystemMessage(
                                 LocalizationPayload.Create(
-                                    "FailedMessage", 
+                                    "FailedMessage",
                                     "Global",
                                     LocalizationArg_LocalizationPayload.Create(
                                         GroupMessages.PlayerNotFound(notification.RecipientHandle))));
@@ -292,6 +322,39 @@ namespace CentralServer.LobbyServer.Chat
             {
                 SessionManager.GetClientConnection(player)?.Send(message);
             }
+        }
+
+        public void SendSystemWhisper(string senderHandle, long recipientAccountId, string text)
+        {
+            LobbySessionInfo session = SessionManager.GetSessionInfo(recipientAccountId);
+            if (session == null)
+            {
+                log.Error($"Cannot send whisper: recipient={recipientAccountId} is not online");
+                return;
+            }
+
+            ChatNotification message = new ChatNotification
+            {
+                SenderAccountId = 0,
+                SenderHandle = BotHandlePrefix + senderHandle,
+                RecipientHandle = session.Handle,
+                ConsoleMessageType = ConsoleMessageType.WhisperChat,
+                Text = text,
+                EmojisAllowed = InventoryManager.GetUnlockedEmojiIDs(0),
+                DisplayDevTag = false,
+            };
+
+            SessionManager.GetClientConnection(recipientAccountId)?.Send(message);
+
+            DB.Get().ChatHistoryDao.Save(new ChatHistoryDao.Entry(
+                message,
+                DateTime.UtcNow,
+                null,
+                new HashSet<long> { recipientAccountId },
+                new HashSet<long>(),
+                false));
+
+            OnChatMessage(message, false);
         }
     }
 }

@@ -311,6 +311,13 @@ export function ban(authHeader: string, penaltyInfo: PenaltyInfo) {
         { headers: { 'Authorization': authHeader } });
 }
 
+export function sendWhisper(abort: AbortController, authHeader: string, accountId: number, sender: string, message: string) {
+    return axios.post(
+        baseUrl + "/api/admin/player/whisper",
+        { accountId, sender, message },
+        { headers: { 'Authorization': authHeader }, signal: abort.signal });
+}
+
 export function sendAdminMessage(abort: AbortController, authHeader: string, accountId: number, msg: string) {
     return axios.post(
         baseUrl + "/api/admin/player/adminMessage",

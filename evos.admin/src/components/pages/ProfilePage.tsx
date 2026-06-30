@@ -10,6 +10,7 @@ import MuteBanPlayer from "../controls/MuteBanPlayer";
 import {EvosCard, StackWrapper} from "../generic/BasicComponents";
 import AdminMessages from "../controls/AdminMessages";
 import TempPassword from "../controls/TempPassword";
+import SendWhisper from "../controls/SendWhisper";
 
 
 export default function ProfilePage() {
@@ -77,6 +78,7 @@ export default function ProfilePage() {
                     onCommit={handleCommit}
                 />
                 <AdminMessages accountId={playerDetails?.player.accountId ?? 0} />
+                <SendWhisper accountId={playerDetails?.player.accountId ?? 0} handle={handle} />
                 <EvosCard variant="outlined">
                     <TempPassword accountId={playerDetails?.player.accountId ?? 0}/>
                 </EvosCard>

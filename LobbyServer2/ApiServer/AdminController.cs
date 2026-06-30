@@ -295,6 +295,36 @@ namespace CentralServer.ApiServer
             return success ? Results.Ok() : Results.Problem();
         }
 
+        public class WhisperModel
+        {
+            public long accountId { get; set; }
+            public string sender { get; set; }
+            public string message { get; set; }
+        }
+
+        public static IResult SendWhisper([FromBody] WhisperModel data, ClaimsPrincipal user)
+        {
+            if (!ValidateAdmin(user, out IResult error, out long adminAccountId, out string adminHandle))
+            {
+                return error;
+            }
+
+            if (string.IsNullOrEmpty(data.message))
+            {
+                return Results.BadRequest();
+            }
+
+            PersistedAccountData recipient = DB.Get().AccountDao.GetAccount(data.accountId);
+            if (recipient == null)
+            {
+                return Results.NotFound();
+            }
+
+            log.Info($"API WHISPER by {adminHandle} ({adminAccountId}) to {recipient.Handle} ({data.accountId}): {data.sender}: {data.message}");
+            ChatManager.Get().SendSystemWhisper(data.sender, data.accountId, data.message);
+            return Results.Ok();
+        }
+
         public static IResult SendAdminMessage([FromBody] PenaltyInfo data, ClaimsPrincipal user)
         {
             if (!ValidateAdmin(user, out IResult error, out long adminAccountId, out string adminHandle))
