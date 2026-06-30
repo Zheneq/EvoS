@@ -504,6 +504,46 @@ namespace CentralServer.ApiServer
             return Results.Ok(new RegistrationCodesResponseModel { entries = entries });
         }
 
+        public class MapPickBanModel
+        {
+            public long captainAAccountId { get; set; }
+            public long captainBAccountId { get; set; }
+            public int pickCount { get; set; }
+        }
+
+        private static readonly List<MapPickBanSession.MapOption> DefaultMapPool =
+            Maps.GetMapName
+                .Select(kv => new MapPickBanSession.MapOption(kv.Key, kv.Value))
+                .Take(7)
+                .ToList();
+
+        public static IResult StartMapPickBan([FromBody] MapPickBanModel data, ClaimsPrincipal user)
+        {
+            if (!ValidateAdmin(user, out IResult error, out long adminAccountId, out string adminHandle))
+            {
+                return error;
+            }
+
+            try
+            {
+                log.Info($"API MAP PICK/BAN by {adminHandle} ({adminAccountId}): " +
+                    $"captainA={LobbyServerUtils.GetHandle(data.captainAAccountId)} ({data.captainAAccountId}) " +
+                    $"captainB={LobbyServerUtils.GetHandle(data.captainBAccountId)} ({data.captainBAccountId}) " +
+                    $"pickCount={data.pickCount}");
+                MapPickBanSession.Start(
+                    DefaultMapPool,
+                    data.pickCount,
+                    data.captainAAccountId,
+                    data.captainBAccountId,
+                    maps => log.Info($"Map pick/ban result triggered from API: {string.Join(", ", maps.Select(m => m.DisplayName))}"));
+                return Results.Ok();
+            }
+            catch (ArgumentException e)
+            {
+                return Results.BadRequest(new ApiServer.ErrorResponseModel { message = e.Message });
+            }
+        }
+
         public static bool ValidateAdmin(
             ClaimsPrincipal user,
             out IResult error,

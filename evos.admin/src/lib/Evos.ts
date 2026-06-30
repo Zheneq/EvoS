@@ -691,6 +691,13 @@ export interface MatchHistoryResponse {
     matches: MatchHistoryEntry[];
 }
 
+export function startMapPickBan(abort: AbortController, authHeader: string, captainAAccountId: number, captainBAccountId: number, pickCount: number) {
+    return axios.post(
+        baseUrl + "/api/admin/player/mapPickBan",
+        { captainAAccountId, captainBAccountId, pickCount },
+        { headers: { 'Authorization': authHeader }, signal: abort.signal });
+}
+
 export function getMatchHistory(
     abort: AbortController,
     authHeader: string,
