@@ -91,7 +91,7 @@ namespace EvoS.DirectoryServer.Account
                 throw new ArgumentException(InvalidUsername);
             }
 
-            if (!IsAllowedUsername(username))
+            if (!IsAllowedUsername(username) && !ignoreConditions)
             {
                 log.Info($"Attempt to register as \"{username}\"");
                 throw new ArgumentException(CannotUseThisUsername);

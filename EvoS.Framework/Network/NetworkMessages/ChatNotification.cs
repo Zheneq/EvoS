@@ -25,5 +25,19 @@ namespace EvoS.Framework.Network.NetworkMessages
             RequestId = 0;
             ResponseId = 0;
         }
+
+        public override string ToString()
+        {
+            return $"{nameof(SenderAccountId)}: {SenderAccountId}, "
+                   + $"{nameof(SenderHandle)}: {SenderHandle}, "
+                   + $"{nameof(SenderTeam)}: {SenderTeam}, "
+                   + $"{nameof(RecipientHandle)}: {RecipientHandle}, "
+                   + $"{nameof(CharacterType)}: {CharacterType}, "
+                   + $"{nameof(ConsoleMessageType)}: {ConsoleMessageType}, "
+                   + $"{nameof(Text)}: {Text}, "
+                   + $"{nameof(LocalizedText)}: {LocalizedText}, "
+                   + $"{nameof(EmojisAllowed)}: {EmojisAllowed}, "
+                   + $"{nameof(DisplayDevTag)}: {DisplayDevTag}";
+        }
     }
 }

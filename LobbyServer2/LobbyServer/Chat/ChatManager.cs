@@ -17,7 +17,7 @@ using log4net;
 
 namespace CentralServer.LobbyServer.Chat
 {
-    class ChatManager
+    partial class ChatManager
     {
         private static readonly ILog log = LogManager.GetLogger(typeof(ChatManager));
 
@@ -26,20 +26,26 @@ namespace CentralServer.LobbyServer.Chat
         public event Action<ChatNotification> OnGlobalChatMessage = delegate { };
         public event Action<ChatNotification, bool> OnChatMessage = delegate { };
 
-        public const string BotHandlePrefix = "<sprite=1>";
+        public static readonly string BotHandlePrefix = TmpSprite.Tag(TmpSpriteId.Iso, 24);
+        private static readonly char BotHandleRenderedPrefix = TmpSprite.Rendered(TmpSpriteId.Iso);
+        private static readonly string MentorHandlePrefix = TmpSprite.Tag(TmpSpriteId.Mentor, 24);
+
+        private const string DevPrefixRegex = @"\(.*?\)";
+
+        [GeneratedRegex("^(?:" + TmpSprite.TagRegex + "|" + TmpSprite.RenderedRegex + "|" + DevPrefixRegex + @")\s*")]
+        private static partial Regex HandlePrefixRegex();
 
         private record WhisperHandlerEntry(long SenderAccountId, string RecipientHandle, Action<ChatNotification> Callback);
         private readonly ConcurrentDictionary<(long, string), WhisperHandlerEntry> _whisperHandlers = new();
 
         public void RegisterWhisperHandler(long senderAccountId, string recipientHandle, Action<ChatNotification> callback = null)
         {
-            string prefixedHandle = BotHandlePrefix + recipientHandle;
-            _whisperHandlers[(senderAccountId, prefixedHandle)] = new WhisperHandlerEntry(senderAccountId, prefixedHandle, callback);
+            _whisperHandlers[(senderAccountId, recipientHandle)] = new WhisperHandlerEntry(senderAccountId, recipientHandle, callback);
         }
 
         public void UnregisterWhisperHandler(long senderAccountId, string recipientHandle)
         {
-            _whisperHandlers.TryRemove((senderAccountId, BotHandlePrefix + recipientHandle), out _);
+            _whisperHandlers.TryRemove((senderAccountId, recipientHandle), out _);
         }
 
         public static ChatManager Get()
@@ -107,12 +113,10 @@ namespace CentralServer.LobbyServer.Chat
 
             HashSet<long> recipients = new HashSet<long>();
             HashSet<long> blockedRecipients = new HashSet<long>();
-            string mentorTag = "<size=24><sprite=2></size>";
-            string patternMentorTag = Regex.Escape(mentorTag);
 
             if (account.Mentor)
             {
-                message.SenderHandle = $"{mentorTag}{message.SenderHandle}";
+                message.SenderHandle = $"{MentorHandlePrefix}{message.SenderHandle}";
             }
 
             switch (notification.ConsoleMessageType)
@@ -127,7 +131,7 @@ namespace CentralServer.LobbyServer.Chat
                             }
 
                             // Remove Mentor icon
-                            message.SenderHandle = Regex.Replace(message.SenderHandle, patternMentorTag, "");
+                            message.SenderHandle = HandlePrefixRegex().Replace(message.SenderHandle, "");
 
                             OnGlobalChatMessage(message);
                         }
@@ -139,39 +143,45 @@ namespace CentralServer.LobbyServer.Chat
                     }
                 case ConsoleMessageType.WhisperChat:
                     {
+                        FixWhisperChatNotification(notification);
+
                         // Clean the recipient handle by removing (mentor icon) and (Dev) tag
-                        notification.RecipientHandle = Regex.Replace(notification.RecipientHandle, @"\p{C}|\(.*?\)", "");
-
-                        long? accountId = SessionManager.GetOnlinePlayerByHandleOrUsername(notification.RecipientHandle);
-
-                        if (accountId.HasValue && accountId.Value != conn.AccountId)
+                        string actualRecipientHandle = HandlePrefixRegex().Replace(notification.RecipientHandle, "");
+                        message.RecipientHandle = actualRecipientHandle;
+                        message.Text = notification.Text;
+                        
+                        if (notification.RecipientHandle.StartsWith(BotHandleRenderedPrefix)
+                            || notification.RecipientHandle.StartsWith(BotHandlePrefix))
                         {
-                            message.RecipientHandle = notification.RecipientHandle;
-                            SendMessageToPlayer(accountId.Value, message, out bool isBlocked);
+                            message.RecipientHandle = BotHandlePrefix + actualRecipientHandle;
                             conn.Send(message);
-                            (isBlocked ? blockedRecipients : recipients).Add(accountId.Value);
-                        }
-                        else if (notification.RecipientHandle.StartsWith(BotHandlePrefix))
-                        {
-                            message.RecipientHandle = notification.RecipientHandle;
-                            if (_whisperHandlers.TryGetValue(
-                                    (conn.AccountId, notification.RecipientHandle),
-                                    out WhisperHandlerEntry handlerEntry))
+                            if (_whisperHandlers.TryGetValue((conn.AccountId, actualRecipientHandle), out WhisperHandlerEntry handlerEntry))
                             {
+                                log.Info($"Invoking chat bot {actualRecipientHandle} callback with {message}");
                                 handlerEntry.Callback?.Invoke(message);
                             }
-                            conn.Send(message);
                             recipients.Add(0);
                         }
                         else
                         {
-                            log.Warn($"{conn.AccountId} {account.Handle} failed to whisper to {notification.RecipientHandle}");
-                            conn.SendSystemMessage(
-                                LocalizationPayload.Create(
-                                    "FailedMessage",
-                                    "Global",
-                                    LocalizationArg_LocalizationPayload.Create(
-                                        GroupMessages.PlayerNotFound(notification.RecipientHandle))));
+                            long? accountId = SessionManager.GetOnlinePlayerByHandleOrUsername(actualRecipientHandle);
+
+                            if (accountId.HasValue && accountId.Value != conn.AccountId)
+                            {
+                                SendMessageToPlayer(accountId.Value, message, out bool isBlocked);
+                                conn.Send(message);
+                                (isBlocked ? blockedRecipients : recipients).Add(accountId.Value);
+                            }
+                            else 
+                            {
+                                log.Warn($"{conn.AccountId} {account.Handle} failed to whisper to {actualRecipientHandle}");
+                                conn.SendSystemMessage(
+                                    LocalizationPayload.Create(
+                                        "FailedMessage",
+                                        "Global",
+                                        LocalizationArg_LocalizationPayload.Create(
+                                            GroupMessages.PlayerNotFound(actualRecipientHandle))));
+                            }
                         }
                         break;
                     }
@@ -259,8 +269,8 @@ namespace CentralServer.LobbyServer.Chat
                     }
             }
 
-            // Remove Mentor icon
-            message.SenderHandle = Regex.Replace(message.SenderHandle, patternMentorTag, "");
+            // Remove prefixes
+            message.SenderHandle = HandlePrefixRegex().Replace(message.SenderHandle, "");
 
             DB.Get().ChatHistoryDao.Save(new ChatHistoryDao.Entry(
                 message,
@@ -355,6 +365,33 @@ namespace CentralServer.LobbyServer.Chat
                 false));
 
             OnChatMessage(message, false);
+        }
+
+        private static readonly Regex SpriteTagRegex = new ("^(" + TmpSprite.TagRegex.Replace("<", @"<\s") + @"[^\s]+)\s");
+
+        [GeneratedRegex(@"<\s")]
+        private static partial Regex HandleFixRegex();
+
+        private const string BrokenHandle = "<";
+        
+        /**
+         * Depending on what player does, reply handle with icon can either start with a rendered sprite
+         * or just be "<" with the rest of unrendered sprite prepended to the actual message
+         * (with a bunch of spaces sprinkled in)
+         */
+        private static void FixWhisperChatNotification(ChatNotification notification)
+        {
+            if (notification.RecipientHandle != BrokenHandle)
+            {
+                return;
+            }
+
+            Match match = SpriteTagRegex.Match(BrokenHandle + ' ' + notification.Text);
+            if (match.Success)
+            {
+                notification.RecipientHandle = HandleFixRegex().Replace(match.Groups[0].Value, "<").Trim();
+                notification.Text = notification.Text[(match.Groups[0].Value.Length - 2)..];
+            }
         }
     }
 }

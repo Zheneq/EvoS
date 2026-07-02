@@ -24,6 +24,7 @@ public class MapPickBanSession
 
     private readonly List<MapOption> _remaining;
     private readonly List<(MapOption Map, int CaptainIndex)> _picks;
+    private readonly int _pickCount;
     private readonly List<Step> _steps;
     private readonly long[] _captains;
     private readonly Action<List<MapOption>> _callback;
@@ -64,6 +65,7 @@ public class MapPickBanSession
         _remaining = new List<MapOption>(mapPool);
         _picks = [];
         _steps = BuildSteps(pickCount);
+        _pickCount = pickCount;
         _captains = [captainAAccountId, captainBAccountId];
         _callback = callback;
     }
@@ -87,6 +89,11 @@ public class MapPickBanSession
                  + $"captainA={LobbyServerUtils.GetHandle(_captains[0])} "
                  + $"captainB={LobbyServerUtils.GetHandle(_captains[1])} "
                  + $"steps={_steps.Count}");
+        string count = _pickCount == 1 ? "1 map" : $"{_pickCount} maps";
+        BroadcastToGroupMembers(
+            $"{LobbyServerUtils.GetHandle(_captains[0])} and {LobbyServerUtils.GetHandle(_captains[1])} "
+            + $"are picking {count} for this match",
+            true);
         SendPromptToCurrentCaptain();
     }
 
@@ -175,6 +182,10 @@ public class MapPickBanSession
             string label = captainIndex == 0 ? "A pick" : "B pick";
             sb.AppendLine($"  {index++}. {map.DisplayName} ({label})");
         }
+        foreach (MapOption map in _remaining)
+        {
+            sb.AppendLine($"  {index++}. {map.DisplayName} (final map)");
+        }
         return sb.ToString().TrimEnd();
     }
 
@@ -187,13 +198,14 @@ public class MapPickBanSession
 
     private void BroadcastToGroupMembers(string text, bool includeCaptains = false)
     {
+        HashSet<long> sent = [];
         foreach (long captainId in _captains)
         {
             GroupInfo group = GroupManager.GetPlayerGroup(captainId);
             if (group == null) continue;
             foreach (long memberId in group.Members)
             {
-                if (memberId != captainId || includeCaptains)
+                if ((memberId != captainId || includeCaptains) && sent.Add(memberId))
                 {
                     SessionManager.GetClientConnection(memberId)?.SendSystemMessage(text);
                 }
