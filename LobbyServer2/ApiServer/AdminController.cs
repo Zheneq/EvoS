@@ -84,7 +84,7 @@ namespace CentralServer.ApiServer
             {
                 return Results.BadRequest();
             }
-            SessionManager.Broadcast(data.Msg);
+            ChatManager.Get().Broadcast(data.Msg);
             return Results.Ok();
         }
 

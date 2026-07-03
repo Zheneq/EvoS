@@ -298,14 +298,5 @@ namespace CentralServer.LobbyServer.Session
         {
             SessionInfos.Values.FirstOrDefault()?.conn.Broadcast(message);
         }
-
-        public static void Broadcast(string msg)
-        {
-            Broadcast(new ChatNotification
-            {
-                ConsoleMessageType = ConsoleMessageType.BroadcastMessage,
-                Text = msg,
-            });
-        }
     }
 }

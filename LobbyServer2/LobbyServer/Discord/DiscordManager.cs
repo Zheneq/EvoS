@@ -103,6 +103,7 @@ namespace CentralServer.LobbyServer.Discord
             {
                 _ = SendServerStatusLoop(cancelTokenSource.Token);
                 ChatManager.Get().OnGlobalChatMessage += SendGlobalChatMessage;
+                ChatManager.Get().OnBroadcastMessage += SendBroadcastToLobbyChannel;
             }
 
             if (adminChatLogChannel is not null)
@@ -115,6 +116,7 @@ namespace CentralServer.LobbyServer.Discord
                 AdminManager.Get().OnAdminAction += SendAdminActionAudit;
                 AdminManager.Get().OnAdminMessage += SendAdminMessageAudit;
                 AdminController.OnAdminPauseQueue += SendAdminPauseQueueAudit;
+                ChatManager.Get().OnBroadcastMessage += SendBroadcastMessageAudit;
             }
 
             if (adminSystemReportChannel is not null)
@@ -163,6 +165,7 @@ namespace CentralServer.LobbyServer.Discord
             if (lobbyChannel != null)
             {
                 ChatManager.Get().OnGlobalChatMessage -= SendGlobalChatMessage;
+                ChatManager.Get().OnBroadcastMessage -= SendBroadcastToLobbyChannel;
             }
 
             if (adminChatLogChannel is not null)
@@ -175,6 +178,7 @@ namespace CentralServer.LobbyServer.Discord
                 AdminManager.Get().OnAdminAction -= SendAdminActionAudit;
                 AdminManager.Get().OnAdminMessage -= SendAdminMessageAudit;
                 AdminController.OnAdminPauseQueue -= SendAdminPauseQueueAudit;
+                ChatManager.Get().OnBroadcastMessage -= SendBroadcastMessageAudit;
             }
 
             if (adminSystemReportChannel is not null)
@@ -287,6 +291,25 @@ namespace CentralServer.LobbyServer.Discord
             catch (Exception e)
             {
                 log.Error("Failed to send lobby chat message to discord webhook", e);
+            }
+        }
+
+        private async void SendBroadcastToLobbyChannel(ChatNotification notification)
+        {
+            if (lobbyChannel == null || notification.RecipientHandle != null)
+            {
+                return;
+            }
+
+            try
+            {
+                await lobbyChannel.SendMessageAsync(
+                    notification.Text,
+                    username: "Broadcast");
+            }
+            catch (Exception e)
+            {
+                log.Error("Failed to send broadcast message to lobby discord webhook", e);
             }
         }
 
@@ -406,6 +429,36 @@ namespace CentralServer.LobbyServer.Discord
             catch (Exception e)
             {
                 log.Error("Failed to send admin pause queue audit message to discord webhook", e);
+            }
+        }
+
+        private async void SendBroadcastMessageAudit(ChatNotification notification)
+        {
+            if (adminActionLogChannel == null || !conf.AdminEnableAdminAudit)
+            {
+                return;
+            }
+
+            try
+            {
+                string to = notification.RecipientHandle != null
+                    ? $"to {notification.RecipientHandle}"
+                    : "to all";
+                await adminActionLogChannel.SendMessageAsync(
+                    username: notification.SenderHandle ?? "Atlas Reactor",
+                    embeds:
+                    [
+                        new EmbedBuilder
+                        {
+                            Title = $"Broadcast {to}",
+                            Description = description(notification.Text),
+                            Color = Color.Orange,
+                        }.Build()
+                    ]);
+            }
+            catch (Exception e)
+            {
+                log.Error("Failed to send broadcast message audit to discord webhook", e);
             }
         }
 

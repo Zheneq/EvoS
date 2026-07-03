@@ -25,6 +25,7 @@ namespace CentralServer.LobbyServer.Chat
 
         public event Action<ChatNotification> OnGlobalChatMessage = delegate { };
         public event Action<ChatNotification, bool> OnChatMessage = delegate { };
+        public event Action<ChatNotification> OnBroadcastMessage = delegate { };
 
         public static readonly string BotHandlePrefix = TmpSprite.Tag(TmpSpriteId.Iso, 24);
         private static readonly char BotHandleRenderedPrefix = TmpSprite.Rendered(TmpSpriteId.Iso);
@@ -332,6 +333,58 @@ namespace CentralServer.LobbyServer.Chat
             {
                 SessionManager.GetClientConnection(player)?.Send(message);
             }
+        }
+
+        public void Broadcast(string msg)
+        {
+            ChatNotification message = new ChatNotification
+            {
+                SenderAccountId = 0,
+                ConsoleMessageType = ConsoleMessageType.BroadcastMessage,
+                Text = msg,
+            };
+
+            SessionManager.Broadcast(message);
+
+            DB.Get().ChatHistoryDao.Save(new ChatHistoryDao.Entry(
+                message,
+                DateTime.UtcNow,
+                null,
+                new HashSet<long>(),
+                new HashSet<long>(),
+                false));
+
+            OnBroadcastMessage(message);
+        }
+
+        public void BroadcastToPlayer(long accountId, string msg)
+        {
+            LobbySessionInfo session = SessionManager.GetSessionInfo(accountId);
+            if (session == null)
+            {
+                log.Error($"Cannot broadcast to player: accountId={accountId} is not online");
+                return;
+            }
+
+            ChatNotification message = new ChatNotification
+            {
+                SenderAccountId = 0,
+                RecipientHandle = session.Handle,
+                ConsoleMessageType = ConsoleMessageType.BroadcastMessage,
+                Text = msg,
+            };
+
+            SessionManager.GetClientConnection(accountId)?.Send(message);
+
+            DB.Get().ChatHistoryDao.Save(new ChatHistoryDao.Entry(
+                message,
+                DateTime.UtcNow,
+                null,
+                new HashSet<long> { accountId },
+                new HashSet<long>(),
+                false));
+
+            OnBroadcastMessage(message);
         }
 
         public void SendSystemWhisper(string senderHandle, long recipientAccountId, string text)

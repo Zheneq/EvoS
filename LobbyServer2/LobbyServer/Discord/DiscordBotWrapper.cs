@@ -1,5 +1,6 @@
 using System.Linq;
 using System.Threading.Tasks;
+using CentralServer.LobbyServer.Chat;
 using CentralServer.LobbyServer.Matchmaking;
 using CentralServer.LobbyServer.Session;
 using Discord;
@@ -146,13 +147,7 @@ namespace CentralServer.LobbyServer.Discord
                 {
                     string msg = command.Data.Options.First().Value.ToString();
                     log.Info($"CMD /{command.Data.Name} - {handle}: {msg}");
-                    ChatNotification message = new ChatNotification
-                    {
-                        SenderHandle = handle,
-                        ConsoleMessageType = ConsoleMessageType.BroadcastMessage,
-                        Text = msg,
-                    };
-                    SessionManager.Broadcast(message);
+                    ChatManager.Get().Broadcast(msg);
                     await command.RespondAsync($"Broadcast: {msg}", ephemeral: true);
                     break;
                 }
