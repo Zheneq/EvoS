@@ -31,13 +31,14 @@ public class PvpGame: Game
 
         if (asymmetricSlots is { Count: > 0 })
         {
-            // Clone the shared GameSubType and set the actual proxy count for this specific match
+            // Clone the shared GameSubType and set per-team proxy counts for this specific match
             GameSubType = GameSubType.Clone();
-            GameSubType.TeamABots = asymmetricSlots.Values.Sum(n => n - 1);
+            GameSubType.TeamABots = teamA.Where(asymmetricSlots.ContainsKey).Sum(id => asymmetricSlots[id] - 1);
+            GameSubType.TeamBBots = teamB.Where(asymmetricSlots.ContainsKey).Sum(id => asymmetricSlots[id] - 1);
         }
 
         // Fill Teams
-        if (!FillTeam(teamA, Team.TeamA, GameSubType, asymmetricSlots) || !FillTeam(teamB, Team.TeamB, GameSubType))
+        if (!FillTeam(teamA, Team.TeamA, GameSubType, asymmetricSlots) || !FillTeam(teamB, Team.TeamB, GameSubType, asymmetricSlots))
         {
             return;
         }

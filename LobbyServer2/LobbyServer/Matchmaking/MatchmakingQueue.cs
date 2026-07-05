@@ -505,7 +505,7 @@ namespace CentralServer.LobbyServer.Matchmaking
             if (_asymmetricDescriptors.ContainsKey(subType.LocalizedName))
             {
                 asymmetricSlots = new Dictionary<long, int>();
-                foreach (Matchmaker.MatchmakingGroup group in match.Match.TeamA.Groups)
+                foreach (Matchmaker.MatchmakingGroup group in match.Match.Groups)
                 {
                     if (group.EffectiveSlots > 1)
                     {

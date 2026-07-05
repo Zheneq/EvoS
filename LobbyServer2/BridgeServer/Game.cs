@@ -571,7 +571,7 @@ public abstract class Game
         GameSubType gameSubType,
         Dictionary<long, int> asymmetricSlots = null)
     {
-        bool isAsymmetricTeam = asymmetricSlots != null && team == Team.TeamA;
+        bool isAsymmetricTeam = asymmetricSlots != null;
 
         int botNum = 0;
         int playerNum = 0;
