@@ -191,7 +191,7 @@ namespace CentralServer.LobbyServer.Matchmaking
             subTypes.Add(advertised);
             Matchmakers[advertised.LocalizedName] = MatchmakerFactory(advertised);
             _asymmetricDescriptors[advertised.LocalizedName] = descriptor;
-            log.Info($"Registered asymmetric subtype '{advertised.LocalizedName}' (N={descriptor.N}) derived from '{descriptor.BaseSubTypeName}'");
+            log.Info($"Registered asymmetric subtype '{advertised.LocalizedName}' (N={descriptor.ControlledCharacters}) derived from '{descriptor.BaseSubTypeName}'");
         }
 
         private void ReloadConfig()
@@ -335,7 +335,7 @@ namespace CentralServer.LobbyServer.Matchmaking
                         {
                             GroupInfo group = GroupManager.GetGroup(groupId);
                             if (group is null) continue;
-                            combinedSlots[groupId] = descriptor.IsAvailableFor(group.Leader) ? descriptor.N : 1;
+                            combinedSlots[groupId] = descriptor.IsAvailableFor(group.Leader) ? descriptor.ControlledCharacters : 1;
                         }
 
                         foreach (long groupId in GetQueuedGroups(descriptor.BaseSubTypeIndex))
