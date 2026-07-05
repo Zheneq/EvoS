@@ -89,7 +89,7 @@ namespace EvoS.DirectoryServer
                 AssignGameClientRequest request = JsonConvert.DeserializeObject<AssignGameClientRequest>(requestBody);
                 log.Debug($"< AssignGameClientRequest {DefaultJsonSerializer.Serialize(request)}");
                 AssignGameClientResponse response;
-                if (request is null)
+                if (request?.SessionInfo is null || request.AuthInfo is null)
                 {
                     response = Fail(new AssignGameClientRequest(), "Network error. Please, restart the game.");
                     log.Warn($"Fail during login (bad request) userAgent=\"{context.Request.Headers.UserAgent}\" body=\"{requestBody}\"");
