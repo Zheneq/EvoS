@@ -232,7 +232,13 @@ namespace CentralServer.LobbyServer.Matchmaking
             */
         }
 
-        public static async Task StartGameAsync(List<long> teamA, List<long> teamB, GameType gameType, List<GameSubType> gameSubTypes, int subTypeIndex)
+        public static async Task StartGameAsync(
+            List<long> teamA,
+            List<long> teamB,
+            GameType gameType,
+            List<GameSubType> gameSubTypes,
+            int subTypeIndex,
+            Dictionary<long, int> asymmetricSlots = null)
         {
             log.Info($"Starting {gameType} game...");
             PvpGame game = GameManager.CreatePvpGame();
@@ -241,7 +247,7 @@ namespace CentralServer.LobbyServer.Matchmaking
                 log.Info($"Failed to create {gameType} game");
                 return;
             }
-            await game.StartGameAsync(teamA.Shuffle().ToList(), teamB.Shuffle().ToList(), gameType, gameSubTypes, subTypeIndex);
+            await game.StartGameAsync(teamA.Shuffle().ToList(), teamB.Shuffle().ToList(), gameType, gameSubTypes, subTypeIndex, asymmetricSlots);
         }
 
         public static void OnGameEnded(LobbyGameInfo gameInfo, LobbyGameSummary gameSummary, GameSubType gameSubType)

@@ -22,7 +22,9 @@ public static class Elo
         DateTime now,
         IAccountProvider accountProvider,
         IMatchHistoryProvider matchHistoryProvider,
-        IAccountUpdater accountUpdater)
+        IAccountUpdater accountUpdater,
+        IAsymmetricEloCalculator asymmetricCalculator = null,
+        Dictionary<long, int> asymmetricSlots = null)
     {
         if (gameSummary is null
             || gameSummary.GameResult != GameResult.TeamAWon && gameSummary.GameResult != GameResult.TeamBWon
@@ -32,7 +34,7 @@ public static class Elo
         }
         
         if (gameSubType is null
-            || gameSubType.Mods.Contains(GameSubType.SubTypeMods.ControlAllBots))
+            || (gameSubType.Mods.Contains(GameSubType.SubTypeMods.ControlAllBots) && asymmetricCalculator == null))
         {
             log.Info($"{gameInfo.GameServerProcessCode} was a fourlancer game, not updating elo");
             return;
@@ -40,10 +42,12 @@ public static class Elo
         
         List<PersistedAccountData> teamA = gameSummary.PlayerGameSummaryList
             .Where(pgs => pgs.IsInTeamA())
+            .DistinctBy(pgs => pgs.AccountId)
             .Select(pgs => accountProvider(pgs.AccountId))
             .ToList();
         List<PersistedAccountData> teamB = gameSummary.PlayerGameSummaryList
             .Where(pgs => pgs.IsInTeamB())
+            .DistinctBy(pgs => pgs.AccountId)
             .Select(pgs => accountProvider(pgs.AccountId))
             .ToList();
         
@@ -57,7 +61,10 @@ public static class Elo
             {
                 UpdateConfidence(acc, gameInfo.GameConfig.GameType, eloKey, conf, now, matchHistoryProvider);
             }
-            float eloChange = GetEloChange(teamA, teamB, eloKey, conf, gameSummary.GameResult == GameResult.TeamAWon ? 1 : 0);
+            int result = gameSummary.GameResult == GameResult.TeamAWon ? 1 : 0;
+            float eloChange = asymmetricCalculator != null
+                ? asymmetricCalculator.CalculateEloChange(teamA, teamB, asymmetricSlots ?? new Dictionary<long, int>(), eloKey, conf, result)
+                : GetEloChange(teamA, teamB, eloKey, conf, result);
             AwardEloTeam(teamA, eloKey, conf, eloChange, accountUpdater);
             AwardEloTeam(teamB, eloKey, conf, -eloChange, accountUpdater);
         }

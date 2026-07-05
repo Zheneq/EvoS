@@ -30,12 +30,14 @@ public abstract class Matchmaker
         public long GroupID;
         public DateTime QueueTime;
         public List<long> Members;
+        public int EffectiveSlots; // how many team slots this group fills (> Members.Count for asymmetric players)
         
         public MatchmakingGroup(long groupId, List<long> members, DateTime queueTime)
         {
             GroupID = groupId;
             Members = members;
             QueueTime = queueTime;
+            EffectiveSlots = members.Count;
         }
 
         public MatchmakingGroup(GroupInfo groupInfo, DateTime queueTime = default)

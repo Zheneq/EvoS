@@ -91,11 +91,11 @@ public abstract class MatchmakerBase: Matchmaker
 
             public bool Push(MatchmakingGroup groupInfo)
             {
-                if (_capacity <= _size || _capacity - _size < groupInfo.Players)
+                if (_capacity <= _size || _capacity - _size < groupInfo.EffectiveSlots)
                 {
                     return false;
                 }
-                _size += groupInfo.Players;
+                _size += groupInfo.EffectiveSlots;
                 _groups.Add(groupInfo);
                 return true;
             }
@@ -108,7 +108,7 @@ public abstract class MatchmakerBase: Matchmaker
                     return false;
                 }
                 MatchmakingGroup groupInfo = _groups[^1];
-                _size -= groupInfo.Players;
+                _size -= groupInfo.EffectiveSlots;
                 _groups.RemoveAt(_groups.Count - 1);
                 groupId = groupInfo.GroupID;
                 return true;

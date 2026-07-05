@@ -565,31 +565,42 @@ public abstract class Game
         Terminate();
     }
 
-    protected bool FillTeam(List<long> players, Team team, GameSubType gameSubType)
+    protected bool FillTeam(
+        List<long> players,
+        Team team,
+        GameSubType gameSubType,
+        Dictionary<long, int> asymmetricSlots = null)
     {
-        int botNum = team == Team.TeamA ? gameSubType.TeamABots : gameSubType.TeamBBots;
-        int playerNum = (team == Team.TeamA ? gameSubType.TeamAPlayers : gameSubType.TeamBPlayers) - botNum;
+        bool isAsymmetricTeam = asymmetricSlots != null && team == Team.TeamA;
 
-        if (playerNum < 0)
+        int botNum = 0;
+        int playerNum = 0;
+        if (!isAsymmetricTeam)
         {
-            log.Error($"Misconfigured sub type {gameSubType.LocalizedName} with {playerNum} human players in {team}");
-            playerNum = 0;
-        }
+            botNum = team == Team.TeamA ? gameSubType.TeamABots : gameSubType.TeamBBots;
+            playerNum = (team == Team.TeamA ? gameSubType.TeamAPlayers : gameSubType.TeamBPlayers) - botNum;
 
-        if (team == Team.TeamA
-            && gameSubType.Mods is not null
-            && gameSubType.Mods.Contains(GameSubType.SubTypeMods.AntiSocial) 
-            && !IsControlAllBots)
-        {
-            int botsForAntiSocial = playerNum - players.Count;
-            botNum += botsForAntiSocial;
-            playerNum = players.Count;
-            log.Info($"Adding {botsForAntiSocial} bots for an antisocial game");
-        }
+            if (playerNum < 0)
+            {
+                log.Error($"Misconfigured sub type {gameSubType.LocalizedName} with {playerNum} human players in {team}");
+                playerNum = 0;
+            }
 
-        if (playerNum != players.Count)
-        {
-            log.Error($"Expected {playerNum} players in {team} but got {players.Count}");
+            if (team == Team.TeamA
+                && gameSubType.Mods is not null
+                && gameSubType.Mods.Contains(GameSubType.SubTypeMods.AntiSocial)
+                && !IsControlAllBots)
+            {
+                int botsForAntiSocial = playerNum - players.Count;
+                botNum += botsForAntiSocial;
+                playerNum = players.Count;
+                log.Info($"Adding {botsForAntiSocial} bots for an antisocial game");
+            }
+
+            if (playerNum != players.Count)
+            {
+                log.Error($"Expected {playerNum} players in {team} but got {players.Count}");
+            }
         }
 
         foreach (long accountId in players)
@@ -609,16 +620,71 @@ public abstract class Game
             playerInfo.PlayerId = Playerid;
             log.Info($"adding player {client.UserName} ({playerInfo.CharacterType}), {client.AccountId} to {team}. readystate: {playerInfo.ReadyState}");
             TeamInfo.TeamPlayerInfo.Add(playerInfo);
-        }
-        
 
-        for (int i = 0; i < botNum; i++)
+            if (isAsymmetricTeam && asymmetricSlots.TryGetValue(accountId, out int n) && n > 1)
+            {
+                for (int j = 0; j < n - 1; j++)
+                {
+                    LobbyServerPlayerInfo proxy = AddAsymmetricProxy(accountId, j, team, gameSubType);
+                    log.Info($"adding asymmetric proxy {proxy.CharacterType} for {client.UserName} to {team}");
+                }
+            }
+        }
+
+        if (!isAsymmetricTeam)
         {
-            LobbyServerPlayerInfo playerInfo = AddBot(team, i, gameSubType);
-            log.Info($"adding bot {playerInfo.CharacterType} to {team}");
+            for (int i = 0; i < botNum; i++)
+            {
+                LobbyServerPlayerInfo playerInfo = AddBot(team, i, gameSubType);
+                log.Info($"adding bot {playerInfo.CharacterType} to {team}");
+            }
         }
 
         return true;
+    }
+
+    protected LobbyServerPlayerInfo AddAsymmetricProxy(long controllingAccountId, int proxyNr, Team team, GameSubType gameSubType)
+    {
+        LobbyServerPlayerInfo controllingPlayer = TeamInfo.TeamPlayerInfo
+            .FirstOrDefault(p => p.AccountId == controllingAccountId && p.TeamId == team);
+        if (controllingPlayer == null)
+        {
+            log.Error($"Cannot add asymmetric proxy: controlling player {controllingAccountId} not found in {team}");
+            controllingPlayer = TeamInfo.TeamPlayerInfo.FirstOrDefault();
+        }
+
+        PersistedAccountData account = DB.Get().AccountDao.GetAccount(controllingAccountId);
+        CharacterType characterType = PickCharacter(team, true);
+        if (account?.AccountComponent?.LastRemoteCharacters != null
+            && proxyNr >= 0 && proxyNr < account.AccountComponent.LastRemoteCharacters.Count
+            && account.AccountComponent.LastRemoteCharacters[proxyNr] != CharacterType.None)
+        {
+            characterType = account.AccountComponent.LastRemoteCharacters[proxyNr];
+        }
+
+        CharacterComponent characterComponent = (CharacterComponent)account.CharacterData[characterType].CharacterComponent.Clone();
+        LobbyCharacterInfo lobbyCharacterInfo = LobbyCharacterInfo.Of(account.CharacterData[characterType], characterComponent);
+
+        LobbyServerPlayerInfo playerInfo = new LobbyServerPlayerInfo
+        {
+            ReadyState = ReadyState.Ready,
+            IsGameOwner = false,
+            TeamId = team,
+            PlayerId = TeamInfo.TeamPlayerInfo.Count + 1,
+            IsNPCBot = false,
+            AccountId = controllingPlayer.AccountId,
+            Handle = controllingPlayer.Handle,
+            CharacterInfo = lobbyCharacterInfo,
+            ControllingPlayerId = controllingPlayer.PlayerId,
+            ControllingPlayerInfo = controllingPlayer,
+            CustomGameVisualSlot = 0,
+            Difficulty = BotDifficulty.Medium,
+            BotCanTaunt = false,
+        };
+
+        controllingPlayer.ProxyPlayerIds.Add(playerInfo.PlayerId);
+        TeamInfo.TeamPlayerInfo.Add(playerInfo);
+        return playerInfo;
     }
 
     protected LobbyServerPlayerInfo AddBot(Team team, int botNr, GameSubType gameSubType)

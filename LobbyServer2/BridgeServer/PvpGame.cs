@@ -19,11 +19,25 @@ public class PvpGame: Game
         AssignServer(server);
     }
     
-    public async Task StartGameAsync(List<long> teamA, List<long> teamB, GameType gameType, List<GameSubType> gameSubTypes, int subTypeIndex)
+    public async Task StartGameAsync(
+        List<long> teamA,
+        List<long> teamB,
+        GameType gameType,
+        List<GameSubType> gameSubTypes,
+        int subTypeIndex,
+        Dictionary<long, int> asymmetricSlots = null)
     {
         GameSubType = gameSubTypes[subTypeIndex];
+
+        if (asymmetricSlots is { Count: > 0 })
+        {
+            // Clone the shared GameSubType and set the actual proxy count for this specific match
+            GameSubType = GameSubType.Clone();
+            GameSubType.TeamABots = asymmetricSlots.Values.Sum(n => n - 1);
+        }
+
         // Fill Teams
-        if (!FillTeam(teamA, Team.TeamA, GameSubType) || !FillTeam(teamB, Team.TeamB, GameSubType))
+        if (!FillTeam(teamA, Team.TeamA, GameSubType, asymmetricSlots) || !FillTeam(teamB, Team.TeamB, GameSubType))
         {
             return;
         }
