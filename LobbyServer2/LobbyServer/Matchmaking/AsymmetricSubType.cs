@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using EvoS.Framework.Network.Static;
 
 namespace CentralServer.LobbyServer.Matchmaking;
@@ -6,7 +7,7 @@ namespace CentralServer.LobbyServer.Matchmaking;
 /**
  *  Concept
 
-  An asymmetric subtype is a programmatically derived variant of an existing base subtype 
+  An asymmetric subtype is a programmatically derived variant of an existing base subtype
   (e.g., the standard 4v4 PvP Deathmatch). In it, one or more players each control N characters
   instead of one, while all other players control one character each. The team still has the same
   total character count (e.g. 4v4) — the asymmetry is only in who controls what.
@@ -28,6 +29,12 @@ namespace CentralServer.LobbyServer.Matchmaking;
   GameSubType to the queue's subtype list (giving it a new bit in the SubTypeMask), creates a matchmaker for it,
   and stores the descriptor internally.
 
+  Multiple asymmetric subtypes derived from the same base share ONE matchmaker pool. Only the first registered
+  descriptor for a given base (IsPrimaryForBase = true) runs the active matchmaker; subsequent ones (secondaries)
+  are present in the subtype list for client-side bit selection but contribute an empty pool to matchmaking.
+  The primary's pool combines all asymmetric variants of the base plus normal-queue fillers, so players with
+  different ControlledCharacters values can match together.
+
   ---
   Queue Eligibility (MatchmakingQueue.FilterSubTypeMaskForGroup)
 
@@ -46,44 +53,43 @@ namespace CentralServer.LobbyServer.Matchmaking;
   ---
   Matchmaking — Combined Pool (MatchmakingQueue.GetQueuedGroupsBySubtype)
 
-  For an asymmetric subtype index i, the pool fed to its matchmaker is a union of two group sets:
+  For the primary asymmetric subtype of a given base, the pool fed to the matchmaker combines all variants:
 
-  ┌────────────────────────────────┬──────────────────────┐
-  │             Source             │    EffectiveSlots    │
-  ├────────────────────────────────┼──────────────────────┤
-  │ Groups with bit i set AND      │ ControlledCharacters │
-  │ eligible (IsAvailableFor)      │                      │
-  ├────────────────────────────────┼──────────────────────┤
-  │ Groups with bit i set but NOT  │ 1 (filler)           │
-  │ eligible                       │                      │
-  ├────────────────────────────────┼──────────────────────┤
-  │ Groups with the base sub-type  │ 1 (filler)           │
-  │ bit set (normal queue)         │                      │
-  └────────────────────────────────┴──────────────────────┘
+  ┌──────────────────────────────────────────────┬────────────────────────────────┐
+  │                    Source                    │        EffectiveSlots          │
+  ├──────────────────────────────────────────────┼────────────────────────────────┤
+  │ Groups with any asymmetric bit for this base │ descriptor.ControlledCharacters│
+  │ AND eligible (IsAvailableFor)                │ for that descriptor            │
+  ├──────────────────────────────────────────────┼────────────────────────────────┤
+  │ Groups with any asymmetric bit for this base │ 1 (filler)                     │
+  │ but NOT eligible                             │                                │
+  ├──────────────────────────────────────────────┼────────────────────────────────┤
+  │ Groups with the base subtype bit set         │ 1 (filler)                     │
+  │ (normal queue)                               │                                │
+  └──────────────────────────────────────────────┴────────────────────────────────┘
 
-  This lets normal PvP players fill the remaining slots in an asymmetric match without needing to know anything special.
+  Secondary asymmetric subtypes (same base, registered later) return an empty pool and run no matches.
 
   ---
   Match Formation → Game Creation (MatchmakingQueue.StartMatch, MatchmakingManager, PvpGame)
 
-  Once the matchmaker finds a complete match, StartMatch inspects each TeamA group's EffectiveSlots.
-  Any group with EffectiveSlots > 1 maps its members to asymmetricSlots:
-  Dictionary<long, int> (accountId → ControlledCharacters).
-  This dict is threaded through MatchmakingManager.StartGameAsync → PvpGame.StartGameAsync.
+  Once the matchmaker finds a complete match, StartMatch builds two dicts from groups with EffectiveSlots > 1:
+  - asymmetricSlots: Dictionary<long, int>    (accountId → ControlledCharacters)
+  - asymmetricEloKeys: Dictionary<long, string> (accountId → their specific descriptor's LocalizedName)
 
-  TODO does game server care?
-  In PvpGame, the shared GameSubType is cloned for the specific match, and TeamABots is set to the actual total
-  proxy count (sum of N-1 per asymmetric player). This gives the game server the correct slot count without
-  mutating the shared subtype object.
+  Both are threaded through MatchmakingManager.StartGameAsync → PvpGame.StartGameAsync and stored on Game.
+
+  In PvpGame, the shared GameSubType is cloned for the specific match, and TeamABots/TeamBBots are set to the
+  actual proxy count per team. This gives the game server the correct slot count without mutating the shared object.
 
   ---
   Team Filling — Proxy Assignment (Game.cs)
 
-  FillTeam has an optional asymmetricSlots parameter. When non-null and filling TeamA:
+  FillTeam has an optional asymmetricSlots parameter. When non-null:
 
   1. Each human player is added normally.
-  2. Immediately after, if that player appears in asymmetricSlots with N > 1, AddAsymmetricProxy is called N−1 times
-    to add proxy slots controlled by them.
+  2. Immediately after, if that player appears in asymmetricSlots with N > 1, AddAsymmetricProxy is called N−1
+     times to add proxy slots controlled by them.
   3. The static bot loop is skipped (proxies are added inline instead).
 
   AddAsymmetricProxy creates a LobbyServerPlayerInfo with:
@@ -93,21 +99,20 @@ namespace CentralServer.LobbyServer.Matchmaking;
   - Character picked from account.LastRemoteCharacters[proxyNr] (same as ControlAllBots coop mode)
   - The proxy's PlayerId is added to controllingPlayer.ProxyPlayerIds
 
-  TeamB always uses the normal FillTeam path — no proxies.
-
   ---
   ELO (MatchmakingQueue.OnGameEnded, Elo.cs)
 
-  When a game ends, if the sub-type is asymmetric:
-  - The ELO key is the sub-type's LocalizedName (e.g. "PvP_Asymmetric_N3") instead of "PvP", 
-    so asymmetric ratings are tracked separately.
-  - descriptor.EloCalculator is passed to Elo.OnGameEnded. If non-null, it replaces the standard ELO math.
-    If null, the existing formula runs unchanged.
+  When a game ends, asymmetricEloKeys (stored on the Game object) provides per-player ELO key overrides:
+  - Asymmetric players update their ELO under their specific descriptor's LocalizedName key
+    (e.g. "PvP_Asymmetric_N3") so ratings are tracked separately per role.
+  - Normal filler players update under the base "PvP" key as usual.
 
-  Elo.OnGameEnded deduplicates team lists by AccountId before computing ratings (proxy slots share
-  the controlling player's account ID and would otherwise skew averages). The ControlAllBots early-exit only fires
-   when no calculator is wired — this preserves backward compatibility with existing coop fourlancer games while
-  letting asymmetric PvP games update ELO normally.
+  The ELO change magnitude is still computed from base PvP ELOs for both teams (most data, most stable).
+  Only the storage key differs. descriptor.EloCalculator can override the full calculation if non-null.
+
+  Elo.OnGameEnded deduplicates team lists by AccountId before computing ratings (proxy slots share the
+  controlling player's account ID and would otherwise skew averages). The ControlAllBots early-exit only fires
+  when no calculator is wired — preserving backward compatibility with existing coop fourlancer games.
  */
 public interface IAsymmetricEloCalculator
 {
@@ -115,7 +120,8 @@ public interface IAsymmetricEloCalculator
         List<PersistedAccountData> teamA,
         List<PersistedAccountData> teamB,
         Dictionary<long, int> asymmetricSlots,
-        string eloKey,
+        Dictionary<long, string> playerEloKeys,
+        string baseEloKey,
         MatchmakingConfiguration conf,
         int result);
 }
@@ -124,7 +130,9 @@ public class AsymmetricSubTypeDescriptor
 {
     public string LocalizedName;
     public string BaseSubTypeName;
-    public int BaseSubTypeIndex = -1; // set by MatchmakingQueue.RegisterAsymmetricSubType
+    public int BaseSubTypeIndex = -1;  // set by MatchmakingQueue.RegisterAsymmetricSubType
+    public int SubTypeIndex = -1;      // index of this descriptor's entry in SubTypes list
+    public bool IsPrimaryForBase;      // only the primary runs the active matchmaker pool
     public int ControlledCharacters;
     public HashSet<long> AllowedAccountIds = new();
     public IAsymmetricEloCalculator EloCalculator; // null = same math as standard
@@ -170,6 +178,11 @@ public static class AsymmetricSubTypeManager
     {
         Descriptors.TryGetValue(localizedName, out var d);
         return d;
+    }
+
+    public static IEnumerable<AsymmetricSubTypeDescriptor> GetDescriptorsForBase(int baseSubTypeIndex)
+    {
+        return Descriptors.Values.Where(d => d.BaseSubTypeIndex == baseSubTypeIndex);
     }
 
     public static bool IsAsymmetricRole(long accountId, string localizedName)

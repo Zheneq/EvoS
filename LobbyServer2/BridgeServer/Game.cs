@@ -41,6 +41,7 @@ public abstract class Game
     public BridgeServerProtocol Server { private set; get; } // TODO check it is set when needed
 
     public GameSubType GameSubType { protected set; get; } // can be null
+    public Dictionary<long, string> AsymmetricEloKeys { protected set; get; }
 
     public string ProcessCode => GameInfo?.GameServerProcessCode;
     public GameStatus GameStatus => GameInfo?.GameStatus ?? GameStatus.None;
@@ -127,7 +128,7 @@ public abstract class Game
         }
         try
         {
-            MatchmakingManager.OnGameEnded(GameInfo, GameSummary, GameSubType);
+            MatchmakingManager.OnGameEnded(GameInfo, GameSummary, GameSubType, AsymmetricEloKeys);
         }
         catch (Exception e)
         {

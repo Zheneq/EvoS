@@ -25,9 +25,11 @@ public class PvpGame: Game
         GameType gameType,
         List<GameSubType> gameSubTypes,
         int subTypeIndex,
-        Dictionary<long, int> asymmetricSlots = null)
+        Dictionary<long, int> asymmetricSlots = null,
+        Dictionary<long, string> asymmetricEloKeys = null)
     {
         GameSubType = gameSubTypes[subTypeIndex];
+        AsymmetricEloKeys = asymmetricEloKeys;
 
         if (asymmetricSlots is { Count: > 0 })
         {

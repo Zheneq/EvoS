@@ -238,7 +238,8 @@ namespace CentralServer.LobbyServer.Matchmaking
             GameType gameType,
             List<GameSubType> gameSubTypes,
             int subTypeIndex,
-            Dictionary<long, int> asymmetricSlots = null)
+            Dictionary<long, int> asymmetricSlots = null,
+            Dictionary<long, string> asymmetricEloKeys = null)
         {
             log.Info($"Starting {gameType} game...");
             PvpGame game = GameManager.CreatePvpGame();
@@ -247,14 +248,14 @@ namespace CentralServer.LobbyServer.Matchmaking
                 log.Info($"Failed to create {gameType} game");
                 return;
             }
-            await game.StartGameAsync(teamA.Shuffle().ToList(), teamB.Shuffle().ToList(), gameType, gameSubTypes, subTypeIndex, asymmetricSlots);
+            await game.StartGameAsync(teamA.Shuffle().ToList(), teamB.Shuffle().ToList(), gameType, gameSubTypes, subTypeIndex, asymmetricSlots, asymmetricEloKeys);
         }
 
-        public static void OnGameEnded(LobbyGameInfo gameInfo, LobbyGameSummary gameSummary, GameSubType gameSubType)
+        public static void OnGameEnded(LobbyGameInfo gameInfo, LobbyGameSummary gameSummary, GameSubType gameSubType, Dictionary<long, string> asymmetricEloKeys = null)
         {
             if (Queues.TryGetValue(gameInfo.GameConfig.GameType, out var queue))
             {
-                queue.OnGameEnded(gameInfo, gameSummary, gameSubType);
+                queue.OnGameEnded(gameInfo, gameSummary, gameSubType, asymmetricEloKeys);
             }
         }
     }

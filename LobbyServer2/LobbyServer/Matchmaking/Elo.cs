@@ -24,7 +24,8 @@ public static class Elo
         IMatchHistoryProvider matchHistoryProvider,
         IAccountUpdater accountUpdater,
         IAsymmetricEloCalculator asymmetricCalculator = null,
-        Dictionary<long, int> asymmetricSlots = null)
+        Dictionary<long, int> asymmetricSlots = null,
+        Dictionary<long, string> playerEloKeys = null)
     {
         if (gameSummary is null
             || gameSummary.GameResult != GameResult.TeamAWon && gameSummary.GameResult != GameResult.TeamBWon
@@ -59,14 +60,15 @@ public static class Elo
         {
             foreach (PersistedAccountData acc in teamA.Concat(teamB))
             {
-                UpdateConfidence(acc, gameInfo.GameConfig.GameType, eloKey, conf, now, matchHistoryProvider);
+                string key = playerEloKeys?.GetValueOrDefault(acc.AccountId) ?? eloKey;
+                UpdateConfidence(acc, gameInfo.GameConfig.GameType, key, conf, now, matchHistoryProvider);
             }
             int result = gameSummary.GameResult == GameResult.TeamAWon ? 1 : 0;
             float eloChange = asymmetricCalculator != null
-                ? asymmetricCalculator.CalculateEloChange(teamA, teamB, asymmetricSlots ?? new Dictionary<long, int>(), eloKey, conf, result)
+                ? asymmetricCalculator.CalculateEloChange(teamA, teamB, asymmetricSlots ?? new Dictionary<long, int>(), playerEloKeys ?? new Dictionary<long, string>(), eloKey, conf, result)
                 : GetEloChange(teamA, teamB, eloKey, conf, result);
-            AwardEloTeam(teamA, eloKey, conf, eloChange, accountUpdater);
-            AwardEloTeam(teamB, eloKey, conf, -eloChange, accountUpdater);
+            AwardEloTeam(teamA, eloKey, playerEloKeys, conf, eloChange, accountUpdater);
+            AwardEloTeam(teamB, eloKey, playerEloKeys, conf, -eloChange, accountUpdater);
         }
     }
 
@@ -170,12 +172,15 @@ public static class Elo
         accountUpdater(acc);
     }
 
-    private static void AwardEloTeam(List<PersistedAccountData> team, string eloKey, MatchmakingConfiguration conf, float eloDelta, IAccountUpdater accountUpdater)
+    private static void AwardEloTeam(List<PersistedAccountData> team, string baseEloKey, Dictionary<long, string> playerEloKeys, MatchmakingConfiguration conf, float eloDelta, IAccountUpdater accountUpdater)
     {
-        float avgConf = team.Select(p => GetEloConfidenceFactor(p, eloKey, conf)).Sum() / team.Count;
+        // Confidence factor normalization always uses the base key so all players are on the same scale
+        // TODO is this ok?
+        float avgConf = team.Select(p => GetEloConfidenceFactor(p, baseEloKey, conf)).Sum() / team.Count;
         foreach (PersistedAccountData acc in team)
         {
-            AwardElo(acc, eloKey, eloDelta * GetEloConfidenceFactor(acc, eloKey, conf) / avgConf, accountUpdater);
+            string key = playerEloKeys?.GetValueOrDefault(acc.AccountId) ?? baseEloKey;
+            AwardElo(acc, key, eloDelta * GetEloConfidenceFactor(acc, baseEloKey, conf) / avgConf, accountUpdater);
         }
     }
 }
