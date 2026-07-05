@@ -426,9 +426,18 @@ namespace CentralServer.LobbyServer.Matchmaking
         {
             DateTime matchmakingIterationStartTime = DateTime.UtcNow;
             List<ScoredMatchWithSubType> matches = new List<ScoredMatchWithSubType>();
+            HashSet<int> baseSubTypesWithMatch = new HashSet<int>();
             for (int i = 0; i < MatchmakingQueueInfo.GameConfig.SubTypes.Count; i++)
             {
                 GameSubType subType = MatchmakingQueueInfo.GameConfig.SubTypes[i];
+
+                // If the base subtype already formed a match, skip all its asymmetric variants
+                if (_asymmetricDescriptors.TryGetValue(subType.LocalizedName, out var asymDesc)
+                    && baseSubTypesWithMatch.Contains(asymDesc.BaseSubTypeIndex))
+                {
+                    continue;
+                }
+
                 using (M(MatchmakingTime, subType).NewTimer())
                 {
                     int subTypeIndex = i;
@@ -437,8 +446,12 @@ namespace CentralServer.LobbyServer.Matchmaking
                         .Select(m => new ScoredMatchWithSubType(m, subTypeIndex))
                         .ToList();
                     matches.AddRange(subQueueMatches);
-                    
+
                     if (subQueueMatches.Count > 0) {
+                        if (!_asymmetricDescriptors.ContainsKey(subType.LocalizedName))
+                        {
+                            baseSubTypesWithMatch.Add(i);
+                        }
                         string queueString = string.Join(
                             ", ",
                             queuedGroupsBySubtype[i]
