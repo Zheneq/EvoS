@@ -130,7 +130,7 @@ public class PvpGame: Game
 
     public void BuildGameInfo(GameType gameType, List<GameSubType> gameSubTypes, int subTypeIndex)
     {
-        GameSubType gameMode = gameSubTypes[subTypeIndex];
+        GameSubType gameMode = GameSubType ?? gameSubTypes[subTypeIndex];
         GameInfo = new LobbyGameInfo
         {
             AcceptedPlayers = TeamInfo.TeamPlayerInfo.Count(p => p.IsReady),
