@@ -62,17 +62,17 @@ public class MatchmakerTest : EvosTest
 
         DateTime now = DateTime.UtcNow;
         int i = 0;
-        List<Matchmaker.MatchmakingGroup> queuedGroups = new List<Matchmaker.MatchmakingGroup>
-        {
-            new(i++, new List<long> {1, 2}, now - TimeSpan.FromMinutes(2)),
-            new(i++, new List<long> {3, 4, 5, 6}, now - TimeSpan.FromMinutes(1)),
-            new(i++, new List<long> {7}, now - TimeSpan.FromMinutes(2)),
-            new(i++, new List<long> {8}, now - TimeSpan.FromMinutes(2)),
-            new(i++, new List<long> {9}, now - TimeSpan.FromMinutes(3)),
-            new(i++, new List<long> {10}, now - TimeSpan.FromMinutes(3)),
-            new(i++, new List<long> {11}, now - TimeSpan.FromMinutes(4)),
-            new(i++, new List<long> {12}, now - TimeSpan.FromMinutes(8)),
-        };
+        List<Matchmaker.MatchmakingGroup> queuedGroups =
+        [
+            new(i++, Players([1, 2]), now - TimeSpan.FromMinutes(2)),
+            new(i++, Players([3, 4, 5, 6]), now - TimeSpan.FromMinutes(1)),
+            new(i++, Players([7]), now - TimeSpan.FromMinutes(2)),
+            new(i++, Players([8]), now - TimeSpan.FromMinutes(2)),
+            new(i++, Players([9]), now - TimeSpan.FromMinutes(3)),
+            new(i++, Players([10]), now - TimeSpan.FromMinutes(3)),
+            new(i++, Players([11]), now - TimeSpan.FromMinutes(4)),
+            new(i++, Players([12]), now - TimeSpan.FromMinutes(8))
+        ];
         
         List<Matchmaker.ScoredMatch> matchesRanked = matchmaker.GetMatchesRanked(queuedGroups, now);
 
@@ -94,13 +94,13 @@ public class MatchmakerTest : EvosTest
 
         DateTime now = DateTime.UtcNow;
         int i = 0;
-        List<Matchmaker.MatchmakingGroup> queuedGroups = new List<Matchmaker.MatchmakingGroup>
-        {
-            new(i++, new List<long> {1, 2}, now - TimeSpan.FromSeconds(30)),
-            new(i++, new List<long> {3, 4, 5, 6}, now - TimeSpan.FromSeconds(1)),
-            new(i++, new List<long> {8}, now - TimeSpan.FromSeconds(50)),
-            new(i++, new List<long> {9}, now - TimeSpan.FromSeconds(50)),
-        };
+        List<Matchmaker.MatchmakingGroup> queuedGroups =
+        [
+            new(i++, Players([1, 2]), now - TimeSpan.FromSeconds(30)),
+            new(i++, Players([3, 4, 5, 6]), now - TimeSpan.FromSeconds(1)),
+            new(i++, Players([8]), now - TimeSpan.FromSeconds(50)),
+            new(i++, Players([9]), now - TimeSpan.FromSeconds(50))
+        ];
         
         List<Matchmaker.ScoredMatch> matchesRanked = matchmaker.GetMatchesRanked(queuedGroups, now);
         Assert.Empty(matchesRanked);
@@ -121,13 +121,13 @@ public class MatchmakerTest : EvosTest
 
         DateTime now = DateTime.UtcNow;
         int i = 0;
-        List<Matchmaker.MatchmakingGroup> queuedGroups = new List<Matchmaker.MatchmakingGroup>
-        {
-            new(i++, new List<long> {1, 2}, now - TimeSpan.FromMinutes(30)),
-            new(i++, new List<long> {3, 4, 5, 6}, now - TimeSpan.FromMinutes(30)),
-            new(i++, new List<long> {8}, now - TimeSpan.FromMinutes(50)),
-            new(i++, new List<long> {9}, now - TimeSpan.FromMinutes(50)),
-        };
+        List<Matchmaker.MatchmakingGroup> queuedGroups =
+        [
+            new(i++, Players([1, 2]), now - TimeSpan.FromMinutes(30)),
+            new(i++, Players([3, 4, 5, 6]), now - TimeSpan.FromMinutes(30)),
+            new(i++, Players([8]), now - TimeSpan.FromMinutes(50)),
+            new(i++, Players([9]), now - TimeSpan.FromMinutes(50))
+        ];
         
         List<Matchmaker.ScoredMatch> matchesRanked = matchmaker.GetMatchesRanked(queuedGroups, now);
         Assert.Empty(matchesRanked);
@@ -146,10 +146,10 @@ public class MatchmakerTest : EvosTest
         });
 
         DateTime now = DateTime.UtcNow;
-        List<Matchmaker.MatchmakingGroup> queuedGroups = new List<Matchmaker.MatchmakingGroup>();
+        List<Matchmaker.MatchmakingGroup> queuedGroups = [];
         for (int i = 1; i <= players; i++)
         {
-            queuedGroups.Add( new(i, new List<long> {i}, now));
+            queuedGroups.Add( new(i, Players([i]), now));
         }
         
         List<Matchmaker.ScoredMatch> matchesRanked = matchmaker.GetMatchesRanked(queuedGroups, now);
@@ -195,13 +195,13 @@ public class MatchmakerTest : EvosTest
     {
         DateTime now = DateTime.UtcNow;
         int i = 0;
-        List<Matchmaker.MatchmakingGroup> queuedGroups = new List<Matchmaker.MatchmakingGroup>
-        {
-            new(i++, new List<long> {1}, now - TimeSpan.FromMinutes(2)),
-            new(i++, new List<long> {2, 3}, now - TimeSpan.FromMinutes(4)),
-            new(i++, new List<long> {4}, now - TimeSpan.FromMinutes(3)),
-            new(i++, new List<long> {5}, now - TimeSpan.FromMinutes(1)),
-        };
+        List<Matchmaker.MatchmakingGroup> queuedGroups =
+        [
+            new(i++, Players([1]), now - TimeSpan.FromMinutes(2)),
+            new(i++, Players([2, 3]), now - TimeSpan.FromMinutes(4)),
+            new(i++, Players([4]), now - TimeSpan.FromMinutes(3)),
+            new(i++, Players([5]), now - TimeSpan.FromMinutes(1))
+        ];
         
         List<Matchmaker.ScoredMatch> matchesRanked = matchmaker.GetMatchesRanked(queuedGroups, now);
         Assert.NotEmpty(matchesRanked);
@@ -238,5 +238,10 @@ public class MatchmakerTest : EvosTest
     private static PersistedAccountData MakeAccount(long accId, string username, float elo, int eloConfidenceLevel)
     {
         return TestAccountHelper.MakeAccount(accId, username, elo, eloConfidenceLevel, EloKey);
+    }
+
+    private static List<QueuePlayerData> Players(List<long> ids)
+    {
+        return ids.Select(id => new QueuePlayerData(id, EloKey, 1)).ToList();
     }
 }

@@ -10,7 +10,6 @@ using CentralServer.LobbyServer.Session;
 using CentralServer.LobbyServer.Utils;
 using EvoS.Framework;
 using EvoS.Framework.Constants.Enums;
-using EvoS.Framework.DataAccess;
 using EvoS.Framework.Network.NetworkMessages;
 using EvoS.Framework.Network.Static;
 using log4net;
@@ -176,6 +175,7 @@ namespace CentralServer.LobbyServer.Matchmaking
                     : new MatchmakerFifo(GameType, st);
         }
 
+        // TODO
         public void RegisterAsymmetricSubType(AsymmetricSubTypeDescriptor descriptor)
         {
             List<GameSubType> subTypes = MatchmakingQueueInfo.GameConfig.SubTypes;
@@ -323,9 +323,11 @@ namespace CentralServer.LobbyServer.Matchmaking
             }
         }
 
+        // TODO
         private Dictionary<int, List<Matchmaker.MatchmakingGroup>> GetQueuedGroupsBySubtype()
         {
-            var queuedGroupsBySubtype = new Dictionary<int, List<Matchmaker.MatchmakingGroup>>();
+            Dictionary<int, List<Matchmaker.MatchmakingGroup>> queuedGroupsBySubtype =
+                new Dictionary<int, List<Matchmaker.MatchmakingGroup>>();
 
             for (int i = 0; i < MatchmakingQueueInfo.GameConfig.SubTypes.Count; i++)
             {
@@ -349,12 +351,12 @@ namespace CentralServer.LobbyServer.Matchmaking
                         // All asymmetric descriptors for this base contribute their queued groups
                         foreach (AsymmetricSubTypeDescriptor relDesc in AsymmetricSubTypeManager.GetDescriptorsForBase(descriptor.BaseSubTypeIndex))
                         {
-                            foreach (long groupId in GetQueuedGroups(relDesc.SubTypeIndex))
+                            foreach (long groupId in GetQueuedGroups(relDesc.SubTypeIndex)) // TODO so you can't queue for two asymmetric?
                             {
                                 if (combinedSlots.ContainsKey(groupId)) continue;
                                 GroupInfo group = GroupManager.GetGroup(groupId);
                                 if (group is null) continue;
-                                combinedSlots[groupId] = relDesc.IsAvailableFor(group.Leader) ? relDesc.ControlledCharacters : 1;
+                                combinedSlots[groupId] = relDesc.IsAvailableFor(group.Leader) ? relDesc.ControlledCharacters : 1; // TODO it's definitely too late to check for eligibility
                             }
                         }
 
@@ -381,8 +383,12 @@ namespace CentralServer.LobbyServer.Matchmaking
                                 log.Error($"Group {groupId} is both queued and disbanded");
                                 continue;
                             }
-                            var mmGroup = new Matchmaker.MatchmakingGroup(group, queueTime);
-                            mmGroup.EffectiveSlots = effectiveSlots;
+                            var mmGroup = new Matchmaker.MatchmakingGroup(
+                                group.GroupId,
+                                group.Members
+                                    .Select(id => new QueuePlayerData(id, EloKey, effectiveSlots))
+                                    .ToList(),
+                                queueTime);
                             queuedGroups.Add(mmGroup);
                         }
                     }
@@ -409,7 +415,12 @@ namespace CentralServer.LobbyServer.Matchmaking
                                     return null;
                                 }
 
-                                return new Matchmaker.MatchmakingGroup(group, queueTime);
+                                return new Matchmaker.MatchmakingGroup(
+                                    group.GroupId,
+                                    group.Members
+                                        .Select(id => new QueuePlayerData(id, EloKey, 1))
+                                        .ToList(),
+                                    queueTime);
                             })
                             .Where(g => g is not null)
                             .ToList();
@@ -426,7 +437,7 @@ namespace CentralServer.LobbyServer.Matchmaking
         {
             DateTime matchmakingIterationStartTime = DateTime.UtcNow;
             List<ScoredMatchWithSubType> matches = new List<ScoredMatchWithSubType>();
-            HashSet<int> baseSubTypesWithMatch = new HashSet<int>();
+            HashSet<int> baseSubTypesWithMatch = new HashSet<int>(); // TODO a bool is enough, we don't need to track it separately for each of them
             for (int i = 0; i < MatchmakingQueueInfo.GameConfig.SubTypes.Count; i++)
             {
                 GameSubType subType = MatchmakingQueueInfo.GameConfig.SubTypes[i];
@@ -533,42 +544,12 @@ namespace CentralServer.LobbyServer.Matchmaking
             {
                 RemoveGroup(groupInfo.GroupID);
             }
-
-            Dictionary<long, int> asymmetricSlots = null;
-            Dictionary<long, string> asymmetricEloKeys = null;
-            GameSubType subType = MatchmakingQueueInfo.GameConfig.SubTypes[match.SubTypeIndex];
-            if (_asymmetricDescriptors.TryGetValue(subType.LocalizedName, out var primaryDesc))
-            {
-                asymmetricSlots = new Dictionary<long, int>();
-                asymmetricEloKeys = new Dictionary<long, string>();
-                foreach (Matchmaker.MatchmakingGroup group in match.Match.Groups)
-                {
-                    if (group.EffectiveSlots <= 1) continue;
-                    // Find which asymmetric descriptor this group belongs to by matching ControlledCharacters + eligibility
-                    AsymmetricSubTypeDescriptor matchingDesc = AsymmetricSubTypeManager
-                        .GetDescriptorsForBase(primaryDesc.BaseSubTypeIndex)
-                        .FirstOrDefault(d => d.ControlledCharacters == group.EffectiveSlots && group.Members.Any(d.IsAvailableFor));
-                    foreach (long memberId in group.Members)
-                    {
-                        asymmetricSlots[memberId] = group.EffectiveSlots;
-                        if (matchingDesc != null)
-                        {
-                            asymmetricEloKeys[memberId] = matchingDesc.LocalizedName;
-                        }
-                    }
-                }
-                if (asymmetricSlots.Count == 0) asymmetricSlots = null;
-                if (asymmetricEloKeys.Count == 0) asymmetricEloKeys = null;
-            }
-
             _ = MatchmakingManager.StartGameAsync(
-                match.Match.TeamA.AccountIds,
-                match.Match.TeamB.AccountIds,
+                match.Match.TeamA.MatchPlayerDatas.Values.ToList(), // TODO do we care about order?
+                match.Match.TeamB.MatchPlayerDatas.Values.ToList(),
                 GameType,
                 MatchmakingQueueInfo.GameConfig.SubTypes,
-                match.SubTypeIndex,
-                asymmetricSlots,
-                asymmetricEloKeys)
+                match.SubTypeIndex)
                 .LogError();
         }
         
@@ -606,13 +587,11 @@ namespace CentralServer.LobbyServer.Matchmaking
             return selected;
         }
 
-        public void OnGameEnded(LobbyGameInfo gameInfo, LobbyGameSummary gameSummary, GameSubType gameSubType, Dictionary<long, string> asymmetricEloKeys = null)
+        public void OnGameEnded(LobbyGameInfo gameInfo, LobbyGameSummary gameSummary, GameSubType gameSubType, List<MatchPlayerData> players)
         {
-            string eloKey = EloKey;
             IAsymmetricEloCalculator calculator = null;
-            if (gameSubType != null && _asymmetricDescriptors.TryGetValue(gameSubType.LocalizedName, out var descriptor))
+            if (_asymmetricDescriptors.TryGetValue(gameSubType.LocalizedName, out var descriptor))
             {
-                eloKey = gameSubType.LocalizedName; // separate ELO bucket per asymmetric subtype
                 calculator = descriptor.EloCalculator;
             }
 
@@ -620,15 +599,13 @@ namespace CentralServer.LobbyServer.Matchmaking
                 gameInfo,
                 gameSummary,
                 gameSubType,
-                eloKey,
-                GetConf(gameSubType?.LocalizedName),
+                players,
+                GetConf(gameSubType.LocalizedName),
                 DateTime.UtcNow,
                 DB.Get().AccountDao.GetAccount,
                 DB.Get().MatchHistoryDao.Find,
                 DB.Get().AccountDao.UpdateExperienceComponent,
-                calculator,
-                null,
-                asymmetricEloKeys);
+                calculator);
         }
 
         private void UpdateQueueInfo()
@@ -674,6 +651,7 @@ namespace CentralServer.LobbyServer.Matchmaking
                 }
             }
 
+            // TODO it should be applied before callback
             // Strip asymmetric subtype bits for accounts that are not in the allowed list
             List<GameSubType> subTypes = MatchmakingQueueInfo.GameConfig.SubTypes;
             for (int i = 0; i < subTypes.Count; i++)

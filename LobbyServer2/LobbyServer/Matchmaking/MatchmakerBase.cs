@@ -42,7 +42,7 @@ public abstract class MatchmakerBase: Matchmaker
                     long hash = matchScratch.GetHash();
                     if (processed.Add(hash))
                     {
-                        yield return matchScratch.ToMatch(_accountDao, eloKey);
+                        yield return matchScratch.ToMatch(_accountDao);
                     }
                 }
                 else
@@ -84,6 +84,7 @@ public abstract class MatchmakerBase: Matchmaker
             {
                 return _groups
                     .SelectMany(g => g.Members)
+                    .Select(data => data.AccountId)
                     .Order()
                     .Select(accountId => accountId.GetHashCode())
                     .Aggregate(17, (a, b) => a * 31 + b);
@@ -91,11 +92,11 @@ public abstract class MatchmakerBase: Matchmaker
 
             public bool Push(MatchmakingGroup groupInfo)
             {
-                if (_capacity <= _size || _capacity - _size < groupInfo.EffectiveSlots)
+                if (_capacity <= _size || _capacity - _size < groupInfo.Slots)
                 {
                     return false;
                 }
-                _size += groupInfo.EffectiveSlots;
+                _size += groupInfo.Slots;
                 _groups.Add(groupInfo);
                 return true;
             }
@@ -108,7 +109,7 @@ public abstract class MatchmakerBase: Matchmaker
                     return false;
                 }
                 MatchmakingGroup groupInfo = _groups[^1];
-                _size -= groupInfo.EffectiveSlots;
+                _size -= groupInfo.Slots;
                 _groups.RemoveAt(_groups.Count - 1);
                 groupId = groupInfo.GroupID;
                 return true;
@@ -139,9 +140,9 @@ public abstract class MatchmakerBase: Matchmaker
             _usedGroupIds = usedGroupIds;
         }
 
-        public Match ToMatch(AccountDao accountDao, string eloKey)
+        public Match ToMatch(AccountDao accountDao)
         {
-            return new Match(accountDao, _teamA.Groups.ToList(), _teamB.Groups.ToList(), eloKey);
+            return new Match(accountDao, _teamA.Groups.ToList(), _teamB.Groups.ToList());
         }
 
         public long GetHash()

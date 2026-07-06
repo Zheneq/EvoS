@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using EvoS.Framework.Network.Static;
 
 namespace EvoS.Framework.Network.NetworkMessages
@@ -167,6 +168,11 @@ namespace EvoS.Framework.Network.NetworkMessages
             {
                 AppliedEntitlements.Remove(ENTITLEMENT_DEV);
             }
+        }
+
+        public List<CharacterType> GetLastCharacters(int num)
+        {
+            return LastRemoteCharacters.Prepend(LastCharacter).Take(num).ToList();
         }
     }
 }

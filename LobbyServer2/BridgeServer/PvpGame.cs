@@ -20,27 +20,25 @@ public class PvpGame: Game
     }
     
     public async Task StartGameAsync(
-        List<long> teamA,
-        List<long> teamB,
+        List<MatchPlayerData> teamA,
+        List<MatchPlayerData> teamB,
         GameType gameType,
         List<GameSubType> gameSubTypes,
-        int subTypeIndex,
-        Dictionary<long, int> asymmetricSlots = null,
-        Dictionary<long, string> asymmetricEloKeys = null)
+        int subTypeIndex)
     {
         GameSubType = gameSubTypes[subTypeIndex];
-        AsymmetricEloKeys = asymmetricEloKeys;
 
-        if (asymmetricSlots is { Count: > 0 })
-        {
-            // Clone the shared GameSubType and set per-team proxy counts for this specific match
-            GameSubType = GameSubType.Clone();
-            GameSubType.TeamABots = teamA.Where(asymmetricSlots.ContainsKey).Sum(id => asymmetricSlots[id] - 1);
-            GameSubType.TeamBBots = teamB.Where(asymmetricSlots.ContainsKey).Sum(id => asymmetricSlots[id] - 1);
-        }
+        // if (asymmetricSlots is { Count: > 0 })
+        // {
+        //     // TODO does it really matter?
+        //     // Clone the shared GameSubType and set per-team proxy counts for this specific match
+        //     GameSubType = GameSubType.Clone();
+        //     GameSubType.TeamABots = teamA.Where(asymmetricSlots.ContainsKey).Sum(id => asymmetricSlots[id] - 1);
+        //     GameSubType.TeamBBots = teamB.Where(asymmetricSlots.ContainsKey).Sum(id => asymmetricSlots[id] - 1);
+        // }
 
         // Fill Teams
-        if (!FillTeam(teamA, Team.TeamA, GameSubType, asymmetricSlots) || !FillTeam(teamB, Team.TeamB, GameSubType, asymmetricSlots))
+        if (!FillTeam(teamA, Team.TeamA, GameSubType) || !FillTeam(teamB, Team.TeamB, GameSubType))
         {
             return;
         }
@@ -130,7 +128,9 @@ public class PvpGame: Game
 
     public void BuildGameInfo(GameType gameType, List<GameSubType> gameSubTypes, int subTypeIndex)
     {
-        GameSubType gameMode = GameSubType ?? gameSubTypes[subTypeIndex];
+        // TODO if we don't override it for asymmetric, we don't need to override it here
+        // GameSubType gameMode = GameSubType ?? gameSubTypes[subTypeIndex];
+        GameSubType gameMode = gameSubTypes[subTypeIndex];
         GameInfo = new LobbyGameInfo
         {
             AcceptedPlayers = TeamInfo.TeamPlayerInfo.Count(p => p.IsReady),

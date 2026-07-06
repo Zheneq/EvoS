@@ -117,11 +117,8 @@ namespace CentralServer.LobbyServer.Matchmaking;
 public interface IAsymmetricEloCalculator
 {
     float CalculateEloChange(
-        List<PersistedAccountData> teamA,
-        List<PersistedAccountData> teamB,
-        Dictionary<long, int> asymmetricSlots,
-        Dictionary<long, string> playerEloKeys,
-        string baseEloKey,
+        List<MatchPlayerData> teamA,
+        List<MatchPlayerData> teamB,
         MatchmakingConfiguration conf,
         int result);
 }
@@ -134,13 +131,18 @@ public class AsymmetricSubTypeDescriptor
     public int SubTypeIndex = -1;      // index of this descriptor's entry in SubTypes list
     public bool IsPrimaryForBase;      // only the primary runs the active matchmaker pool
     public int ControlledCharacters;
-    public HashSet<long> AllowedAccountIds = new();
+    public HashSet<long> AllowedAccountIds = new(); // TODO probably should be decided elsewhere
     public IAsymmetricEloCalculator EloCalculator; // null = same math as standard
 
     public bool IsAvailableFor(long accountId)
     {
         // Time-window filtering is a stub — fill in later
         return AllowedAccountIds.Contains(accountId);
+    }
+    
+    public bool IsAvailableFor(QueuePlayerData data)
+    {
+        return IsAvailableFor(data.AccountId);
     }
 
     public GameSubType CreateAdvertisedSubType(GameSubType baseSubType)
@@ -185,6 +187,7 @@ public static class AsymmetricSubTypeManager
         return Descriptors.Values.Where(d => d.BaseSubTypeIndex == baseSubTypeIndex);
     }
 
+    // TODO what is it for?
     public static bool IsAsymmetricRole(long accountId, string localizedName)
     {
         var d = GetDescriptor(localizedName);

@@ -17,15 +17,13 @@ public static class Elo
         LobbyGameInfo gameInfo,
         LobbyGameSummary gameSummary,
         GameSubType gameSubType,
-        string eloKey, // TODO move eloKey into conf
+        List<MatchPlayerData> players,
         MatchmakingConfiguration conf,
         DateTime now,
         IAccountProvider accountProvider,
         IMatchHistoryProvider matchHistoryProvider,
         IAccountUpdater accountUpdater,
-        IAsymmetricEloCalculator asymmetricCalculator = null,
-        Dictionary<long, int> asymmetricSlots = null,
-        Dictionary<long, string> playerEloKeys = null)
+        IAsymmetricEloCalculator asymmetricCalculator = null)
     {
         if (gameSummary is null
             || gameSummary.GameResult != GameResult.TeamAWon && gameSummary.GameResult != GameResult.TeamBWon
@@ -35,54 +33,53 @@ public static class Elo
         }
         
         if (gameSubType is null
-            || (gameSubType.Mods.Contains(GameSubType.SubTypeMods.ControlAllBots) && asymmetricCalculator == null))
+            || (gameSubType.Mods.Contains(GameSubType.SubTypeMods.ControlAllBots) && asymmetricCalculator == null)) // TODO we could just provide a calculator if we want to update elo and not provide if not
         {
             log.Info($"{gameInfo.GameServerProcessCode} was a fourlancer game, not updating elo");
             return;
         }
         
-        List<PersistedAccountData> teamA = gameSummary.PlayerGameSummaryList
+        Dictionary<long, MatchPlayerData> matchPlayerDatas = players.ToDictionary(p => p.AccountId);
+        List<MatchPlayerData> teamA = gameSummary.PlayerGameSummaryList
             .Where(pgs => pgs.IsInTeamA())
             .DistinctBy(pgs => pgs.AccountId)
-            .Select(pgs => accountProvider(pgs.AccountId))
+            .Select(pgs => matchPlayerDatas[pgs.AccountId])
             .ToList();
-        List<PersistedAccountData> teamB = gameSummary.PlayerGameSummaryList
+        List<MatchPlayerData> teamB = gameSummary.PlayerGameSummaryList
             .Where(pgs => pgs.IsInTeamB())
             .DistinctBy(pgs => pgs.AccountId)
-            .Select(pgs => accountProvider(pgs.AccountId))
+            .Select(pgs => matchPlayerDatas[pgs.AccountId])
             .ToList();
         
         log.Info($"Game {gameInfo.Name} ended, " +
                  $"{string.Join(", ", teamA.Select(acc => acc.Handle))} {(gameSummary.GameResult == GameResult.TeamAWon ? "won" : "lost")}, " +
                  $"{string.Join(", ", teamB.Select(acc => acc.Handle))} {(gameSummary.GameResult == GameResult.TeamBWon ? "won" : "lost")}");
-        
+
         lock (EloLock)
         {
-            foreach (PersistedAccountData acc in teamA.Concat(teamB))
+            foreach (MatchPlayerData data in teamA.Concat(teamB))
             {
-                string key = playerEloKeys?.GetValueOrDefault(acc.AccountId) ?? eloKey;
-                UpdateConfidence(acc, gameInfo.GameConfig.GameType, key, conf, now, matchHistoryProvider);
+                UpdateConfidence(data, gameInfo.GameConfig.GameType, data.EloKey, conf, now);
             }
             int result = gameSummary.GameResult == GameResult.TeamAWon ? 1 : 0;
-            float eloChange = asymmetricCalculator != null
-                ? asymmetricCalculator.CalculateEloChange(teamA, teamB, asymmetricSlots ?? new Dictionary<long, int>(), playerEloKeys ?? new Dictionary<long, string>(), eloKey, conf, result)
-                : GetEloChange(teamA, teamB, eloKey, conf, result);
-            AwardEloTeam(teamA, eloKey, playerEloKeys, conf, eloChange, accountUpdater);
-            AwardEloTeam(teamB, eloKey, playerEloKeys, conf, -eloChange, accountUpdater);
+            float? eloChangeOverride = asymmetricCalculator?.CalculateEloChange(teamA, teamB, conf, result);
+            float eloChange = eloChangeOverride ?? GetEloChange(teamA, teamB, conf, result); // TODO this could be handled by a provided calculator too?
+            AwardEloTeam(teamA, conf, eloChange, accountUpdater);
+            AwardEloTeam(teamB, conf, -eloChange, accountUpdater);
         }
     }
 
     private static void UpdateConfidence(
-        PersistedAccountData player,
+        MatchPlayerData player,
         GameType gameType,
         string eloKey,
         MatchmakingConfiguration conf,
-        DateTime now,
-        IMatchHistoryProvider matchHistoryProvider)
+        DateTime now)
     {
-        List<PersistedCharacterMatchData> matches = matchHistoryProvider(player.AccountId);
+        PersistedAccountData account = DB.Get().AccountDao.GetAccount(player.AccountId);
+        List<PersistedCharacterMatchData> matches = DB.Get().MatchHistoryDao.Find(player.AccountId);
         PersistedCharacterMatchData lastMatch = matches
-            .FirstOrDefault(m => m.MatchComponent.GameType == gameType);
+            .FirstOrDefault(m => m.MatchComponent.GameType == gameType); // TODO also check SubTypeLocTag?
 
         int confidenceLevelDelta = -100;
         if (lastMatch is not null)
@@ -98,7 +95,7 @@ public static class Elo
                 }
             }
 
-            int eloConfidenceLevel = GetEloConfidenceLevel(player, eloKey);
+            int eloConfidenceLevel = player.GetEloConfidenceLevel();
             if (eloConfidenceLevel < conf.EloConfidenceUpgrade.Count)
             {
                 int num = matches
@@ -111,76 +108,63 @@ public static class Elo
             }
         }
 
-        int currentConfLevel = GetEloConfidenceLevel(player, eloKey);
+        int currentConfLevel = player.GetEloConfidenceLevel();
         log.Info($"Updating {player.Handle}'s {eloKey} elo confidence level " +
                  $"{currentConfLevel} -> {Math.Max(0, currentConfLevel + confidenceLevelDelta)}");
         
-        player.ExperienceComponent.EloValues.ApplyDelta(eloKey, 0, confidenceLevelDelta);
+        account.ExperienceComponent.EloValues.ApplyDelta(eloKey, 0, confidenceLevelDelta);
+        DB.Get().AccountDao.UpdateExperienceComponent(account);
     }
 
-    private static float GetTeamElo(List<PersistedAccountData> team, string eloKey)
+    private static float GetTeamElo(List<MatchPlayerData> team)
     {
-        return team.Select(p => GetElo(p, eloKey)).Sum() / team.Count;
+        return team.Select(p => p.GetElo()).Sum() / team.Count;
     }
 
     private static float GetEloChange(
-        List<PersistedAccountData> teamA,
-        List<PersistedAccountData> teamB,
-        string eloKey,
+        List<MatchPlayerData> teamA,
+        List<MatchPlayerData> teamB,
         MatchmakingConfiguration conf,
         int result)
     {
-
-        float k = conf.EloBasePot * (teamA.Select(p => GetEloConfidenceFactor(p, eloKey, conf)).Sum() / (2 * teamA.Count) +
-                                  teamB.Select(p => GetEloConfidenceFactor(p, eloKey, conf)).Sum() / (2 * teamB.Count));
-        return k * (result - GetPrediction(eloKey, teamA, teamB));
+        // TODO account for NumControlledCharacters
+        float k = conf.EloBasePot * (teamA.Select(p => GetEloConfidenceFactor(p, conf)).Sum() / (2 * teamA.Count) +
+                                  teamB.Select(p => GetEloConfidenceFactor(p, conf)).Sum() / (2 * teamB.Count));
+        return k * (result - GetPrediction(teamA, teamB));
     }
 
-    private static float GetPrediction(string eloKey, List<PersistedAccountData> teamA, List<PersistedAccountData> teamB)
+    private static float GetPrediction(List<MatchPlayerData> teamA, List<MatchPlayerData> teamB)
     {
-        return GetPrediction(GetTeamElo(teamA, eloKey), GetTeamElo(teamB, eloKey));
+        return GetPrediction(GetTeamElo(teamA), GetTeamElo(teamB));
     }
 
     public static float GetPrediction(float teamAElo, float teamBElo)
     {
         return 1.0f / (1 + MathF.Pow(10, (teamBElo - teamAElo) / 400.0f));
     }
-    
-    private static float GetElo(PersistedAccountData acc, string eloKey)
+
+    private static float GetEloConfidenceFactor(MatchPlayerData data, MatchmakingConfiguration conf)
     {
-        acc.ExperienceComponent.EloValues.GetElo(eloKey, out float elo, out _);
-        return elo;
-    }
-    
-    private static float GetEloConfidenceFactor(PersistedAccountData acc, string eloKey, MatchmakingConfiguration conf)
-    {
-        int cf = GetEloConfidenceLevel(acc, eloKey);
+        int cf = data.GetEloConfidenceLevel();
         return conf.EloConfidenceFactor[Math.Clamp(cf, 0, conf.EloConfidenceFactor.Count-1)];
     }
 
-    private static int GetEloConfidenceLevel(PersistedAccountData acc, string eloKey)
+    private static void AwardElo(MatchPlayerData data, string eloKey, float delta, IAccountUpdater accountUpdater)
     {
-        acc.ExperienceComponent.EloValues.GetElo(eloKey, out _, out int cf);
-        return Math.Max(cf, 0);
-    }
-
-    private static void AwardElo(PersistedAccountData acc, string eloKey, float delta, IAccountUpdater accountUpdater)
-    {
-        float currentElo = GetElo(acc, eloKey);
-        log.Info($"Updating {acc.Handle}'s {eloKey} elo {currentElo} -> {currentElo + delta}");
+        float currentElo = data.GetElo();
+        log.Info($"Updating {data.Handle}'s {eloKey} elo {currentElo} -> {currentElo + delta}");
+        var acc = DB.Get().AccountDao.GetAccount(data.AccountId);
         acc.ExperienceComponent.EloValues.ApplyDelta(eloKey, delta, 0);
         accountUpdater(acc);
     }
 
-    private static void AwardEloTeam(List<PersistedAccountData> team, string baseEloKey, Dictionary<long, string> playerEloKeys, MatchmakingConfiguration conf, float eloDelta, IAccountUpdater accountUpdater)
+    // TODO maybe make asymm elo more volatile than normal?
+    private static void AwardEloTeam(List<MatchPlayerData> team, MatchmakingConfiguration conf, float eloDelta, IAccountUpdater accountUpdater)
     {
-        // Confidence factor normalization always uses the base key so all players are on the same scale
-        // TODO is this ok?
-        float avgConf = team.Select(p => GetEloConfidenceFactor(p, baseEloKey, conf)).Sum() / team.Count;
-        foreach (PersistedAccountData acc in team)
+        float avgConf = team.Select(p => GetEloConfidenceFactor(p, conf)).Sum() / team.Count;
+        foreach (MatchPlayerData data in team)
         {
-            string key = playerEloKeys?.GetValueOrDefault(acc.AccountId) ?? baseEloKey;
-            AwardElo(acc, key, eloDelta * GetEloConfidenceFactor(acc, baseEloKey, conf) / avgConf, accountUpdater);
+            AwardElo(data, data.EloKey, eloDelta * GetEloConfidenceFactor(data, conf) / avgConf, accountUpdater);
         }
     }
 }

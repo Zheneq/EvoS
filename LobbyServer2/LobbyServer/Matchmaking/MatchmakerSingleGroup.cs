@@ -31,15 +31,15 @@ public class MatchmakerSingleGroup : Matchmaker
     {
         MatchmakingGroup group = queuedGroups
             .OrderBy(g => g.QueueTime)
-            .FirstOrDefault(g => g.Players <= _subType.TeamAPlayers);
+            .FirstOrDefault(g => g.Slots <= _subType.TeamAPlayers);
         if (group is null)
         {
             return new();
         }
 
-        Match bestMatch = new Match(_accountDao, new() { group }, new(), string.Empty);
+        Match bestMatch = new Match(_accountDao, [group], []);
         
         log.Info($"Best match: {bestMatch}");
-        return new() { new ScoredMatch(bestMatch, Score, "first one") };
+        return [new ScoredMatch(bestMatch, Score, "first one")];
     }
 }

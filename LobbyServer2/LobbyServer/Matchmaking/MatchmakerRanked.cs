@@ -139,8 +139,8 @@ public class MatchmakerRanked : MatchmakerBase
         }
         
         float score = 0;
-        Dictionary<CharacterRole,int> roles = team.Accounts.Values
-            .Select(acc => acc.AccountComponent.LastCharacter)
+        Dictionary<CharacterRole,int> roles = team.MatchPlayerDatas.Values
+            .SelectMany(acc => acc.SelectedCharacters)
             .Select(ch => CharacterConfigs.Characters[ch].CharacterRole)
             .GroupBy(role => role)
             .ToDictionary(el => el.Key, el => el.Count());
@@ -172,8 +172,8 @@ public class MatchmakerRanked : MatchmakerBase
             return 1;
         }
         
-        int totalBlocks = team.Accounts.Values
-            .Select(acc => team.AccountIds.Count(accId => acc.SocialComponent.BlockedAccounts.Contains(accId)))
+        int totalBlocks = team.MatchPlayerDatas.Values
+            .Select(data => team.AccountIds.Count(accId => data.BlockedAccounts.Contains(accId)))
             .Sum();
 
         return 1 - Math.Min(totalBlocks * 0.125f, 1);
@@ -181,15 +181,9 @@ public class MatchmakerRanked : MatchmakerBase
 
     private float GetTeamConfidenceBalanceFactor(Match match)
     {
-        int diff = Math.Abs(match.TeamA.Accounts.Values.Select(GetEloConfidenceLevel).Sum()
-                            - match.TeamB.Accounts.Values.Select(GetEloConfidenceLevel).Sum());
+        int diff = Math.Abs(match.TeamA.MatchPlayerDatas.Values.Select(data => data.GetEloConfidenceLevel()).Sum()
+                            - match.TeamB.MatchPlayerDatas.Values.Select(data => data.GetEloConfidenceLevel()).Sum());
         return 1 - Cap(diff * 0.33f);
-    }
-
-    private int GetEloConfidenceLevel(PersistedAccountData acc)
-    {
-        acc.ExperienceComponent.EloValues.GetElo(_eloKey, out _, out int eloConfLevel);
-        return eloConfLevel;
     }
 
     private float GetTieBreakerFactor(Match match)

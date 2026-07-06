@@ -37,11 +37,12 @@ public abstract class Game
 
     public ServerGameMetrics GameMetrics { get; private set; } = new ServerGameMetrics();
     public LobbyGameSummary GameSummary { get; private set; }
+    private List<MatchPlayerData> TeamA;
+    private List<MatchPlayerData> TeamB;
     public DateTime StopTime { private set; get; }
     public BridgeServerProtocol Server { private set; get; } // TODO check it is set when needed
 
     public GameSubType GameSubType { protected set; get; } // can be null
-    public Dictionary<long, string> AsymmetricEloKeys { protected set; get; }
 
     public string ProcessCode => GameInfo?.GameServerProcessCode;
     public GameStatus GameStatus => GameInfo?.GameStatus ?? GameStatus.None;
@@ -128,7 +129,7 @@ public abstract class Game
         }
         try
         {
-            MatchmakingManager.OnGameEnded(GameInfo, GameSummary, GameSubType, AsymmetricEloKeys);
+            MatchmakingManager.OnGameEnded(GameInfo, GameSummary, GameSubType, TeamA.Concat(TeamB).ToList());
         }
         catch (Exception e)
         {
@@ -566,46 +567,50 @@ public abstract class Game
         Terminate();
     }
 
-    protected bool FillTeam(
-        List<long> players,
-        Team team,
-        GameSubType gameSubType,
-        Dictionary<long, int> asymmetricSlots = null)
+    protected bool FillTeam(List<MatchPlayerData> players, Team team, GameSubType gameSubType)
     {
-        bool isAsymmetricTeam = asymmetricSlots != null;
-
-        int botNum = 0;
-        int playerNum = 0;
-        if (!isAsymmetricTeam)
+        // TODO assign somewhere else and maybe combine them
+        switch (team)
         {
-            botNum = team == Team.TeamA ? gameSubType.TeamABots : gameSubType.TeamBBots;
-            playerNum = (team == Team.TeamA ? gameSubType.TeamAPlayers : gameSubType.TeamBPlayers) - botNum;
+            case Team.TeamA:
+                TeamA = players;
+                break;
+            case Team.TeamB:
+                TeamB = players;
+                break;
+        }
+        
+        int botNum = team == Team.TeamA ? gameSubType.TeamABots : gameSubType.TeamBBots;
+        int multiCharacterAdjustment = players.Select(data => data.NumControlledCharacters).Sum() - players.Count;
+        botNum += multiCharacterAdjustment;
+        
+        int playerNum = (team == Team.TeamA ? gameSubType.TeamAPlayers : gameSubType.TeamBPlayers) - botNum;
 
-            if (playerNum < 0)
-            {
-                log.Error($"Misconfigured sub type {gameSubType.LocalizedName} with {playerNum} human players in {team}");
-                playerNum = 0;
-            }
-
-            if (team == Team.TeamA
-                && gameSubType.Mods is not null
-                && gameSubType.Mods.Contains(GameSubType.SubTypeMods.AntiSocial)
-                && !IsControlAllBots)
-            {
-                int botsForAntiSocial = playerNum - players.Count;
-                botNum += botsForAntiSocial;
-                playerNum = players.Count;
-                log.Info($"Adding {botsForAntiSocial} bots for an antisocial game");
-            }
-
-            if (playerNum != players.Count)
-            {
-                log.Error($"Expected {playerNum} players in {team} but got {players.Count}");
-            }
+        if (playerNum < 0)
+        {
+            log.Error($"Misconfigured sub type {gameSubType.LocalizedName} with {playerNum} human players in {team}");
+            playerNum = 0;
         }
 
-        foreach (long accountId in players)
+        if (team == Team.TeamA
+            && gameSubType.Mods is not null
+            && gameSubType.Mods.Contains(GameSubType.SubTypeMods.AntiSocial) 
+            && !IsControlAllBots)
         {
+            int botsForAntiSocial = playerNum - players.Count;
+            botNum += botsForAntiSocial;
+            playerNum = players.Count;
+            log.Info($"Adding {botsForAntiSocial} bots for an antisocial game");
+        }
+
+        if (playerNum != players.Count)
+        {
+            log.Error($"Expected {playerNum} players in {team} but got {players.Count}");
+        }
+
+        foreach (MatchPlayerData playerData in players)
+        {
+            long accountId = playerData.AccountId;
             LobbyServerProtocol client = SessionManager.GetClientConnection(accountId);
             PersistedAccountData account = DB.Get().AccountDao.GetAccount(accountId);
             if (client == null)
@@ -621,96 +626,51 @@ public abstract class Game
             playerInfo.PlayerId = Playerid;
             log.Info($"adding player {client.UserName} ({playerInfo.CharacterType}), {client.AccountId} to {team}. readystate: {playerInfo.ReadyState}");
             TeamInfo.TeamPlayerInfo.Add(playerInfo);
-
-            if (isAsymmetricTeam && asymmetricSlots.TryGetValue(accountId, out int n) && n > 1)
+            
+            for (int i = 0; i < playerData.NumControlledCharacters - 1; i++)
             {
-                for (int j = 0; j < n - 1; j++)
-                {
-                    LobbyServerPlayerInfo proxy = AddAsymmetricProxy(accountId, j, team, gameSubType);
-                    log.Info($"adding asymmetric proxy {proxy.CharacterType} for {client.UserName} to {team}");
-                }
+                LobbyServerPlayerInfo proxy = AddBot(team, playerInfo, i);
+                log.Info($"Adding asymmetric proxy {proxy.CharacterType} for {client.UserName} to {team}");
+                botNum--;
             }
         }
 
-        if (!isAsymmetricTeam)
+        bool isAntiSocial = gameSubType.Mods is not null && gameSubType.Mods.Contains(GameSubType.SubTypeMods.AntiSocial);
+        bool isPlayerControllingAllCharacters = IsControlAllBots && !(isAntiSocial && team == Team.TeamB);
+        LobbyServerPlayerInfo controllingPlayer = isPlayerControllingAllCharacters ? GetControllingPlayer(team) : null;
+        for (int i = 0; i < botNum; i++)
         {
-            for (int i = 0; i < botNum; i++)
-            {
-                LobbyServerPlayerInfo playerInfo = AddBot(team, i, gameSubType);
-                log.Info($"adding bot {playerInfo.CharacterType} to {team}");
-            }
+            LobbyServerPlayerInfo playerInfo = AddBot(team, controllingPlayer, i);
+            log.Info($"Adding bot {playerInfo.CharacterType} to {team}");
         }
 
         return true;
     }
 
-    protected LobbyServerPlayerInfo AddAsymmetricProxy(long controllingAccountId, int proxyNr, Team team, GameSubType gameSubType)
+    protected LobbyServerPlayerInfo AddBot(Team team, LobbyServerPlayerInfo controllingPlayer, int botNr)
     {
-        LobbyServerPlayerInfo controllingPlayer = TeamInfo.TeamPlayerInfo
-            .FirstOrDefault(p => p.AccountId == controllingAccountId && p.TeamId == team);
-        if (controllingPlayer == null)
-        {
-            log.Error($"Cannot add asymmetric proxy: controlling player {controllingAccountId} not found in {team}");
-            controllingPlayer = TeamInfo.TeamPlayerInfo.FirstOrDefault();
-        }
-
-        PersistedAccountData account = DB.Get().AccountDao.GetAccount(controllingAccountId);
-        CharacterType characterType = PickCharacter(team, true);
-        if (account?.AccountComponent?.LastRemoteCharacters != null
-            && proxyNr >= 0 && proxyNr < account.AccountComponent.LastRemoteCharacters.Count
-            && account.AccountComponent.LastRemoteCharacters[proxyNr] != CharacterType.None)
-        {
-            characterType = account.AccountComponent.LastRemoteCharacters[proxyNr];
-        }
-
-        CharacterComponent characterComponent = (CharacterComponent)account.CharacterData[characterType].CharacterComponent.Clone();
-        LobbyCharacterInfo lobbyCharacterInfo = LobbyCharacterInfo.Of(account.CharacterData[characterType], characterComponent);
-
-        LobbyServerPlayerInfo playerInfo = new LobbyServerPlayerInfo
-        {
-            ReadyState = ReadyState.Ready,
-            IsGameOwner = false,
-            TeamId = team,
-            PlayerId = TeamInfo.TeamPlayerInfo.Count + 1,
-            IsNPCBot = false,
-            AccountId = controllingPlayer.AccountId,
-            Handle = controllingPlayer.Handle,
-            CharacterInfo = lobbyCharacterInfo,
-            ControllingPlayerId = controllingPlayer.PlayerId,
-            ControllingPlayerInfo = controllingPlayer,
-            CustomGameVisualSlot = 0,
-            Difficulty = BotDifficulty.Medium,
-            BotCanTaunt = false,
-        };
-
-        controllingPlayer.ProxyPlayerIds.Add(playerInfo.PlayerId);
-        TeamInfo.TeamPlayerInfo.Add(playerInfo);
-        return playerInfo;
-    }
-
-    protected LobbyServerPlayerInfo AddBot(Team team, int botNr, GameSubType gameSubType)
-    {
-        // Initialize basic character information
         CharacterType characterType = PickCharacter(team, true);
         LobbyCharacterInfo lobbyCharacterInfo = InitializeDefaultCharacterInfo(characterType);
-        LobbyServerPlayerInfo controllingPlayer = new();
-        bool isAntiSocial = gameSubType.Mods is not null && gameSubType.Mods.Contains(GameSubType.SubTypeMods.AntiSocial);
 
-        if (IsControlAllBots && !(isAntiSocial && team == Team.TeamB))
+        if (controllingPlayer != null)
         {
-            // either non-AntiSocial or Team A in AntiSocial mode
-            controllingPlayer = GetControllingPlayer(team);
             PersistedAccountData account = DB.Get().AccountDao.GetAccount(controllingPlayer.AccountId);
-            if (account?.AccountComponent?.LastRemoteCharacters != null &&
-                botNr >= 0 && botNr < account.AccountComponent.LastRemoteCharacters.Count)
+            if (account != null)
             {
-                if (account.AccountComponent.LastRemoteCharacters[botNr] != CharacterType.None)
+                if (account.AccountComponent?.LastRemoteCharacters != null
+                    && botNr >= 0
+                    && botNr < account.AccountComponent.LastRemoteCharacters.Count
+                    && account.AccountComponent.LastRemoteCharacters[botNr] != CharacterType.None)
                 {
                     characterType = account.AccountComponent.LastRemoteCharacters[botNr];
                 }
+                CharacterComponent characterComponent = (CharacterComponent)account.CharacterData[characterType].CharacterComponent.Clone();
+                lobbyCharacterInfo = LobbyCharacterInfo.Of(account.CharacterData[characterType], characterComponent);
             }
-            CharacterComponent characterComponent = (CharacterComponent)account.CharacterData[characterType].CharacterComponent.Clone();
-            lobbyCharacterInfo = LobbyCharacterInfo.Of(account.CharacterData[characterType], characterComponent);
+            else
+            {
+                log.Error($"Controlling player account {controllingPlayer.AccountId} not found. Adding a bot instead.");
+            }
         }
 
         LobbyServerPlayerInfo playerInfo = new LobbyServerPlayerInfo
@@ -719,29 +679,23 @@ public abstract class Game
             IsGameOwner = false,
             TeamId = team,
             PlayerId = TeamInfo.TeamPlayerInfo.Count + 1,
-            IsNPCBot = !IsControlAllBots || (team == Team.TeamB && isAntiSocial),  // Team B bots in AntiSocial are NPC bots
+            IsNPCBot = controllingPlayer == null,
             Handle = GameWideData.Get().GetCharacterResourceLink(characterType).m_displayName, // TODO localization?
             CharacterInfo = lobbyCharacterInfo,
-            ControllingPlayerId = GetControllingPlayerId(team),
-            ControllingPlayerInfo = GetControllingPlayerInfo(team),
+            ControllingPlayerId = controllingPlayer?.PlayerId ?? 0,
+            ControllingPlayerInfo = controllingPlayer,
             CustomGameVisualSlot = 0,
             Difficulty = BotDifficulty.Medium,
             BotCanTaunt = true,
         };
 
-        // Assign ProxyPlayerIds based on team and game mode
-        if (IsControlAllBots)
+        if (controllingPlayer != null)
         {
-            if (team == Team.TeamA || (team == Team.TeamB && !isAntiSocial))
-            {
-                // Team A: Always add player to ProxyPlayerIds
-                controllingPlayer.ProxyPlayerIds.Add(playerInfo.PlayerId);
-                playerInfo.AccountId = controllingPlayer.AccountId;
-                playerInfo.Handle = controllingPlayer.Handle;
-            }
+            controllingPlayer.ProxyPlayerIds.Add(playerInfo.PlayerId);
+            playerInfo.AccountId = controllingPlayer.AccountId;
+            playerInfo.Handle = controllingPlayer.Handle;
         }
 
-        // Add the player to the team and return the info
         TeamInfo.TeamPlayerInfo.Add(playerInfo);
         return playerInfo;
     }
@@ -769,15 +723,6 @@ public abstract class Game
                ?? TeamInfo.TeamPlayerInfo.FirstOrDefault();
     }
 
-    private int GetControllingPlayerId(Team team)
-    {
-        if (!IsControlAllBots || (GameInfo?.GameConfig.GameType == GameType.PvE && team == Team.TeamB))
-        {
-            return 0;
-        }
-        return GetControllingPlayerIdInternal(team);
-    }
-
     private int GetControllingPlayerIdInternal(Team team)
     {
         // Default hardcoded values
@@ -796,23 +741,6 @@ public abstract class Game
     private static LobbyServerPlayerInfo GetTeamLeader(IEnumerable<LobbyServerPlayerInfo> teamPlayerInfo)
     {
         return teamPlayerInfo.FirstOrDefault(p => p.GroupLeader);
-    }
-
-    private LobbyServerPlayerInfo GetControllingPlayerInfo(Team team)
-    {
-        if (!IsControlAllBots)
-        {
-            return null;
-        }
-
-        if (GameInfo?.GameConfig.GameType == GameType.PvE && team == Team.TeamB) 
-        {
-            //PvE has no other controlling player
-            return null;
-        }
-
-        int playerId = GetControllingPlayerIdInternal(team);
-        return TeamInfo.TeamPlayerInfo.Find(p => p.PlayerId == playerId);
     }
 
     protected CharacterType PickCharacter(Team team, bool forBot)

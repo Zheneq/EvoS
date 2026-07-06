@@ -29,65 +29,56 @@ public abstract class Matchmaker
     {
         public long GroupID;
         public DateTime QueueTime;
-        public List<long> Members;
-        public int EffectiveSlots; // how many team slots this group fills (> Members.Count for asymmetric players)
+        public List<QueuePlayerData> Members;
         
-        public MatchmakingGroup(long groupId, List<long> members, DateTime queueTime)
+        public MatchmakingGroup(long groupId, List<QueuePlayerData> members, DateTime queueTime)
         {
             GroupID = groupId;
             Members = members;
             QueueTime = queueTime;
-            EffectiveSlots = members.Count;
-        }
-
-        public MatchmakingGroup(GroupInfo groupInfo, DateTime queueTime = default)
-            : this(groupInfo.GroupId, groupInfo.Members.ToList(), queueTime)
-        {
         }
 
         public bool Is(GroupInfo groupInfo)
         {
             if (GroupID != groupInfo.GroupId) return false;
             if (Members.Count != groupInfo.Members.Count) return false;
-            return Members.All(accId => groupInfo.Members.Contains(accId));
+            return Members.All(data => groupInfo.Members.Contains(data.AccountId));
         }
         
         public int Players => Members.Count;
+        public int Slots => Members.Select(data => data.NumControlledCharacters).Sum();
     }
 
     public class Match
     {
         public class Team
         {
-            private readonly string _eloKey;
             public List<MatchmakingGroup> Groups { get; }
-            public Dictionary<long, PersistedAccountData> Accounts { get; }
-            public List<long> AccountIds => Accounts.Values.Select(acc => acc.AccountId).ToList();
+            public Dictionary<long, MatchPlayerData> MatchPlayerDatas { get; }
+            public List<long> AccountIds => MatchPlayerDatas.Values.Select(acc => acc.AccountId).ToList();
             public float Elo { get; }
-            public float MinElo => Accounts.Values.Select(GetElo).Min();
-            public float MaxElo => Accounts.Values.Select(GetElo).Max();
+            public float MinElo => MatchPlayerDatas.Values.Select(data => data.GetElo()).Min();
+            public float MaxElo => MatchPlayerDatas.Values.Select(data => data.GetElo()).Max();
 
-            public Team(AccountDao dao, List<MatchmakingGroup> groups, string eloKey)
+            public Team(AccountDao dao, List<MatchmakingGroup> groups)
             {
-                _eloKey = eloKey;
                 Groups = groups;
-                Accounts = Groups
+                MatchPlayerDatas = Groups
                     .SelectMany(g => g.Members)
-                    .Select(dao.GetAccount)
+                    .Select(data =>
+                    {
+                        var account = dao.GetAccount(data.AccountId);
+                        return new MatchPlayerData(
+                            account.AccountId,
+                            account.Handle,
+                            data.EloKey,
+                            account.ExperienceComponent.EloValues,
+                            account.AccountComponent.GetLastCharacters(data.NumControlledCharacters),
+                            account.SocialComponent.BlockedAccounts);
+                    })
                     .ToDictionary(acc => acc.AccountId);
-                Elo = Accounts.Values.Select(GetElo).Sum() / Accounts.Count;
-            }
-
-            private float GetElo(PersistedAccountData acc)
-            {
-                acc.ExperienceComponent.EloValues.GetElo(_eloKey, out float elo, out _);
-                return elo;
-            }
-
-            private int GetEloConfidenceLevel(PersistedAccountData acc)
-            {
-                acc.ExperienceComponent.EloValues.GetElo(_eloKey, out _, out int eloConfLevel);
-                return eloConfLevel;
+                Elo = MatchPlayerDatas.Values.Select(data => data.GetElo()).Sum() / MatchPlayerDatas.Count; // TODO account for NumControlledCharacters
+                // TODO move the math to Elo?
             }
 
             public override string ToString()
@@ -96,14 +87,14 @@ public abstract class Matchmaker
                     '[' + string.Join(", ", g.Members.Select(FormatAccount)) + ']'))} <{{{Elo}}}>";
             }
 
-            private string FormatAccount(long accId)
+            private string FormatAccount(QueuePlayerData data)
             {
-                if (!Accounts.TryGetValue(accId, out var acc))
-                {
-                    return "#{accId}";
-                }
+                return FormatAccount(MatchPlayerDatas[data.AccountId]);
+            }
 
-                return $"{acc.Handle} <{GetElo(acc):0}|{GetEloConfidenceLevel(acc)}>";
+            private static string FormatAccount(MatchPlayerData data)
+            {
+                return $"{data.Handle} <{data.GetElo():0}|{data.GetEloConfidenceLevel()}>";
             }
         }
 
@@ -111,10 +102,10 @@ public abstract class Matchmaker
         public Team TeamB { get; }
         public IEnumerable<MatchmakingGroup> Groups => TeamA.Groups.Concat(TeamB.Groups);
 
-        public Match(AccountDao accountDao, List<MatchmakingGroup> teamA, List<MatchmakingGroup> teamB, string eloKey)
+        public Match(AccountDao accountDao, List<MatchmakingGroup> teamA, List<MatchmakingGroup> teamB)
         {
-            TeamA = new Team(accountDao, teamA, eloKey);
-            TeamB = new Team(accountDao, teamB, eloKey);
+            TeamA = new Team(accountDao, teamA);
+            TeamB = new Team(accountDao, teamB);
         }
 
         public override string ToString()
@@ -177,7 +168,7 @@ public abstract class Matchmaker
         {
             log.Debug($"Found {possibleMatches.Count} possible matches in " +
                       $"{_gameType}#{_subType.LocalizedName}: " +
-                      $"({string.Join(",", queuedGroups.Select(g => g.Players.ToString()))})");
+                      $"({string.Join(",", queuedGroups.Select(g => g.Players.ToString()))})"); // TODO highlight groups with asymmetric players
             List<Match> filteredMatches = FilterMatches(possibleMatches, now);
             log.Info($"Found {filteredMatches.Count} allowed matches in " +
                      $"{_gameType}#{_subType.LocalizedName} after filtering");
@@ -192,18 +183,21 @@ public abstract class Matchmaker
             if (filteredMatches.Count > 0)
             {
                 List<ScoredMatch> matches = RankMatches(filteredMatches, now);
-                HashSet<long> playersInQueue = queuedGroups.SelectMany(g => g.Members).ToHashSet();
+                HashSet<long> playersInQueue = queuedGroups
+                    .SelectMany(g => g.Members)
+                    .Select(d => d.AccountId)
+                    .ToHashSet();
                 foreach (ScoredMatch scoredMatch in matches)
                 {
                     if (playersInQueue.Count == 0)
                     {
                         break;
                     }
-                    foreach (long accountId in scoredMatch.Match.Groups.SelectMany(g => g.Members))
+                    foreach (QueuePlayerData data in scoredMatch.Match.Groups.SelectMany(g => g.Members))
                     {
-                        if (playersInQueue.Remove(accountId))
+                        if (playersInQueue.Remove(data.AccountId))
                         {
-                            log.Debug($"Best match for {accountId}/{LobbyServerUtils.GetUserName(accountId)}: {scoredMatch.ToDetailedString()}");
+                            log.Debug($"Best match for {data.AccountId}/{LobbyServerUtils.GetUserName(data.AccountId)}: {scoredMatch.ToDetailedString()}");
                         }
                     }
                 }
