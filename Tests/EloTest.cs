@@ -299,6 +299,294 @@ public class EloTest(ITestOutputHelper output) : EvosTest(output)
         Assert.Equal(0, cf);
     }
 
+    // --- GetTeamElo ---
+
+    [Fact]
+    public void GetTeamElo_SinglePlayer_ReturnsPlayerElo()
+    {
+        var p = MakeMatchPlayerDataWithChars(MakePlayer(1, "P", 1700f, 0), 1);
+        Assert.Equal(1700f, Elo.GetTeamElo([p]), precision: 3);
+    }
+
+    [Fact]
+    public void GetTeamElo_TwoPlayers_ReturnsArithmeticMean()
+    {
+        var p1 = MakeMatchPlayerDataWithChars(MakePlayer(1, "A", 1000f, 0), 1);
+        var p2 = MakeMatchPlayerDataWithChars(MakePlayer(2, "B", 2000f, 0), 1);
+        Assert.Equal(1500f, Elo.GetTeamElo([p1, p2]), precision: 3);
+    }
+
+    [Fact]
+    public void GetTeamElo_WeightedByNumControlledCharacters()
+    {
+        // p1 controls 2 chars at 2000, p2 controls 1 char at 1000
+        // weighted mean = (2000*2 + 1000*1) / (2+1) = 5000/3
+        var p1 = MakeMatchPlayerDataWithChars(MakePlayer(1, "A", 2000f, 0), 2);
+        var p2 = MakeMatchPlayerDataWithChars(MakePlayer(2, "B", 1000f, 0), 1);
+        Assert.Equal(5000f / 3f, Elo.GetTeamElo([p1, p2]), precision: 3);
+    }
+
+    [Fact]
+    public void EloChange_ControllerOfMultipleCharacters_GetsScaledDelta()
+    {
+        // 1v1, equal ELOs, cf=0: k=64, eloChange=32, AwardEloTeam gain = 32*factor*numChars/avgConf
+        // numChars=2 → gain = 64, vs. numChars=1 → gain = 32
+        var multiCharPlayer = MakePlayer(1, "Multi", 1500f, 0);
+        var opponent = MakePlayer(2, "Opp", 1500f, 0);
+        var now = DateTime.UtcNow;
+        var allPlayers = new[] { multiCharPlayer, opponent }.ToDictionary(p => p.AccountId);
+        var stableHistory = new List<PersistedCharacterMatchData>
+        {
+            MakeMatch(GameType.PvP, now - TimeSpan.FromHours(1))
+        };
+
+        multiCharPlayer.ExperienceComponent.EloValues.GetElo(EloKey, out float before, out _);
+        Elo.OnGameEnded(
+            MakeGameInfo(GameType.PvP),
+            MakeSummary(GameResult.TeamAWon, [multiCharPlayer.AccountId], [opponent.AccountId]),
+            [MakeMatchPlayerDataWithChars(multiCharPlayer, 2), MakeMatchPlayerData(opponent)],
+            DefaultConf(),
+            now,
+            id => allPlayers[id],
+            _ => stableHistory,
+            _ => { });
+
+        multiCharPlayer.ExperienceComponent.EloValues.GetElo(EloKey, out float after, out _);
+        Assert.Equal(64f, after - before, precision: 3);
+    }
+
+    // --- InitElo ---
+
+    [Fact]
+    public void InitElo_KeyAlreadyExists_NoUpdate()
+    {
+        var account = MakePlayer(1, "P1", 1500f, 2);
+        int updaterCount = 0;
+        Elo.InitElo(account.AccountId, EloKey, _ => account, _ => updaterCount++);
+        Assert.Equal(0, updaterCount);
+        account.ExperienceComponent.EloValues.GetElo(EloKey, out float elo, out _);
+        Assert.Equal(1500f, elo);
+    }
+
+    [Fact]
+    public void InitElo_NoFallbackKey_NoUpdate()
+    {
+        // "PvP$ranked" absent; fallback "PvP" also absent (account only has lowercase "pvp" key)
+        var account = MakePlayer(1, "P1", 1500f, 2);
+        int updaterCount = 0;
+        Elo.InitElo(account.AccountId, "PvP$ranked", _ => account, _ => updaterCount++);
+        Assert.Equal(0, updaterCount);
+        Assert.False(account.ExperienceComponent.EloValues.Values.ContainsKey("PvP$ranked"));
+    }
+
+    [Fact]
+    public void InitElo_FallbackExists_CopiesAndUpdates()
+    {
+        var account = MakePlayer(1, "P1", 1500f, 0);
+        account.ExperienceComponent.EloValues.UpdateElo("PvP", 1800f, 1);
+        int updaterCount = 0;
+        Elo.InitElo(account.AccountId, "PvP$ranked", _ => account, _ => updaterCount++);
+        Assert.Equal(1, updaterCount);
+        account.ExperienceComponent.EloValues.GetElo("PvP$ranked", out float elo, out int cf);
+        Assert.Equal(1800f, elo);
+        Assert.Equal(1, cf);
+    }
+
+    [Fact]
+    public void InitElo_CopiedDatumIsIndependent()
+    {
+        // EloDatum.Clone() must produce an independent copy so mutating the fallback doesn't affect the new key
+        var account = MakePlayer(1, "P1", 1500f, 0);
+        account.ExperienceComponent.EloValues.UpdateElo("PvP", 1800f, 1);
+        Elo.InitElo(account.AccountId, "PvP$ranked", _ => account, _ => { });
+        account.ExperienceComponent.EloValues.UpdateElo("PvP", 2000f, 0);
+        account.ExperienceComponent.EloValues.GetElo("PvP$ranked", out float elo, out int cf);
+        Assert.Equal(1800f, elo);
+        Assert.Equal(1, cf);
+    }
+
+    // --- GetEloKey format ---
+
+    [Fact]
+    public void GetEloKey_Format()
+    {
+        var subType = new GameSubType { LocalizedName = "5v5" };
+        Assert.Equal("PvP$5v5", Elo.GetEloKey(GameType.PvP, subType));
+    }
+
+    // --- additional confidence update logic ---
+
+    [Fact]
+    public void Confidence_MatchAt60Days_NoDecay()
+    {
+        // 30d < 60d < 90d: loop hits i=0 → delta = -0 = 0; upgrade skipped (cf=2 is max)
+        var now = DateTime.UtcNow;
+        var p1 = MakePlayer(1, "P1", 1500f, 2);
+        var p2 = MakePlayer(2, "P2", 1500f, 0);
+        var history = new List<PersistedCharacterMatchData>
+        {
+            MakeMatch(GameType.PvP, now - TimeSpan.FromDays(60))
+        };
+        Elo.OnGameEnded(
+            MakeGameInfo(GameType.PvP),
+            MakeSummary(GameResult.TeamAWon, [p1.AccountId], [p2.AccountId]),
+            [MakeMatchPlayerData(p1), MakeMatchPlayerData(p2)],
+            DefaultConf(),
+            now,
+            id => id == p1.AccountId ? p1 : p2,
+            _ => history,
+            _ => { });
+        p1.ExperienceComponent.EloValues.GetElo(EloKey, out _, out int cf);
+        Assert.Equal(2, cf);
+    }
+
+    [Fact]
+    public void Confidence_MatchAt120Days_DecaysByOne()
+    {
+        // 90d < 120d < 180d: loop hits i=1 → delta = -1; 2-1 = 1
+        var now = DateTime.UtcNow;
+        var p1 = MakePlayer(1, "P1", 1500f, 2);
+        var p2 = MakePlayer(2, "P2", 1500f, 0);
+        var history = new List<PersistedCharacterMatchData>
+        {
+            MakeMatch(GameType.PvP, now - TimeSpan.FromDays(120))
+        };
+        Elo.OnGameEnded(
+            MakeGameInfo(GameType.PvP),
+            MakeSummary(GameResult.TeamAWon, [p1.AccountId], [p2.AccountId]),
+            [MakeMatchPlayerData(p1), MakeMatchPlayerData(p2)],
+            DefaultConf(),
+            now,
+            id => id == p1.AccountId ? p1 : p2,
+            _ => history,
+            _ => { });
+        p1.ExperienceComponent.EloValues.GetElo(EloKey, out _, out int cf);
+        Assert.Equal(1, cf);
+    }
+
+    [Fact]
+    public void Confidence_AlreadyAtMaxLevel_NoUpgrade()
+    {
+        // cf=2 equals EloConfidenceUpgrade.Count=2, so the upgrade branch is never entered
+        var now = DateTime.UtcNow;
+        var p1 = MakePlayer(1, "P1", 1500f, 2);
+        var p2 = MakePlayer(2, "P2", 1500f, 0);
+        var history = Enumerable.Range(0, 30)
+            .Select(_ => MakeMatch(GameType.PvP, now - TimeSpan.FromHours(12)))
+            .ToList();
+        Elo.OnGameEnded(
+            MakeGameInfo(GameType.PvP),
+            MakeSummary(GameResult.TeamAWon, [p1.AccountId], [p2.AccountId]),
+            [MakeMatchPlayerData(p1), MakeMatchPlayerData(p2)],
+            DefaultConf(),
+            now,
+            id => id == p1.AccountId ? p1 : p2,
+            _ => history,
+            _ => { });
+        p1.ExperienceComponent.EloValues.GetElo(EloKey, out _, out int cf);
+        Assert.Equal(2, cf);
+    }
+
+    [Fact]
+    public void Confidence_UpgradeFromLevelOne_ToLevelTwo()
+    {
+        // cf=1, 25 recent PvP matches → EloConfidenceUpgrade[1]=25 threshold met → cf becomes 2
+        var now = DateTime.UtcNow;
+        var p1 = MakePlayer(1, "P1", 1500f, 1);
+        var p2 = MakePlayer(2, "P2", 1500f, 0);
+        var history = Enumerable.Range(0, 25)
+            .Select(_ => MakeMatch(GameType.PvP, now - TimeSpan.FromHours(12)))
+            .ToList();
+        Elo.OnGameEnded(
+            MakeGameInfo(GameType.PvP),
+            MakeSummary(GameResult.TeamAWon, [p1.AccountId], [p2.AccountId]),
+            [MakeMatchPlayerData(p1), MakeMatchPlayerData(p2)],
+            DefaultConf(),
+            now,
+            id => id == p1.AccountId ? p1 : p2,
+            _ => history,
+            _ => { });
+        p1.ExperienceComponent.EloValues.GetElo(EloKey, out _, out int cf);
+        Assert.Equal(2, cf);
+    }
+
+    [Fact]
+    public void Confidence_MatchOfDifferentSubType_TreatedAsNoHistory()
+    {
+        // No match with the correct subtype → lastMatch=null → delta=-100 → cf drops to 0
+        var now = DateTime.UtcNow;
+        var p1 = MakePlayer(1, "P1", 1500f, 2);
+        var p2 = MakePlayer(2, "P2", 1500f, 0);
+        var history = Enumerable.Range(0, 30)
+            .Select(_ => new PersistedCharacterMatchData
+            {
+                MatchComponent = new MatchComponent
+                {
+                    GameType = GameType.PvP,
+                    MatchTime = now - TimeSpan.FromHours(1),
+                    SubTypeLocTag = "wrongSubType"
+                }
+            })
+            .ToList();
+        Elo.OnGameEnded(
+            MakeGameInfo(GameType.PvP),
+            MakeSummary(GameResult.TeamAWon, [p1.AccountId], [p2.AccountId]),
+            [MakeMatchPlayerData(p1), MakeMatchPlayerData(p2)],
+            DefaultConf(),
+            now,
+            id => id == p1.AccountId ? p1 : p2,
+            _ => history,
+            _ => { });
+        p1.ExperienceComponent.EloValues.GetElo(EloKey, out _, out int cf);
+        Assert.Equal(0, cf);
+    }
+
+    [Fact]
+    public void Confidence_UpgradeCountIncludesAllGameTypeMatches()
+    {
+        // 1 correct-subtype match + 9 other-subtype PvP matches = 10 total PvP matches.
+        // The upgrade count query filters only by GameType, not SubTypeLocTag, so all 10 count.
+        // 10 >= EloConfidenceUpgrade[0]=10 → upgrade fires despite only 1 correct-subtype match.
+        var now = DateTime.UtcNow;
+        var p1 = MakePlayer(1, "P1", 1500f, 0);
+        var p2 = MakePlayer(2, "P2", 1500f, 0);
+        var history = new List<PersistedCharacterMatchData>
+        {
+            MakeMatch(GameType.PvP, now - TimeSpan.FromHours(1))
+        };
+        history.AddRange(Enumerable.Range(0, 9).Select(_ => new PersistedCharacterMatchData
+        {
+            MatchComponent = new MatchComponent
+            {
+                GameType = GameType.PvP,
+                MatchTime = now - TimeSpan.FromHours(1),
+                SubTypeLocTag = "otherSubType"
+            }
+        }));
+        Elo.OnGameEnded(
+            MakeGameInfo(GameType.PvP),
+            MakeSummary(GameResult.TeamAWon, [p1.AccountId], [p2.AccountId]),
+            [MakeMatchPlayerData(p1), MakeMatchPlayerData(p2)],
+            DefaultConf(),
+            now,
+            id => id == p1.AccountId ? p1 : p2,
+            _ => history,
+            _ => { });
+        p1.ExperienceComponent.EloValues.GetElo(EloKey, out _, out int cf);
+        Assert.Equal(1, cf);
+    }
+
+    // --- ELO conservation ---
+
+    [Fact]
+    public void EloChange_TotalEloConserved()
+    {
+        // For equal-size teams, the total ELO gain across all players is zero
+        var (teamA, teamB) = MakeSymmetricTeams(1800f, 1400f, 1, 2);
+        RunGame(teamA, teamB, GameResult.TeamBWon, out float[] gainA, out float[] gainB);
+        Assert.Equal(0f, gainA.Sum() + gainB.Sum(), precision: 3);
+    }
+
     // --- fixture helpers ---
 
     private static PersistedAccountData MakePlayer(long id, string name, float elo, int confidence)
@@ -307,6 +595,10 @@ public class EloTest(ITestOutputHelper output) : EvosTest(output)
     private static MatchPlayerData MakeMatchPlayerData(PersistedAccountData player) =>
         new(player.AccountId, player.Handle, EloKey, player.ExperienceComponent.EloValues,
             [CharacterType.PendingWillFill], []);
+
+    private static MatchPlayerData MakeMatchPlayerDataWithChars(PersistedAccountData player, int numChars) =>
+        new(player.AccountId, player.Handle, EloKey, player.ExperienceComponent.EloValues,
+            Enumerable.Repeat(CharacterType.PendingWillFill, numChars).ToList(), []);
 
     private static (PersistedAccountData[], PersistedAccountData[]) MakeSymmetricTeams(
         float eloA, float eloB, int confidenceA, int confidenceB)
