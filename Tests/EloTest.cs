@@ -10,6 +10,7 @@ public class EloTest(ITestOutputHelper output) : EvosTest(output)
 {
     private const string EloKey = "pvp";
     private const string OtherKey = "other";
+    private const string SubType = "testSubType";
 
     // --- GetPrediction (public, testable directly) ---
 
@@ -170,27 +171,6 @@ public class EloTest(ITestOutputHelper output) : EvosTest(output)
             [p2],
             GameResult.TeamAWon,
             gameType: GameType.Ranked,
-            fourlancer: false,
-            updaterCallCount: ref updaterCallCount);
-
-        Assert.Equal(0, updaterCallCount);
-        p1.ExperienceComponent.EloValues.GetElo(EloKey, out float elo, out _);
-        Assert.Equal(1500f, elo);
-    }
-
-    [Fact]
-    public void SkipFourlancer_NoEloChange()
-    {
-        var p1 = MakePlayer(1, "P1", 1500f, 2);
-        var p2 = MakePlayer(2, "P2", 1500f, 2);
-
-        int updaterCallCount = 0;
-        RunGameCustom(
-            [p1],
-            [p2],
-            GameResult.TeamAWon,
-            gameType: GameType.PvP,
-            fourlancer: true,
             updaterCallCount: ref updaterCallCount);
 
         Assert.Equal(0, updaterCallCount);
@@ -210,7 +190,6 @@ public class EloTest(ITestOutputHelper output) : EvosTest(output)
             [p2],
             GameResult.TieGame,
             gameType: GameType.PvP,
-            fourlancer: false,
             updaterCallCount: ref updaterCallCount);
 
         Assert.Equal(0, updaterCallCount);
@@ -384,7 +363,6 @@ public class EloTest(ITestOutputHelper output) : EvosTest(output)
         PersistedAccountData[] teamB,
         GameResult result,
         GameType gameType,
-        bool fourlancer,
         ref int updaterCallCount)
     {
         var allPlayers = teamA.Concat(teamB).ToDictionary(p => p.AccountId);
@@ -409,7 +387,12 @@ public class EloTest(ITestOutputHelper output) : EvosTest(output)
     private static LobbyGameInfo MakeGameInfo(GameType gameType) => new()
     {
         GameServerProcessCode = "test",
-        GameConfig = new LobbyGameConfig { GameType = gameType }
+        GameConfig = new LobbyGameConfig
+        {
+            GameType = gameType,
+            SubTypes = [ new GameSubType { LocalizedName = SubType}],
+            InstanceSubTypeBit = 1,
+        }
     };
 
     private static LobbyGameSummary MakeSummary(GameResult result, long[] teamAIds, long[] teamBIds)
@@ -449,6 +432,6 @@ public class EloTest(ITestOutputHelper output) : EvosTest(output)
 
     private static PersistedCharacterMatchData MakeMatch(GameType gameType, DateTime time) => new()
     {
-        MatchComponent = new MatchComponent { GameType = gameType, MatchTime = time }
+        MatchComponent = new MatchComponent { GameType = gameType, MatchTime = time, SubTypeLocTag = SubType }
     };
 }
