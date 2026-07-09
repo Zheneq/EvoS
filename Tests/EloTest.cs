@@ -222,11 +222,12 @@ public class EloTest(ITestOutputHelper output) : EvosTest(output)
     public void SkipNullSummary_NoException()
     {
         int updaterCallCount = 0;
+        var p1 = MakePlayer(1, "P1", 1500f, 2);
+        var p2 = MakePlayer(2, "P2", 1500f, 2);
         Elo.OnGameEnded(
             MakeGameInfo(GameType.PvP),
             null,
-            MakePvPSubType(fourlancer: false),
-            EloKey,
+            [MakeMatchPlayerData(p1), MakeMatchPlayerData(p2)],
             DefaultConf(),
             DateTime.UtcNow,
             _ => null,
@@ -250,8 +251,7 @@ public class EloTest(ITestOutputHelper output) : EvosTest(output)
         Elo.OnGameEnded(
             MakeGameInfo(GameType.PvP),
             MakeSummary(GameResult.TeamAWon, [p1.AccountId], [p2.AccountId]),
-            MakePvPSubType(),
-            EloKey,
+            [MakeMatchPlayerData(p1), MakeMatchPlayerData(p2)],
             DefaultConf(),
             DateTime.UtcNow,
             id => id == p1.AccountId ? p1 : p2,
@@ -277,8 +277,7 @@ public class EloTest(ITestOutputHelper output) : EvosTest(output)
         Elo.OnGameEnded(
             MakeGameInfo(GameType.PvP),
             MakeSummary(GameResult.TeamAWon, [p1.AccountId], [p2.AccountId]),
-            MakePvPSubType(),
-            EloKey,
+            [MakeMatchPlayerData(p1), MakeMatchPlayerData(p2)],
             DefaultConf(),
             now,
             id => id == p1.AccountId ? p1 : p2,
@@ -310,8 +309,7 @@ public class EloTest(ITestOutputHelper output) : EvosTest(output)
         Elo.OnGameEnded(
             MakeGameInfo(GameType.PvP),
             MakeSummary(GameResult.TeamAWon, [p1.AccountId], [p2.AccountId]),
-            MakePvPSubType(),
-            EloKey,
+            [MakeMatchPlayerData(p1), MakeMatchPlayerData(p2)],
             new MatchmakingConfiguration(),
             now,
             id => id == p1.AccountId ? p1 : p2,
@@ -326,6 +324,10 @@ public class EloTest(ITestOutputHelper output) : EvosTest(output)
 
     private static PersistedAccountData MakePlayer(long id, string name, float elo, int confidence)
         => TestAccountHelper.MakeAccount(id, name, elo, confidence, EloKey);
+
+    private static MatchPlayerData MakeMatchPlayerData(PersistedAccountData player) =>
+        new(player.AccountId, player.Handle, EloKey, player.ExperienceComponent.EloValues,
+            [CharacterType.PendingWillFill], []);
 
     private static (PersistedAccountData[], PersistedAccountData[]) MakeSymmetricTeams(
         float eloA, float eloB, int confidenceA, int confidenceB)
@@ -357,8 +359,7 @@ public class EloTest(ITestOutputHelper output) : EvosTest(output)
         Elo.OnGameEnded(
             MakeGameInfo(GameType.PvP),
             MakeSummary(result, teamA.Select(p => p.AccountId).ToArray(), teamB.Select(p => p.AccountId).ToArray()),
-            MakePvPSubType(),
-            EloKey,
+            teamA.Concat(teamB).Select(MakeMatchPlayerData).ToList(),
             DefaultConf(),
             now,
             id => allPlayers[id],
@@ -392,8 +393,7 @@ public class EloTest(ITestOutputHelper output) : EvosTest(output)
         Elo.OnGameEnded(
             MakeGameInfo(gameType),
             MakeSummary(result, teamA.Select(p => p.AccountId).ToArray(), teamB.Select(p => p.AccountId).ToArray()),
-            MakePvPSubType(fourlancer),
-            EloKey,
+            teamA.Concat(teamB).Select(MakeMatchPlayerData).ToList(),
             DefaultConf(),
             DateTime.UtcNow,
             id => allPlayers[id],
