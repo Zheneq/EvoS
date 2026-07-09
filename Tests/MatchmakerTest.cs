@@ -1,6 +1,5 @@
 using CentralServer.LobbyServer.Matchmaking;
 using EvoS.Framework.DataAccess.Daos;
-using EvoS.Framework.Network.NetworkMessages;
 using EvoS.Framework.Network.Static;
 using log4net;
 using Moq;
@@ -168,8 +167,7 @@ public class MatchmakerTest : EvosTest
                 LocalizedName = "Test",
                 TeamAPlayers = 1,
                 TeamBPlayers = 0
-            },
-            EloKey);
+            });
 
         HelperTestFifo(matchmaker);
     }
@@ -221,7 +219,6 @@ public class MatchmakerTest : EvosTest
                 TeamAPlayers = 4,
                 TeamBPlayers = 4
             },
-            EloKey,
             () => conf);
         return matchmaker;
     }

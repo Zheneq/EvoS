@@ -17,16 +17,15 @@ public class MatchmakerFifo : MatchmakerBase
     public MatchmakerFifo(
         AccountDao accountDao,
         GameType gameType,
-        GameSubType subType,
-        string eloKey)
-        : base(accountDao, gameType, subType, eloKey)
+        GameSubType subType)
+        : base(accountDao, gameType, subType)
     {
     }
     
     public MatchmakerFifo(
         GameType gameType,
         GameSubType subType)
-        : base(DB.Get().AccountDao, gameType, subType, string.Empty)
+        : base(DB.Get().AccountDao, gameType, subType)
     {
     }
         
