@@ -485,7 +485,8 @@ namespace CentralServer.LobbyServer.Matchmaking
                 GetConf(gameSubType.LocalizedName),
                 DateTime.UtcNow,
                 DB.Get().AccountDao.GetAccount,
-                DB.Get().MatchHistoryDao.Find);
+                DB.Get().MatchHistoryDao.Find,
+                DB.Get().AccountDao.UpdateExperienceComponent);
         }
 
         private void UpdateQueueInfo()

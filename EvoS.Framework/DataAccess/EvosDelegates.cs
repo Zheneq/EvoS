@@ -5,3 +5,4 @@ namespace EvoS.Framework.DataAccess;
 
 public delegate PersistedAccountData IAccountProvider(long accountId);
 public delegate List<PersistedCharacterMatchData> IMatchHistoryProvider(long accountId);
+public delegate void IAccountUpdater(PersistedAccountData account);

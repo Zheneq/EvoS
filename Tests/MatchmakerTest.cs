@@ -237,27 +237,6 @@ public class MatchmakerTest : EvosTest
 
     private static PersistedAccountData MakeAccount(long accId, string username, float elo, int eloConfidenceLevel)
     {
-        var acc = new PersistedAccountData
-        {
-            AccountId = accId,
-            UserName = username,
-            Handle = $"{username}#{accId}",
-            ExperienceComponent = new ExperienceComponent
-            {
-                EloValues = new EloValues()
-            },
-            AccountComponent = new AccountComponent
-            {
-                LastCharacter = CharacterType.PendingWillFill
-            },
-            SocialComponent = new SocialComponent
-            {
-                BlockedAccounts = new HashSet<long>()
-            },
-        };
-        
-        acc.ExperienceComponent.EloValues.UpdateElo(EloKey, elo, eloConfidenceLevel);
-
-        return acc;
+        return TestAccountHelper.MakeAccount(accId, username, elo, eloConfidenceLevel, EloKey);
     }
 }

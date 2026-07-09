@@ -21,7 +21,8 @@ public static class Elo
         MatchmakingConfiguration conf,
         DateTime now,
         IAccountProvider accountProvider,
-        IMatchHistoryProvider matchHistoryProvider)
+        IMatchHistoryProvider matchHistoryProvider,
+        IAccountUpdater accountUpdater)
     {
         if (gameSummary is null
             || gameSummary.GameResult != GameResult.TeamAWon && gameSummary.GameResult != GameResult.TeamBWon
@@ -57,8 +58,8 @@ public static class Elo
                 UpdateConfidence(acc, gameInfo.GameConfig.GameType, eloKey, conf, now, matchHistoryProvider);
             }
             float eloChange = GetEloChange(teamA, teamB, eloKey, conf, gameSummary.GameResult == GameResult.TeamAWon ? 1 : 0);
-            AwardEloTeam(teamA, eloKey, conf, eloChange);
-            AwardEloTeam(teamB, eloKey, conf, -eloChange);
+            AwardEloTeam(teamA, eloKey, conf, eloChange, accountUpdater);
+            AwardEloTeam(teamB, eloKey, conf, -eloChange, accountUpdater);
         }
     }
 
@@ -154,20 +155,20 @@ public static class Elo
         return Math.Max(cf, 0);
     }
 
-    private static void AwardElo(PersistedAccountData acc, string eloKey, float delta)
+    private static void AwardElo(PersistedAccountData acc, string eloKey, float delta, IAccountUpdater accountUpdater)
     {
         float currentElo = GetElo(acc, eloKey);
         log.Info($"Updating {acc.Handle}'s {eloKey} elo {currentElo} -> {currentElo + delta}");
         acc.ExperienceComponent.EloValues.ApplyDelta(eloKey, delta, 0);
-        DB.Get().AccountDao.UpdateExperienceComponent(acc);
+        accountUpdater(acc);
     }
 
-    private static void AwardEloTeam(List<PersistedAccountData> team, string eloKey, MatchmakingConfiguration conf, float eloDelta)
+    private static void AwardEloTeam(List<PersistedAccountData> team, string eloKey, MatchmakingConfiguration conf, float eloDelta, IAccountUpdater accountUpdater)
     {
         float avgConf = team.Select(p => GetEloConfidenceFactor(p, eloKey, conf)).Sum() / team.Count;
         foreach (PersistedAccountData acc in team)
         {
-            AwardElo(acc, eloKey, eloDelta * GetEloConfidenceFactor(acc, eloKey, conf) / avgConf);
+            AwardElo(acc, eloKey, eloDelta * GetEloConfidenceFactor(acc, eloKey, conf) / avgConf, accountUpdater);
         }
     }
 }
