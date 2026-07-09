@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using EvoS.Framework.Constants.Enums;
 using EvoS.Framework.DataAccess;
 using EvoS.Framework.Network.Static;
@@ -10,8 +11,9 @@ namespace CentralServer.LobbyServer.Matchmaking;
 
 public static class Elo
 {
+    // TODO if asymm/4lancer elo is empty, initialize it for corresponding solo
     private static readonly ILog log = LogManager.GetLogger(typeof(Elo));
-    private static readonly object EloLock = new();
+    private static readonly Lock EloLock = new();
     
     public static void OnGameEnded(
         LobbyGameInfo gameInfo,
@@ -22,8 +24,7 @@ public static class Elo
         DateTime now,
         IAccountProvider accountProvider,
         IMatchHistoryProvider matchHistoryProvider,
-        IAccountUpdater accountUpdater,
-        IAsymmetricEloCalculator asymmetricCalculator = null)
+        IAccountUpdater accountUpdater)
     {
         if (gameSummary is null
             || gameSummary.GameResult != GameResult.TeamAWon && gameSummary.GameResult != GameResult.TeamBWon
@@ -32,12 +33,7 @@ public static class Elo
             return;
         }
         
-        if (gameSubType is null
-            || (gameSubType.Mods.Contains(GameSubType.SubTypeMods.ControlAllBots) && asymmetricCalculator == null)) // TODO we could just provide a calculator if we want to update elo and not provide if not
-        {
-            log.Info($"{gameInfo.GameServerProcessCode} was a fourlancer game, not updating elo");
-            return;
-        }
+        // TODO proper eloKey for 4lancer
         
         Dictionary<long, MatchPlayerData> matchPlayerDatas = players.ToDictionary(p => p.AccountId);
         List<MatchPlayerData> teamA = gameSummary.PlayerGameSummaryList
@@ -62,8 +58,7 @@ public static class Elo
                 UpdateConfidence(data, gameInfo.GameConfig.GameType, data.EloKey, conf, now);
             }
             int result = gameSummary.GameResult == GameResult.TeamAWon ? 1 : 0;
-            float? eloChangeOverride = asymmetricCalculator?.CalculateEloChange(teamA, teamB, conf, result);
-            float eloChange = eloChangeOverride ?? GetEloChange(teamA, teamB, conf, result); // TODO this could be handled by a provided calculator too?
+            float eloChange = GetEloChange(teamA, teamB, conf, result);
             AwardEloTeam(teamA, conf, eloChange, accountUpdater);
             AwardEloTeam(teamB, conf, -eloChange, accountUpdater);
         }
@@ -116,9 +111,10 @@ public static class Elo
         DB.Get().AccountDao.UpdateExperienceComponent(account);
     }
 
-    private static float GetTeamElo(List<MatchPlayerData> team)
+    public static float GetTeamElo(List<MatchPlayerData> team)
     {
-        return team.Select(p => p.GetElo()).Sum() / team.Count;
+        return team.Select(p => p.GetElo() * p.NumControlledCharacters).Sum()
+               / team.Select(p => p.NumControlledCharacters).Sum();
     }
 
     private static float GetEloChange(
@@ -127,7 +123,6 @@ public static class Elo
         MatchmakingConfiguration conf,
         int result)
     {
-        // TODO account for NumControlledCharacters
         float k = conf.EloBasePot * (teamA.Select(p => GetEloConfidenceFactor(p, conf)).Sum() / (2 * teamA.Count) +
                                   teamB.Select(p => GetEloConfidenceFactor(p, conf)).Sum() / (2 * teamB.Count));
         return k * (result - GetPrediction(teamA, teamB));
@@ -158,13 +153,12 @@ public static class Elo
         accountUpdater(acc);
     }
 
-    // TODO maybe make asymm elo more volatile than normal?
     private static void AwardEloTeam(List<MatchPlayerData> team, MatchmakingConfiguration conf, float eloDelta, IAccountUpdater accountUpdater)
     {
         float avgConf = team.Select(p => GetEloConfidenceFactor(p, conf)).Sum() / team.Count;
         foreach (MatchPlayerData data in team)
         {
-            AwardElo(data, data.EloKey, eloDelta * GetEloConfidenceFactor(data, conf) / avgConf, accountUpdater);
+            AwardElo(data, data.EloKey, eloDelta * GetEloConfidenceFactor(data, conf) * data.NumControlledCharacters / avgConf, accountUpdater);
         }
     }
 }

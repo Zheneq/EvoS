@@ -569,7 +569,6 @@ public abstract class Game
 
     protected bool FillTeam(List<MatchPlayerData> players, Team team, GameSubType gameSubType)
     {
-        // TODO assign somewhere else and maybe combine them
         switch (team)
         {
             case Team.TeamA:

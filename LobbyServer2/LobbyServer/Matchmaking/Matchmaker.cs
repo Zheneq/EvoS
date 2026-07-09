@@ -54,6 +54,7 @@ public abstract class Matchmaker
         public class Team
         {
             public List<MatchmakingGroup> Groups { get; }
+            public List<MatchPlayerData> MatchPlayerDataList { get; }
             public Dictionary<long, MatchPlayerData> MatchPlayerDatas { get; }
             public List<long> AccountIds => MatchPlayerDatas.Values.Select(acc => acc.AccountId).ToList();
             public float Elo { get; }
@@ -63,7 +64,7 @@ public abstract class Matchmaker
             public Team(AccountDao dao, List<MatchmakingGroup> groups)
             {
                 Groups = groups;
-                MatchPlayerDatas = Groups
+                MatchPlayerDataList = Groups
                     .SelectMany(g => g.Members)
                     .Select(data =>
                     {
@@ -76,9 +77,9 @@ public abstract class Matchmaker
                             account.AccountComponent.GetLastCharacters(data.NumControlledCharacters),
                             account.SocialComponent.BlockedAccounts);
                     })
-                    .ToDictionary(acc => acc.AccountId);
-                Elo = MatchPlayerDatas.Values.Select(data => data.GetElo()).Sum() / MatchPlayerDatas.Count; // TODO account for NumControlledCharacters
-                // TODO move the math to Elo?
+                    .ToList();
+                MatchPlayerDatas = MatchPlayerDataList.ToDictionary(acc => acc.AccountId);
+                Elo = Matchmaking.Elo.GetTeamElo(MatchPlayerDatas.Values.ToList());
             }
 
             public override string ToString()
@@ -168,7 +169,7 @@ public abstract class Matchmaker
         {
             log.Debug($"Found {possibleMatches.Count} possible matches in " +
                       $"{_gameType}#{_subType.LocalizedName}: " +
-                      $"({string.Join(",", queuedGroups.Select(g => g.Players.ToString()))})"); // TODO highlight groups with asymmetric players
+                      $"({string.Join(",", queuedGroups.Select(g => g.Players + (g.Players != g.Slots ? $" ({g.Slots} slots)" : "")))})");
             List<Match> filteredMatches = FilterMatches(possibleMatches, now);
             log.Info($"Found {filteredMatches.Count} allowed matches in " +
                      $"{_gameType}#{_subType.LocalizedName} after filtering");

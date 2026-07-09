@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using EvoS.Framework.Constants.Enums;
+using EvoS.Framework.Misc;
 using EvoS.Framework.Network.Unity;
 
 namespace EvoS.Framework.Network.Static
@@ -45,9 +46,7 @@ namespace EvoS.Framework.Network.Static
                 BotCanTaunt = false,
                 CharacterInfo = LobbyCharacterInfo.Of(account.CharacterData[characterType]),
                 ControllingPlayerId = 0,
-                EffectiveClientAccessLevel = account.AccountComponent.IsDev()
-                    ? ClientAccessLevel.Admin
-                    : ClientAccessLevel.Full,
+                EffectiveClientAccessLevel = AccessUtils.GetClientAccessLevel(account),
                 EmblemID = account.AccountComponent.SelectedForegroundBannerID == -1
                     ? 65
                     : account.AccountComponent.SelectedForegroundBannerID, // patch for existing users: default is 65 

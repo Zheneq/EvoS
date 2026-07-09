@@ -7,18 +7,28 @@ namespace EvoS.Framework.Network.Static
     [EvosMessage(795)]
     public class QueueRequirement_DateTime : QueueRequirement
     {
+        private RequirementType m_requirementType;
+
+        private DateTime m_dateTime;
+
         public override bool AnyGroupMember => false;
 
-        public override QueueRequirement.RequirementType Requirement => this.m_requirementType;
+        public override RequirementType Requirement => m_requirementType;
 
-        public static QueueRequirement Create(QueueRequirement.RequirementType reqType, JsonReader reader)
+        public override void WriteToJson(JsonWriter writer)
+        {
+            writer.WritePropertyName("Value");
+            writer.WriteValue(m_dateTime);
+        }
+
+        public static QueueRequirement Create(RequirementType reqType, JsonReader reader)
         {
             QueueRequirement_DateTime queueRequirement_DateTime = new QueueRequirement_DateTime();
             queueRequirement_DateTime.m_requirementType = reqType;
             reader.Read();
             if (reader.TokenType == JsonToken.Date)
             {
-                queueRequirement_DateTime.m_dateTime = (DateTime) reader.Value;
+                queueRequirement_DateTime.m_dateTime = (DateTime)reader.Value;
                 reader.Read();
             }
             else
@@ -27,12 +37,7 @@ namespace EvoS.Framework.Network.Static
                 queueRequirement_DateTime.m_dateTime = DateTime.Parse(s);
                 reader.Read();
             }
-
             return queueRequirement_DateTime;
         }
-
-        private QueueRequirement.RequirementType m_requirementType;
-
-        private DateTime m_dateTime;
     }
 }

@@ -175,7 +175,7 @@ namespace CentralServer.LobbyServer
             return new LobbyStatusNotification
             {
                 AllowRelogin = false,
-                ClientAccessLevel = account.AccountComponent.IsDev() ? ClientAccessLevel.Admin : ClientAccessLevel.Full,
+                ClientAccessLevel = AccessUtils.GetClientAccessLevel(account),
                 ErrorReportRate = new TimeSpan(0, 3, 0),
                 GameplayOverrides = GameConfig.GetGameplayOverrides(),
                 HasPurchasedGame = true,

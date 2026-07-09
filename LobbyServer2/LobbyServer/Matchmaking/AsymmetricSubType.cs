@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Linq;
 using EvoS.Framework.Network.Static;
 
 namespace CentralServer.LobbyServer.Matchmaking;
@@ -114,37 +113,15 @@ namespace CentralServer.LobbyServer.Matchmaking;
   controlling player's account ID and would otherwise skew averages). The ControlAllBots early-exit only fires
   when no calculator is wired — preserving backward compatibility with existing coop fourlancer games.
  */
-public interface IAsymmetricEloCalculator
-{
-    float CalculateEloChange(
-        List<MatchPlayerData> teamA,
-        List<MatchPlayerData> teamB,
-        MatchmakingConfiguration conf,
-        int result);
-}
-
 public class AsymmetricSubTypeDescriptor
 {
     public string LocalizedName;
     public string BaseSubTypeName;
-    public int BaseSubTypeIndex = -1;  // set by MatchmakingQueue.RegisterAsymmetricSubType
-    public int SubTypeIndex = -1;      // index of this descriptor's entry in SubTypes list
-    public bool IsPrimaryForBase;      // only the primary runs the active matchmaker pool
-    public int ControlledCharacters;
-    public HashSet<long> AllowedAccountIds = new(); // TODO probably should be decided elsewhere
-    public IAsymmetricEloCalculator EloCalculator; // null = same math as standard
-
-    public bool IsAvailableFor(long accountId)
-    {
-        // Time-window filtering is a stub — fill in later
-        return AllowedAccountIds.Contains(accountId);
-    }
+    public int BaseSubTypeIndex;
+    public int SubTypeIndex; 
+    public bool SkipMatchmaking;
+    public int NumControlledCharacters;
     
-    public bool IsAvailableFor(QueuePlayerData data)
-    {
-        return IsAvailableFor(data.AccountId);
-    }
-
     public GameSubType CreateAdvertisedSubType(GameSubType baseSubType)
     {
         GameSubType advertised = baseSubType.Clone();
@@ -152,8 +129,7 @@ public class AsymmetricSubTypeDescriptor
         advertised.TeamABots = 0;
         advertised.TeamBBots = 0;
 
-        // Fresh Mods list so we don't mutate the original
-        advertised.Mods = new List<GameSubType.SubTypeMods>(baseSubType.Mods ?? new List<GameSubType.SubTypeMods>());
+        advertised.Mods = new List<GameSubType.SubTypeMods>(baseSubType.Mods ?? []);
         if (!advertised.Mods.Contains(GameSubType.SubTypeMods.ControlAllBots))
         {
             advertised.Mods.Add(GameSubType.SubTypeMods.ControlAllBots);
@@ -163,34 +139,10 @@ public class AsymmetricSubTypeDescriptor
             advertised.Mods.Add(GameSubType.SubTypeMods.NotAllowedForGroups);
         }
 
+        advertised.Requirements = RequirementCollection.Create();
+        advertised.Requirements.AddRange(baseSubType.Requirements);
+        advertised.Requirements.Add(new QueueRequirement_AccessLevel { AccessLevel = ClientAccessLevel.VIP });
+
         return advertised;
-    }
-}
-
-public static class AsymmetricSubTypeManager
-{
-    public static readonly Dictionary<string, AsymmetricSubTypeDescriptor> Descriptors = new();
-
-    public static void Register(AsymmetricSubTypeDescriptor descriptor)
-    {
-        Descriptors[descriptor.LocalizedName] = descriptor;
-    }
-
-    public static AsymmetricSubTypeDescriptor GetDescriptor(string localizedName)
-    {
-        Descriptors.TryGetValue(localizedName, out var d);
-        return d;
-    }
-
-    public static IEnumerable<AsymmetricSubTypeDescriptor> GetDescriptorsForBase(int baseSubTypeIndex)
-    {
-        return Descriptors.Values.Where(d => d.BaseSubTypeIndex == baseSubTypeIndex);
-    }
-
-    // TODO what is it for?
-    public static bool IsAsymmetricRole(long accountId, string localizedName)
-    {
-        var d = GetDescriptor(localizedName);
-        return d != null && d.IsAvailableFor(accountId);
     }
 }

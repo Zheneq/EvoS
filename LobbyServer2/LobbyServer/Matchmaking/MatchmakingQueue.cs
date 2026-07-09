@@ -10,6 +10,7 @@ using CentralServer.LobbyServer.Session;
 using CentralServer.LobbyServer.Utils;
 using EvoS.Framework;
 using EvoS.Framework.Constants.Enums;
+using EvoS.Framework.DataAccess;
 using EvoS.Framework.Network.NetworkMessages;
 using EvoS.Framework.Network.Static;
 using log4net;
@@ -29,7 +30,7 @@ namespace CentralServer.LobbyServer.Matchmaking
         private readonly bool RankedMatchmaking;
         private MatchmakingConfigBundle Conf = new(); // TODO move to MatchmakerRanked
         private readonly Dictionary<string, Matchmaker> Matchmakers;
-        private readonly Dictionary<string, AsymmetricSubTypeDescriptor> _asymmetricDescriptors = new();
+        private readonly Dictionary<string, AsymmetricSubTypeDescriptor> AsymmetricDescriptors = new();
         
         private readonly ConcurrentDictionary<long, DateTime> QueuedGroups = new();
         public readonly LobbyMatchmakingQueueInfo MatchmakingQueueInfo;
@@ -175,31 +176,35 @@ namespace CentralServer.LobbyServer.Matchmaking
                     : new MatchmakerFifo(GameType, st);
         }
 
-        // TODO
-        public void RegisterAsymmetricSubType(AsymmetricSubTypeDescriptor descriptor)
+        public void RegisterAsymmetricSubType(string localizedName, string baseSubTypeName, int numControlledCharacters)
         {
             List<GameSubType> subTypes = MatchmakingQueueInfo.GameConfig.SubTypes;
-            int baseIndex = subTypes.FindIndex(st => st.LocalizedName == descriptor.BaseSubTypeName);
+            int baseIndex = subTypes.FindIndex(st => st.LocalizedName == baseSubTypeName);
             if (baseIndex < 0)
             {
-                log.Error($"Cannot register asymmetric subtype {descriptor.LocalizedName}: base subtype '{descriptor.BaseSubTypeName}' not found");
+                log.Error($"Cannot register asymmetric subtype {localizedName}: base subtype '{baseSubTypeName}' not found");
                 return;
             }
+            // The first descriptor registered for a given base owns the active matchmaker pool.
+            bool hasPrimary = AsymmetricDescriptors.Values.Any(d => d.BaseSubTypeIndex == baseIndex && !d.SkipMatchmaking);
 
-            descriptor.BaseSubTypeIndex = baseIndex;
+            var descriptor = new AsymmetricSubTypeDescriptor
+            {
+                LocalizedName = localizedName,
+                BaseSubTypeName = baseSubTypeName,
+                NumControlledCharacters = numControlledCharacters,
+                BaseSubTypeIndex = baseIndex,
+                SkipMatchmaking = hasPrimary,
+            };
             GameSubType advertised = descriptor.CreateAdvertisedSubType(subTypes[baseIndex]);
             subTypes.Add(advertised);
             descriptor.SubTypeIndex = subTypes.Count - 1;
 
-            // The first descriptor registered for a given base owns the active matchmaker pool.
-            // Subsequent descriptors for the same base are secondary: they get an idle matchmaker
-            // (empty pool returned by GetQueuedGroupsBySubtype) so the primary doesn't run duplicates.
-            bool hasPrimary = _asymmetricDescriptors.Values.Any(d => d.BaseSubTypeIndex == baseIndex && d.IsPrimaryForBase);
-            descriptor.IsPrimaryForBase = !hasPrimary;
             Matchmakers[advertised.LocalizedName] = MatchmakerFactory(advertised);
-
-            _asymmetricDescriptors[advertised.LocalizedName] = descriptor;
-            log.Info($"Registered asymmetric subtype '{advertised.LocalizedName}' (N={descriptor.ControlledCharacters}, primary={descriptor.IsPrimaryForBase}) derived from '{descriptor.BaseSubTypeName}'");
+            AsymmetricDescriptors[advertised.LocalizedName] = descriptor;
+            log.Info($"Registered asymmetric subtype '{advertised.LocalizedName}' "
+                     + $"(N={descriptor.NumControlledCharacters}, skip mm={descriptor.SkipMatchmaking}) "
+                     + $"derived from '{descriptor.BaseSubTypeName}'");
         }
 
         private void ReloadConfig()
@@ -323,107 +328,36 @@ namespace CentralServer.LobbyServer.Matchmaking
             }
         }
 
-        // TODO
         private Dictionary<int, List<Matchmaker.MatchmakingGroup>> GetQueuedGroupsBySubtype()
         {
             Dictionary<int, List<Matchmaker.MatchmakingGroup>> queuedGroupsBySubtype =
                 new Dictionary<int, List<Matchmaker.MatchmakingGroup>>();
 
-            for (int i = 0; i < MatchmakingQueueInfo.GameConfig.SubTypes.Count; i++)
+            lock (GroupManager.Lock)
             {
-                GameSubType subType = MatchmakingQueueInfo.GameConfig.SubTypes[i];
-
-                if (_asymmetricDescriptors.TryGetValue(subType.LocalizedName, out var descriptor))
+                for (int i = 0; i < MatchmakingQueueInfo.GameConfig.SubTypes.Count; i++)
                 {
-                    if (!descriptor.IsPrimaryForBase)
-                    {
-                        // Secondary: the primary already handles this base's pool. Return nothing.
-                        queuedGroupsBySubtype[i] = new List<Matchmaker.MatchmakingGroup>();
-                        continue;
-                    }
+                    GameSubType subType = MatchmakingQueueInfo.GameConfig.SubTypes[i];
 
-                    // Primary: build a combined pool from ALL asymmetric variants of this base + normal fillers.
                     List<Matchmaker.MatchmakingGroup> queuedGroups;
-                    lock (GroupManager.Lock)
+                    if (AsymmetricDescriptors.TryGetValue(subType.LocalizedName, out var descriptor))
                     {
-                        var combinedSlots = new Dictionary<long, int>(); // groupId → EffectiveSlots
-
-                        // All asymmetric descriptors for this base contribute their queued groups
-                        foreach (AsymmetricSubTypeDescriptor relDesc in AsymmetricSubTypeManager.GetDescriptorsForBase(descriptor.BaseSubTypeIndex))
+                        if (descriptor.SkipMatchmaking)
                         {
-                            foreach (long groupId in GetQueuedGroups(relDesc.SubTypeIndex)) // TODO so you can't queue for two asymmetric?
-                            {
-                                if (combinedSlots.ContainsKey(groupId)) continue;
-                                GroupInfo group = GroupManager.GetGroup(groupId);
-                                if (group is null) continue;
-                                combinedSlots[groupId] = relDesc.IsAvailableFor(group.Leader) ? relDesc.ControlledCharacters : 1; // TODO it's definitely too late to check for eligibility
-                            }
+                            queuedGroupsBySubtype[i] = [];
+                            continue;
                         }
 
-                        // Normal-queue players (base subtype bit) fill remaining slots
-                        foreach (long groupId in GetQueuedGroups(descriptor.BaseSubTypeIndex))
+                        queuedGroups = [];
+                        foreach (AsymmetricSubTypeDescriptor relDesc in GetDescriptorsForBase(descriptor.BaseSubTypeIndex))
                         {
-                            if (!combinedSlots.ContainsKey(groupId))
-                            {
-                                combinedSlots[groupId] = 1;
-                            }
+                            queuedGroups.AddRange(GetAndConvertQueuedGroups(i, relDesc.NumControlledCharacters));
                         }
-
-                        queuedGroups = new List<Matchmaker.MatchmakingGroup>(combinedSlots.Count);
-                        foreach ((long groupId, int effectiveSlots) in combinedSlots)
-                        {
-                            if (!GetQueueTime(groupId, out DateTime queueTime))
-                            {
-                                log.Error($"Cannot fetch queue time for group {groupId}");
-                                queueTime = DateTime.UtcNow;
-                            }
-                            GroupInfo group = GroupManager.GetGroup(groupId);
-                            if (group is null)
-                            {
-                                log.Error($"Group {groupId} is both queued and disbanded");
-                                continue;
-                            }
-                            var mmGroup = new Matchmaker.MatchmakingGroup(
-                                group.GroupId,
-                                group.Members
-                                    .Select(id => new QueuePlayerData(id, EloKey, effectiveSlots))
-                                    .ToList(),
-                                queueTime);
-                            queuedGroups.Add(mmGroup);
-                        }
+                        queuedGroups.AddRange(GetAndConvertQueuedGroups(descriptor.BaseSubTypeIndex, 1));
                     }
-                    queuedGroupsBySubtype[i] = queuedGroups;
-                }
-                else
-                {
-                    List<Matchmaker.MatchmakingGroup> queuedGroups;
-                    lock (GroupManager.Lock)
+                    else
                     {
-                        queuedGroups = GetQueuedGroups(i)
-                            .Select(groupId =>
-                            {
-                                if (!GetQueueTime(groupId, out DateTime queueTime))
-                                {
-                                    log.Error($"Cannon fetch queue time for group {groupId}");
-                                    queueTime = DateTime.UtcNow;
-                                }
-
-                                GroupInfo group = GroupManager.GetGroup(groupId);
-                                if (group is null)
-                                {
-                                    log.Error($"Group {groupId} is both queued and disbanded");
-                                    return null;
-                                }
-
-                                return new Matchmaker.MatchmakingGroup(
-                                    group.GroupId,
-                                    group.Members
-                                        .Select(id => new QueuePlayerData(id, EloKey, 1))
-                                        .ToList(),
-                                    queueTime);
-                            })
-                            .Where(g => g is not null)
-                            .ToList();
+                        queuedGroups = GetAndConvertQueuedGroups(i, 1);
                     }
                     queuedGroupsBySubtype[i] = queuedGroups;
                 }
@@ -432,19 +366,52 @@ namespace CentralServer.LobbyServer.Matchmaking
             return queuedGroupsBySubtype;
         }
 
+        private IEnumerable<AsymmetricSubTypeDescriptor> GetDescriptorsForBase(int baseSubTypeIndex)
+        {
+            return AsymmetricDescriptors.Values.Where(d => d.BaseSubTypeIndex == baseSubTypeIndex);
+        }
+
+        private List<Matchmaker.MatchmakingGroup> GetAndConvertQueuedGroups(int subTypeIndex, int numControlledCharacters)
+        {
+            return GetQueuedGroups(subTypeIndex)
+                .Select(groupId =>
+                {
+                    if (!GetQueueTime(groupId, out DateTime queueTime))
+                    {
+                        log.Error($"Cannon fetch queue time for group {groupId}");
+                        queueTime = DateTime.UtcNow;
+                    }
+
+                    GroupInfo group = GroupManager.GetGroup(groupId);
+                    if (group is null)
+                    {
+                        log.Error($"Group {groupId} is both queued and disbanded");
+                        return null;
+                    }
+
+                    return new Matchmaker.MatchmakingGroup(
+                        group.GroupId,
+                        group.Members
+                            .Select(id => new QueuePlayerData(id, EloKey, numControlledCharacters))
+                            .ToList(),
+                        queueTime);
+                })
+                .Where(g => g is not null)
+                .ToList();
+        }
+
         private List<ScoredMatchWithSubType> FindMatches(
             Dictionary<int, List<Matchmaker.MatchmakingGroup>> queuedGroupsBySubtype)
         {
             DateTime matchmakingIterationStartTime = DateTime.UtcNow;
             List<ScoredMatchWithSubType> matches = new List<ScoredMatchWithSubType>();
-            HashSet<int> baseSubTypesWithMatch = new HashSet<int>(); // TODO a bool is enough, we don't need to track it separately for each of them
+            bool hasBaseTypeMatched = false;
             for (int i = 0; i < MatchmakingQueueInfo.GameConfig.SubTypes.Count; i++)
             {
                 GameSubType subType = MatchmakingQueueInfo.GameConfig.SubTypes[i];
 
-                // If the base subtype already formed a match, skip all its asymmetric variants
-                if (_asymmetricDescriptors.TryGetValue(subType.LocalizedName, out var asymDesc)
-                    && baseSubTypesWithMatch.Contains(asymDesc.BaseSubTypeIndex))
+                // If any base subtype formed a match, skip all asymmetric variants
+                if (AsymmetricDescriptors.TryGetValue(subType.LocalizedName, out _) && hasBaseTypeMatched)
                 {
                     continue;
                 }
@@ -458,10 +425,11 @@ namespace CentralServer.LobbyServer.Matchmaking
                         .ToList();
                     matches.AddRange(subQueueMatches);
 
-                    if (subQueueMatches.Count > 0) {
-                        if (!_asymmetricDescriptors.ContainsKey(subType.LocalizedName))
+                    if (subQueueMatches.Count > 0)
+                    {
+                        if (!AsymmetricDescriptors.ContainsKey(subType.LocalizedName))
                         {
-                            baseSubTypesWithMatch.Add(i);
+                            hasBaseTypeMatched = true;
                         }
                         string queueString = string.Join(
                             ", ",
@@ -545,8 +513,8 @@ namespace CentralServer.LobbyServer.Matchmaking
                 RemoveGroup(groupInfo.GroupID);
             }
             _ = MatchmakingManager.StartGameAsync(
-                match.Match.TeamA.MatchPlayerDatas.Values.ToList(), // TODO do we care about order?
-                match.Match.TeamB.MatchPlayerDatas.Values.ToList(),
+                match.Match.TeamA.MatchPlayerDataList,
+                match.Match.TeamB.MatchPlayerDataList,
                 GameType,
                 MatchmakingQueueInfo.GameConfig.SubTypes,
                 match.SubTypeIndex)
@@ -589,12 +557,6 @@ namespace CentralServer.LobbyServer.Matchmaking
 
         public void OnGameEnded(LobbyGameInfo gameInfo, LobbyGameSummary gameSummary, GameSubType gameSubType, List<MatchPlayerData> players)
         {
-            IAsymmetricEloCalculator calculator = null;
-            if (_asymmetricDescriptors.TryGetValue(gameSubType.LocalizedName, out var descriptor))
-            {
-                calculator = descriptor.EloCalculator;
-            }
-
             Elo.OnGameEnded(
                 gameInfo,
                 gameSummary,
@@ -604,8 +566,7 @@ namespace CentralServer.LobbyServer.Matchmaking
                 DateTime.UtcNow,
                 DB.Get().AccountDao.GetAccount,
                 DB.Get().MatchHistoryDao.Find,
-                DB.Get().AccountDao.UpdateExperienceComponent,
-                calculator);
+                DB.Get().AccountDao.UpdateExperienceComponent);
         }
 
         private void UpdateQueueInfo()
@@ -628,39 +589,56 @@ namespace CentralServer.LobbyServer.Matchmaking
                 SessionManager.GetClientConnection(accountId)?.Send(notify);
             }
         }
+
+        public ushort FilterSubTypeMask(GroupInfo groupInfo, ushort selectedSubTypeMask)
+        {
+            ushort mask = FilterSubTypeMaskForGroup(groupInfo, selectedSubTypeMask);
+            mask = FilterSubTypeMaskForEligibility(groupInfo, mask);
+
+            if (mask == 0)
+            {
+                mask = groupInfo.IsSolo()
+                    ? (ushort)1
+                    : GetFallbackSubTypeMaskAllowedForGroups(selectedSubTypeMask);
+
+                log.Info($"No valid subqueues selected for group {groupInfo.GroupId}, "
+                         + $"falling back to subtype mask {DebugFormatSubTypeMask(mask)}");
+            }
+            
+            return mask;
+        }
         
         public ushort FilterSubTypeMaskForGroup(GroupInfo groupInfo, ushort selectedSubTypeMask)
         {
-            ushort mask;
             if (groupInfo.IsSolo())
             {
-                mask = selectedSubTypeMask;
-            }
-            else
-            {
-                ushort allowedSubTypeMask = GetSubTypeMaskAllowedForGroups();
-                log.Info($"Selected for group {groupInfo.GroupId}: {DebugFormatSubTypeMask(selectedSubTypeMask)}, "
-                         + $"allowed for groups: {DebugFormatSubTypeMask(allowedSubTypeMask)}");
-                mask = (ushort)(allowedSubTypeMask & selectedSubTypeMask);
-
-                if (mask == 0)
-                {
-                    mask = GetFallbackSubTypeMaskAllowedForGroups(selectedSubTypeMask);
-                    log.Info($"No valid subqueues selected for group {groupInfo.GroupId}, "
-                             + $"falling back to subtype mask {DebugFormatSubTypeMask(mask)}");
-                }
+                return selectedSubTypeMask;
             }
 
-            // TODO it should be applied before callback
-            // Strip asymmetric subtype bits for accounts that are not in the allowed list
+            ushort allowedSubTypeMask = GetSubTypeMaskAllowedForGroups();
+            log.Info($"Selected for group {groupInfo.GroupId}: {DebugFormatSubTypeMask(selectedSubTypeMask)}, "
+                     + $"allowed for groups: {DebugFormatSubTypeMask(allowedSubTypeMask)}");
+
+            return (ushort)(allowedSubTypeMask & selectedSubTypeMask);
+        }
+
+        // TODO generalize into queue requirement
+        public ushort FilterSubTypeMaskForEligibility(GroupInfo groupInfo, ushort selectedSubTypeMask)
+        {
+            ushort mask = selectedSubTypeMask;
             List<GameSubType> subTypes = MatchmakingQueueInfo.GameConfig.SubTypes;
             for (int i = 0; i < subTypes.Count; i++)
             {
-                if ((mask & (1u << i)) == 0) continue;
-                if (!_asymmetricDescriptors.TryGetValue(subTypes[i].LocalizedName, out var descriptor)) continue;
-                if (!descriptor.IsAvailableFor(groupInfo.Leader))
+                if ((mask & (1u << i)) != 0
+                    && AsymmetricDescriptors.TryGetValue(subTypes[i].LocalizedName, out var descriptor)
+                    && descriptor != null)
                 {
-                    mask &= (ushort)~(1u << i);
+                    var account = DB.Get().AccountDao.GetAccount(groupInfo.Leader);
+                    if (account == null || !account.AccountComponent.IsVip())
+                    {
+                        log.Info($"{account?.AccountId}/{account?.Handle} attempted to queue for asymmetric");
+                        mask &= (ushort)~(1u << i);
+                    }
                 }
             }
 

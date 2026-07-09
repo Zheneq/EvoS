@@ -10,6 +10,7 @@ namespace EvoS.Framework.Network.NetworkMessages
     public class AccountComponent
     {
         private const string ENTITLEMENT_DEV = "DEVELOPER_ACCESS";
+        private const string ENTITLEMENT_VIP = "VIP_ACCESS";
         
         public AccountComponent()
         {
@@ -157,6 +158,12 @@ namespace EvoS.Framework.Network.NetworkMessages
             AppliedEntitlements.TryGetValue(ENTITLEMENT_DEV, out int value);
             return value == 1;
         }
+
+        public bool IsVip()
+        {
+            AppliedEntitlements.TryGetValue(ENTITLEMENT_VIP, out int value);
+            return value == 1;
+        }
         
         public void SetIsDev(bool isDev)
         {
@@ -172,7 +179,11 @@ namespace EvoS.Framework.Network.NetworkMessages
 
         public List<CharacterType> GetLastCharacters(int num)
         {
-            return LastRemoteCharacters.Prepend(LastCharacter).Take(num).ToList();
+            return LastRemoteCharacters
+                .Prepend(LastCharacter)
+                .Concat(Enumerable.Repeat(CharacterType.PendingWillFill, num))
+                .Take(num)
+                .ToList();
         }
     }
 }

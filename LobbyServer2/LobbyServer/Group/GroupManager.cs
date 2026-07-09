@@ -460,7 +460,7 @@ namespace CentralServer.LobbyServer.Group
                 return;
             }
             
-            ushort newMask = queue.FilterSubTypeMaskForGroup(groupInfo, leaderConn.GetSubTypeMask());
+            ushort newMask = queue.FilterSubTypeMask(groupInfo, leaderConn.GetSubTypeMask());
 
             ushort oldMask = groupInfo.SubTypeMask;
             if (oldMask != newMask)
