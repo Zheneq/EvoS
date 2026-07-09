@@ -75,15 +75,15 @@ namespace CentralServer.LobbyServer.Matchmaking
                     Buckets = new[] { .51, .52, .53, .54, .55, .56, .57, .58, .59, .60, .65, .70, .75, .90 }
                 });
 
-        public IEnumerable<long> GetQueuedGroups()
+        public IEnumerable<long> GetRawQueuedGroups()
         {
             return QueuedGroups.OrderBy(kv => kv.Value).Select(kv => kv.Key);
         }
         
-        public IEnumerable<long> GetQueuedGroups(int subTypeIndex)
+        public IEnumerable<long> GetRawQueuedGroups(int subTypeIndex)
         {
             uint subTypeFlag = 1U << subTypeIndex;
-            return GetQueuedGroups()
+            return GetRawQueuedGroups()
                 .Where(groupId => (GroupManager.GetGroupSubTypeMask(groupId) & subTypeFlag) != 0);
         }
 
@@ -91,23 +91,23 @@ namespace CentralServer.LobbyServer.Matchmaking
 
         public int SubTypeCount => MatchmakingQueueInfo.GameConfig.SubTypes.Count;
         
-        public List<List<long>> GetQueuedGroupsBySubType()
+        public List<List<long>> GetRawQueuedGroupsBySubType()
         {
             var res = new List<List<long>>();
             for (int i = 0; i < SubTypeCount; i++)
             {
-                res.Add(GetQueuedGroups(i).ToList());
+                res.Add(GetRawQueuedGroups(i).ToList());
             }
 
             return res;
         }
         
-        public List<List<long>> GetQueuedPlayersBySubType()
+        public List<List<long>> GetRawQueuedPlayersBySubType()
         {
             var res = new List<List<long>>();
             for (int i = 0; i < SubTypeCount; i++)
             {
-                res.Add(GetQueuedGroups(i)
+                res.Add(GetRawQueuedGroups(i)
                     .SelectMany(GroupManager.GetGroupMembers)
                     .ToList());
             }
@@ -156,7 +156,7 @@ namespace CentralServer.LobbyServer.Matchmaking
                 for (int i = 0; i < SubTypeCount; i++)
                 {
                     GameSubType subType = GetSubType(i);
-                    M(QueueSize, subType).Set(GetPlayerCount(i));
+                    M(QueueSize, subType).Set(GetRawPlayerCount(i));
                 }
 
                 M(QueueSize).Set(GetPlayerCount());
@@ -288,9 +288,9 @@ namespace CentralServer.LobbyServer.Matchmaking
                 .Sum(group => group?.Members.Count ?? 0);
         }
 
-        public int GetPlayerCount(int subTypeIndex)
+        public int GetRawPlayerCount(int subTypeIndex)
         {
-            return GetQueuedGroups(subTypeIndex)
+            return GetRawQueuedGroups(subTypeIndex)
                 .Select(GroupManager.GetGroup)
                 .Sum(group => group?.Members.Count ?? 0);
         }
@@ -330,7 +330,7 @@ namespace CentralServer.LobbyServer.Matchmaking
             }
         }
 
-        private Dictionary<int, List<Matchmaker.MatchmakingGroup>> GetQueuedGroupsBySubtype()
+        private Dictionary<int, List<Matchmaker.MatchmakingGroup>> GetAndConvertQueuedGroups()
         {
             Dictionary<int, List<Matchmaker.MatchmakingGroup>> queuedGroupsBySubtype =
                 new Dictionary<int, List<Matchmaker.MatchmakingGroup>>();
@@ -353,13 +353,13 @@ namespace CentralServer.LobbyServer.Matchmaking
                         queuedGroups = [];
                         foreach (AsymmetricSubTypeDescriptor relDesc in GetDescriptorsForBase(descriptor.BaseSubTypeIndex))
                         {
-                            queuedGroups.AddRange(GetAndConvertQueuedGroups(i, relDesc.NumControlledCharacters));
+                            queuedGroups.AddRange(GetAndConvertRawQueuedGroups(relDesc.SubTypeIndex, relDesc.NumControlledCharacters));
                         }
-                        queuedGroups.AddRange(GetAndConvertQueuedGroups(descriptor.BaseSubTypeIndex, 1));
+                        queuedGroups.AddRange(GetAndConvertRawQueuedGroups(descriptor.BaseSubTypeIndex, 1));
                     }
                     else
                     {
-                        queuedGroups = GetAndConvertQueuedGroups(i, 1);
+                        queuedGroups = GetAndConvertRawQueuedGroups(i, 1);
                     }
                     queuedGroupsBySubtype[i] = queuedGroups;
                 }
@@ -368,15 +368,42 @@ namespace CentralServer.LobbyServer.Matchmaking
             return queuedGroupsBySubtype;
         }
 
+        // TODO This logic has to be in sync with GetAndConvertQueuedGroups. Unite them.
+        private List<long> GetEffectiveQueuedGroups(int subTypeIndex)
+        {
+            GameSubType subType = GetSubType(subTypeIndex);
+
+            List<long> queuedGroups;
+            if (AsymmetricDescriptors.TryGetValue(subType.LocalizedName, out var descriptor))
+            {
+                if (descriptor.SkipMatchmaking)
+                {
+                    return [];
+                }
+
+                queuedGroups = [];
+                foreach (AsymmetricSubTypeDescriptor relDesc in GetDescriptorsForBase(descriptor.BaseSubTypeIndex))
+                {
+                    queuedGroups.AddRange(GetRawQueuedGroups(relDesc.SubTypeIndex));
+                }
+                queuedGroups.AddRange(GetRawQueuedGroups(descriptor.BaseSubTypeIndex));
+            }
+            else
+            {
+                queuedGroups = GetRawQueuedGroups(subTypeIndex).ToList();
+            }
+            return queuedGroups;
+        }
+
         private IEnumerable<AsymmetricSubTypeDescriptor> GetDescriptorsForBase(int baseSubTypeIndex)
         {
             return AsymmetricDescriptors.Values.Where(d => d.BaseSubTypeIndex == baseSubTypeIndex);
         }
 
-        private List<Matchmaker.MatchmakingGroup> GetAndConvertQueuedGroups(int subTypeIndex, int numControlledCharacters)
+        private List<Matchmaker.MatchmakingGroup> GetAndConvertRawQueuedGroups(int subTypeIndex, int numControlledCharacters)
         {
             string eloKey = Elo.GetEloKey(GameType, GetSubType(subTypeIndex));
-            return GetQueuedGroups(subTypeIndex)
+            return GetRawQueuedGroups(subTypeIndex)
                 .Select(groupId =>
                 {
                     if (!GetQueueTime(groupId, out DateTime queueTime))
@@ -463,7 +490,7 @@ namespace CentralServer.LobbyServer.Matchmaking
                 
                 lock (GroupManager.Lock)
                 {
-                    HashSet<long> stillQueued = GetQueuedGroups(match.SubTypeIndex).ToHashSet();
+                    HashSet<long> stillQueued = GetEffectiveQueuedGroups(match.SubTypeIndex).ToHashSet();
                     if (match.Match.Groups.Any(g =>
                             !stillQueued.Contains(g.GroupID)
                             || !g.Is(GroupManager.GetGroup(g.GroupID))))
@@ -499,7 +526,7 @@ namespace CentralServer.LobbyServer.Matchmaking
 
         private void TryMatch()
         {
-            Dictionary<int, List<Matchmaker.MatchmakingGroup>> queuedGroupsBySubtype = GetQueuedGroupsBySubtype();
+            Dictionary<int, List<Matchmaker.MatchmakingGroup>> queuedGroupsBySubtype = GetAndConvertQueuedGroups();
             List<ScoredMatchWithSubType> matches = FindMatches(queuedGroupsBySubtype);
             StartBestMatch(matches);
         }
@@ -636,7 +663,7 @@ namespace CentralServer.LobbyServer.Matchmaking
                     && descriptor != null)
                 {
                     var account = DB.Get().AccountDao.GetAccount(groupInfo.Leader);
-                    if (account == null || !account.AccountComponent.IsVip())
+                    if (account == null || !account.AccountComponent.IsVipOrHigher())
                     {
                         log.Info($"{account?.AccountId}/{account?.Handle} attempted to queue for asymmetric");
                         mask &= (ushort)~(1u << i);

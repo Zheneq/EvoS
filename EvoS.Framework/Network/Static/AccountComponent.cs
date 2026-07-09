@@ -164,6 +164,11 @@ namespace EvoS.Framework.Network.NetworkMessages
             AppliedEntitlements.TryGetValue(ENTITLEMENT_VIP, out int value);
             return value == 1;
         }
+
+        public bool IsVipOrHigher()
+        {
+            return IsVip() || IsDev();
+        }
         
         public void SetIsDev(bool isDev)
         {

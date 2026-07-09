@@ -140,7 +140,10 @@ public class AsymmetricSubTypeDescriptor
         }
 
         advertised.Requirements = RequirementCollection.Create();
-        advertised.Requirements.AddRange(baseSubType.Requirements);
+        if (baseSubType.Requirements != null)
+        {
+            advertised.Requirements.AddRange(baseSubType.Requirements);
+        }
         advertised.Requirements.Add(new QueueRequirement_AccessLevel { AccessLevel = ClientAccessLevel.VIP });
 
         return advertised;

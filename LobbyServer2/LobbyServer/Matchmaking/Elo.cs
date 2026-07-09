@@ -31,8 +31,6 @@ public static class Elo
             return;
         }
         
-        // TODO proper eloKey for 4lancer
-        
         Dictionary<long, MatchPlayerData> matchPlayerDatas = players.ToDictionary(p => p.AccountId);
         List<MatchPlayerData> teamA = gameSummary.PlayerGameSummaryList
             .Where(pgs => pgs.IsInTeamA())

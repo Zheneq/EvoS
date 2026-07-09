@@ -230,12 +230,12 @@ namespace CentralServer.ApiServer
 
             public static IEnumerable<Queue> Of(MatchmakingQueue q)
             {
-                return Of(q, q.GetQueuedGroupsBySubType());
+                return Of(q, q.GetRawQueuedGroupsBySubType());
             }
 
             public static IEnumerable<Queue> OfPlayers(MatchmakingQueue q)
             {
-                return Of(q, q.GetQueuedPlayersBySubType());
+                return Of(q, q.GetRawQueuedPlayersBySubType());
             }
 
             private static IEnumerable<Queue> Of(MatchmakingQueue q, List<List<long>> groupsBySubType)
