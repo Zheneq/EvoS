@@ -82,7 +82,7 @@ public class MatchmakerRanked : MatchmakerBase
 
         foreach (long accountId in accountIds)
         {
-            Elo.InitElo(accountId, eloKey, DB.Get().AccountDao.GetAccount, DB.Get().AccountDao.UpdateExperienceComponent);
+            Elo.InitElo(accountId, eloKey, _accountDao.GetAccount, _accountDao.UpdateExperienceComponent);
         }
     }
 
