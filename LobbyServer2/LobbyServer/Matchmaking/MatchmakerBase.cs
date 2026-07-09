@@ -9,29 +9,25 @@ namespace CentralServer.LobbyServer.Matchmaking;
 public abstract class MatchmakerBase: Matchmaker
 {
     protected readonly AccountDao _accountDao;
-    protected readonly string _eloKey;
     
     protected MatchmakerBase(
         AccountDao accountDao,
         GameType gameType,
-        GameSubType subType,
-        string eloKey)
+        GameSubType subType)
         : base(gameType, subType)
     {
         _accountDao = accountDao;
-        _eloKey = eloKey;
     }
 
     protected override IEnumerable<Match> FindMatches(List<MatchmakingGroup> queuedGroups)
     {
-        return FindMatches(new MatchScratch(_subType), queuedGroups, new HashSet<long>(), _eloKey);
+        return FindMatches(new MatchScratch(_subType), queuedGroups, new HashSet<long>());
     }
     
     private IEnumerable<Match> FindMatches(
         MatchScratch matchScratch,
         List<MatchmakingGroup> queuedGroups,
-        HashSet<long> processed,
-        string eloKey)
+        HashSet<long> processed)
     {
         foreach (MatchmakingGroup groupInfo in queuedGroups)
         {
@@ -47,7 +43,7 @@ public abstract class MatchmakerBase: Matchmaker
                 }
                 else
                 {
-                    foreach (Match match in FindMatches(matchScratch, queuedGroups, processed, eloKey))
+                    foreach (Match match in FindMatches(matchScratch, queuedGroups, processed))
                     {
                         yield return match;
                     }

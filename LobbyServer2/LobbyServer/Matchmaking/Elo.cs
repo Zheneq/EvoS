@@ -11,14 +11,12 @@ namespace CentralServer.LobbyServer.Matchmaking;
 
 public static class Elo
 {
-    // TODO if asymm/4lancer elo is empty, initialize it for corresponding solo
     private static readonly ILog log = LogManager.GetLogger(typeof(Elo));
     private static readonly Lock EloLock = new();
     
     public static void OnGameEnded(
         LobbyGameInfo gameInfo,
         LobbyGameSummary gameSummary,
-        GameSubType gameSubType,
         List<MatchPlayerData> players,
         MatchmakingConfiguration conf,
         DateTime now,
@@ -55,7 +53,14 @@ public static class Elo
         {
             foreach (MatchPlayerData data in teamA.Concat(teamB))
             {
-                UpdateConfidence(data, gameInfo.GameConfig.GameType, data.EloKey, conf, now);
+                UpdateConfidence(
+                    data,
+                    gameInfo.GameConfig.GameType,
+                    gameInfo.GameConfig.SelectedSubType.LocalizedName,
+                    conf,
+                    now,
+                    accountProvider,
+                    matchHistoryProvider);
             }
             int result = gameSummary.GameResult == GameResult.TeamAWon ? 1 : 0;
             float eloChange = GetEloChange(teamA, teamB, conf, result);
@@ -67,14 +72,18 @@ public static class Elo
     private static void UpdateConfidence(
         MatchPlayerData player,
         GameType gameType,
-        string eloKey,
+        string subType,
         MatchmakingConfiguration conf,
-        DateTime now)
+        DateTime now,
+        IAccountProvider accountProvider,
+        IMatchHistoryProvider matchHistoryProvider)
     {
-        PersistedAccountData account = DB.Get().AccountDao.GetAccount(player.AccountId);
-        List<PersistedCharacterMatchData> matches = DB.Get().MatchHistoryDao.Find(player.AccountId);
+        PersistedAccountData account = accountProvider(player.AccountId);
+        List<PersistedCharacterMatchData> matches = matchHistoryProvider(player.AccountId);
         PersistedCharacterMatchData lastMatch = matches
-            .FirstOrDefault(m => m.MatchComponent.GameType == gameType); // TODO also check SubTypeLocTag?
+            .FirstOrDefault(m =>
+                m.MatchComponent.GameType == gameType 
+                && m.MatchComponent.SubTypeLocTag == subType);
 
         int confidenceLevelDelta = -100;
         if (lastMatch is not null)
@@ -104,10 +113,10 @@ public static class Elo
         }
 
         int currentConfLevel = player.GetEloConfidenceLevel();
-        log.Info($"Updating {player.Handle}'s {eloKey} elo confidence level " +
+        log.Info($"Updating {player.Handle}'s {player.EloKey} elo confidence level " +
                  $"{currentConfLevel} -> {Math.Max(0, currentConfLevel + confidenceLevelDelta)}");
         
-        account.ExperienceComponent.EloValues.ApplyDelta(eloKey, 0, confidenceLevelDelta);
+        account.ExperienceComponent.EloValues.ApplyDelta(player.EloKey, 0, confidenceLevelDelta);
         DB.Get().AccountDao.UpdateExperienceComponent(account);
     }
 
@@ -153,6 +162,26 @@ public static class Elo
         accountUpdater(acc);
     }
 
+    public static void InitElo(long accountId, string eloKey, IAccountProvider accountProvider, IAccountUpdater accountUpdater)
+    {
+        PersistedAccountData account = accountProvider(accountId);
+        EloValues eloValues = account.ExperienceComponent.EloValues;
+
+        if (eloValues.Values.ContainsKey(eloKey))
+        {
+            return;
+        }
+        
+        string fallbackEloKey = GetFallbackEloKey(eloKey);
+        if (!eloValues.Values.TryGetValue(fallbackEloKey, out EloDatum fallbackValue))
+        {
+            return;
+        }
+        
+        eloValues.Values[eloKey] = (EloDatum)fallbackValue.Clone();
+        accountUpdater(account);
+    }
+
     private static void AwardEloTeam(List<MatchPlayerData> team, MatchmakingConfiguration conf, float eloDelta, IAccountUpdater accountUpdater)
     {
         float avgConf = team.Select(p => GetEloConfidenceFactor(p, conf)).Sum() / team.Count;
@@ -160,5 +189,17 @@ public static class Elo
         {
             AwardElo(data, data.EloKey, eloDelta * GetEloConfidenceFactor(data, conf) * data.NumControlledCharacters / avgConf, accountUpdater);
         }
+    }
+
+    // TODO make it a type outside, only convert to string inside Elo class
+    public static string GetEloKey(GameType gameType, GameSubType gameSubType)
+    {
+        return $"{gameType}${gameSubType.LocalizedName}";
+    }
+
+    private static string GetFallbackEloKey(string eloKey)
+    {
+        int indexOf = eloKey.IndexOf('$');
+        return indexOf < 0 ? null : eloKey[..indexOf];
     }
 }

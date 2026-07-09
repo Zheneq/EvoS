@@ -23,9 +23,8 @@ public class MatchmakerRanked : MatchmakerBase
         AccountDao accountDao,
         GameType gameType,
         GameSubType subType,
-        string eloKey,
         Func<MatchmakingConfiguration> conf)
-        : base(accountDao, gameType, subType, eloKey)
+        : base(accountDao, gameType, subType)
     {
         _conf = conf;
     }
@@ -33,9 +32,8 @@ public class MatchmakerRanked : MatchmakerBase
     public MatchmakerRanked(
         GameType gameType,
         GameSubType subType,
-        string eloKey,
         Func<MatchmakingConfiguration> conf)
-        :this(DB.Get().AccountDao, gameType, subType, eloKey, conf)
+        :this(DB.Get().AccountDao, gameType, subType, conf)
     {
     }
 
@@ -70,7 +68,22 @@ public class MatchmakerRanked : MatchmakerBase
 
     public override List<ScoredMatch> GetMatchesRanked(List<MatchmakingGroup> queuedGroups, DateTime now)
     {
+        InitElo(queuedGroups);
         return base.GetMatchesRanked(queuedGroups.Take(12).ToList(), now);
+    }
+
+    private void InitElo(List<MatchmakingGroup> queuedGroups)
+    {
+        string eloKey = Elo.GetEloKey(_gameType, _subType);
+        IEnumerable<long> accountIds = queuedGroups
+            .SelectMany(g => g.Members)
+            .Select(data => data.AccountId)
+            .Distinct();
+
+        foreach (long accountId in accountIds)
+        {
+            Elo.InitElo(accountId, eloKey, DB.Get().AccountDao.GetAccount, DB.Get().AccountDao.UpdateExperienceComponent);
+        }
     }
 
     protected override ScoredMatch RankMatch(Match match, DateTime now)

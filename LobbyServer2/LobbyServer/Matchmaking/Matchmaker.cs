@@ -73,7 +73,7 @@ public abstract class Matchmaker
                             account.AccountId,
                             account.Handle,
                             data.EloKey,
-                            account.ExperienceComponent.EloValues,
+                            (EloValues) account.ExperienceComponent.EloValues.Clone(),
                             account.AccountComponent.GetLastCharacters(data.NumControlledCharacters),
                             account.SocialComponent.BlockedAccounts);
                     })

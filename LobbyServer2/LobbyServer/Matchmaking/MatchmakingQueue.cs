@@ -26,7 +26,6 @@ namespace CentralServer.LobbyServer.Matchmaking
         private static readonly ILog log = LogManager.GetLogger(typeof(MatchmakingQueue));
         private const string ConfigPath = @"Config/Matchmaking/";
 
-        private readonly string EloKey;
         private readonly bool RankedMatchmaking;
         private MatchmakingConfigBundle Conf = new(); // TODO move to MatchmakerRanked
         private readonly Dictionary<string, Matchmaker> Matchmakers;
@@ -87,11 +86,15 @@ namespace CentralServer.LobbyServer.Matchmaking
             return GetQueuedGroups()
                 .Where(groupId => (GroupManager.GetGroupSubTypeMask(groupId) & subTypeFlag) != 0);
         }
+
+        public GameSubType GetSubType(int subTypeIndex) => MatchmakingQueueInfo.GameConfig.SubTypes[subTypeIndex];
+
+        public int SubTypeCount => MatchmakingQueueInfo.GameConfig.SubTypes.Count;
         
         public List<List<long>> GetQueuedGroupsBySubType()
         {
             var res = new List<List<long>>();
-            for (int i = 0; i < MatchmakingQueueInfo.GameConfig.SubTypes.Count; i++)
+            for (int i = 0; i < SubTypeCount; i++)
             {
                 res.Add(GetQueuedGroups(i).ToList());
             }
@@ -102,7 +105,7 @@ namespace CentralServer.LobbyServer.Matchmaking
         public List<List<long>> GetQueuedPlayersBySubType()
         {
             var res = new List<List<long>>();
-            for (int i = 0; i < MatchmakingQueueInfo.GameConfig.SubTypes.Count; i++)
+            for (int i = 0; i < SubTypeCount; i++)
             {
                 res.Add(GetQueuedGroups(i)
                     .SelectMany(GroupManager.GetGroupMembers)
@@ -129,7 +132,6 @@ namespace CentralServer.LobbyServer.Matchmaking
         public MatchmakingQueue(GameType gameType, bool isRanked)
         {
             GameTypeString = gameType.ToString();
-            EloKey = GameTypeString;
             RankedMatchmaking = isRanked;
             MatchmakingQueueInfo = new LobbyMatchmakingQueueInfo()
             {
@@ -151,9 +153,9 @@ namespace CentralServer.LobbyServer.Matchmaking
             
             Metrics.DefaultRegistry.AddBeforeCollectCallback(() =>
             {
-                for (int i = 0; i < MatchmakingQueueInfo.GameConfig.SubTypes.Count; i++)
+                for (int i = 0; i < SubTypeCount; i++)
                 {
-                    GameSubType subType = MatchmakingQueueInfo.GameConfig.SubTypes[i];
+                    GameSubType subType = GetSubType(i);
                     M(QueueSize, subType).Set(GetPlayerCount(i));
                 }
 
@@ -170,7 +172,7 @@ namespace CentralServer.LobbyServer.Matchmaking
         private Matchmaker MatchmakerFactory(GameSubType st)
         {
             return RankedMatchmaking
-                ? new MatchmakerRanked(GameType, st, EloKey, () => GetConf(st.LocalizedName))
+                ? new MatchmakerRanked(GameType, st, () => GetConf(st.LocalizedName))
                 : st.Mods is not null && st.Mods.Contains(GameSubType.SubTypeMods.AntiSocial)
                     ? new MatchmakerSingleGroup(GameType, st)
                     : new MatchmakerFifo(GameType, st);
@@ -335,9 +337,9 @@ namespace CentralServer.LobbyServer.Matchmaking
 
             lock (GroupManager.Lock)
             {
-                for (int i = 0; i < MatchmakingQueueInfo.GameConfig.SubTypes.Count; i++)
+                for (int i = 0; i < SubTypeCount; i++)
                 {
-                    GameSubType subType = MatchmakingQueueInfo.GameConfig.SubTypes[i];
+                    GameSubType subType = GetSubType(i);
 
                     List<Matchmaker.MatchmakingGroup> queuedGroups;
                     if (AsymmetricDescriptors.TryGetValue(subType.LocalizedName, out var descriptor))
@@ -373,6 +375,7 @@ namespace CentralServer.LobbyServer.Matchmaking
 
         private List<Matchmaker.MatchmakingGroup> GetAndConvertQueuedGroups(int subTypeIndex, int numControlledCharacters)
         {
+            string eloKey = Elo.GetEloKey(GameType, GetSubType(subTypeIndex));
             return GetQueuedGroups(subTypeIndex)
                 .Select(groupId =>
                 {
@@ -392,7 +395,7 @@ namespace CentralServer.LobbyServer.Matchmaking
                     return new Matchmaker.MatchmakingGroup(
                         group.GroupId,
                         group.Members
-                            .Select(id => new QueuePlayerData(id, EloKey, numControlledCharacters))
+                            .Select(id => new QueuePlayerData(id, eloKey, numControlledCharacters))
                             .ToList(),
                         queueTime);
                 })
@@ -406,9 +409,9 @@ namespace CentralServer.LobbyServer.Matchmaking
             DateTime matchmakingIterationStartTime = DateTime.UtcNow;
             List<ScoredMatchWithSubType> matches = new List<ScoredMatchWithSubType>();
             bool hasBaseTypeMatched = false;
-            for (int i = 0; i < MatchmakingQueueInfo.GameConfig.SubTypes.Count; i++)
+            for (int i = 0; i < SubTypeCount; i++)
             {
-                GameSubType subType = MatchmakingQueueInfo.GameConfig.SubTypes[i];
+                GameSubType subType = GetSubType(i);
 
                 // If any base subtype formed a match, skip all asymmetric variants
                 if (AsymmetricDescriptors.TryGetValue(subType.LocalizedName, out _) && hasBaseTypeMatched)
@@ -456,7 +459,7 @@ namespace CentralServer.LobbyServer.Matchmaking
         {
             foreach (var match in matches.OrderByDescending(m => m))
             {
-                GameSubType subType = MatchmakingQueueInfo.GameConfig.SubTypes[match.SubTypeIndex];
+                GameSubType subType = GetSubType(match.SubTypeIndex);
                 
                 lock (GroupManager.Lock)
                 {
@@ -560,7 +563,6 @@ namespace CentralServer.LobbyServer.Matchmaking
             Elo.OnGameEnded(
                 gameInfo,
                 gameSummary,
-                gameSubType,
                 players,
                 GetConf(gameSubType.LocalizedName),
                 DateTime.UtcNow,
