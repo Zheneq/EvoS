@@ -331,6 +331,7 @@ namespace CentralServer.LobbyServer.Group
                 response = new LobbyPlayerGroupInfo
                 {
                     SelectedQueueType = client?.SelectedGameType ?? GameType.None,
+                    SubTypeMask = groupInfo?.SubTypeMask ?? 0,
                     MemberDisplayName = account.Handle,
                     InAGroup = false,
                     // IsLeader = true,
