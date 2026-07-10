@@ -206,7 +206,8 @@ public class MatchmakerRanked : MatchmakerBase
     private float GetAsymmetricFactor(Match match)
     {
         int extraControlledCharacters = match.Groups.Select(g => g.Slots - g.Players).Sum();
-        return 1 - Cap(extraControlledCharacters * 0.125f);
+        int maxExtraControlledCharacters = match.Groups.Select(g => g.Slots - g.Players).Max();
+        return 1 - Cap((extraControlledCharacters + maxExtraControlledCharacters) * 0.083f);
     }
 
     private float GetTieBreakerFactor(Match match)
