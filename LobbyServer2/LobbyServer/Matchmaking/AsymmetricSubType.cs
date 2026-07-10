@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using EvoS.Framework.Network.Static;
 
@@ -121,6 +122,7 @@ public class AsymmetricSubTypeDescriptor
     public int SubTypeIndex; 
     public bool SkipMatchmaking;
     public int NumControlledCharacters;
+    public TimeSpan TurnTime;
     
     public GameSubType CreateAdvertisedSubType(GameSubType baseSubType)
     {
@@ -138,6 +140,8 @@ public class AsymmetricSubTypeDescriptor
         {
             advertised.Mods.Add(GameSubType.SubTypeMods.NotAllowedForGroups);
         }
+
+        advertised.GameOverrides.TurnTimeSpan = TurnTime;
 
         advertised.Requirements = RequirementCollection.Create();
         if (baseSubType.Requirements != null)

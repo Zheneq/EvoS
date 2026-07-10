@@ -9,6 +9,7 @@ public record MatchPlayerData(
     string Handle,
     string EloKey,
     EloValues EloValues, // TODO do we need to carry all of them if we are only looking for EloKey one?
+    int SubTypeIndex,
     List<CharacterType> SelectedCharacters,
     HashSet<long> BlockedAccounts)
 {

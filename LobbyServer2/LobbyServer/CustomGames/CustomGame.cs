@@ -541,7 +541,7 @@ public class CustomGame : Game
 
         // Assign players to game
         SetGameStatus(GameStatus.FreelancerSelecting);
-        GetClients().ForEach(client => SendGameAssignmentNotification(client));
+        GetClients().ForEach(client => SendGameAssignmentNotification(client.AccountId));
         GetClients().ForEach(client => client.OnGameAssigned(this));
 
         await HandleRankedResolutionPhase();

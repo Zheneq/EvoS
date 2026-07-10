@@ -178,7 +178,11 @@ namespace CentralServer.LobbyServer.Matchmaking
                     : new MatchmakerFifo(GameType, st);
         }
 
-        public void RegisterAsymmetricSubType(string localizedName, string baseSubTypeName, int numControlledCharacters)
+        public void RegisterAsymmetricSubType(
+            string localizedName,
+            string baseSubTypeName,
+            int numControlledCharacters,
+            TimeSpan turnTime)
         {
             List<GameSubType> subTypes = MatchmakingQueueInfo.GameConfig.SubTypes;
             int baseIndex = subTypes.FindIndex(st => st.LocalizedName == baseSubTypeName);
@@ -197,6 +201,7 @@ namespace CentralServer.LobbyServer.Matchmaking
                 NumControlledCharacters = numControlledCharacters,
                 BaseSubTypeIndex = baseIndex,
                 SkipMatchmaking = hasPrimary,
+                TurnTime = turnTime,
             };
             GameSubType advertised = descriptor.CreateAdvertisedSubType(subTypes[baseIndex]);
             subTypes.Add(advertised);
@@ -422,7 +427,7 @@ namespace CentralServer.LobbyServer.Matchmaking
                     return new Matchmaker.MatchmakingGroup(
                         group.GroupId,
                         group.Members
-                            .Select(id => new QueuePlayerData(id, eloKey, numControlledCharacters))
+                            .Select(id => new QueuePlayerData(id, eloKey, subTypeIndex, numControlledCharacters))
                             .ToList(),
                         queueTime);
                 })
@@ -542,12 +547,19 @@ namespace CentralServer.LobbyServer.Matchmaking
             {
                 RemoveGroup(groupInfo.GroupID);
             }
+
+            var subTypeIndex = match.SubTypeIndex;
+            if (AsymmetricDescriptors.TryGetValue(GetSubType(match.SubTypeIndex).LocalizedName, out var descriptor))
+            {
+                subTypeIndex = descriptor.BaseSubTypeIndex;
+            }
+            
             _ = MatchmakingManager.StartGameAsync(
                 match.Match.TeamA.MatchPlayerDataList,
                 match.Match.TeamB.MatchPlayerDataList,
                 GameType,
                 MatchmakingQueueInfo.GameConfig.SubTypes,
-                match.SubTypeIndex)
+                subTypeIndex)
                 .LogError();
         }
         

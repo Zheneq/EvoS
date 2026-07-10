@@ -7,6 +7,7 @@ using CentralServer.LobbyServer.Matchmaking;
 using EvoS.Framework.Constants.Enums;
 using EvoS.Framework.Network.Static;
 using log4net;
+using MoreLinq.Extensions;
 
 namespace CentralServer.BridgeServer;
 
@@ -43,14 +44,14 @@ public class PvpGame: Game
             return;
         }
 
-        BuildGameInfo(gameType, gameSubTypes, subTypeIndex);
+        GameInfo = BuildGameInfo(gameType, gameSubTypes, subTypeIndex);
 
         // Assign Current Server
         GetClients().ForEach(c => c.JoinGame(this));
 
         // Assign players to game
         SetGameStatus(GameStatus.FreelancerSelecting);
-        GetClients().ForEach(client => SendGameAssignmentNotification(client));
+        Players.ForEach(player => SendGameAssignmentNotification(player));
         GetClients().ForEach(client => client.OnGameAssigned(this));
 
         await HandleRankedResolutionPhase();
@@ -124,46 +125,5 @@ public class PvpGame: Game
         SendGameInfoNotifications();
 
         log.Info($"Game {gameType} started");
-    }
-
-    public void BuildGameInfo(GameType gameType, List<GameSubType> gameSubTypes, int subTypeIndex)
-    {
-        // TODO if we don't override it for asymmetric, we don't need to override it here
-        // GameSubType gameMode = GameSubType ?? gameSubTypes[subTypeIndex];
-        GameSubType gameMode = gameSubTypes[subTypeIndex];
-        GameInfo = new LobbyGameInfo
-        {
-            AcceptedPlayers = TeamInfo.TeamPlayerInfo.Count(p => p.IsReady),
-            AcceptTimeout = new TimeSpan(0, 0, 0),
-            SelectTimeout = TimeSpan.FromSeconds(30),
-            LoadoutSelectTimeout = TimeSpan.FromSeconds(30),
-            SelectSubPhaseBan1Timeout = TimeSpan.FromSeconds(60),
-            SelectSubPhaseBan2Timeout = TimeSpan.FromSeconds(30),
-            SelectSubPhaseFreelancerSelectTimeout = TimeSpan.FromSeconds(30),
-            SelectSubPhaseTradeTimeout = TimeSpan.FromSeconds(15),
-            ActiveHumanPlayers = TeamInfo.TeamPlayerInfo.Count(p => p.IsHumanControlled),
-            ActivePlayers = TeamInfo.TeamPlayerInfo.Count,
-            CreateTimestamp = DateTime.UtcNow.Ticks,
-            GameConfig = new LobbyGameConfig
-            {
-                GameOptionFlags = GameOptionFlag.NoInputIdleDisconnect,
-                GameServerShutdownTime = -1,
-                GameType = gameType,
-                InstanceSubTypeBit = (ushort)(1 << subTypeIndex),
-                IsActive = true,
-                Map = MatchmakingQueue.SelectMap(gameMode),
-                ResolveTimeoutLimit = 1600, // TODO ?
-                RoomName = "",
-                Spectators = 0,
-                SubTypes = gameSubTypes,
-                TeamABots = gameMode.TeamABots, // TODO update with actual values (for antisocial)?
-                TeamAPlayers = gameMode.TeamAPlayers,
-                TeamBBots = gameMode.TeamBBots,
-                TeamBPlayers = gameMode.TeamBPlayers,
-            },
-            GameResult = GameResult.NoResult,
-            GameServerAddress = Server.URI,
-            GameServerProcessCode = Server.ProcessCode
-        };
     }
 }

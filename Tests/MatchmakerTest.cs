@@ -239,6 +239,6 @@ public class MatchmakerTest : EvosTest
 
     private static List<QueuePlayerData> Players(List<long> ids)
     {
-        return ids.Select(id => new QueuePlayerData(id, EloKey, 1)).ToList();
+        return ids.Select(id => new QueuePlayerData(id, EloKey, 1, 1)).ToList();
     }
 }

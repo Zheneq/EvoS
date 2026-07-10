@@ -593,12 +593,24 @@ public class EloTest(ITestOutputHelper output) : EvosTest(output)
         => TestAccountHelper.MakeAccount(id, name, elo, confidence, EloKey);
 
     private static MatchPlayerData MakeMatchPlayerData(PersistedAccountData player) =>
-        new(player.AccountId, player.Handle, EloKey, player.ExperienceComponent.EloValues,
-            [CharacterType.PendingWillFill], []);
+        new(
+            player.AccountId,
+            player.Handle,
+            EloKey,
+            player.ExperienceComponent.EloValues,
+            1,
+            [CharacterType.PendingWillFill],
+            []);
 
     private static MatchPlayerData MakeMatchPlayerDataWithChars(PersistedAccountData player, int numChars) =>
-        new(player.AccountId, player.Handle, EloKey, player.ExperienceComponent.EloValues,
-            Enumerable.Repeat(CharacterType.PendingWillFill, numChars).ToList(), []);
+        new(
+            player.AccountId,
+            player.Handle,
+            EloKey,
+            player.ExperienceComponent.EloValues,
+            1,
+            Enumerable.Repeat(CharacterType.PendingWillFill, numChars).ToList(),
+            []);
 
     private static (PersistedAccountData[], PersistedAccountData[]) MakeSymmetricTeams(
         float eloA, float eloB, int confidenceA, int confidenceB)

@@ -39,6 +39,7 @@ public abstract class Game
     public LobbyGameSummary GameSummary { get; private set; }
     private List<MatchPlayerData> TeamA;
     private List<MatchPlayerData> TeamB;
+    protected IEnumerable<MatchPlayerData> Players => TeamA.Concat(TeamB);
     public DateTime StopTime { private set; get; }
     public BridgeServerProtocol Server { private set; get; } // TODO check it is set when needed
 
@@ -345,12 +346,12 @@ public abstract class Game
         }
     }
 
-    public void SendGameAssignmentNotification(LobbyServerProtocol client, bool reconnection = false)
+    protected void SendGameAssignmentNotification(MatchPlayerData data, bool reconnection = false)
     {
-        LobbyServerPlayerInfo playerInfo = GetPlayerInfo(client.AccountId);
+        LobbyServerPlayerInfo playerInfo = GetPlayerInfo(data.AccountId);
         GameAssignmentNotification notification = new GameAssignmentNotification
         {
-            GameInfo = GameInfo,
+            GameInfo = BuildGameInfo(GameInfo.GameConfig.GameType, GameInfo.GameConfig.SubTypes, data.SubTypeIndex),
             GameResult = GameInfo.GameResult,
             Observer = false,
             PlayerInfo = LobbyPlayerInfo.FromServer(playerInfo, 0, new MatchmakingQueueConfig()),
@@ -358,7 +359,7 @@ public abstract class Game
             GameplayOverrides = GameConfig.GetGameplayOverrides()
         };
 
-        client.Send(notification);
+        SessionManager.GetClientConnection(data.AccountId)?.Send(notification);
     }
 
     public void SendGameInfoNotifications()
@@ -402,13 +403,13 @@ public abstract class Game
 
     protected void SendGameAssignmentNotification(long accountId, bool reconnection = false)
     {
-        LobbyServerProtocol client = SessionManager.GetClientConnection(accountId);
-        if (client is null)
+        var player = Players.FirstOrDefault(p => p.AccountId == accountId);
+        if (player is null)
         {
             log.Error($"Failed to send game assignment to {LobbyServerUtils.GetHandle(accountId)}");
             return;
         }
-        SendGameAssignmentNotification(client, reconnection);
+        SendGameAssignmentNotification(player, reconnection);
     }
 
     public virtual void SetPlayerReady(long accountId)
@@ -1101,7 +1102,8 @@ public abstract class Game
     public bool ReconnectPlayer(LobbyServerProtocol conn)
     {
         LobbyServerPlayerInfo playerInfo = GetPlayerInfo(conn.AccountId);
-        if (playerInfo == null)
+        var playerData = Players.FirstOrDefault(p => p.AccountId == conn.AccountId);
+        if (playerInfo == null || playerData == null)
         {
             log.Error($"Cannot reconnect player {LobbyServerUtils.GetHandle(conn.AccountId)} to {ProcessCode}");
             return false;
@@ -1109,7 +1111,7 @@ public abstract class Game
 
         conn.JoinGame(this);
         playerInfo.ReplacedWithBots = false;
-        SendGameAssignmentNotification(conn, true);
+        SendGameAssignmentNotification(playerData, true);
         conn.OnStartGame(this);
         SendGameInfo(conn);
         Server.StartGameForReconnection(conn.AccountId);
@@ -1562,5 +1564,56 @@ public abstract class Game
                 client.BroadcastRefreshFriendList();
             }
         }
+    }
+
+    protected LobbyGameInfo BuildGameInfo(GameType gameType, List<GameSubType> gameSubTypes, int subTypeIndex)
+    {
+        // TODO if we don't override it for asymmetric, we don't need to override it here
+        // GameSubType gameMode = GameSubType ?? gameSubTypes[subTypeIndex];
+        GameSubType subType = gameSubTypes[subTypeIndex];
+
+        TimeSpan? turnTime = Players
+            .Select(p => p.SubTypeIndex)
+            .Select(i => gameSubTypes[i].GameOverrides.TurnTimeSpan)
+            .Max();
+        if (turnTime != null)
+        {
+            subType.GameOverrides.TurnTimeSpan = turnTime;
+        }
+
+        return new LobbyGameInfo
+        {
+            AcceptedPlayers = TeamInfo.TeamPlayerInfo.Count(p => p.IsReady),
+            AcceptTimeout = new TimeSpan(0, 0, 0),
+            SelectTimeout = TimeSpan.FromSeconds(30),
+            LoadoutSelectTimeout = TimeSpan.FromSeconds(30),
+            SelectSubPhaseBan1Timeout = TimeSpan.FromSeconds(60),
+            SelectSubPhaseBan2Timeout = TimeSpan.FromSeconds(30),
+            SelectSubPhaseFreelancerSelectTimeout = TimeSpan.FromSeconds(30),
+            SelectSubPhaseTradeTimeout = TimeSpan.FromSeconds(15),
+            ActiveHumanPlayers = TeamInfo.TeamPlayerInfo.Count(p => p.IsHumanControlled),
+            ActivePlayers = TeamInfo.TeamPlayerInfo.Count,
+            CreateTimestamp = DateTime.UtcNow.Ticks,
+            GameConfig = new LobbyGameConfig
+            {
+                GameOptionFlags = GameOptionFlag.NoInputIdleDisconnect,
+                GameServerShutdownTime = -1,
+                GameType = gameType,
+                InstanceSubTypeBit = (ushort)(1 << subTypeIndex),
+                IsActive = true,
+                Map = MatchmakingQueue.SelectMap(subType),
+                ResolveTimeoutLimit = 1600, // TODO ?
+                RoomName = "",
+                Spectators = 0,
+                SubTypes = gameSubTypes,
+                TeamABots = subType.TeamABots, // TODO update with actual values (for antisocial)?
+                TeamAPlayers = subType.TeamAPlayers,
+                TeamBBots = subType.TeamBBots,
+                TeamBPlayers = subType.TeamBPlayers,
+            },
+            GameResult = GameResult.NoResult,
+            GameServerAddress = Server.URI,
+            GameServerProcessCode = Server.ProcessCode
+        };
     }
 }

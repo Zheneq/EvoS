@@ -74,6 +74,7 @@ public abstract class Matchmaker
                             account.Handle,
                             data.EloKey,
                             (EloValues) account.ExperienceComponent.EloValues.Clone(),
+                            data.SubTypeIndex,
                             account.AccountComponent.GetLastCharacters(data.NumControlledCharacters),
                             account.SocialComponent.BlockedAccounts);
                     })
