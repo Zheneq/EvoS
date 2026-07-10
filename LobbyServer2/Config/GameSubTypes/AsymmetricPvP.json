@@ -1,0 +1,20 @@
+[
+  {
+    "LocalizedName": "Asymmetric2Deathmatch@SubTypes",
+    "BaseSubTypeName": "Deathmatch@SubTypes",
+    "NumControlledCharacters": 2,
+    "TurnTime": "00:00:20"
+  },
+  {
+    "LocalizedName": "Asymmetric3Deathmatch@SubTypes",
+    "BaseSubTypeName": "Deathmatch@SubTypes",
+    "NumControlledCharacters": 3,
+    "TurnTime": "00:00:25"
+  },
+  {
+    "LocalizedName": "Asymmetric4Deathmatch@SubTypes",
+    "BaseSubTypeName": "Deathmatch@SubTypes",
+    "NumControlledCharacters": 4,
+    "TurnTime": "00:00:30"
+  }
+]

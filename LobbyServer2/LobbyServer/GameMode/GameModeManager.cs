@@ -1,9 +1,12 @@
-﻿using EvoS.Framework;
+﻿using CentralServer.LobbyServer.Matchmaking;
+using EvoS.Framework;
 using EvoS.Framework.Constants.Enums;
 using EvoS.Framework.Misc;
 using EvoS.Framework.Network.Static;
+using log4net;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using System;
 using System.Collections.Generic;
 using System.IO;
 
@@ -11,12 +14,17 @@ namespace CentralServer.LobbyServer.Gamemode
 {
     class GameModeManager
     {
+        private static readonly ILog log = LogManager.GetLogger(typeof(GameModeManager));
         private const string ConfigPath = @"Config/GameSubTypes/";
-        private static readonly Dictionary<GameType, string> ConfigFiles = new Dictionary<GameType, string>()
+        private static readonly Dictionary<GameType, string> ConfigFiles = new()
         {
             { GameType.PvP, "DeathMatch.json" },
             { GameType.Custom, "Custom.json" },
             { GameType.Coop, "Coop.json" }
+        };
+        private static readonly Dictionary<GameType, string> AsymmetricConfigFiles = new()
+        {
+            { GameType.PvP, "AsymmetricPvP.json" },
         };
 
         private static Dictionary<string, bool> LocalizedNameToBans = new Dictionary<string, bool>();
@@ -102,7 +110,7 @@ namespace CentralServer.LobbyServer.Gamemode
             {
                 IsActive = LobbyConfiguration.GetGameTypeCoopAvailable(),
                 MaxWillFillPerTeam = 4,
-                SubTypes = LoadGameSubTypes(ConfigFiles[GameType.Coop])
+                SubTypes = MatchmakingManager.GetQueue(GameType.Coop).MatchmakingQueueInfo.GameConfig.SubTypes
             };
         }
 
@@ -112,8 +120,37 @@ namespace CentralServer.LobbyServer.Gamemode
             {
                 IsActive = LobbyConfiguration.GetGameTypePvPAvailable(),
                 MaxWillFillPerTeam = 4,
-                SubTypes = LoadGameSubTypes(ConfigFiles[GameType.PvP])
+                SubTypes = MatchmakingManager.GetQueue(GameType.PvP).MatchmakingQueueInfo.GameConfig.SubTypes
             };
+        }
+
+        internal static List<GameSubType> LoadSubTypesForGameType(GameType gameType)
+        {
+            if (ConfigFiles.TryGetValue(gameType, out string filename))
+            {
+                return LoadGameSubTypes(filename);
+            }
+            return [];
+        }
+
+        internal static List<AsymmetricSubTypeConfig> LoadAsymmetricSubTypesForGameType(GameType gameType)
+        {
+            if (!AsymmetricConfigFiles.TryGetValue(gameType, out string filename))
+            {
+                return [];
+            }
+            JsonReader reader = null;
+            try
+            {
+                reader = new JsonTextReader(new StreamReader(ConfigPath + filename));
+                return new JsonSerializer().Deserialize<List<AsymmetricSubTypeConfig>>(reader) ?? [];
+            }
+            catch (Exception e)
+            {
+                log.Error($"Failed to load asymmetric subtypes for {gameType}", e);
+                return [];
+            }
+            finally { reader?.Close(); }
         }
 
         /// <summary>

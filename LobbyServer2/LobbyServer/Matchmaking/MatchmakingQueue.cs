@@ -150,7 +150,7 @@ namespace CentralServer.LobbyServer.Matchmaking
             // TODO handle matchmakers more carefully
             Matchmakers = MatchmakingQueueInfo.GameConfig.SubTypes
                 .ToDictionary(st => st.LocalizedName, MatchmakerFactory);
-            
+
             Metrics.DefaultRegistry.AddBeforeCollectCallback(() =>
             {
                 for (int i = 0; i < SubTypeCount; i++)
@@ -206,18 +206,31 @@ namespace CentralServer.LobbyServer.Matchmaking
             GameSubType advertised = descriptor.CreateAdvertisedSubType(subTypes[baseIndex]);
             subTypes.Add(advertised);
             descriptor.SubTypeIndex = subTypes.Count - 1;
-
-            Matchmakers[advertised.LocalizedName] = MatchmakerFactory(advertised);
+            //
+            // Matchmakers[advertised.LocalizedName] = MatchmakerFactory(advertised);
+            bool suppressLog = AsymmetricDescriptors.ContainsKey(advertised.LocalizedName);
             AsymmetricDescriptors[advertised.LocalizedName] = descriptor;
-            log.Info($"Registered asymmetric subtype '{advertised.LocalizedName}' "
-                     + $"(N={descriptor.NumControlledCharacters}, skip mm={descriptor.SkipMatchmaking}) "
-                     + $"derived from '{descriptor.BaseSubTypeName}'");
+            if (!suppressLog)
+            {
+                log.Info($"Registered asymmetric subtype '{advertised.LocalizedName}' "
+                         + $"(N={descriptor.NumControlledCharacters}, skip mm={descriptor.SkipMatchmaking}) "
+                         + $"derived from '{descriptor.BaseSubTypeName}'");
+            }
         }
 
         private void ReloadConfig()
         {
-            MatchmakingQueueInfo.GameConfig.SubTypes = GameModeManager.GetGameTypeAvailabilities()[GameType].SubTypes;
+            MatchmakingQueueInfo.GameConfig.SubTypes = GameModeManager.LoadSubTypesForGameType(GameType);
             ReloadMatchmakingConfig(GameType);
+
+            foreach (AsymmetricSubTypeConfig config in GameModeManager.LoadAsymmetricSubTypesForGameType(GameType))
+            {
+                RegisterAsymmetricSubType(
+                    config.LocalizedName,
+                    config.BaseSubTypeName,
+                    config.NumControlledCharacters,
+                    config.TurnTime);
+            }
         }
 
         private void ReloadMatchmakingConfig(GameType gameType)

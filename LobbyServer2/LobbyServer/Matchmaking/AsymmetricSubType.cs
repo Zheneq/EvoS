@@ -114,6 +114,14 @@ namespace CentralServer.LobbyServer.Matchmaking;
   controlling player's account ID and would otherwise skew averages). The ControlAllBots early-exit only fires
   when no calculator is wired — preserving backward compatibility with existing coop fourlancer games.
  */
+public class AsymmetricSubTypeConfig
+{
+    public string LocalizedName { get; set; }
+    public string BaseSubTypeName { get; set; }
+    public int NumControlledCharacters { get; set; }
+    public TimeSpan TurnTime { get; set; }
+}
+
 public class AsymmetricSubTypeDescriptor
 {
     public string LocalizedName;
