@@ -86,7 +86,8 @@ public abstract class Matchmaker
             public override string ToString()
             {
                 return $"{string.Join(", ", Groups.Select(g =>
-                    '[' + string.Join(", ", g.Members.Select(FormatAccount)) + ']'))} <{{{Elo}}}>";
+                    '[' + string.Join(", ", g.Members.Select(FormatAccount)) + ']' 
+                    + (g.Slots > g.Players ? $" * {Math.Ceiling((float)g.Slots / g.Players):F0}" : "")))} <{{{Elo}}}>";
             }
 
             private string FormatAccount(QueuePlayerData data)
@@ -154,7 +155,7 @@ public abstract class Matchmaker
 
         public string ToDetailedString()
         {
-            return $"{Score} {Description} {Match}";
+            return $"{Score} / {Description} / {Match}";
         }
     }
         
@@ -170,7 +171,7 @@ public abstract class Matchmaker
         {
             log.Debug($"Found {possibleMatches.Count} possible matches in " +
                       $"{_gameType}#{_subType.LocalizedName}: " +
-                      $"({string.Join(",", queuedGroups.Select(g => g.Players + (g.Players != g.Slots ? $" ({g.Slots} slots)" : "")))})");
+                      $"({LobbyServerUtils.FormatMatchmakingGroups(queuedGroups, true, null)})");
             List<Match> filteredMatches = FilterMatches(possibleMatches, now);
             log.Info($"Found {filteredMatches.Count} allowed matches in " +
                      $"{_gameType}#{_subType.LocalizedName} after filtering");

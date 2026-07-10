@@ -1,6 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net;
+using CentralServer.LobbyServer.Group;
+using CentralServer.LobbyServer.Matchmaking;
 using CentralServer.LobbyServer.Session;
 using CentralServer.Proxy;
 using EvoS.Framework;
@@ -158,6 +161,48 @@ namespace CentralServer.LobbyServer.Utils
         public static bool IsVanilla(long accountId)
         {
             return SessionManager.GetSessionInfo(accountId)?.ProtocolVersion == ProtocolVersion.VANILLA;
+        }
+
+        public static string FormatMatchmakingGroups(
+            IEnumerable<Matchmaker.MatchmakingGroup> queuedGroups,
+            bool listHandles,
+            DateTime? nowForQueueTime)
+        {
+            return string.Join(
+                ", ",
+                queuedGroups
+                    .GroupBy(g => g.GroupID)
+                    .Select(kv =>
+                    {
+                        List<Matchmaker.MatchmakingGroup> allSubTypes = kv.OrderBy(g => g.Slots).ToList();
+                        Matchmaker.MatchmakingGroup group = allSubTypes.First();
+
+                        string players = $"{group.Players}";
+                        if (listHandles)
+                        {
+                            players = $"[{string.Join(
+                                ", ",
+                                GroupManager
+                                    .GetGroupMembers(group.GroupID)
+                                    .Select(GetHandle)
+                            )}]";
+                        }
+                        
+                        string slots = "";
+                        if (allSubTypes.Count > 1 || group.Players != group.Slots)
+                        {
+                            slots = $" <{string.Join("/", allSubTypes.Select(g => g.Slots))} slots>";
+                        }
+
+                        string queueTime = "";
+                        if (nowForQueueTime != null)
+                        {
+                            TimeSpan groupQueueTime = (DateTime)nowForQueueTime - group.QueueTime;
+                            queueTime = $" ({groupQueueTime.FormatMinutesSeconds()})";
+                        }
+
+                        return players + slots + queueTime;
+                    }));
         }
     }
 }

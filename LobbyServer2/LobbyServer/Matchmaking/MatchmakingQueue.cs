@@ -468,17 +468,10 @@ namespace CentralServer.LobbyServer.Matchmaking
                         }
                         string queueString = string.Join(
                             ", ",
-                            queuedGroupsBySubtype[i]
-                                .Select(
-                                    g =>
-                                        $"[{string.Join(
-                                            ", ",
-                                            GroupManager
-                                                .GetGroupMembers(g.GroupID)
-                                                .Select(LobbyServerUtils.GetHandle)
-                                        )}] ({
-                                        (matchmakingIterationStartTime - g.QueueTime).FormatMinutesSeconds()
-                                    })"));
+                            LobbyServerUtils.FormatMatchmakingGroups(
+                                queuedGroupsBySubtype[i],
+                                false,
+                                matchmakingIterationStartTime));
                         log.Info($"Queue snapshot {MatchmakingQueueInfo.GameType} {subType.LocalizedName}: {queueString}");
                     }
                 }

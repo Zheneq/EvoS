@@ -134,7 +134,7 @@ public class MatchmakerRanked : MatchmakerBase
                   $"blocks:{teamBlockFactorWeighted:0.00} [{teamBlockFactor:0.00}], " +
                   $"tConf:{teamConfidenceBalanceFactorWeighted:0.00} [{teamConfidenceBalanceFactor:0.00}], " +
                   $"tieBr:{tieBreakerFactorWeighted:0.00} [{tieBreakerFactor:0.00}]" +
-                  $") {match}";
+                  ")";
 
         return new ScoredMatch(match, score, description);
     }
