@@ -18,6 +18,7 @@ public class MatchmakingConfiguration
     public float TeamBlockWeight = 2;
     public float WaitingTimeWeight = 5;
     public float TeamConfidenceBalanceWeight = 1;
+    public float AsymmetricWeight = 3;
     public float TieBreakerWeight = 0.01f;
     
     public TimeSpan WaitingTimeWeightCap = TimeSpan.FromMinutes(15);

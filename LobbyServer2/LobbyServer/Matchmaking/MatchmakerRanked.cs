@@ -98,6 +98,7 @@ public class MatchmakerRanked : MatchmakerBase
         float teamCompositionFactor = (GetTeamCompositionFactor(match.TeamA) + GetTeamCompositionFactor(match.TeamB)) * 0.5f;
         float teamBlockFactor = (GetBlocksFactor(match.TeamA) + GetBlocksFactor(match.TeamB)) * 0.5f;
         float teamConfidenceBalanceFactor = GetTeamConfidenceBalanceFactor(match);
+        float asymmetricFactor = GetAsymmetricFactor(match);
         float tieBreakerFactor = GetTieBreakerFactor(match);
         
         // TODO balance max - min elo in the team
@@ -116,6 +117,7 @@ public class MatchmakerRanked : MatchmakerBase
         float teamCompositionFactorWeighted = teamCompositionFactor * Conf.TeamCompositionWeight;
         float teamBlockFactorWeighted = teamBlockFactor * Conf.TeamBlockWeight;
         float teamConfidenceBalanceFactorWeighted = teamConfidenceBalanceFactor * Conf.TeamConfidenceBalanceWeight;
+        float asymmetricFactorWeighted = asymmetricFactor * Conf.AsymmetricWeight;
         float tieBreakerFactorWeighted = tieBreakerFactor * Conf.TieBreakerWeight;
         float score =
             teamEloDifferenceFactorWeighted
@@ -124,6 +126,7 @@ public class MatchmakerRanked : MatchmakerBase
             + teamCompositionFactorWeighted
             + teamBlockFactorWeighted
             + teamConfidenceBalanceFactorWeighted
+            + asymmetricFactorWeighted
             + tieBreakerFactorWeighted;
         
         string description = $"Score {score:0.00} " +
@@ -133,6 +136,7 @@ public class MatchmakerRanked : MatchmakerBase
                   $"tComp:{teamCompositionFactorWeighted:0.00} [{teamCompositionFactor:0.00}], " +
                   $"blocks:{teamBlockFactorWeighted:0.00} [{teamBlockFactor:0.00}], " +
                   $"tConf:{teamConfidenceBalanceFactorWeighted:0.00} [{teamConfidenceBalanceFactor:0.00}], " +
+                  $"asymm:{asymmetricFactorWeighted:0.00} [{asymmetricFactor:0.00}], " +
                   $"tieBr:{tieBreakerFactorWeighted:0.00} [{tieBreakerFactor:0.00}]" +
                   ")";
 
@@ -197,6 +201,12 @@ public class MatchmakerRanked : MatchmakerBase
         int diff = Math.Abs(match.TeamA.MatchPlayerDatas.Values.Select(data => data.GetEloConfidenceLevel()).Sum()
                             - match.TeamB.MatchPlayerDatas.Values.Select(data => data.GetEloConfidenceLevel()).Sum());
         return 1 - Cap(diff * 0.33f);
+    }
+
+    private float GetAsymmetricFactor(Match match)
+    {
+        int extraControlledCharacters = match.Groups.Select(g => g.Slots - g.Players).Sum();
+        return 1 - Cap(extraControlledCharacters * 0.125f);
     }
 
     private float GetTieBreakerFactor(Match match)
