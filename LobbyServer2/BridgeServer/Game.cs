@@ -34,6 +34,7 @@ public abstract class Game
 
     public LobbyGameInfo GameInfo { protected set; get; } // TODO check it is set when needed
     public LobbyServerTeamInfo TeamInfo { protected set; get; } = new LobbyServerTeamInfo() { TeamPlayerInfo = new List<LobbyServerPlayerInfo>() };
+    public string Map { protected set; get; } // TODO check it is set when needed
 
     public ServerGameMetrics GameMetrics { get; private set; } = new ServerGameMetrics();
     public LobbyGameSummary GameSummary { get; private set; }
@@ -351,7 +352,7 @@ public abstract class Game
         LobbyServerPlayerInfo playerInfo = GetPlayerInfo(data.AccountId);
         GameAssignmentNotification notification = new GameAssignmentNotification
         {
-            GameInfo = BuildGameInfo(GameInfo.GameConfig.GameType, GameInfo.GameConfig.SubTypes, data.SubTypeIndex),
+            GameInfo = BuildGameInfo(GameInfo.GameConfig.GameType, GameInfo.GameConfig.SubTypes, data.SubTypeIndex, GameInfo.GameStatus),
             GameResult = GameInfo.GameResult,
             Observer = false,
             PlayerInfo = LobbyPlayerInfo.FromServer(playerInfo, 0, new MatchmakingQueueConfig()),
@@ -390,10 +391,18 @@ public abstract class Game
             GameInfo.GameStatus = gamestatus;
         }
 
+        // TODO we need a common way to track these personalized subtype bits
+        var gameInfo = GameInfo.Clone();
+        var player = Players.FirstOrDefault(d => d.AccountId == playerConnection.AccountId);
+        if (player != null)
+        {
+            gameInfo.GameConfig.InstanceSubTypeBit = (ushort)(1 << player.SubTypeIndex);
+        }
+
         LobbyServerPlayerInfo playerInfo = GetPlayerInfo(playerConnection.AccountId);
         GameInfoNotification notification = new GameInfoNotification
         {
-            GameInfo = GameInfo,
+            GameInfo = gameInfo,
             TeamInfo = LobbyTeamInfo.FromServer(TeamInfo, 0, new MatchmakingQueueConfig()),
             PlayerInfo = LobbyPlayerInfo.FromServer(playerInfo, 0, new MatchmakingQueueConfig())
         };
@@ -1566,10 +1575,8 @@ public abstract class Game
         }
     }
 
-    protected LobbyGameInfo BuildGameInfo(GameType gameType, List<GameSubType> gameSubTypes, int subTypeIndex)
+    protected LobbyGameInfo BuildGameInfo(GameType gameType, List<GameSubType> gameSubTypes, int subTypeIndex, GameStatus gameStatus)
     {
-        // TODO if we don't override it for asymmetric, we don't need to override it here
-        // GameSubType gameMode = GameSubType ?? gameSubTypes[subTypeIndex];
         GameSubType subType = gameSubTypes[subTypeIndex];
 
         TimeSpan? turnTime = Players
@@ -1601,7 +1608,7 @@ public abstract class Game
                 GameType = gameType,
                 InstanceSubTypeBit = (ushort)(1 << subTypeIndex),
                 IsActive = true,
-                Map = MatchmakingQueue.SelectMap(subType),
+                Map = Map,
                 ResolveTimeoutLimit = 1600, // TODO ?
                 RoomName = "",
                 Spectators = 0,
@@ -1613,7 +1620,8 @@ public abstract class Game
             },
             GameResult = GameResult.NoResult,
             GameServerAddress = Server.URI,
-            GameServerProcessCode = Server.ProcessCode
+            GameServerProcessCode = Server.ProcessCode,
+            GameStatus = gameStatus,
         };
     }
 }

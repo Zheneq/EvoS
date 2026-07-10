@@ -54,6 +54,7 @@ public class CustomGame : Game
         };
         lobbyGameInfo.GameConfig.GameType = GameType.Custom;
         GameSubType = gameConfig.SubTypes.ElementAtOrDefault(0);
+        Map = gameConfig.Map;
 
         LobbyServerTeamInfo teamInfo = new LobbyServerTeamInfo()
         {

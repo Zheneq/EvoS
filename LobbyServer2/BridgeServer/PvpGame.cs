@@ -29,22 +29,14 @@ public class PvpGame: Game
     {
         GameSubType = gameSubTypes[subTypeIndex];
 
-        // if (asymmetricSlots is { Count: > 0 })
-        // {
-        //     // TODO does it really matter?
-        //     // Clone the shared GameSubType and set per-team proxy counts for this specific match
-        //     GameSubType = GameSubType.Clone();
-        //     GameSubType.TeamABots = teamA.Where(asymmetricSlots.ContainsKey).Sum(id => asymmetricSlots[id] - 1);
-        //     GameSubType.TeamBBots = teamB.Where(asymmetricSlots.ContainsKey).Sum(id => asymmetricSlots[id] - 1);
-        // }
-
         // Fill Teams
         if (!FillTeam(teamA, Team.TeamA, GameSubType) || !FillTeam(teamB, Team.TeamB, GameSubType))
         {
             return;
         }
 
-        GameInfo = BuildGameInfo(gameType, gameSubTypes, subTypeIndex);
+        Map = MatchmakingQueue.SelectMap(gameSubTypes[subTypeIndex]);
+        GameInfo = BuildGameInfo(gameType, gameSubTypes, subTypeIndex, GameStatus.Assembling);
 
         // Assign Current Server
         GetClients().ForEach(c => c.JoinGame(this));

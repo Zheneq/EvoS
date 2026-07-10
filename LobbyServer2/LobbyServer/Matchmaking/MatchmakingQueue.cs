@@ -558,7 +558,7 @@ namespace CentralServer.LobbyServer.Matchmaking
                 match.Match.TeamA.MatchPlayerDataList,
                 match.Match.TeamB.MatchPlayerDataList,
                 GameType,
-                MatchmakingQueueInfo.GameConfig.SubTypes,
+                MatchmakingQueueInfo.GameConfig.SubTypes.Select(st => st.Clone()).ToList(),
                 subTypeIndex)
                 .LogError();
         }
