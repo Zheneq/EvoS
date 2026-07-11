@@ -1,5 +1,5 @@
 import React, {useEffect, useState} from 'react';
-import {asDate, ban, getPlayer, mute, PlayerDetails} from "../../lib/Evos";
+import {asDate, ban, getPlayer, mute, PlayerDetails, setVip} from "../../lib/Evos";
 import {EvosError, processError} from "../../lib/Error";
 import {useAuthHeader} from "react-auth-kit";
 import {useNavigate, useParams} from "react-router-dom";
@@ -11,6 +11,7 @@ import {EvosCard, StackWrapper} from "../generic/BasicComponents";
 import AdminMessages from "../controls/AdminMessages";
 import TempPassword from "../controls/TempPassword";
 import SendWhisper from "../controls/SendWhisper";
+import BaseDialog from "../generic/BaseDialog";
 
 
 export default function ProfilePage() {
@@ -18,6 +19,8 @@ export default function ProfilePage() {
     const [error, setError] = useState<EvosError>();
     const [playerDetails, setPlayerDetails] = useState<PlayerDetails>();
     const [lastAction, setLastAction] = useState<Date>();
+    const [confirmVipOpen, setConfirmVipOpen] = useState(false);
+    const [vipProcessing, setVipProcessing] = useState(false);
 
     const {accountId} = useParams();
     const accountIdNumber = accountId && parseInt(accountId);
@@ -45,10 +48,28 @@ export default function ProfilePage() {
     }, [accountIdNumber, authHeader, navigate, setPlayerDetails, lastAction]);
 
     const handle = `${playerDetails?.player.handle ?? "Nobody"}`;
+    const isVip = playerDetails?.isVip;
+    
+    const handleVipConfirm = () => {
+        if (!accountIdNumber) return;
+        setVipProcessing(true);
+        setConfirmVipOpen(false);
+        const abort = new AbortController();
+        setVip(abort, authHeader, accountIdNumber, !isVip)
+            .then(() => handleCommit())
+            .catch(e => processError(e, setError, navigate))
+            .finally(() => setVipProcessing(false));
+    };
 
     return (
         <Paper>
             {error && <ErrorDialog error={error} onDismiss={() => setError(undefined)} />}
+            <BaseDialog
+                title={confirmVipOpen ? `${isVip ? 'Revoke' : 'Grant'} VIP for ${handle}?` : undefined}
+                onDismiss={() => setConfirmVipOpen(false)}
+                onAccept={handleVipConfirm}
+                acceptText={isVip ? 'Revoke VIP' : 'Grant VIP'}
+            />
             <StackWrapper>
                 <EvosCard variant="outlined"><Player info={playerDetails?.player} /></EvosCard>
                 {loading && <LinearProgress />}
@@ -56,6 +77,14 @@ export default function ProfilePage() {
                     <Button onClick={() => navigate(`/account/${accountIdNumber}/matches`)}>Match History</Button>
                     <Button onClick={() => navigate(`/account/${accountIdNumber}/chat`)}>Chat History</Button>
                     <Button onClick={() => navigate(`/account/${accountIdNumber}/feedback`)}>Feedback History</Button>
+                </EvosCard>
+                <EvosCard variant="outlined">
+                    <Button
+                        disabled={loading || vipProcessing}
+                        onClick={() => setConfirmVipOpen(true)}
+                    >
+                        {isVip ? 'Revoke VIP' : 'Grant VIP'}
+                    </Button>
                 </EvosCard>
                 <MuteBanPlayer
                     disabled={loading}

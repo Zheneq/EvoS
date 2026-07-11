@@ -34,6 +34,7 @@ export interface PlayerDetails {
     player: PlayerData;
     bannedUntil?: string;
     mutedUntil?: string;
+    isVip: boolean;
 }
 
 export interface GroupData {
@@ -309,6 +310,13 @@ export function ban(authHeader: string, penaltyInfo: PenaltyInfo) {
         baseUrl + "/api/admin/player/banned",
         penaltyInfo,
         { headers: { 'Authorization': authHeader } });
+}
+
+export function setVip(abort: AbortController, authHeader: string, accountId: number, isVip: boolean) {
+    return axios.post(
+        baseUrl + "/api/admin/player/vip",
+        { accountId, isVip },
+        { headers: { 'Authorization': authHeader }, signal: abort.signal });
 }
 
 export function sendWhisper(abort: AbortController, authHeader: string, accountId: number, sender: string, message: string) {

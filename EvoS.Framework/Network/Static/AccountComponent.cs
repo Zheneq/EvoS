@@ -182,6 +182,18 @@ namespace EvoS.Framework.Network.NetworkMessages
             }
         }
 
+        public void SetIsVip(bool isVip)
+        {
+            if (isVip)
+            {
+                AppliedEntitlements.TryAdd(ENTITLEMENT_VIP, 1);
+            }
+            else
+            {
+                AppliedEntitlements.Remove(ENTITLEMENT_VIP);
+            }
+        }
+
         public List<CharacterType> GetLastCharacters(int num)
         {
             return LastRemoteCharacters
