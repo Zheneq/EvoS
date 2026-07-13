@@ -40,7 +40,7 @@ public abstract class Game
     public LobbyGameSummary GameSummary { get; private set; }
     private List<MatchPlayerData> TeamA;
     private List<MatchPlayerData> TeamB;
-    protected IEnumerable<MatchPlayerData> Players => TeamA.Concat(TeamB);
+    protected IEnumerable<MatchPlayerData> Players => (TeamA ?? []).Concat(TeamB ?? []);
     public DateTime StopTime { private set; get; }
     public BridgeServerProtocol Server { private set; get; } // TODO check it is set when needed
 
@@ -347,7 +347,7 @@ public abstract class Game
         }
     }
 
-    protected void SendGameAssignmentNotification(MatchPlayerData data, bool reconnection = false)
+    protected virtual void SendGameAssignmentNotification(MatchPlayerData data, bool reconnection = false)
     {
         LobbyServerPlayerInfo playerInfo = GetPlayerInfo(data.AccountId);
         GameAssignmentNotification notification = new GameAssignmentNotification
@@ -410,7 +410,7 @@ public abstract class Game
         playerConnection.Send(notification);
     }
 
-    protected void SendGameAssignmentNotification(long accountId, bool reconnection = false)
+    protected virtual void SendGameAssignmentNotification(long accountId, bool reconnection = false)
     {
         var player = Players.FirstOrDefault(p => p.AccountId == accountId);
         if (player is null)
@@ -1619,9 +1619,20 @@ public abstract class Game
                 TeamBPlayers = subType.TeamBPlayers,
             },
             GameResult = GameResult.NoResult,
-            GameServerAddress = Server.URI,
-            GameServerProcessCode = Server.ProcessCode,
+            GameServerAddress = GetGameServerURI(),
+            GameServerProcessCode = GetGameServerProcessCode(),
             GameStatus = gameStatus,
         };
+    }
+    
+
+    protected virtual string GetGameServerProcessCode()
+    {
+        return Server.ProcessCode;
+    }
+
+    protected virtual string GetGameServerURI()
+    {
+        return Server.URI;
     }
 }

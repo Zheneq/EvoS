@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using CentralServer.BridgeServer;
 using CentralServer.LobbyServer.Character;
 using CentralServer.LobbyServer.Group;
+using CentralServer.LobbyServer.Matchmaking;
 using CentralServer.LobbyServer.Session;
 using CentralServer.LobbyServer.Utils;
 using EvoS.Framework.Constants.Enums;
@@ -50,7 +51,7 @@ public class CustomGame : Game
             GameConfig = gameConfig,
             GameResult = GameResult.NoResult,
             GameStatus = GameStatus.Assembling,
-            GameServerProcessCode = $"CustomGame-{Guid.NewGuid()}",
+            GameServerProcessCode = GetGameServerProcessCode(),
         };
         lobbyGameInfo.GameConfig.GameType = GameType.Custom;
         GameSubType = gameConfig.SubTypes.ElementAtOrDefault(0);
@@ -88,6 +89,16 @@ public class CustomGame : Game
         SendGameInfoNotifications();
     }
 
+    protected sealed override string GetGameServerProcessCode()
+    {
+        return $"CustomGame-{Guid.NewGuid()}";
+    }
+
+    protected override string GetGameServerURI()
+    {
+        return "";
+    }
+
     public override void Terminate()
     {
         base.Terminate();
@@ -101,6 +112,40 @@ public class CustomGame : Game
                 playerConnection.LeaveGame(this);
             }
         }
+    }
+    
+    // TODO HACK - BuildGameInfo currently doesn't work for custom
+    protected sealed override void SendGameAssignmentNotification(long accountId, bool reconnection = false)
+    {
+        LobbyServerPlayerInfo playerInfo = GetPlayerInfo(accountId);
+        GameAssignmentNotification notification = new GameAssignmentNotification
+        {
+            GameInfo = GameInfo,
+            GameResult = GameInfo.GameResult,
+            Observer = false,
+            PlayerInfo = LobbyPlayerInfo.FromServer(playerInfo, 0, new MatchmakingQueueConfig()),
+            Reconnection = reconnection,
+            GameplayOverrides = GameConfig.GetGameplayOverrides()
+        };
+
+        SessionManager.GetClientConnection(accountId)?.Send(notification);
+    }
+
+    // TODO HACK - BuildGameInfo currently doesn't work for custom
+    protected override void SendGameAssignmentNotification(MatchPlayerData data, bool reconnection = false)
+    {
+        LobbyServerPlayerInfo playerInfo = GetPlayerInfo(data.AccountId);
+        GameAssignmentNotification notification = new GameAssignmentNotification
+        {
+            GameInfo = GameInfo,
+            GameResult = GameInfo.GameResult,
+            Observer = false,
+            PlayerInfo = LobbyPlayerInfo.FromServer(playerInfo, 0, new MatchmakingQueueConfig()),
+            Reconnection = reconnection,
+            GameplayOverrides = GameConfig.GetGameplayOverrides()
+        };
+
+        SessionManager.GetClientConnection(data.AccountId)?.Send(notification);
     }
 
     protected override TimeSpan GetFinalizeGameDelay()
