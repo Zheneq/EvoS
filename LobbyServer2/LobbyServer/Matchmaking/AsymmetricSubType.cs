@@ -149,7 +149,7 @@ public class AsymmetricSubTypeDescriptor
             advertised.Mods.Add(GameSubType.SubTypeMods.NotAllowedForGroups);
         }
 
-        advertised.GameOverrides.TurnTimeSpan = TurnTime;
+        advertised.GameOverrides = new GameValueOverrides { TurnTimeSpan = TurnTime };
 
         advertised.Requirements = RequirementCollection.Create();
         if (baseSubType.Requirements != null)
