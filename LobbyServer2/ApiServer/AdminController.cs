@@ -8,6 +8,7 @@ using CentralServer.LobbyServer;
 using CentralServer.LobbyServer.Chat;
 using CentralServer.LobbyServer.Config;
 using CentralServer.LobbyServer.CustomGames;
+using CentralServer.LobbyServer.Discord;
 using CentralServer.LobbyServer.Matchmaking;
 using CentralServer.LobbyServer.Session;
 using CentralServer.LobbyServer.Utils;
@@ -487,6 +488,10 @@ namespace CentralServer.ApiServer
             public DateTime IssuedAt { get; set; }
             public DateTime ExpiresAt { get; set; }
             public DateTime UsedAt { get; set; }
+            public string DiscordUserId { get; set; }
+            public string DiscordUserName { get; set; }
+            public string DiscordDisplayName { get; set; }
+            public string DiscordAvatarUrl { get; set; }
 
             public static RegistrationCodeEntryModel Of(RegistrationCodeDao.RegistrationCodeEntry e)
             {
@@ -500,6 +505,10 @@ namespace CentralServer.ApiServer
                     IssuedAt = e.IssuedAt,
                     ExpiresAt = e.ExpiresAt,
                     UsedAt = e.UsedAt,
+                    DiscordUserId = e.DiscordUserId == 0 ? null : e.DiscordUserId.ToString(),
+                    DiscordUserName = e.DiscordUserName,
+                    DiscordDisplayName = e.DiscordDisplayName,
+                    DiscordAvatarUrl = e.DiscordAvatarUrl,
                 };
             }
         }
@@ -523,11 +532,126 @@ namespace CentralServer.ApiServer
 
             RegistrationCodeDao dao = DB.Get().RegistrationCodeDao;
             List<RegistrationCodeEntryModel> entries = (before > 0
-                    ? dao.FindBefore(limit, DateTimeOffset.FromUnixTimeSeconds(before).UtcDateTime)
-                    : dao.FindAll(limit, offset))
+                    ? dao.FindIssuedBefore(limit, DateTimeOffset.FromUnixTimeSeconds(before).UtcDateTime)
+                    : dao.FindAllIssued(limit, offset))
                 .Select(RegistrationCodeEntryModel.Of)
                 .ToList();
             return Results.Ok(new RegistrationCodesResponseModel { entries = entries });
+        }
+
+        public class UsernameRequestEntryModel
+        {
+            public string Code { get; set; }
+            public string RequestedUsername { get; set; }
+            public string DiscordUserId { get; set; }
+            public string DiscordUserName { get; set; }
+            public string DiscordDisplayName { get; set; }
+            public string DiscordAvatarUrl { get; set; }
+            public DateTime DiscordCreatedAt { get; set; }
+            public DateTime? DiscordJoinedAt { get; set; }
+            public DateTime RequestedAt { get; set; }
+
+            public static UsernameRequestEntryModel Of(RegistrationCodeDao.RegistrationCodeEntry e)
+            {
+                return new UsernameRequestEntryModel
+                {
+                    Code = e.Code,
+                    RequestedUsername = e.IssuedTo,
+                    DiscordUserId = e.DiscordUserId.ToString(),
+                    DiscordUserName = e.DiscordUserName,
+                    DiscordDisplayName = e.DiscordDisplayName,
+                    DiscordAvatarUrl = e.DiscordAvatarUrl,
+                    DiscordCreatedAt = e.DiscordCreatedAt,
+                    DiscordJoinedAt = e.DiscordJoinedAt,
+                    RequestedAt = e.RequestedAt,
+                };
+            }
+        }
+
+        public class UsernameRequestsResponseModel
+        {
+            public List<UsernameRequestEntryModel> entries { get; set; }
+        }
+
+        public class ConfirmUsernameRequestModel
+        {
+            public string Code { get; set; }
+        }
+
+        public class DeclineUsernameRequestModel
+        {
+            public string Code { get; set; }
+            public string Reason { get; set; }
+        }
+
+        public static IResult GetUsernameRequests(ClaimsPrincipal user)
+        {
+            if (!ValidateAdmin(user, out IResult error, out _, out _))
+            {
+                return error;
+            }
+
+            List<UsernameRequestEntryModel> entries = DB.Get().RegistrationCodeDao
+                .FindByState(RegistrationCodeDao.RegistrationState.Requested, RegistrationCodeDao.LIMIT)
+                .Select(UsernameRequestEntryModel.Of)
+                .ToList();
+            return Results.Ok(new UsernameRequestsResponseModel { entries = entries });
+        }
+
+        public static IResult ConfirmUsernameRequest([FromBody] ConfirmUsernameRequestModel data, ClaimsPrincipal user)
+        {
+            if (!ValidateAdmin(user, out IResult error, out long adminAccountId, out string adminHandle))
+            {
+                return error;
+            }
+
+            RegistrationCodeDao dao = DB.Get().RegistrationCodeDao;
+            RegistrationCodeDao.RegistrationCodeEntry entry = dao.Find(data.Code);
+            if (entry is null || entry.State != RegistrationCodeDao.RegistrationState.Requested)
+            {
+                return Results.NotFound(new ApiServer.ErrorResponseModel { message = "Request not found" });
+            }
+
+            if (DB.Get().LoginDao.Find(entry.IssuedTo) is not null)
+            {
+                return Results.Conflict(new ApiServer.ErrorResponseModel { message = "Username already in use" });
+            }
+
+            log.Info($"API CONFIRM USERNAME REQUEST by {adminHandle} ({adminAccountId}): {entry.IssuedTo}");
+            entry.State = RegistrationCodeDao.RegistrationState.Issued;
+            entry.IssuedBy = adminAccountId;
+            entry.IssuedAt = DateTime.UtcNow;
+            entry.ExpiresAt = EvosConfiguration.GetRegistrationCodeLifetime().Ticks > 0
+                ? DateTime.UtcNow.Add(EvosConfiguration.GetRegistrationCodeLifetime())
+                : DateTime.MaxValue;
+            dao.Save(entry);
+
+            DiscordManager.Get().Bot?.PingUsernameRequestApproved(entry.DiscordUserId, entry.IssuedTo);
+            return Results.Ok();
+        }
+
+        public static IResult DeclineUsernameRequest([FromBody] DeclineUsernameRequestModel data, ClaimsPrincipal user)
+        {
+            if (!ValidateAdmin(user, out IResult error, out long adminAccountId, out string adminHandle))
+            {
+                return error;
+            }
+
+            RegistrationCodeDao dao = DB.Get().RegistrationCodeDao;
+            RegistrationCodeDao.RegistrationCodeEntry entry = dao.Find(data.Code);
+            if (entry is null || entry.State != RegistrationCodeDao.RegistrationState.Requested)
+            {
+                return Results.NotFound(new ApiServer.ErrorResponseModel { message = "Request not found" });
+            }
+
+            log.Info($"API DECLINE USERNAME REQUEST by {adminHandle} ({adminAccountId}): {entry.IssuedTo}");
+            entry.State = RegistrationCodeDao.RegistrationState.Declined;
+            entry.IssuedBy = adminAccountId;
+            entry.DeclineReason = data.Reason;
+            dao.Save(entry);
+
+            DiscordManager.Get().Bot?.PingUsernameRequestDeclined(entry.DiscordUserId, data.Reason);
+            return Results.Ok();
         }
 
         public class MapPickBanModel

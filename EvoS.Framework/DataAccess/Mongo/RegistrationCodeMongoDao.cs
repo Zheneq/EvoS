@@ -8,34 +8,58 @@ namespace EvoS.Framework.DataAccess.Mongo
     public class RegistrationCodeMongoDao : MongoDao<string, RegistrationCodeDao.RegistrationCodeEntry>, RegistrationCodeDao
     {
         public RegistrationCodeMongoDao() : base(
-            "registration_codes", 
+            "registration_codes",
             new CreateIndexModel<RegistrationCodeDao.RegistrationCodeEntry>(Builders<RegistrationCodeDao.RegistrationCodeEntry>.IndexKeys
-                .Descending(entry => entry.IssuedAt)))
+                .Descending(entry => entry.IssuedAt)),
+            new CreateIndexModel<RegistrationCodeDao.RegistrationCodeEntry>(Builders<RegistrationCodeDao.RegistrationCodeEntry>.IndexKeys
+                .Ascending(entry => entry.DiscordUserId)))
         {
         }
+        
+        private FilterDefinition<RegistrationCodeDao.RegistrationCodeEntry> IssuedOnly =>
+            f.And(
+                f.Ne("State", RegistrationCodeDao.RegistrationState.Requested),
+                f.Ne("State", RegistrationCodeDao.RegistrationState.Declined));
 
         public RegistrationCodeDao.RegistrationCodeEntry Find(string code)
         {
             return c.Find(f.Eq("Code", code)).FirstOrDefault();
         }
 
-        public List<RegistrationCodeDao.RegistrationCodeEntry> FindBefore(int limit, DateTime dateTime)
+        public List<RegistrationCodeDao.RegistrationCodeEntry> FindIssuedBefore(int limit, DateTime dateTime)
         {
             return c
-                .Find(f.Lt("IssuedAt", dateTime))
+                .Find(f.And(IssuedOnly, f.Lt("IssuedAt", dateTime)))
                 .Sort(s.Descending("IssuedAt"))
                 .Limit(limit)
                 .ToList();
         }
 
-        public List<RegistrationCodeDao.RegistrationCodeEntry> FindAll(int limit, int offset)
+        public List<RegistrationCodeDao.RegistrationCodeEntry> FindAllIssued(int limit, int offset)
         {
             return c
-                .Find(f.Empty)
+                .Find(IssuedOnly)
                 .Sort(s.Descending("IssuedAt"))
                 .Skip(offset)
                 .Limit(limit)
                 .ToList();
+        }
+
+        public List<RegistrationCodeDao.RegistrationCodeEntry> FindByState(RegistrationCodeDao.RegistrationState state, int limit)
+        {
+            return c
+                .Find(f.Eq("State", state))
+                .Sort(s.Descending("RequestedAt"))
+                .Limit(limit)
+                .ToList();
+        }
+
+        public RegistrationCodeDao.RegistrationCodeEntry FindLatestByDiscordUser(ulong discordUserId)
+        {
+            return c
+                .Find(f.Eq("DiscordUserId", discordUserId))
+                .Sort(s.Descending("RequestedAt"))
+                .FirstOrDefault();
         }
 
         public void Save(RegistrationCodeDao.RegistrationCodeEntry entry)
@@ -43,4 +67,4 @@ namespace EvoS.Framework.DataAccess.Mongo
             insert(entry.Code, entry);
         }
     }
-} 
+}

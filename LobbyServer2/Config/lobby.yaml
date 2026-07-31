@@ -10,8 +10,6 @@ GroupConfig:
   CanInviteActiveOpponents: false
 Discord:
   Enabled: false
-  BotToken: "" # Enter the bots token leave empty to disable
-  BotChannelId: 0 # Enter the channel id for 2way chat (usualy the LobbyChannel id)
   AdminChannel: # Discord Webhook for admin reports
     Webhook: ""
     ThreadId: # leave empty to post into the channel

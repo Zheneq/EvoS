@@ -38,38 +38,79 @@ namespace EvoS.Framework.DataAccess.Daos
             return nonCachedEntry;
         }
 
-        public List<RegistrationCodeDao.RegistrationCodeEntry> FindBefore(int limit, DateTime dateTime)
+        private static bool IsIssued(RegistrationCodeDao.RegistrationCodeEntry entry) =>
+            entry.State != RegistrationCodeDao.RegistrationState.Requested
+            && entry.State != RegistrationCodeDao.RegistrationState.Declined;
+
+        public List<RegistrationCodeDao.RegistrationCodeEntry> FindIssuedBefore(int limit, DateTime dateTime)
         {
             if (dao is RegistrationCodeMockDao)
             {
                 return cache
                     .Select(x => x.Value)
-                    .Where(x => x.IssuedAt < dateTime)
+                    .Where(x => IsIssued(x) && x.IssuedAt < dateTime)
                     .OrderByDescending(x => x.IssuedAt)
                     .Take(limit)
                     .ToList();
             }
-            
-            List<RegistrationCodeDao.RegistrationCodeEntry> daoEntries = dao.FindBefore(limit, dateTime);
+
+            List<RegistrationCodeDao.RegistrationCodeEntry> daoEntries = dao.FindIssuedBefore(limit, dateTime);
             daoEntries.ForEach(Cache);
             return daoEntries;
         }
 
-        public List<RegistrationCodeDao.RegistrationCodeEntry> FindAll(int limit, int offset)
+        public List<RegistrationCodeDao.RegistrationCodeEntry> FindAllIssued(int limit, int offset)
         {
             if (dao is RegistrationCodeMockDao)
             {
                 return cache
                     .Select(x => x.Value)
+                    .Where(IsIssued)
                     .OrderByDescending(x => x.IssuedAt)
                     .Skip(offset)
                     .Take(limit)
                     .ToList();
             }
-            
-            List<RegistrationCodeDao.RegistrationCodeEntry> daoEntries = dao.FindAll(limit, offset);
+
+            List<RegistrationCodeDao.RegistrationCodeEntry> daoEntries = dao.FindAllIssued(limit, offset);
             daoEntries.ForEach(Cache);
             return daoEntries;
+        }
+
+        public List<RegistrationCodeDao.RegistrationCodeEntry> FindByState(RegistrationCodeDao.RegistrationState state, int limit)
+        {
+            if (dao is RegistrationCodeMockDao)
+            {
+                return cache
+                    .Select(x => x.Value)
+                    .Where(x => x.State == state)
+                    .OrderByDescending(x => x.RequestedAt)
+                    .Take(limit)
+                    .ToList();
+            }
+
+            List<RegistrationCodeDao.RegistrationCodeEntry> daoEntries = dao.FindByState(state, limit);
+            daoEntries.ForEach(Cache);
+            return daoEntries;
+        }
+
+        public RegistrationCodeDao.RegistrationCodeEntry FindLatestByDiscordUser(ulong discordUserId)
+        {
+            if (dao is RegistrationCodeMockDao)
+            {
+                return cache
+                    .Select(x => x.Value)
+                    .Where(x => x.DiscordUserId == discordUserId)
+                    .OrderByDescending(x => x.RequestedAt)
+                    .FirstOrDefault();
+            }
+
+            RegistrationCodeDao.RegistrationCodeEntry entry = dao.FindLatestByDiscordUser(discordUserId);
+            if (entry != null)
+            {
+                Cache(entry);
+            }
+            return entry;
         }
 
         public void Save(RegistrationCodeDao.RegistrationCodeEntry entry)

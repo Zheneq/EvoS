@@ -1,0 +1,4 @@
+Enabled: false
+BotToken: "" # Enter the bot's token, leave empty to disable
+BotChannelId: 0 # Channel id for 2-way chat relay (usually the LobbyChannel id)
+RequestChannelId: 0 # Channel id where players request usernames and get pinged

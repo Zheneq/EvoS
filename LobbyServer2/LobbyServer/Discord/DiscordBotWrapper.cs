@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using CentralServer.LobbyServer.Chat;
@@ -6,7 +7,10 @@ using CentralServer.LobbyServer.Session;
 using Discord;
 using Discord.Net;
 using Discord.WebSocket;
+using EvoS.DirectoryServer.Account;
 using EvoS.Framework.Constants.Enums;
+using EvoS.Framework.DataAccess;
+using EvoS.Framework.DataAccess.Daos;
 using EvoS.Framework.Network.NetworkMessages;
 using log4net;
 using Newtonsoft.Json;
@@ -21,15 +25,18 @@ namespace CentralServer.LobbyServer.Discord
         private const string CMD_BROADCAST = "broadcast";
         private const string CMD_QUEUE_DISABLE = "qoff";
         private const string CMD_QUEUE_ENABLE = "qon";
-        
+        private const string CMD_REQUEST_NAME = "register";
+        private const string CMD_GET_CODE = "code";
+
         private readonly DiscordSocketClient botClient;
         private static readonly DiscordSocketConfig discordConfig = new DiscordSocketConfig
         {
             GatewayIntents = GatewayIntents.AllUnprivileged | GatewayIntents.MessageContent
         };
         private readonly ulong? botChannelId;
-        
-        public DiscordBotWrapper(DiscordConfiguration conf)
+        private readonly ulong? requestChannelId;
+
+        public DiscordBotWrapper(DiscordBotConfiguration conf)
         {
             log.Info("Discord bot is enabled");
             botClient = new DiscordSocketClient(discordConfig);
@@ -42,13 +49,14 @@ namespace CentralServer.LobbyServer.Discord
                 log.Info("Discord bot lobby channel is enabled");
                 botChannelId = conf.BotChannelId;
             }
+            requestChannelId = conf.RequestChannelId is null or 0 ? null : conf.RequestChannelId;
             botClient.Log += Log;
             botClient.Ready += Ready;
             botClient.SlashCommandExecuted += SlashCommandHandler;
             botClient.MessageReceived += ClientOnMessageReceived;
         }
 
-        public async Task Login(DiscordConfiguration conf)
+        public async Task Login(DiscordBotConfiguration conf)
         {
             await botClient.LoginAsync(TokenType.Bot, conf.BotToken);
             await botClient.StartAsync();
@@ -81,12 +89,25 @@ namespace CentralServer.LobbyServer.Discord
                 .WithDefaultMemberPermissions(GuildPermission.ManageGuild)
                 .Build();
 
+            SlashCommandProperties requestNameCommand = new SlashCommandBuilder()
+                .WithName(CMD_REQUEST_NAME)
+                .WithDescription("Request a username to register an account")
+                .AddOption("name", ApplicationCommandOptionType.String, "The username you want", true)
+                .Build();
+
+            SlashCommandProperties getCodeCommand = new SlashCommandBuilder()
+                .WithName(CMD_GET_CODE)
+                .WithDescription("Get the registration code for your approved username request")
+                .Build();
+
             try
             {
                 await botClient.CreateGlobalApplicationCommandAsync(infoCommand);
                 await botClient.CreateGlobalApplicationCommandAsync(broadcastCommand);
                 await botClient.CreateGlobalApplicationCommandAsync(queueDisableCommand);
                 await botClient.CreateGlobalApplicationCommandAsync(queueEnableCommand);
+                await botClient.CreateGlobalApplicationCommandAsync(requestNameCommand);
+                await botClient.CreateGlobalApplicationCommandAsync(getCodeCommand);
             }
             catch (HttpException exception)
             {
@@ -165,7 +186,148 @@ namespace CentralServer.LobbyServer.Discord
                     await command.RespondAsync("Matchmaking queue is unpaused", ephemeral: true);
                     break;
                 }
+                case CMD_REQUEST_NAME:
+                {
+                    await HandleRequestName(command, handle);
+                    break;
+                }
+                case CMD_GET_CODE:
+                {
+                    await HandleGetCode(command, handle);
+                    break;
+                }
             }
+        }
+
+        private async Task<bool> IsWrongChannel(SocketSlashCommand command)
+        {
+            if (requestChannelId.HasValue && command.ChannelId != requestChannelId)
+            {
+                await command.RespondAsync(
+                    $"Please use this command in <#{requestChannelId}>.",
+                    ephemeral: true);
+                return true;
+            }
+
+            return false;
+        }
+
+        private async Task HandleRequestName(SocketSlashCommand command, string handle)
+        {
+            if (await IsWrongChannel(command))
+            {
+                return;
+            }
+
+            string name = command.Data.Options.First().Value.ToString()?.Trim() ?? "";
+            log.Info($"CMD /{command.Data.Name} - {handle}: {name}");
+
+            RegistrationCodeDao dao = DB.Get().RegistrationCodeDao;
+
+            // One active request/code per Discord user.
+            RegistrationCodeDao.RegistrationCodeEntry existing = dao.FindLatestByDiscordUser(command.User.Id);
+            if (existing is { State: RegistrationCodeDao.RegistrationState.Requested })
+            {
+                await command.RespondAsync(
+                    $"You already have a pending request for `{existing.IssuedTo}`. Please wait for it to be reviewed.",
+                    ephemeral: true);
+                return;
+            }
+            if (existing is { State: RegistrationCodeDao.RegistrationState.Issued, IsValid: true })
+            {
+                await command.RespondAsync(
+                    $"You already have an approved code waiting. Use `/{CMD_GET_CODE}` to receive it.",
+                    ephemeral: true);
+                return;
+            }
+
+            if (!LoginManager.IsValidUsername(name))
+            {
+                await command.RespondAsync(LoginManager.InvalidUsername, ephemeral: true);
+                return;
+            }
+            if (!LoginManager.IsAllowedUsername(name))
+            {
+                await command.RespondAsync(LoginManager.CannotUseThisUsername, ephemeral: true);
+                return;
+            }
+            if (DB.Get().LoginDao.Find(name.ToLower()) is not null)
+            {
+                await command.RespondAsync(LoginManager.UsernameIsAlreadyUsed, ephemeral: true);
+                return;
+            }
+
+            SocketGuildUser guildUser = command.User as SocketGuildUser;
+            dao.Save(new RegistrationCodeDao.RegistrationCodeEntry
+            {
+                Code = Guid.NewGuid().ToString(),
+                State = RegistrationCodeDao.RegistrationState.Requested,
+                IssuedTo = name.ToLower(),
+                RequestedAt = DateTime.UtcNow,
+                DiscordUserId = command.User.Id,
+                DiscordUserName = command.User.Username,
+                DiscordDisplayName = guildUser?.DisplayName ?? command.User.Username,
+                DiscordAvatarUrl = command.User.GetAvatarUrl() ?? command.User.GetDefaultAvatarUrl(),
+                DiscordCreatedAt = command.User.CreatedAt.UtcDateTime,
+                DiscordJoinedAt = guildUser?.JoinedAt?.UtcDateTime
+            });
+
+            await command.RespondAsync(
+                $"Your request for `{name}` has been submitted for review. " +
+                "You will be pinged here once it is approved.",
+                ephemeral: true);
+        }
+
+        private async Task HandleGetCode(SocketSlashCommand command, string handle)
+        {
+            if (await IsWrongChannel(command))
+            {
+                return;
+            }
+
+            log.Info($"CMD /{command.Data.Name} - {handle}");
+            RegistrationCodeDao dao = DB.Get().RegistrationCodeDao;
+            RegistrationCodeDao.RegistrationCodeEntry entry = dao.FindLatestByDiscordUser(command.User.Id);
+
+            if (entry is null || entry.State == RegistrationCodeDao.RegistrationState.Requested)
+            {
+                await command.RespondAsync(
+                    $"You do not have an approved code yet. Use `/{CMD_REQUEST_NAME}` first, then wait for approval.",
+                    ephemeral: true);
+                return;
+            }
+
+            if (entry.State == RegistrationCodeDao.RegistrationState.Declined)
+            {
+                await command.RespondAsync(
+                    $"Your username request was declined: {entry.DeclineReason}",
+                    ephemeral: true);
+                return;
+            }
+
+            if (entry.IsUsed)
+            {
+                await command.RespondAsync("You have already registered an account.", ephemeral: true);
+                return;
+            }
+
+            if (entry.HasExpired)
+            {
+                // Re-queue the request so an admin can approve it again.
+                entry.State = RegistrationCodeDao.RegistrationState.Requested;
+                entry.ExpiresAt = default;
+                entry.RequestedAt = DateTime.UtcNow;
+                dao.Save(entry);
+                await command.RespondAsync(
+                    "Your registration code has expired. Your request has been sent back for review.",
+                    ephemeral: true);
+                return;
+            }
+
+            await command.RespondAsync(
+                $"Your registration code for `{entry.IssuedTo}` is:\n`{entry.Code}`\n" +
+                "Enter this username and code on the registration screen.",
+                ephemeral: true);
         }
 
         private static Task Log(LogMessage msg)
@@ -190,6 +352,41 @@ namespace CentralServer.LobbyServer.Discord
             if (_channelId.Value == 0) return null;
             IMessageChannel chnl = botClient.GetChannel(_channelId.Value) as IMessageChannel;
             return chnl.SendMessageAsync(text, isTTS, embed, options, allowedMentions, messageReference, components, stickers, embeds, flags);
+        }
+
+        private async Task PingRequestChannel(ulong discordUserId, string message)
+        {
+            if (!requestChannelId.HasValue)
+            {
+                return;
+            }
+
+            try
+            {
+                await SendMessageAsync(
+                    text: message,
+                    allowedMentions: new AllowedMentions(AllowedMentionTypes.Users),
+                    channelIdOverride: requestChannelId);
+            }
+            catch (Exception e)
+            {
+                log.Error($"Failed to ping user {discordUserId} in the request channel", e);
+            }
+        }
+        
+        public async Task PingUsernameRequestApproved(ulong discordUserId, string username)
+        {
+            await PingRequestChannel(
+                discordUserId,
+                $"<@{discordUserId}> your username request for `{username}` has been approved! " +
+                $"Use `/{CMD_GET_CODE}` to receive your registration code.");
+        }
+
+        public async Task PingUsernameRequestDeclined(ulong discordUserId, string reason)
+        {
+            await PingRequestChannel(
+                discordUserId,
+                $"<@{discordUserId}> your username request has been declined: {reason}");
         }
     }
 }

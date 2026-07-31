@@ -20,7 +20,7 @@ namespace EvoS.DirectoryServer.Account
     {
         private static readonly ILog log = LogManager.GetLogger(typeof(LoginManager));
         private static readonly HashAlgorithm algorithm = SHA256.Create();
-        private static readonly Regex usernameRegex = new Regex(@"^[A-Za-z][A-Za-z_\-0-9]{3,}$");
+        private static readonly Regex usernameRegex = new Regex(@"^[A-Za-z][A-Za-z_\-0-9]{3,23}$");
         private static readonly Regex bannedUsernameRegex = new Regex(@"^(?:(?:changeMeToYour)?user(?:name)?|admin|draft|gaia|maps)$", RegexOptions.IgnoreCase);
         private static readonly Regex bannedPasswordRegex = new Regex(@"^(?:(?:changeMeToYour)?password)$", RegexOptions.IgnoreCase);
 
@@ -28,7 +28,7 @@ namespace EvoS.DirectoryServer.Account
         public const string UserDoesNotExist = "User does not exist";
         public const string InvalidUsername = "Invalid username. " +
                         "Please use only latin characters, numbers, underscore and dash, and start with a letter. " +
-                        "4 symbols or more.";
+                        "4 to 24 symbols.";
         public const string CannotUseThisUsername = "You cannot use this username. Please choose another.";
         public const string CannotUseThisPassword = "You cannot use this password. Please choose another.";
         public const string FailedToCreateAnAccount = "Failed to crate an account";

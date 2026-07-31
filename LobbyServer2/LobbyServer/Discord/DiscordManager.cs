@@ -53,6 +53,8 @@ namespace CentralServer.LobbyServer.Discord
             { totalPlayers = -1, inGame = -1, inQueue = -1 };
         private DiscordLobbyUtils.Status lastStatus = NO_STATUS;
 
+        public DiscordBotWrapper Bot => discordBot;
+
 
         public DiscordManager()
         {
@@ -143,21 +145,21 @@ namespace CentralServer.LobbyServer.Discord
                 return;
             }
 
-            if (conf.BotToken.IsNullOrEmpty())
+            DiscordBotConfiguration botConf = DiscordBotConfiguration.Get();
+            if (!botConf.Enabled || botConf.BotToken.IsNullOrEmpty())
             {
                 log.Info("Discord bot is not enabled");
                 return;
             }
 
-            if (conf.BotToken.Length < 70)
+            if (botConf.BotToken.Length < 70)
             {
                 log.Error("Discord bot token is invalid");
                 return;
             }
 
-            // Init bot but we dont use it for anything not yet anyway we just want chat from discord to atlas and commands
-            discordBot = new DiscordBotWrapper(conf);
-            await discordBot.Login(conf);
+            discordBot = new DiscordBotWrapper(botConf);
+            await discordBot.Login(botConf);
         }
 
         public void Shutdown()

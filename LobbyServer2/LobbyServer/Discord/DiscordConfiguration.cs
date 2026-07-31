@@ -18,9 +18,6 @@ namespace CentralServer.LobbyServer.Discord
         public DiscordChannel AdminActionLogChannel;
         public DiscordChannel AdminErrorLogChannel;
 
-        public string BotToken = "";
-        public ulong? BotChannelId;
-
         public bool AdminEnableUserReports;
         public ulong? AdminUserReportThreadId;
         public bool AdminEnableChatAudit;

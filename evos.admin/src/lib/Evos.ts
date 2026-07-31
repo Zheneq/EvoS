@@ -96,10 +96,30 @@ export interface RegistrationCodeEntry {
     issuedAt: string;
     expiresAt: string;
     usedAt: string;
+    discordUserId: string | null;
+    discordUserName: string | null;
+    discordDisplayName: string | null;
+    discordAvatarUrl: string | null;
 }
 
 export interface RegistrationCodesResponse {
     entries: RegistrationCodeEntry[];
+}
+
+export interface UsernameRequestEntry {
+    code: string;
+    requestedUsername: string;
+    discordUserId: string;
+    discordUserName: string;
+    discordDisplayName: string;
+    discordAvatarUrl: string;
+    discordCreatedAt: string;
+    discordJoinedAt: string | null;
+    requestedAt: string;
+}
+
+export interface UsernameRequestsResponse {
+    entries: UsernameRequestEntry[];
 }
 
 export interface SearchResults {
@@ -226,6 +246,33 @@ export function formatDate(ts: string): string {
     return ts ? new Date(ts).toLocaleString() : "N/A";
 }
 
+export function formatRelativeTime(ts: string): string {
+    if (!ts) {
+        return "";
+    }
+    const seconds = Math.max(0, (new Date().getTime() - new Date(ts).getTime()) / 1000);
+    const units: [number, string][] = [
+        [60, "second"],
+        [60, "minute"],
+        [24, "hour"],
+        [7, "day"],
+        [4.34524, "week"],
+        [12, "month"],
+        [Number.POSITIVE_INFINITY, "year"],
+    ];
+    let value = seconds;
+    let unit = "second";
+    for (const [size, name] of units) {
+        unit = name;
+        if (value < size) {
+            break;
+        }
+        value /= size;
+    }
+    const rounded = Math.floor(value);
+    return `${rounded} ${unit}${rounded === 1 ? "" : "s"} ago`;
+}
+
 export function cap(txt: string): string {
     return txt.charAt(0).toUpperCase() + txt.slice(1);
 }
@@ -350,6 +397,26 @@ export function getRegistrationCodes(abort: AbortController, authHeader: string,
     return axios.get<RegistrationCodesResponse>(
         baseUrl + "/api/admin/player/registrationCode",
         { params: { before: Math.floor(before.getTime() / 1000) }, headers: { 'Authorization': authHeader }, signal: abort.signal });
+}
+
+export function getUsernameRequests(abort: AbortController, authHeader: string) {
+    return axios.get<UsernameRequestsResponse>(
+        baseUrl + "/api/admin/player/usernameRequests",
+        { headers: { 'Authorization': authHeader }, signal: abort.signal });
+}
+
+export function confirmUsernameRequest(abort: AbortController, authHeader: string, code: string) {
+    return axios.post(
+        baseUrl + "/api/admin/player/usernameRequest/confirm",
+        { code: code },
+        { headers: { 'Authorization': authHeader }, signal: abort.signal });
+}
+
+export function declineUsernameRequest(abort: AbortController, authHeader: string, code: string, reason: string) {
+    return axios.post(
+        baseUrl + "/api/admin/player/usernameRequest/decline",
+        { code: code, reason: reason },
+        { headers: { 'Authorization': authHeader }, signal: abort.signal });
 }
 
 export function generateTempPassword(abort: AbortController, authHeader: string, accountId: number) {

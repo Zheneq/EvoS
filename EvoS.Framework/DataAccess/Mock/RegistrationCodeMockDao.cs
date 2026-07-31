@@ -11,14 +11,24 @@ namespace EvoS.Framework.DataAccess.Mock
             return null;
         }
 
-        public List<RegistrationCodeDao.RegistrationCodeEntry> FindBefore(int limit, DateTime dateTime)
+        public List<RegistrationCodeDao.RegistrationCodeEntry> FindIssuedBefore(int limit, DateTime dateTime)
         {
             return new List<RegistrationCodeDao.RegistrationCodeEntry>();
         }
 
-        public List<RegistrationCodeDao.RegistrationCodeEntry> FindAll(int limit, int offset)
+        public List<RegistrationCodeDao.RegistrationCodeEntry> FindAllIssued(int limit, int offset)
         {
             return new List<RegistrationCodeDao.RegistrationCodeEntry>();
+        }
+
+        public List<RegistrationCodeDao.RegistrationCodeEntry> FindByState(RegistrationCodeDao.RegistrationState state, int limit)
+        {
+            return new List<RegistrationCodeDao.RegistrationCodeEntry>();
+        }
+
+        public RegistrationCodeDao.RegistrationCodeEntry FindLatestByDiscordUser(ulong discordUserId)
+        {
+            return null;
         }
 
         public void Save(RegistrationCodeDao.RegistrationCodeEntry entry)
