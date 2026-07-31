@@ -1,43 +1,21 @@
 using System.Collections.Generic;
-using System.IO;
-using log4net;
-using YamlDotNet.Serialization;
+using CentralServer.LobbyServer.Utils;
 
-namespace CentralServer.LobbyServer.Discord
+namespace CentralServer.LobbyServer.Discord;
+
+public class DiscordBotConfiguration
 {
-    public class DiscordBotConfiguration
-    {
-        private static readonly ILog log = LogManager.GetLogger(typeof(DiscordBotConfiguration));
-        private const string ConfigPath = "Config/discordBot.yaml";
+    private static readonly ReloadableConfig<DiscordBotConfiguration> Config =
+        new("discordBot.yaml");
 
-        private static DiscordBotConfiguration Instance;
+    public bool Enabled = false;
+    public string BotToken = "";
+    public ulong? BotChannelId;
+    public ulong? RequestChannelId;
 
-        public bool Enabled = false;
-        public string BotToken = "";
-        public ulong? BotChannelId;
-        public ulong? RequestChannelId;
+    // Discord user IDs allowed to invoke management commands (broadcast, qoff, qon).
+    // When empty, the commands fall back to Discord's ManageGuild permission gate only.
+    public HashSet<ulong> AdminUserIds = new();
 
-        // Discord user IDs allowed to invoke management commands (broadcast, qoff, qon).
-        // When empty, the commands fall back to Discord's ManageGuild permission gate only.
-        public HashSet<ulong> AdminUserIds = new();
-
-        public static DiscordBotConfiguration Get()
-        {
-            if (Instance == null)
-            {
-                if (File.Exists(ConfigPath))
-                {
-                    var deserializer = new DeserializerBuilder().Build();
-                    Instance = deserializer.Deserialize<DiscordBotConfiguration>(File.ReadAllText(ConfigPath));
-                }
-                else
-                {
-                    log.Info($"{ConfigPath} not found, Discord bot is disabled");
-                    Instance = new DiscordBotConfiguration();
-                }
-            }
-
-            return Instance;
-        }
-    }
+    public static DiscordBotConfiguration Get() => Config.Get();
 }

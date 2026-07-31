@@ -36,12 +36,10 @@ namespace CentralServer.LobbyServer.Discord
         };
         private readonly ulong? botChannelId;
         private readonly ulong? requestChannelId;
-        private readonly HashSet<ulong> adminUserIds;
 
         public DiscordBotWrapper(DiscordBotConfiguration conf)
         {
             log.Info("Discord bot is enabled");
-            adminUserIds = conf.AdminUserIds ?? new HashSet<ulong>();
             botClient = new DiscordSocketClient(discordConfig);
             if (!conf.BotChannelId.HasValue || conf.BotChannelId == 0)
             {
@@ -209,6 +207,7 @@ namespace CentralServer.LobbyServer.Discord
         // When the allowlist is empty, we rely solely on that gate and let the command through.
         private async Task<bool> IsNotAdmin(SocketSlashCommand command, string handle)
         {
+            HashSet<ulong> adminUserIds = DiscordBotConfiguration.Get().AdminUserIds ?? new HashSet<ulong>();
             if (adminUserIds.Count == 0 || adminUserIds.Contains(command.User.Id))
             {
                 return false;

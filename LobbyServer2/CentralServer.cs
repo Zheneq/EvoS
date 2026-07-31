@@ -12,6 +12,7 @@ using CentralServer.LobbyServer.Group;
 using CentralServer.LobbyServer.Matchmaking;
 using CentralServer.LobbyServer.Session;
 using CentralServer.LobbyServer.Stats;
+using CentralServer.LobbyServer.Utils;
 using EvoS.Framework;
 using log4net;
 using WebSocketSharp;
@@ -111,6 +112,7 @@ namespace CentralServer
             }
 
             DiscordManager.Get().Shutdown();
+            ReloadableConfig.ShutdownAll();
 
             log.Info("Lobby server is not listening, exiting...");
         }
