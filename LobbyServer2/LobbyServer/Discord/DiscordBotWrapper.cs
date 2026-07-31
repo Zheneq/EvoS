@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using CentralServer.LobbyServer.Chat;
@@ -35,10 +36,12 @@ namespace CentralServer.LobbyServer.Discord
         };
         private readonly ulong? botChannelId;
         private readonly ulong? requestChannelId;
+        private readonly HashSet<ulong> adminUserIds;
 
         public DiscordBotWrapper(DiscordBotConfiguration conf)
         {
             log.Info("Discord bot is enabled");
+            adminUserIds = conf.AdminUserIds ?? new HashSet<ulong>();
             botClient = new DiscordSocketClient(discordConfig);
             if (!conf.BotChannelId.HasValue || conf.BotChannelId == 0)
             {
@@ -149,7 +152,7 @@ namespace CentralServer.LobbyServer.Discord
 
         private async Task SlashCommandHandler(SocketSlashCommand command)
         {
-            string handle = $"{command.User.Username}#{command.User.Discriminator}";
+            string handle = $"{command.User.Username} ({command.User.Id})";
             switch (command.Data.Name)
             {
                 case CMD_INFO:
@@ -166,6 +169,7 @@ namespace CentralServer.LobbyServer.Discord
                 }
                 case CMD_BROADCAST:
                 {
+                    if (await IsNotAdmin(command, handle)) break;
                     string msg = command.Data.Options.First().Value.ToString();
                     log.Info($"CMD /{command.Data.Name} - {handle}: {msg}");
                     ChatManager.Get().Broadcast(msg);
@@ -174,6 +178,7 @@ namespace CentralServer.LobbyServer.Discord
                 }
                 case CMD_QUEUE_DISABLE:
                 {
+                    if (await IsNotAdmin(command, handle)) break;
                     log.Info($"CMD /{command.Data.Name} - {handle}");
                     MatchmakingManager.Enabled = false;
                     await command.RespondAsync("Matchmaking queue is paused", ephemeral: true);
@@ -181,6 +186,7 @@ namespace CentralServer.LobbyServer.Discord
                 }
                 case CMD_QUEUE_ENABLE:
                 {
+                    if (await IsNotAdmin(command, handle)) break;
                     log.Info($"CMD /{command.Data.Name} - {handle}");
                     MatchmakingManager.Enabled = true;
                     await command.RespondAsync("Matchmaking queue is unpaused", ephemeral: true);
@@ -197,6 +203,20 @@ namespace CentralServer.LobbyServer.Discord
                     break;
                 }
             }
+        }
+
+        // Extra defense-in-depth on top of the command's ManageGuild permission gate.
+        // When the allowlist is empty, we rely solely on that gate and let the command through.
+        private async Task<bool> IsNotAdmin(SocketSlashCommand command, string handle)
+        {
+            if (adminUserIds.Count == 0 || adminUserIds.Contains(command.User.Id))
+            {
+                return false;
+            }
+
+            log.Warn($"Rejected management command /{command.Data.Name} from non-admin {handle} ({command.User.Id})");
+            await command.RespondAsync("You are not allowed to use this command.", ephemeral: true);
+            return true;
         }
 
         private async Task<bool> IsWrongChannel(SocketSlashCommand command)

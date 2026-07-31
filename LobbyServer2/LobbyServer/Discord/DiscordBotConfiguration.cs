@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.IO;
 using log4net;
 using YamlDotNet.Serialization;
@@ -15,6 +16,10 @@ namespace CentralServer.LobbyServer.Discord
         public string BotToken = "";
         public ulong? BotChannelId;
         public ulong? RequestChannelId;
+
+        // Discord user IDs allowed to invoke management commands (broadcast, qoff, qon).
+        // When empty, the commands fall back to Discord's ManageGuild permission gate only.
+        public HashSet<ulong> AdminUserIds = new();
 
         public static DiscordBotConfiguration Get()
         {
