@@ -107,7 +107,6 @@ export interface RegistrationCodesResponse {
 }
 
 export interface UsernameRequestEntry {
-    code: string;
     requestedUsername: string;
     discordUserId: string;
     discordUserName: string;
@@ -405,17 +404,17 @@ export function getUsernameRequests(abort: AbortController, authHeader: string) 
         { headers: { 'Authorization': authHeader }, signal: abort.signal });
 }
 
-export function confirmUsernameRequest(abort: AbortController, authHeader: string, code: string) {
+export function confirmUsernameRequest(abort: AbortController, authHeader: string, discordUserId: string, requestedUsername: string) {
     return axios.post(
         baseUrl + "/api/admin/player/usernameRequest/confirm",
-        { code: code },
+        { discordUserId, requestedUsername },
         { headers: { 'Authorization': authHeader }, signal: abort.signal });
 }
 
-export function declineUsernameRequest(abort: AbortController, authHeader: string, code: string, reason: string) {
+export function declineUsernameRequest(abort: AbortController, authHeader: string, discordUserId: string, requestedUsername: string, reason: string) {
     return axios.post(
         baseUrl + "/api/admin/player/usernameRequest/decline",
-        { code: code, reason: reason },
+        { discordUserId, requestedUsername, reason },
         { headers: { 'Authorization': authHeader }, signal: abort.signal });
 }
 

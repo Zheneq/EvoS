@@ -101,14 +101,16 @@ namespace CentralServer.LobbyServer.Discord
             SlashCommandProperties approveCommand = new SlashCommandBuilder()
                 .WithName(CMD_APPROVE)
                 .WithDescription("Approve a username request")
-                .AddOption("code", ApplicationCommandOptionType.String, "The request code", true)
+                .AddOption("user", ApplicationCommandOptionType.User, "The user who made the request", true)
+                .AddOption("name", ApplicationCommandOptionType.String, "The requested username", true)
                 .WithDefaultMemberPermissions(GuildPermission.ManageGuild)
                 .Build();
 
             SlashCommandProperties declineCommand = new SlashCommandBuilder()
                 .WithName(CMD_DECLINE)
                 .WithDescription("Decline a username request")
-                .AddOption("code", ApplicationCommandOptionType.String, "The request code", true)
+                .AddOption("user", ApplicationCommandOptionType.User, "The user who made the request", true)
+                .AddOption("name", ApplicationCommandOptionType.String, "The requested username", true)
                 .AddOption("reason", ApplicationCommandOptionType.String, "Reason shown to the user", true)
                 .WithDefaultMemberPermissions(GuildPermission.ManageGuild)
                 .Build();
@@ -396,11 +398,12 @@ namespace CentralServer.LobbyServer.Discord
 
         private async Task HandleApprove(SocketSlashCommand command, string handle)
         {
-            string code = command.Data.Options.First().Value.ToString()?.Trim() ?? "";
-            log.Info($"CMD /{command.Data.Name} - {handle}: {code}");
+            ulong discordUserId = ((IUser)command.Data.Options.First(o => o.Name == "user").Value).Id;
+            string username = command.Data.Options.First(o => o.Name == "name").Value.ToString()?.Trim().ToLower() ?? "";
+            log.Info($"CMD /{command.Data.Name} - {handle}: {discordUserId} `{username}`");
 
             UsernameRequestManager.Result result = UsernameRequestManager.Approve(
-                code, GetAdminAccountId(command.User.Id), handle,
+                discordUserId, username, GetAdminAccountId(command.User.Id), handle,
                 out RegistrationCodeDao.RegistrationCodeEntry entry);
 
             string response = result switch
@@ -409,7 +412,7 @@ namespace CentralServer.LobbyServer.Discord
                     $"Approved `{entry.IssuedTo}` — the user has been pinged.",
                 UsernameRequestManager.Result.UsernameTaken =>
                     "That username is already in use.",
-                UsernameRequestManager.Result.NotFound => "No pending request with that code.",
+                UsernameRequestManager.Result.NotFound => "No pending request from that user for that username.",
                 _ => throw new ArgumentOutOfRangeException()
             };
             await command.RespondAsync(response, ephemeral: true);
@@ -417,18 +420,19 @@ namespace CentralServer.LobbyServer.Discord
 
         private async Task HandleDecline(SocketSlashCommand command, string handle)
         {
-            string code = command.Data.Options.First(o => o.Name == "code").Value.ToString()?.Trim() ?? "";
+            ulong discordUserId = ((IUser)command.Data.Options.First(o => o.Name == "user").Value).Id;
+            string username = command.Data.Options.First(o => o.Name == "name").Value.ToString()?.Trim().ToLower() ?? "";
             string reason = command.Data.Options.First(o => o.Name == "reason").Value.ToString()?.Trim() ?? "";
-            log.Info($"CMD /{command.Data.Name} - {handle}: {code} ({reason})");
+            log.Info($"CMD /{command.Data.Name} - {handle}: {discordUserId} `{username}` ({reason})");
 
             UsernameRequestManager.Result result = UsernameRequestManager.Decline(
-                code, reason, GetAdminAccountId(command.User.Id), handle,
+                discordUserId, username, reason, GetAdminAccountId(command.User.Id), handle,
                 out RegistrationCodeDao.RegistrationCodeEntry entry);
 
             string response = result switch
             {
                 UsernameRequestManager.Result.Success => $"Declined `{entry.IssuedTo}` — the user has been pinged.",
-                UsernameRequestManager.Result.NotFound => "No pending request with that code.",
+                UsernameRequestManager.Result.NotFound => "No pending request from that user for that username.",
                 _ => throw new ArgumentOutOfRangeException()
             };
             await command.RespondAsync(response, ephemeral: true);
@@ -452,10 +456,10 @@ namespace CentralServer.LobbyServer.Discord
             {
                 if (customId.StartsWith($"{BTN_APPROVE}:"))
                 {
-                    string code = customId[(BTN_APPROVE.Length + 1)..];
-                    log.Info($"BTN approve - {handle}: {code}");
+                    (ulong discordUserId, string username) = ParseRequestId(customId[(BTN_APPROVE.Length + 1)..]);
+                    log.Info($"BTN approve - {handle}: {discordUserId} `{username}`");
                     UsernameRequestManager.Result result = UsernameRequestManager.Approve(
-                        code, GetAdminAccountId(component.User.Id), handle,
+                        discordUserId, username, GetAdminAccountId(component.User.Id), handle,
                         out RegistrationCodeDao.RegistrationCodeEntry entry);
 
                     switch (result)
@@ -471,7 +475,7 @@ namespace CentralServer.LobbyServer.Discord
                             break;
                         case UsernameRequestManager.Result.NotFound:
                             await component.RespondAsync(
-                                "No pending request with that code.",
+                                "No pending request from that user for that username.",
                                 ephemeral: true);
                             break;
                         default:
@@ -483,11 +487,11 @@ namespace CentralServer.LobbyServer.Discord
                 }
                 else if (customId.StartsWith($"{BTN_DECLINE}:"))
                 {
-                    string code = customId[(BTN_DECLINE.Length + 1)..];
+                    string requestId = customId[(BTN_DECLINE.Length + 1)..];
                     // Carry the notification's message id so the modal handler can edit it once submitted.
                     Modal modal = new ModalBuilder()
                         .WithTitle("Decline username request")
-                        .WithCustomId($"{MODAL_DECLINE}:{component.Message.Id}:{code}")
+                        .WithCustomId($"{MODAL_DECLINE}:{component.Message.Id}:{requestId}")
                         .AddTextInput("Reason (shown to the user)", MODAL_REASON_INPUT,
                             TextInputStyle.Paragraph, required: true)
                         .Build();
@@ -514,17 +518,19 @@ namespace CentralServer.LobbyServer.Discord
                 return;
             }
 
-            string[] parts = customId[(MODAL_DECLINE.Length + 1)..].Split(':', 2);
+            string[] parts = customId[(MODAL_DECLINE.Length + 1)..].Split(':', 3);
             ulong messageId = ulong.TryParse(parts[0], out ulong id) ? id : 0;
-            string code = parts.Length > 1 ? parts[1] : "";
+            (ulong discordUserId, string username) = parts.Length > 2
+                ? ParseRequestId($"{parts[1]}:{parts[2]}")
+                : (0UL, "");
             string reason = modal.Data.Components
                 .FirstOrDefault(c => c.CustomId == MODAL_REASON_INPUT)?.Value?.Trim() ?? "";
-            log.Info($"MODAL decline - {handle}: {code} ({reason})");
+            log.Info($"MODAL decline - {handle}: {discordUserId} `{username}` ({reason})");
 
             try
             {
                 UsernameRequestManager.Result result = UsernameRequestManager.Decline(
-                    code, reason, GetAdminAccountId(modal.User.Id), handle,
+                    discordUserId, username, reason, GetAdminAccountId(modal.User.Id), handle,
                     out RegistrationCodeDao.RegistrationCodeEntry entry);
 
                 if (result == UsernameRequestManager.Result.Success)
@@ -534,12 +540,12 @@ namespace CentralServer.LobbyServer.Discord
                 }
                 else
                 {
-                    await modal.RespondAsync("No pending request with that code.", ephemeral: true);
+                    await modal.RespondAsync("No pending request from that user for that username.", ephemeral: true);
                 }
             }
             catch (Exception e)
             {
-                log.Error($"Failed to handle decline modal {code} from {handle}", e);
+                log.Error($"Failed to handle decline modal {discordUserId} `{username}` from {handle}", e);
             }
         }
 
@@ -593,13 +599,13 @@ namespace CentralServer.LobbyServer.Discord
                         Value = $"<t:{ToUnix(entry.DiscordCreatedAt)}:D> (<t:{ToUnix(entry.DiscordCreatedAt)}:R>)"
                     },
                     new EmbedFieldBuilder { Name = "Joined server", Value = joined },
-                    new EmbedFieldBuilder { Name = "Request code", Value = $"`{entry.Code}`" },
                 }
             }.Build();
 
+            string requestId = $"{entry.DiscordUserId}:{entry.IssuedTo}";
             MessageComponent components = new ComponentBuilder()
-                .WithButton("Approve", $"{BTN_APPROVE}:{entry.Code}", ButtonStyle.Success)
-                .WithButton("Decline", $"{BTN_DECLINE}:{entry.Code}", ButtonStyle.Danger)
+                .WithButton("Approve", $"{BTN_APPROVE}:{requestId}", ButtonStyle.Success)
+                .WithButton("Decline", $"{BTN_DECLINE}:{requestId}", ButtonStyle.Danger)
                 .Build();
 
             try
@@ -610,6 +616,15 @@ namespace CentralServer.LobbyServer.Discord
             {
                 log.Error($"Failed to post username request {entry.Code} to the admin channel", e);
             }
+        }
+
+        // Request identity carried in button/modal custom ids: "<discordUserId>:<username>".
+        private static (ulong, string) ParseRequestId(string requestId)
+        {
+            string[] parts = requestId.Split(':', 2);
+            ulong discordUserId = ulong.TryParse(parts[0], out ulong id) ? id : 0;
+            string username = parts.Length > 1 ? parts[1] : "";
+            return (discordUserId, username);
         }
 
         private static long ToUnix(DateTime utc)

@@ -114,7 +114,7 @@ export default function IssueRegistrationCode() {
     const handleConfirm = (row: UsernameRequestEntry) => {
         setProcessing(true);
         const abort = new AbortController();
-        confirmUsernameRequest(abort, authHeader, row.code)
+        confirmUsernameRequest(abort, authHeader, row.discordUserId, row.requestedUsername)
             .catch(e => processError(e, setRequestsError, navigate))
             .then(() => {
                 setProcessing(false);
@@ -128,7 +128,7 @@ export default function IssueRegistrationCode() {
         }
         setProcessing(true);
         const abort = new AbortController();
-        declineUsernameRequest(abort, authHeader, declineTarget.code, declineReason)
+        declineUsernameRequest(abort, authHeader, declineTarget.discordUserId, declineTarget.requestedUsername, declineReason)
             .catch(e => processError(e, setRequestsError, navigate))
             .then(() => {
                 setProcessing(false);
@@ -193,7 +193,7 @@ export default function IssueRegistrationCode() {
                     </TableHead>
                     <TableBody>
                         {requests.map((row) => (
-                            <TableRow key={row.code}>
+                            <TableRow key={`${row.discordUserId}:${row.requestedUsername}`}>
                                 <TableCell>{row.requestedUsername}</TableCell>
                                 <TableCell>
                                     <DiscordUser

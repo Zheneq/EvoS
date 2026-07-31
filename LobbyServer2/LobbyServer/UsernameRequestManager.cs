@@ -19,13 +19,14 @@ namespace CentralServer.LobbyServer
         }
 
         public static Result Approve(
-            string code,
+            ulong discordUserId,
+            string username,
             long adminAccountId,
             string adminLabel,
             out RegistrationCodeDao.RegistrationCodeEntry entry)
         {
             RegistrationCodeDao dao = DB.Get().RegistrationCodeDao;
-            entry = dao.Find(code);
+            entry = dao.FindRequestByDiscordUser(discordUserId, username);
             if (entry is null || entry.State != RegistrationCodeDao.RegistrationState.Requested)
             {
                 return Result.NotFound;
@@ -50,14 +51,15 @@ namespace CentralServer.LobbyServer
         }
 
         public static Result Decline(
-            string code,
+            ulong discordUserId,
+            string username,
             string reason,
             long adminAccountId,
             string adminLabel,
             out RegistrationCodeDao.RegistrationCodeEntry entry)
         {
             RegistrationCodeDao dao = DB.Get().RegistrationCodeDao;
-            entry = dao.Find(code);
+            entry = dao.FindRequestByDiscordUser(discordUserId, username);
             if (entry is null || entry.State != RegistrationCodeDao.RegistrationState.Requested)
             {
                 return Result.NotFound;

@@ -113,6 +113,25 @@ namespace EvoS.Framework.DataAccess.Daos
             return entry;
         }
 
+        public RegistrationCodeDao.RegistrationCodeEntry FindRequestByDiscordUser(ulong discordUserId, string username)
+        {
+            if (dao is RegistrationCodeMockDao)
+            {
+                return cache
+                    .Select(x => x.Value)
+                    .Where(x => x.DiscordUserId == discordUserId && x.IssuedTo == username)
+                    .OrderByDescending(x => x.RequestedAt)
+                    .FirstOrDefault();
+            }
+
+            RegistrationCodeDao.RegistrationCodeEntry entry = dao.FindRequestByDiscordUser(discordUserId, username);
+            if (entry != null)
+            {
+                Cache(entry);
+            }
+            return entry;
+        }
+
         public void Save(RegistrationCodeDao.RegistrationCodeEntry entry)
         {
             dao.Save(entry);

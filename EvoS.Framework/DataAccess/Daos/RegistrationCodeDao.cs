@@ -14,6 +14,7 @@ namespace EvoS.Framework.DataAccess.Daos
         public List<RegistrationCodeEntry> FindAllIssued(int limit, int offset);
         public List<RegistrationCodeEntry> FindByState(RegistrationState state, int limit);
         public RegistrationCodeEntry FindLatestByDiscordUser(ulong discordUserId);
+        public RegistrationCodeEntry FindRequestByDiscordUser(ulong discordUserId, string username);
         public void Save(RegistrationCodeEntry entry);
 
         // Issued = 0 so legacy rows and manually issued codes (with no State field) are treated as issued.

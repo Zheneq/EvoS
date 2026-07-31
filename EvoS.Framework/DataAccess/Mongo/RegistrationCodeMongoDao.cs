@@ -62,6 +62,14 @@ namespace EvoS.Framework.DataAccess.Mongo
                 .FirstOrDefault();
         }
 
+        public RegistrationCodeDao.RegistrationCodeEntry FindRequestByDiscordUser(ulong discordUserId, string username)
+        {
+            return c
+                .Find(f.And(f.Eq("DiscordUserId", discordUserId), f.Eq("IssuedTo", username)))
+                .Sort(s.Descending("RequestedAt"))
+                .FirstOrDefault();
+        }
+
         public void Save(RegistrationCodeDao.RegistrationCodeEntry entry)
         {
             insert(entry.Code, entry);

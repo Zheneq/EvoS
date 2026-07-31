@@ -539,7 +539,6 @@ namespace CentralServer.ApiServer
 
         public class UsernameRequestEntryModel
         {
-            public string Code { get; set; }
             public string RequestedUsername { get; set; }
             public string DiscordUserId { get; set; }
             public string DiscordUserName { get; set; }
@@ -553,7 +552,6 @@ namespace CentralServer.ApiServer
             {
                 return new UsernameRequestEntryModel
                 {
-                    Code = e.Code,
                     RequestedUsername = e.IssuedTo,
                     DiscordUserId = e.DiscordUserId.ToString(),
                     DiscordUserName = e.DiscordUserName,
@@ -573,12 +571,14 @@ namespace CentralServer.ApiServer
 
         public class ConfirmUsernameRequestModel
         {
-            public string Code { get; set; }
+            public string DiscordUserId { get; set; }
+            public string RequestedUsername { get; set; }
         }
 
         public class DeclineUsernameRequestModel
         {
-            public string Code { get; set; }
+            public string DiscordUserId { get; set; }
+            public string RequestedUsername { get; set; }
             public string Reason { get; set; }
         }
 
@@ -603,7 +603,13 @@ namespace CentralServer.ApiServer
                 return error;
             }
 
-            var result = UsernameRequestManager.Approve(data.Code, adminAccountId, $"{adminHandle} ({adminAccountId})", out _);
+            if (!ulong.TryParse(data.DiscordUserId, out ulong discordUserId))
+            {
+                return Results.BadRequest(new ApiServer.ErrorResponseModel { message = "Invalid Discord user id" });
+            }
+
+            var result = UsernameRequestManager.Approve(
+                discordUserId, data.RequestedUsername, adminAccountId, $"{adminHandle} ({adminAccountId})", out _);
             switch (result)
             {
                 case UsernameRequestManager.Result.NotFound:
@@ -625,8 +631,13 @@ namespace CentralServer.ApiServer
                 return error;
             }
 
+            if (!ulong.TryParse(data.DiscordUserId, out ulong discordUserId))
+            {
+                return Results.BadRequest(new ApiServer.ErrorResponseModel { message = "Invalid Discord user id" });
+            }
+
             UsernameRequestManager.Result result = UsernameRequestManager.Decline(
-                data.Code, data.Reason, adminAccountId, $"{adminHandle} ({adminAccountId})", out _);
+                discordUserId, data.RequestedUsername, data.Reason, adminAccountId, $"{adminHandle} ({adminAccountId})", out _);
             switch (result)
             {
                 case UsernameRequestManager.Result.NotFound:

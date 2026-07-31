@@ -31,6 +31,11 @@ namespace EvoS.Framework.DataAccess.Mock
             return null;
         }
 
+        public RegistrationCodeDao.RegistrationCodeEntry FindRequestByDiscordUser(ulong discordUserId, string username)
+        {
+            return null;
+        }
+
         public void Save(RegistrationCodeDao.RegistrationCodeEntry entry)
         {
         }
