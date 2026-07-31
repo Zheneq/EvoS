@@ -8,9 +8,7 @@ using CentralServer.LobbyServer;
 using CentralServer.LobbyServer.Chat;
 using CentralServer.LobbyServer.Config;
 using CentralServer.LobbyServer.CustomGames;
-using CentralServer.LobbyServer.Discord;
 using CentralServer.LobbyServer.Matchmaking;
-using CentralServer.LobbyServer.Session;
 using CentralServer.LobbyServer.Utils;
 using CentralServer.Proxy;
 using EvoS.DirectoryServer.Account;
@@ -605,29 +603,19 @@ namespace CentralServer.ApiServer
                 return error;
             }
 
-            RegistrationCodeDao dao = DB.Get().RegistrationCodeDao;
-            RegistrationCodeDao.RegistrationCodeEntry entry = dao.Find(data.Code);
-            if (entry is null || entry.State != RegistrationCodeDao.RegistrationState.Requested)
+            var result = UsernameRequestManager.Approve(data.Code, adminAccountId, $"{adminHandle} ({adminAccountId})", out _);
+            switch (result)
             {
-                return Results.NotFound(new ApiServer.ErrorResponseModel { message = "Request not found" });
+                case UsernameRequestManager.Result.NotFound:
+                    return Results.NotFound(new ApiServer.ErrorResponseModel { message = "Request not found" });
+                case UsernameRequestManager.Result.UsernameTaken:
+                    return Results.Conflict(new ApiServer.ErrorResponseModel { message = "Username already in use" });
+                case UsernameRequestManager.Result.Success:
+                    return Results.Ok();
+                default:
+                    log.Error($"Decline username request failed with {result}");
+                    return Results.InternalServerError();
             }
-
-            if (DB.Get().LoginDao.Find(entry.IssuedTo) is not null)
-            {
-                return Results.Conflict(new ApiServer.ErrorResponseModel { message = "Username already in use" });
-            }
-
-            log.Info($"API CONFIRM USERNAME REQUEST by {adminHandle} ({adminAccountId}): {entry.IssuedTo}");
-            entry.State = RegistrationCodeDao.RegistrationState.Issued;
-            entry.IssuedBy = adminAccountId;
-            entry.IssuedAt = DateTime.UtcNow;
-            entry.ExpiresAt = EvosConfiguration.GetRegistrationCodeLifetime().Ticks > 0
-                ? DateTime.UtcNow.Add(EvosConfiguration.GetRegistrationCodeLifetime())
-                : DateTime.MaxValue;
-            dao.Save(entry);
-
-            DiscordManager.Get().Bot?.PingUsernameRequestApproved(entry.DiscordUserId, entry.IssuedTo);
-            return Results.Ok();
         }
 
         public static IResult DeclineUsernameRequest([FromBody] DeclineUsernameRequestModel data, ClaimsPrincipal user)
@@ -637,21 +625,18 @@ namespace CentralServer.ApiServer
                 return error;
             }
 
-            RegistrationCodeDao dao = DB.Get().RegistrationCodeDao;
-            RegistrationCodeDao.RegistrationCodeEntry entry = dao.Find(data.Code);
-            if (entry is null || entry.State != RegistrationCodeDao.RegistrationState.Requested)
+            UsernameRequestManager.Result result = UsernameRequestManager.Decline(
+                data.Code, data.Reason, adminAccountId, $"{adminHandle} ({adminAccountId})", out _);
+            switch (result)
             {
-                return Results.NotFound(new ApiServer.ErrorResponseModel { message = "Request not found" });
+                case UsernameRequestManager.Result.NotFound:
+                    return Results.NotFound(new ApiServer.ErrorResponseModel { message = "Request not found" });
+                case UsernameRequestManager.Result.Success:
+                    return Results.Ok();
+                default:
+                    log.Error($"Decline username request failed with {result}");
+                    return Results.InternalServerError();
             }
-
-            log.Info($"API DECLINE USERNAME REQUEST by {adminHandle} ({adminAccountId}): {entry.IssuedTo}");
-            entry.State = RegistrationCodeDao.RegistrationState.Declined;
-            entry.IssuedBy = adminAccountId;
-            entry.DeclineReason = data.Reason;
-            dao.Save(entry);
-
-            DiscordManager.Get().Bot?.PingUsernameRequestDeclined(entry.DiscordUserId, data.Reason);
-            return Results.Ok();
         }
 
         public class MapPickBanModel

@@ -2,4 +2,5 @@ Enabled: false
 BotToken: "" # Enter the bot's token, leave empty to disable
 BotChannelId: 0 # Channel id for 2-way chat relay (usually the LobbyChannel id)
 RequestChannelId: 0 # Channel id where players request usernames and get pinged
-AdminUserIds: [] # Discord user ids allowed to run management commands (broadcast, qoff, qon); empty falls back to the ManageGuild permission gate
+AdminNotificationChannelId: 0 # Channel id where new username requests are announced for admin review; 0 disables
+AdminUserIds: {} # Map of Discord user id -> in-game account id, allowed to run management commands (broadcast, qoff, qon, approve, decline); empty falls back to the ManageGuild permission gate.

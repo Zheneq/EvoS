@@ -28,32 +28,29 @@ namespace CentralServer.LobbyServer.Discord
         private const string CMD_QUEUE_ENABLE = "qon";
         private const string CMD_REQUEST_NAME = "register";
         private const string CMD_GET_CODE = "code";
+        private const string CMD_APPROVE = "approve";
+        private const string CMD_DECLINE = "decline";
 
         private readonly DiscordSocketClient botClient;
         private static readonly DiscordSocketConfig discordConfig = new DiscordSocketConfig
         {
             GatewayIntents = GatewayIntents.AllUnprivileged | GatewayIntents.MessageContent
         };
-        private readonly ulong? botChannelId;
-        private readonly ulong? requestChannelId;
+
+        private const string BTN_APPROVE = "req_approve";
+        private const string BTN_DECLINE = "req_decline";
+        private const string MODAL_DECLINE = "req_decline_modal";
+        private const string MODAL_REASON_INPUT = "reason";
 
         public DiscordBotWrapper(DiscordBotConfiguration conf)
         {
             log.Info("Discord bot is enabled");
             botClient = new DiscordSocketClient(discordConfig);
-            if (!conf.BotChannelId.HasValue || conf.BotChannelId == 0)
-            {
-                botChannelId = null;
-            }
-            else
-            {
-                log.Info("Discord bot lobby channel is enabled");
-                botChannelId = conf.BotChannelId;
-            }
-            requestChannelId = conf.RequestChannelId is null or 0 ? null : conf.RequestChannelId;
             botClient.Log += Log;
             botClient.Ready += Ready;
             botClient.SlashCommandExecuted += SlashCommandHandler;
+            botClient.ButtonExecuted += ButtonHandler;
+            botClient.ModalSubmitted += ModalHandler;
             botClient.MessageReceived += ClientOnMessageReceived;
         }
 
@@ -101,6 +98,21 @@ namespace CentralServer.LobbyServer.Discord
                 .WithDescription("Get the registration code for your approved username request")
                 .Build();
 
+            SlashCommandProperties approveCommand = new SlashCommandBuilder()
+                .WithName(CMD_APPROVE)
+                .WithDescription("Approve a username request")
+                .AddOption("code", ApplicationCommandOptionType.String, "The request code", true)
+                .WithDefaultMemberPermissions(GuildPermission.ManageGuild)
+                .Build();
+
+            SlashCommandProperties declineCommand = new SlashCommandBuilder()
+                .WithName(CMD_DECLINE)
+                .WithDescription("Decline a username request")
+                .AddOption("code", ApplicationCommandOptionType.String, "The request code", true)
+                .AddOption("reason", ApplicationCommandOptionType.String, "Reason shown to the user", true)
+                .WithDefaultMemberPermissions(GuildPermission.ManageGuild)
+                .Build();
+
             try
             {
                 await botClient.CreateGlobalApplicationCommandAsync(infoCommand);
@@ -109,6 +121,8 @@ namespace CentralServer.LobbyServer.Discord
                 await botClient.CreateGlobalApplicationCommandAsync(queueEnableCommand);
                 await botClient.CreateGlobalApplicationCommandAsync(requestNameCommand);
                 await botClient.CreateGlobalApplicationCommandAsync(getCodeCommand);
+                await botClient.CreateGlobalApplicationCommandAsync(approveCommand);
+                await botClient.CreateGlobalApplicationCommandAsync(declineCommand);
             }
             catch (HttpException exception)
             {
@@ -119,8 +133,11 @@ namespace CentralServer.LobbyServer.Discord
 
         private Task ClientOnMessageReceived(SocketMessage socketMessage)
         {
+            var botChannelId = DiscordBotConfiguration.Get().BotChannelId;
+            
             // Check if Author is not a bot and allow only reading from the discord LobbyChannel
             if (botChannelId == null
+                || botChannelId == 0
                 || socketMessage.Author.IsBot
                 || socketMessage.Channel.Id != botChannelId
                 || socketMessage.Author.IsWebhook)
@@ -167,7 +184,7 @@ namespace CentralServer.LobbyServer.Discord
                 }
                 case CMD_BROADCAST:
                 {
-                    if (await IsNotAdmin(command, handle)) break;
+                    if (!await VerifyAdmin(command, handle)) break;
                     string msg = command.Data.Options.First().Value.ToString();
                     log.Info($"CMD /{command.Data.Name} - {handle}: {msg}");
                     ChatManager.Get().Broadcast(msg);
@@ -176,7 +193,7 @@ namespace CentralServer.LobbyServer.Discord
                 }
                 case CMD_QUEUE_DISABLE:
                 {
-                    if (await IsNotAdmin(command, handle)) break;
+                    if (!await VerifyAdmin(command, handle)) break;
                     log.Info($"CMD /{command.Data.Name} - {handle}");
                     MatchmakingManager.Enabled = false;
                     await command.RespondAsync("Matchmaking queue is paused", ephemeral: true);
@@ -184,7 +201,7 @@ namespace CentralServer.LobbyServer.Discord
                 }
                 case CMD_QUEUE_ENABLE:
                 {
-                    if (await IsNotAdmin(command, handle)) break;
+                    if (!await VerifyAdmin(command, handle)) break;
                     log.Info($"CMD /{command.Data.Name} - {handle}");
                     MatchmakingManager.Enabled = true;
                     await command.RespondAsync("Matchmaking queue is unpaused", ephemeral: true);
@@ -200,40 +217,65 @@ namespace CentralServer.LobbyServer.Discord
                     await HandleGetCode(command, handle);
                     break;
                 }
+                case CMD_APPROVE:
+                {
+                    if (!await VerifyAdmin(command, handle)) break;
+                    await HandleApprove(command, handle);
+                    break;
+                }
+                case CMD_DECLINE:
+                {
+                    if (!await VerifyAdmin(command, handle)) break;
+                    await HandleDecline(command, handle);
+                    break;
+                }
             }
         }
 
         // Extra defense-in-depth on top of the command's ManageGuild permission gate.
         // When the allowlist is empty, we rely solely on that gate and let the command through.
-        private async Task<bool> IsNotAdmin(SocketSlashCommand command, string handle)
+        private static async Task<bool> VerifyAdmin(SocketInteraction interaction, string handle)
         {
-            HashSet<ulong> adminUserIds = DiscordBotConfiguration.Get().AdminUserIds ?? new HashSet<ulong>();
-            if (adminUserIds.Count == 0 || adminUserIds.Contains(command.User.Id))
+            if (IsAdmin(interaction.User.Id))
             {
-                return false;
+                return true;
             }
 
-            log.Warn($"Rejected management command /{command.Data.Name} from non-admin {handle} ({command.User.Id})");
-            await command.RespondAsync("You are not allowed to use this command.", ephemeral: true);
-            return true;
+            log.Warn($"Rejected {interaction.Type} interaction from non-admin {handle}");
+            await interaction.RespondAsync("You are not allowed to use this command.", ephemeral: true);
+            return false;
         }
 
-        private async Task<bool> IsWrongChannel(SocketSlashCommand command)
+        private static bool IsAdmin(ulong discordUserId)
         {
-            if (requestChannelId.HasValue && command.ChannelId != requestChannelId)
+            Dictionary<ulong, long> adminUserIds = DiscordBotConfiguration.Get().AdminUserIds;
+            return adminUserIds is null
+                   || adminUserIds.Count == 0
+                   || adminUserIds.ContainsKey(discordUserId);
+        }
+
+        private static long GetAdminAccountId(ulong discordUserId)
+        {
+            return DiscordBotConfiguration.Get().AdminUserIds?.GetValueOrDefault(discordUserId) ?? 0;
+        }
+
+        private async Task<bool> VerifyChannel(SocketSlashCommand command)
+        {
+            var requestChannelId = DiscordBotConfiguration.Get().RequestChannelId;
+            if (command.ChannelId != requestChannelId)
             {
                 await command.RespondAsync(
                     $"Please use this command in <#{requestChannelId}>.",
                     ephemeral: true);
-                return true;
+                return false;
             }
 
-            return false;
+            return true;
         }
 
         private async Task HandleRequestName(SocketSlashCommand command, string handle)
         {
-            if (await IsWrongChannel(command))
+            if (!await VerifyChannel(command))
             {
                 return;
             }
@@ -277,7 +319,7 @@ namespace CentralServer.LobbyServer.Discord
             }
 
             SocketGuildUser guildUser = command.User as SocketGuildUser;
-            dao.Save(new RegistrationCodeDao.RegistrationCodeEntry
+            RegistrationCodeDao.RegistrationCodeEntry entry = new RegistrationCodeDao.RegistrationCodeEntry
             {
                 Code = Guid.NewGuid().ToString(),
                 State = RegistrationCodeDao.RegistrationState.Requested,
@@ -289,7 +331,10 @@ namespace CentralServer.LobbyServer.Discord
                 DiscordAvatarUrl = command.User.GetAvatarUrl() ?? command.User.GetDefaultAvatarUrl(),
                 DiscordCreatedAt = command.User.CreatedAt.UtcDateTime,
                 DiscordJoinedAt = guildUser?.JoinedAt?.UtcDateTime
-            });
+            };
+            dao.Save(entry);
+
+            await SendUsernameRequestNotification(entry);
 
             await command.RespondAsync(
                 $"Your request for `{name}` has been submitted for review. " +
@@ -299,7 +344,7 @@ namespace CentralServer.LobbyServer.Discord
 
         private async Task HandleGetCode(SocketSlashCommand command, string handle)
         {
-            if (await IsWrongChannel(command))
+            if (!await VerifyChannel(command))
             {
                 return;
             }
@@ -349,6 +394,229 @@ namespace CentralServer.LobbyServer.Discord
                 ephemeral: true);
         }
 
+        private async Task HandleApprove(SocketSlashCommand command, string handle)
+        {
+            string code = command.Data.Options.First().Value.ToString()?.Trim() ?? "";
+            log.Info($"CMD /{command.Data.Name} - {handle}: {code}");
+
+            UsernameRequestManager.Result result = UsernameRequestManager.Approve(
+                code, GetAdminAccountId(command.User.Id), handle,
+                out RegistrationCodeDao.RegistrationCodeEntry entry);
+
+            string response = result switch
+            {
+                UsernameRequestManager.Result.Success =>
+                    $"Approved `{entry.IssuedTo}` — the user has been pinged.",
+                UsernameRequestManager.Result.UsernameTaken =>
+                    "That username is already in use.",
+                UsernameRequestManager.Result.NotFound => "No pending request with that code.",
+                _ => throw new ArgumentOutOfRangeException()
+            };
+            await command.RespondAsync(response, ephemeral: true);
+        }
+
+        private async Task HandleDecline(SocketSlashCommand command, string handle)
+        {
+            string code = command.Data.Options.First(o => o.Name == "code").Value.ToString()?.Trim() ?? "";
+            string reason = command.Data.Options.First(o => o.Name == "reason").Value.ToString()?.Trim() ?? "";
+            log.Info($"CMD /{command.Data.Name} - {handle}: {code} ({reason})");
+
+            UsernameRequestManager.Result result = UsernameRequestManager.Decline(
+                code, reason, GetAdminAccountId(command.User.Id), handle,
+                out RegistrationCodeDao.RegistrationCodeEntry entry);
+
+            string response = result switch
+            {
+                UsernameRequestManager.Result.Success => $"Declined `{entry.IssuedTo}` — the user has been pinged.",
+                UsernameRequestManager.Result.NotFound => "No pending request with that code.",
+                _ => throw new ArgumentOutOfRangeException()
+            };
+            await command.RespondAsync(response, ephemeral: true);
+        }
+
+        private async Task ButtonHandler(SocketMessageComponent component)
+        {
+            string customId = component.Data.CustomId;
+            if (!customId.StartsWith($"{BTN_APPROVE}:") && !customId.StartsWith($"{BTN_DECLINE}:"))
+            {
+                return;
+            }
+
+            string handle = $"{component.User.Username} ({component.User.Id})";
+            if (!await VerifyAdmin(component, handle))
+            {
+                return;
+            }
+
+            try
+            {
+                if (customId.StartsWith($"{BTN_APPROVE}:"))
+                {
+                    string code = customId[(BTN_APPROVE.Length + 1)..];
+                    log.Info($"BTN approve - {handle}: {code}");
+                    UsernameRequestManager.Result result = UsernameRequestManager.Approve(
+                        code, GetAdminAccountId(component.User.Id), handle,
+                        out RegistrationCodeDao.RegistrationCodeEntry entry);
+
+                    switch (result)
+                    {
+                        case UsernameRequestManager.Result.Success:
+                            await component.UpdateAsync(m => ResolveMessage(
+                                m, component.Message, $"✅ Approved by {DisplayName(component.User)}", Color.Green));
+                            break;
+                        case UsernameRequestManager.Result.UsernameTaken:
+                            await component.RespondAsync(
+                                "That username is already in use.",
+                                ephemeral: true);
+                            break;
+                        case UsernameRequestManager.Result.NotFound:
+                            await component.RespondAsync(
+                                "No pending request with that code.",
+                                ephemeral: true);
+                            break;
+                        default:
+                            await component.RespondAsync(
+                                "Server encountered an unexpected error.",
+                                ephemeral: true);
+                            break;
+                    }
+                }
+                else if (customId.StartsWith($"{BTN_DECLINE}:"))
+                {
+                    string code = customId[(BTN_DECLINE.Length + 1)..];
+                    // Carry the notification's message id so the modal handler can edit it once submitted.
+                    Modal modal = new ModalBuilder()
+                        .WithTitle("Decline username request")
+                        .WithCustomId($"{MODAL_DECLINE}:{component.Message.Id}:{code}")
+                        .AddTextInput("Reason (shown to the user)", MODAL_REASON_INPUT,
+                            TextInputStyle.Paragraph, required: true)
+                        .Build();
+                    await component.RespondWithModalAsync(modal);
+                }
+            }
+            catch (Exception e)
+            {
+                log.Error($"Failed to handle button {customId} from {handle}", e);
+            }
+        }
+
+        private async Task ModalHandler(SocketModal modal)
+        {
+            string customId = modal.Data.CustomId;
+            if (!customId.StartsWith($"{MODAL_DECLINE}:"))
+            {
+                return;
+            }
+
+            string handle = $"{modal.User.Username} ({modal.User.Id})";
+            if (!await VerifyAdmin(modal, handle))
+            {
+                return;
+            }
+
+            string[] parts = customId[(MODAL_DECLINE.Length + 1)..].Split(':', 2);
+            ulong messageId = ulong.TryParse(parts[0], out ulong id) ? id : 0;
+            string code = parts.Length > 1 ? parts[1] : "";
+            string reason = modal.Data.Components
+                .FirstOrDefault(c => c.CustomId == MODAL_REASON_INPUT)?.Value?.Trim() ?? "";
+            log.Info($"MODAL decline - {handle}: {code} ({reason})");
+
+            try
+            {
+                UsernameRequestManager.Result result = UsernameRequestManager.Decline(
+                    code, reason, GetAdminAccountId(modal.User.Id), handle,
+                    out RegistrationCodeDao.RegistrationCodeEntry entry);
+
+                if (result == UsernameRequestManager.Result.Success)
+                {
+                    await modal.RespondAsync($"Declined `{entry.IssuedTo}` — the user has been pinged.", ephemeral: true);
+                    await ResolveMessage(modal.Channel, messageId, $"❌ Declined by {DisplayName(modal.User)}: {reason}", Color.Red);
+                }
+                else
+                {
+                    await modal.RespondAsync("No pending request with that code.", ephemeral: true);
+                }
+            }
+            catch (Exception e)
+            {
+                log.Error($"Failed to handle decline modal {code} from {handle}", e);
+            }
+        }
+
+        private static string DisplayName(IUser user) =>
+            (user as IGuildUser)?.Nickname ?? user.Username;
+
+        private static void ResolveMessage(MessageProperties m, IUserMessage original, string status, Color color)
+        {
+            EmbedBuilder builder = original?.Embeds.FirstOrDefault()?.ToEmbedBuilder() ?? new EmbedBuilder();
+            builder.Color = color;
+            builder.Footer = new EmbedFooterBuilder { Text = status };
+            m.Embed = builder.Build();
+            m.Components = new ComponentBuilder().Build();
+        }
+
+        private static async Task ResolveMessage(IMessageChannel channel, ulong messageId, string status, Color color)
+        {
+            if (channel is null
+                || messageId == 0
+                || await channel.GetMessageAsync(messageId) is not IUserMessage original)
+            {
+                return;
+            }
+
+            await original.ModifyAsync(m => ResolveMessage(m, original, status, color));
+        }
+
+        private async Task SendUsernameRequestNotification(RegistrationCodeDao.RegistrationCodeEntry entry)
+        {
+            var adminRequestChannelId = DiscordBotConfiguration.Get().AdminNotificationChannelId;
+            if (adminRequestChannelId is null or 0)
+            {
+                return;
+            }
+
+            string joined = entry.DiscordJoinedAt.HasValue
+                ? $"<t:{ToUnix(entry.DiscordJoinedAt.Value)}:D> (<t:{ToUnix(entry.DiscordJoinedAt.Value)}:R>)"
+                : "Unknown";
+
+            Embed embed = new EmbedBuilder
+            {
+                Title = "New username request",
+                Color = Color.Gold,
+                Fields =
+                {
+                    new EmbedFieldBuilder { Name = "Requested username", Value = $"`{entry.IssuedTo}`" },
+                    new EmbedFieldBuilder { Name = "Discord user", Value = $"<@{entry.DiscordUserId}>" },
+                    new EmbedFieldBuilder
+                    {
+                        Name = "Registered",
+                        Value = $"<t:{ToUnix(entry.DiscordCreatedAt)}:D> (<t:{ToUnix(entry.DiscordCreatedAt)}:R>)"
+                    },
+                    new EmbedFieldBuilder { Name = "Joined server", Value = joined },
+                    new EmbedFieldBuilder { Name = "Request code", Value = $"`{entry.Code}`" },
+                }
+            }.Build();
+
+            MessageComponent components = new ComponentBuilder()
+                .WithButton("Approve", $"{BTN_APPROVE}:{entry.Code}", ButtonStyle.Success)
+                .WithButton("Decline", $"{BTN_DECLINE}:{entry.Code}", ButtonStyle.Danger)
+                .Build();
+
+            try
+            {
+                await SendMessageAsync(embed: embed, components: components, channelIdOverride: adminRequestChannelId);
+            }
+            catch (Exception e)
+            {
+                log.Error($"Failed to post username request {entry.Code} to the admin channel", e);
+            }
+        }
+
+        private static long ToUnix(DateTime utc)
+        {
+            return new DateTimeOffset(DateTime.SpecifyKind(utc, DateTimeKind.Utc)).ToUnixTimeSeconds();
+        }
+
         private static Task Log(LogMessage msg)
         {
             return DiscordUtils.Log(log, msg);
@@ -367,7 +635,7 @@ namespace CentralServer.LobbyServer.Discord
             MessageFlags flags = MessageFlags.None,
             ulong? channelIdOverride = null)
         {
-            ulong? _channelId = channelIdOverride ?? botChannelId;
+            ulong? _channelId = channelIdOverride ?? DiscordBotConfiguration.Get().BotChannelId;
             if (_channelId.Value == 0) return null;
             IMessageChannel chnl = botClient.GetChannel(_channelId.Value) as IMessageChannel;
             return chnl.SendMessageAsync(text, isTTS, embed, options, allowedMentions, messageReference, components, stickers, embeds, flags);
@@ -375,7 +643,8 @@ namespace CentralServer.LobbyServer.Discord
 
         private async Task PingRequestChannel(ulong discordUserId, string message)
         {
-            if (!requestChannelId.HasValue)
+            var requestChannelId = DiscordBotConfiguration.Get().RequestChannelId;
+            if (requestChannelId is null or 0)
             {
                 return;
             }
