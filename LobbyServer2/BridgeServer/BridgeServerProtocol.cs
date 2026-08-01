@@ -7,7 +7,6 @@ using EvoS.Framework.Constants.Enums;
 using EvoS.Framework.Misc;
 using EvoS.Framework.Network.Static;
 using log4net;
-using WebSocketSharp;
 
 namespace CentralServer.BridgeServer
 {
@@ -164,7 +163,7 @@ namespace CentralServer.BridgeServer
             }
         }
 
-        protected override void HandleClose(CloseEventArgs e)
+        protected override void HandleClose(WsCloseEventArgs e)
         {
             UnregisterAllHandlers();
             ServerManager.RemoveServer(ProcessCode);

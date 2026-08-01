@@ -292,7 +292,7 @@ namespace EvoS.DirectoryServer
 
         private static string GetLobbyServerAddress(long accountId, HttpContext context)
         {
-            ProxyConfiguration.Proxy proxy = LobbyServerUtils.DetectProxyHttp(context);
+            ProxyConfiguration.Proxy proxy = LobbyServerUtils.DetectProxy(context);
 
             if (proxy != null)
             {

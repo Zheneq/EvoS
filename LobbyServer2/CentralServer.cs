@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Net.WebSockets;
 using System.Threading;
 using System.Threading.Tasks;
 using CentralServer.ApiServer;
@@ -14,9 +15,11 @@ using CentralServer.LobbyServer.Session;
 using CentralServer.LobbyServer.Stats;
 using CentralServer.LobbyServer.Utils;
 using EvoS.Framework;
+using EvoS.Framework.Misc;
 using log4net;
-using WebSocketSharp;
-using WebSocketSharp.Server;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
 
 namespace CentralServer
 {
@@ -24,7 +27,8 @@ namespace CentralServer
     {
         private static readonly ILog log = LogManager.GetLogger(typeof(CentralServer));
 
-        private static WebSocketServer _server;
+        private static WebApplication _app;
+        private static Task _appRunTask;
 
         private static Action _stopDirectoryServer;
         private static PendingShutdownType _pendingShutdown;
@@ -63,11 +67,22 @@ namespace CentralServer
         {
             _stopDirectoryServer = stopDirectoryServer;
             int port = EvosConfiguration.GetLobbyServerPort();
-            _server = new WebSocketServer(port);
-            _server.AddWebSocketService<LobbyServerProtocol>("/LobbyGameClientSessionManager");
-            _server.AddWebSocketService<BridgeServerProtocol>("/BridgeServer");
-            _server.Log.Level = LogLevel.Debug;
-            _server.WaitTime = EvosConfiguration.GetLobbyServerTimeOut();
+
+            WebApplicationBuilder builder = WebApplication.CreateBuilder();
+            builder.Logging.ClearProviders();
+            builder.Logging.AddLog4Net(new Log4NetProviderOptions("log4net.xml")
+            {
+                LogLevelTranslator = new ApiServer.ApiServer.CustomLogLevelTranslator(),
+            });
+            _app = builder.Build();
+            _app.UseWebSockets(new WebSocketOptions
+            {
+                KeepAliveInterval = EvosConfiguration.GetLobbyServerTimeOut()
+            });
+            _app.Map("/LobbyGameClientSessionManager",
+                sub => sub.Run(context => AcceptConnection(context, new LobbyServerProtocol())));
+            _app.Map("/BridgeServer",
+                sub => sub.Run(context => AcceptConnection(context, new BridgeServerProtocol())));
 
             ChatManager.Get(); // TODO Dependency injection
             await DiscordManager.Get().Start();
@@ -86,7 +101,7 @@ namespace CentralServer
             ServerStatisticsTask serverStatisticsTask = new ServerStatisticsTask(CancellationToken.None);
             _ = Task.Run(serverStatisticsTask.Run, CancellationToken.None);
 
-            _server.Start();
+            _appRunTask = _app.RunAsync($"http://0.0.0.0:{port}");
             log.Info($"Started lobby server on port {port}");
 
             var adminApi = new AdminApiServer().Init();
@@ -106,9 +121,15 @@ namespace CentralServer
 
         public static void MainLoop()
         {
-            while (_server.IsListening)
+            // TODO we were checking that _server.IsListening because it could randomly stop
+            // Then we started to use it to trigger shutdown manually
+            try
             {
-                Thread.Sleep(5000);
+                _appRunTask?.Wait();
+            }
+            catch (Exception e)
+            {
+                log.Error("Lobby server host stopped with an error", e);
             }
 
             DiscordManager.Get().Shutdown();
@@ -117,11 +138,23 @@ namespace CentralServer
             log.Info("Lobby server is not listening, exiting...");
         }
 
+        private static async Task AcceptConnection<TMessage>(HttpContext context, WebSocketBehaviorBase<TMessage> behavior)
+        {
+            if (!context.WebSockets.IsWebSocketRequest)
+            {
+                context.Response.StatusCode = StatusCodes.Status400BadRequest;
+                return;
+            }
+
+            using WebSocket socket = await context.WebSockets.AcceptWebSocketAsync();
+            await behavior.RunConnection(socket, context);
+        }
+
         private static void Stop()
         {
             _stopDirectoryServer();
             SessionManager.OnServerShutdown();
-            _server.Stop();
+            _app?.StopAsync();
         }
 
         public enum PendingShutdownType

@@ -1,5 +1,5 @@
-﻿using System.Collections.Generic;
-using WebSocketSharp;
+﻿using System;
+using System.Collections.Generic;
 
 namespace CentralServer.LobbyServer.Discord
 {
@@ -51,7 +51,7 @@ namespace CentralServer.LobbyServer.Discord
         {
             return channel != null
                    && channel.Webhook != null
-                   && channel.Webhook.MaybeUri();
+                   && Uri.TryCreate(channel.Webhook, UriKind.Absolute, out _);
         }
     }
 }

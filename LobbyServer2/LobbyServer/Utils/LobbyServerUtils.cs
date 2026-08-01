@@ -15,7 +15,6 @@ using EvoS.Framework.Network.Static;
 using log4net;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Primitives;
-using WebSocketSharp.Net.WebSockets;
 
 namespace CentralServer.LobbyServer.Utils
 {
@@ -134,13 +133,7 @@ namespace CentralServer.LobbyServer.Utils
                 context.Connection.RemoteIpAddress);
         }
 
-        public static ProxyConfiguration.Proxy DetectProxyWs(WebSocketContext context)
-        {
-            IPAddress clientIpAddress = GetRealRemoteIpAddress(context.Headers.Get, context.UserEndPoint.Address);
-            return DetectProxy(clientIpAddress);
-        }
-
-        public static ProxyConfiguration.Proxy DetectProxyHttp(HttpContext context)
+        public static ProxyConfiguration.Proxy DetectProxy(HttpContext context)
         {
             return DetectProxy(GetRealRemoteIpAddress(context));
         }

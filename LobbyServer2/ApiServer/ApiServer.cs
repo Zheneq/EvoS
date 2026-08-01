@@ -9,6 +9,7 @@ using EvoS.DirectoryServer.Account;
 using EvoS.Framework;
 using EvoS.Framework.Auth;
 using EvoS.Framework.DataAccess;
+using EvoS.Framework.Misc;
 using EvoS.Framework.Network.Static;
 using log4net;
 using log4net.Core;
@@ -22,7 +23,6 @@ using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 using Newtonsoft.Json;
 using Prometheus;
-using WebSocketSharp;
 using LogLevel = Microsoft.Extensions.Logging.LogLevel;
 
 namespace CentralServer.ApiServer;

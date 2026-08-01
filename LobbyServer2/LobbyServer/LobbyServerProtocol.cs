@@ -27,7 +27,6 @@ using LobbyGameClientMessages;
 using log4net;
 using Newtonsoft.Json;
 using Prometheus;
-using WebSocketSharp;
 using static EvoS.Framework.Misc.GameUtils;
 using CharacterManager = EvoS.DirectoryServer.Character.CharacterManager;
 
@@ -768,7 +767,7 @@ namespace CentralServer.LobbyServer
             });
         }
 
-        protected override void HandleClose(CloseEventArgs e)
+        protected override void HandleClose(WsCloseEventArgs e)
         {
             UnregisterAllHandlers();
             log.Info(string.Format(Messages.PlayerDisconnected, this.UserName));

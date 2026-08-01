@@ -51,7 +51,7 @@ namespace CentralServer.LobbyServer
 
         protected override void HandleOpen()
         {
-            Proxy = LobbyServerUtils.DetectProxyWs(Context);
+            Proxy = LobbyServerUtils.DetectProxy(Context);
             if (Proxy != null)
             {
                 log.Info($"Detected proxy {Proxy.GetName()}");
@@ -97,7 +97,7 @@ namespace CentralServer.LobbyServer
         {
             MemoryStream stream = new MemoryStream();
             EvosSerializer.Instance.Serialize(stream, message);
-            Sessions.Broadcast(stream.ToArray());
+            BroadcastRaw(stream.ToArray());
             LogMessage(">>", message);
         }
 
