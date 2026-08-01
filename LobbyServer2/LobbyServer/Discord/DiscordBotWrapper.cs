@@ -34,7 +34,10 @@ namespace CentralServer.LobbyServer.Discord
         private readonly DiscordSocketClient botClient;
         private static readonly DiscordSocketConfig discordConfig = new DiscordSocketConfig
         {
-            GatewayIntents = GatewayIntents.AllUnprivileged | GatewayIntents.MessageContent
+            GatewayIntents = (GatewayIntents.AllUnprivileged
+                              & ~GatewayIntents.GuildScheduledEvents
+                              & ~GatewayIntents.GuildInvites)
+                             | GatewayIntents.MessageContent
         };
 
         private const string BTN_APPROVE = "req_approve";
@@ -61,7 +64,13 @@ namespace CentralServer.LobbyServer.Discord
             await botClient.SetGameAsync("Atlas Reactor");
         }
 
-        public async Task Ready()
+        private Task Ready()
+        {
+            _ = Task.Run(RegisterCommands);
+            return Task.CompletedTask;
+        }
+
+        private async Task RegisterCommands()
         {
             SlashCommandProperties infoCommand = new SlashCommandBuilder()
                 .WithName(CMD_INFO)
