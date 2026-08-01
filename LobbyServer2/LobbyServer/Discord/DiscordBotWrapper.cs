@@ -321,6 +321,9 @@ namespace CentralServer.LobbyServer.Discord
             }
 
             SocketGuildUser guildUser = command.User as SocketGuildUser;
+            ulong? approvedRoleId = DiscordBotConfiguration.Get().ApprovedRoleId;
+            bool requesterHasApprovedRole = approvedRoleId is > 0
+                && guildUser?.Roles.Any(r => r.Id == approvedRoleId.Value) == true;
             RegistrationCodeDao.RegistrationCodeEntry entry = new RegistrationCodeDao.RegistrationCodeEntry
             {
                 Code = Guid.NewGuid().ToString(),
@@ -336,7 +339,7 @@ namespace CentralServer.LobbyServer.Discord
             };
             dao.Save(entry);
 
-            await SendUsernameRequestNotification(entry);
+            await SendUsernameRequestNotification(entry, requesterHasApprovedRole);
 
             await command.RespondAsync(
                 $"Your request for `{name}` has been submitted for review. " +
@@ -573,7 +576,9 @@ namespace CentralServer.LobbyServer.Discord
             await original.ModifyAsync(m => ResolveMessage(m, original, status, color));
         }
 
-        private async Task SendUsernameRequestNotification(RegistrationCodeDao.RegistrationCodeEntry entry)
+        private async Task SendUsernameRequestNotification(
+            RegistrationCodeDao.RegistrationCodeEntry entry,
+            bool requesterHasApprovedRole)
         {
             var adminRequestChannelId = DiscordBotConfiguration.Get().AdminNotificationChannelId;
             if (adminRequestChannelId is null or 0)
@@ -585,7 +590,7 @@ namespace CentralServer.LobbyServer.Discord
                 ? $"<t:{ToUnix(entry.DiscordJoinedAt.Value)}:D> (<t:{ToUnix(entry.DiscordJoinedAt.Value)}:R>)"
                 : "Unknown";
 
-            Embed embed = new EmbedBuilder
+            EmbedBuilder builder = new EmbedBuilder
             {
                 Title = "New username request",
                 Color = Color.Gold,
@@ -600,7 +605,17 @@ namespace CentralServer.LobbyServer.Discord
                     },
                     new EmbedFieldBuilder { Name = "Joined server", Value = joined },
                 }
-            }.Build();
+            };
+
+            if (requesterHasApprovedRole)
+            {
+                builder.Color = Color.Orange;
+                builder.AddField(
+                    "⚠️ Already registered",
+                    $"Already has the <@&{DiscordBotConfiguration.Get().ApprovedRoleId}> role");
+            }
+
+            Embed embed = builder.Build();
 
             string requestId = $"{entry.DiscordUserId}:{entry.IssuedTo}";
             MessageComponent components = new ComponentBuilder()
@@ -690,6 +705,43 @@ namespace CentralServer.LobbyServer.Discord
             await PingRequestChannel(
                 discordUserId,
                 $"<@{discordUserId}> your username request has been declined: {reason}");
+        }
+
+        public async Task GrantApprovedRole(ulong discordUserId)
+        {
+            ulong? roleId = DiscordBotConfiguration.Get().ApprovedRoleId;
+            if (roleId is null or 0)
+            {
+                return;
+            }
+
+            try
+            {
+                foreach (SocketGuild guild in botClient.Guilds)
+                {
+                    if (guild.GetRole(roleId.Value) is null)
+                    {
+                        continue;
+                    }
+
+                    IGuildUser user = (IGuildUser)guild.GetUser(discordUserId)
+                                      ?? await botClient.Rest.GetGuildUserAsync(guild.Id, discordUserId);
+                    if (user is null)
+                    {
+                        continue;
+                    }
+
+                    if (!user.RoleIds.Contains(roleId.Value))
+                    {
+                        await user.AddRoleAsync(roleId.Value);
+                    }
+                    return;
+                }
+            }
+            catch (Exception e)
+            {
+                log.Error($"Failed to grant approved role to {discordUserId}", e);
+            }
         }
     }
 }

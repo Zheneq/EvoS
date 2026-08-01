@@ -46,6 +46,7 @@ namespace CentralServer.LobbyServer
                 : DateTime.MaxValue;
             dao.Save(entry);
 
+            DiscordManager.Get().Bot?.GrantApprovedRole(entry.DiscordUserId);
             DiscordManager.Get().Bot?.PingUsernameRequestApproved(entry.DiscordUserId, entry.IssuedTo);
             return Result.Success;
         }

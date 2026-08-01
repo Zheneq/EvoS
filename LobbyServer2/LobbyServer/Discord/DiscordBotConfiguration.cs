@@ -14,6 +14,9 @@ public class DiscordBotConfiguration
     public ulong? RequestChannelId;
     public ulong? AdminNotificationChannelId;
 
+    // Role granted to a requester when their username request is approved; 0/null disables.
+    public ulong? ApprovedRoleId;
+
     // Maps a Discord user ID to the admin's in-game account ID for users allowed to invoke
     // management commands (broadcast, qoff, qon, approve, decline). The account ID is recorded as
     // IssuedBy when the admin approves a username request via bot commands (0 if unknown).

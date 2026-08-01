@@ -27,8 +27,8 @@ namespace EvoS.DirectoryServer.Account
         public const string PasswordIsIncorrect = "Password is incorrect";
         public const string UserDoesNotExist = "User does not exist";
         public const string InvalidUsername = "Invalid username. " +
-                        "Please use only latin characters, numbers, underscore and dash, and start with a letter. " +
-                        "4 to 24 symbols.";
+                        "Please use only basic latin characters, numbers, underscore and dash, and start with a letter. " +
+                        "Between 4 and 24 symbols.";
         public const string CannotUseThisUsername = "You cannot use this username. Please choose another.";
         public const string CannotUseThisPassword = "You cannot use this password. Please choose another.";
         public const string FailedToCreateAnAccount = "Failed to crate an account";
