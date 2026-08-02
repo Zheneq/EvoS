@@ -158,7 +158,7 @@ namespace CentralServer.LobbyServer.Discord
                 return;
             }
 
-            discordBot = new DiscordBotWrapper(botConf);
+            discordBot = new DiscordBotWrapper();
             await discordBot.Login(botConf);
         }
 
@@ -241,6 +241,29 @@ namespace CentralServer.LobbyServer.Discord
             catch (Exception e)
             {
                 log.Error("Failed to send game report to discord webhook", e);
+            }
+        }
+
+        public async void SendPlayerRegistered(string code)
+        {
+            if (string.IsNullOrEmpty(code))
+            {
+                return;
+            }
+
+            try
+            {
+                RegistrationCodeDao.RegistrationCodeEntry entry = DB.Get().RegistrationCodeDao.Find(code);
+                if (entry is null || entry.DiscordUserId == 0)
+                {
+                    return;
+                }
+
+                await (Bot?.SendWelcomeMessage(entry) ?? Task.CompletedTask);
+            }
+            catch (Exception e)
+            {
+                log.Error("Failed to announce player registration to discord", e);
             }
         }
 

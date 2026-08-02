@@ -3,5 +3,7 @@ BotToken: "" # Enter the bot's token, leave empty to disable
 BotChannelId: 0 # Channel id for 2-way chat relay (usually the LobbyChannel id)
 RequestChannelId: 0 # Channel id where players request usernames and get pinged
 AdminNotificationChannelId: 0 # Channel id where new username requests are announced for admin review; 0 disables
+WelcomeChannelId: 0 # Channel id where a message is posted when a player registers with a Discord-linked code; 0 disables
+WelcomeMessage: "{mention} just registered! Welcome!" # {mention} -> the registered Discord user, {username} -> the in-game handle
 ApprovedRoleId: 0 # Role id granted to a requester when their username request is approved; 0 disables. The bot needs "Manage Roles" and must rank above this role.
 AdminUserIds: {} # Map of Discord user id -> in-game account id, allowed to run management commands (broadcast, qoff, qon, approve, decline); empty falls back to the ManageGuild permission gate.

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Security.Claims;
 using CentralServer.LobbyServer.Config;
+using CentralServer.LobbyServer.Discord;
 using CentralServer.LobbyServer.Session;
 using CentralServer.LobbyServer.Utils;
 using EvoS.DirectoryServer;
@@ -84,6 +85,7 @@ public class UserApiServer : ApiServer
         try
         {
             LoginManager.Register(authInfo.UserName, authInfo._Password, authInfo.Code, authInfo.LinkedAccountTickets);
+            DiscordManager.Get().SendPlayerRegistered(authInfo.Code);
         }
         catch (ArgumentException e)
         {

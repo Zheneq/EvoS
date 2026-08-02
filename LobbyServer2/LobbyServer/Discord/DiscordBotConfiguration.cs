@@ -14,6 +14,13 @@ public class DiscordBotConfiguration
     public ulong? RequestChannelId;
     public ulong? AdminNotificationChannelId;
 
+    // Channel where a message is posted when a player registers using a Discord-linked code; 0/null disables.
+    public ulong? WelcomeChannelId;
+
+    // {mention} is replaced with a mention of the registered Discord user,
+    // {username} with the in-game handle.
+    public string WelcomeMessage = "{mention} just registered! Welcome!";
+
     // Role granted to a requester when their username request is approved; 0/null disables.
     public ulong? ApprovedRoleId;
 

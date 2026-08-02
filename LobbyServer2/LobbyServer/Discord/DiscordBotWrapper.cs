@@ -45,7 +45,7 @@ namespace CentralServer.LobbyServer.Discord
         private const string MODAL_DECLINE = "req_decline_modal";
         private const string MODAL_REASON_INPUT = "reason";
 
-        public DiscordBotWrapper(DiscordBotConfiguration conf)
+        public DiscordBotWrapper()
         {
             log.Info("Discord bot is enabled");
             botClient = new DiscordSocketClient(discordConfig);
@@ -701,6 +701,33 @@ namespace CentralServer.LobbyServer.Discord
             }
         }
         
+        public async Task SendWelcomeMessage(RegistrationCodeDao.RegistrationCodeEntry entry)
+        {
+            DiscordBotConfiguration conf = DiscordBotConfiguration.Get();
+            ulong? channelId = conf.WelcomeChannelId;
+            if (channelId is null or 0 || string.IsNullOrEmpty(conf.WelcomeMessage))
+            {
+                return;
+            }
+
+            string username = DB.Get().AccountDao.GetAccount(entry.UsedBy)?.UserName ?? entry.IssuedTo;
+            string message = conf.WelcomeMessage
+                .Replace("{mention}", $"<@{entry.DiscordUserId}>")
+                .Replace("{username}", username);
+
+            try
+            {
+                await SendMessageAsync(
+                    text: message,
+                    allowedMentions: new AllowedMentions(AllowedMentionTypes.Users),
+                    channelIdOverride: channelId);
+            }
+            catch (Exception e)
+            {
+                log.Error($"Failed to post registration announcement for {entry.DiscordUserId}", e);
+            }
+        }
+
         public async Task PingUsernameRequestApproved(ulong discordUserId, string username)
         {
             await PingRequestChannel(
