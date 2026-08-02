@@ -115,11 +115,6 @@ namespace CentralServer.LobbyServer.Chat
             HashSet<long> recipients = new HashSet<long>();
             HashSet<long> blockedRecipients = new HashSet<long>();
 
-            if (account.Mentor)
-            {
-                message.SenderHandle = $"{MentorHandlePrefix}{message.SenderHandle}";
-            }
-
             switch (notification.ConsoleMessageType)
             {
                 case ConsoleMessageType.GlobalChat:

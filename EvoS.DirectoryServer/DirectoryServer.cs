@@ -271,7 +271,6 @@ namespace EvoS.DirectoryServer
             // Someday we'll make a db migration tool but not today
             if (PatchAccountData(account))
             {
-                account = StatsApi.GetMentorStatus(account);
                 DB.Get().AccountDao.UpdateAccount(account);
             }
 

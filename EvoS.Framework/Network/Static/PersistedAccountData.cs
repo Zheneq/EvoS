@@ -41,7 +41,6 @@ namespace EvoS.Framework.Network.Static
 
         [JsonIgnore] public string SnapshotNote { get; set; }
 
-        [NonSerialized] public bool Mentor;
         [NonSerialized] public string ApiKey;
 
         public PersistedAccountData()

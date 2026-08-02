@@ -51,36 +51,6 @@ namespace CentralServer.LobbyServer.Stats
             return _instance ??= new StatsApi();
         }
 
-        public static PersistedAccountData GetMentorStatus(PersistedAccountData account)
-        {
-            account.Mentor = false;
-            if (Get().conf.Enabled == true)
-            {
-                try
-                {
-                    HttpResponseMessage responseMentor = client.GetAsync($"{Get().conf.ApiUrl}/discords?filters[playername][$eq]={Uri.EscapeDataString(account.Handle)}").Result;
-                    responseMentor.EnsureSuccessStatusCode();
-                    string responseBody = responseMentor.Content.ReadAsStringAsync().Result;
-                    JObject json = JObject.Parse(responseBody);
-                    JArray dataArray = (JArray)json["data"];
-                    if (dataArray != null && dataArray.Count > 0)
-                    {
-                        bool mentor = dataArray[0]["attributes"]["mentor"].Value<bool>();
-                        if (mentor)
-                        {
-                            account.Mentor = true;
-                            log.Info($"Enabling Mentor status for {account.Handle}");
-                        }
-                    }
-                }
-                catch (Exception e)
-                {
-                    log.Error("Failed to fetch mentor status", e);
-                }
-            }
-            return account;
-        }
-
         public async Task ParseStats(LobbyGameInfo gameInfo, string serverName, string serverVersion, LobbyGameSummary gameSummary)
         {
             if (Get().conf.Enabled != true)
