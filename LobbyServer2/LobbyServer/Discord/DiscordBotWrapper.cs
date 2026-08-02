@@ -383,9 +383,12 @@ namespace CentralServer.LobbyServer.Discord
                 return;
             }
 
-            if (entry.IsUsed)
+            LoginDao.LoginEntry loginEntry = DB.Get().LoginDao.Find(entry.IssuedTo);
+            if (entry.IsUsed || loginEntry is not null)
             {
-                await command.RespondAsync("You have already registered an account.", ephemeral: true);
+                await command.RespondAsync(
+                    $"You have already registered `{loginEntry?.Username ?? entry.IssuedTo}`. Log in with your username and password.",
+                    ephemeral: true);
                 return;
             }
 

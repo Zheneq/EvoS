@@ -139,6 +139,15 @@ namespace EvoS.DirectoryServer.Account
 
                 registrationCodeEntry = e;
             }
+            else if (code is not null)
+            {
+                // consume the registration code if it exists even if it is not required
+                RegistrationCodeDao.RegistrationCodeEntry e = registrationCodeDao.Find(code);
+                if (e is not null && e.IsValid && e.IssuedTo.Equals(username.ToLower()))
+                {
+                    registrationCodeEntry = e;
+                }
+            }
             
             long accountId = GenerateAccountId(username);
             for (int i = 0; loginDao.Find(accountId) != null; ++i)
