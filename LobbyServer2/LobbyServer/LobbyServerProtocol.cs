@@ -369,7 +369,7 @@ namespace CentralServer.LobbyServer
             }
 
             RankedResolutionPhaseData rankedResolutionPhaseData = CurrentGame.GetRankedResolutionPhaseData();
-            LobbyServerPlayerInfo player = CurrentGame.GetPlayerInfo(AccountId);
+            LobbyServerPlayerInfo player = CurrentGame.GetDraftActingSlot(AccountId);
 
             Dictionary<int, CharacterType> teamSelections = player.TeamId == Team.TeamA
                 ? rankedResolutionPhaseData.FriendlyTeamSelections
@@ -438,10 +438,10 @@ namespace CentralServer.LobbyServer
                         LocalizationArg_Freelancer.Create(characterType));
                 }
             }
-            
+
             Send(response);
         }
-        
+
         private void HandlePlayerRankedBanRequest(RankedBanRequest request)
         {
             // TODO also check ready state - do not update if already ready
@@ -460,7 +460,7 @@ namespace CentralServer.LobbyServer
             }
 
             RankedResolutionPhaseData rankedResolutionPhaseData = CurrentGame.GetRankedResolutionPhaseData();
-            LobbyServerPlayerInfo player = CurrentGame.GetPlayerInfo(AccountId);
+            LobbyServerPlayerInfo player = CurrentGame.GetDraftActingSlot(AccountId);
 
             List<RankedResolutionPlayerState> playersOnDeck = rankedResolutionPhaseData.PlayersOnDeck;
             int deckIndex = playersOnDeck.FindIndex(p => p.PlayerId == player.PlayerId);
@@ -528,11 +528,11 @@ namespace CentralServer.LobbyServer
             }
             
             RankedResolutionPhaseData rankedResolutionPhaseData = CurrentGame.GetRankedResolutionPhaseData();
-            LobbyServerPlayerInfo player = CurrentGame.GetPlayerInfo(AccountId);
+            LobbyServerPlayerInfo player = CurrentGame.GetDraftActingSlot(AccountId);
 
             List<RankedResolutionPlayerState> unselectedPlayerStates = rankedResolutionPhaseData.UnselectedPlayerStates;
             int stateIndex = unselectedPlayerStates.FindIndex(p => p.PlayerId == player.PlayerId);
-            
+
             if (stateIndex >= 0)
             {
                 RankedResolutionPlayerState existingUnselectedPlayerStates = unselectedPlayerStates[stateIndex];

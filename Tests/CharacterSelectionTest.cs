@@ -51,7 +51,8 @@ public class CharacterSelectionTest(ITestOutputHelper output) : EvosTest(output)
                     ContextualReadyState = readyState is null
                         ? null
                         : new ContextualReadyState { ReadyState = readyState.Value, GameProcessCode = GameInfo.GameServerProcessCode },
-                });
+                },
+                false);
         }
     }
 

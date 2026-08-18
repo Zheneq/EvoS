@@ -503,6 +503,29 @@ public abstract class Game
         playerConnection.Send(notification);
     }
 
+    // During draft, an account may control multiple slots (asymmetric / ControlAllBots).
+    // Resolve the slot this account is currently expected to act on (the one on deck),
+    // falling back to the account's main slot for normal (single-character) drafts.
+    public LobbyServerPlayerInfo GetDraftActingSlot(long accountId)
+    {
+        lock (characterSelectionLock)
+        {
+            foreach (RankedResolutionPlayerState state in RankedResolutionPhaseData.PlayersOnDeck)
+            {
+                if (state.OnDeckness != RankedResolutionPlayerState.ReadyState.Selected)
+                {
+                    continue;
+                }
+                LobbyServerPlayerInfo slot = GetPlayerById(state.PlayerId);
+                if (slot != null && !slot.IsAIControlled && slot.AccountId == accountId)
+                {
+                    return slot;
+                }
+            }
+            return GetPlayerInfo(accountId);
+        }
+    }
+
     protected virtual void SendGameAssignmentNotification(long accountId, bool reconnection = false)
     {
         var player = Players.FirstOrDefault(p => p.AccountId == accountId);
@@ -945,7 +968,12 @@ public abstract class Game
         return options[rand.Next(options.Count)];
     }
 
-    public virtual bool UpdateCharacterInfo(long accountId, LobbyCharacterInfo characterInfo, LobbyPlayerInfoUpdate update)
+    // characterDataUpdate: the update changes character data (skin, cards, mods, etc.)
+    public virtual bool UpdateCharacterInfo(
+        long accountId,
+        LobbyCharacterInfo characterInfo,
+        LobbyPlayerInfoUpdate update,
+        bool isCharacterDataUpdate)
     {
         LobbyServerPlayerInfo serverPlayerInfo = GetPlayerInfo(accountId);
         LobbyCharacterInfo serverCharacterInfo = serverPlayerInfo.CharacterInfo;
@@ -985,8 +1013,10 @@ public abstract class Game
             {
                 serverPlayerInfo.CharacterInfo = characterInfo;
             }
-            else if (update.CharacterType.HasValue)
+            else if (update.CharacterType.HasValue || isCharacterDataUpdate)
             {
+                // Loadout updates do not specify the character, e.g. when editing
+                // another slot controlled by this account during multilancer draft
                 SetSecondaryCharacter(accountId, update.PlayerId, characterInfo);
             }
 
@@ -1329,36 +1359,80 @@ public abstract class Game
         List<KeyValuePair<int, FreelancerResolutionPhaseSubType>> phases;
         string localizedName = GameSubType.LocalizedName;
         bool hasBans = GameModeManager.GetBans(localizedName);
-        if (hasBans)
+        if (IsControlAllBots)
         {
-            phases = new()
+            // TODO single select vs double select is controlled by PlayersOnDeck.Count
+            // TODO test with two slots active for one player
+            if (hasBans)
             {
-                // Playerid (-1)                           Phase
-                new(0, FreelancerResolutionPhaseSubType.PICK_BANS1),    // TeamA First Person
-                new(4, FreelancerResolutionPhaseSubType.PICK_BANS1),    // TeamB First Person
-                new(0, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamA First Person
-                new(4, FreelancerResolutionPhaseSubType.PICK_FREELANCER2),  // TeamB * 2 First and Second Person
-                new(1, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamA Second Person
-                new(5, FreelancerResolutionPhaseSubType.PICK_BANS2),    // TeamB Second Person
-                new(1, FreelancerResolutionPhaseSubType.PICK_BANS2),    // TeamA Second Person
-                new(6, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamB Third Person
-                new(2, FreelancerResolutionPhaseSubType.PICK_FREELANCER2),  // TeamA * 2 Third and Fourth Person
-                new(7, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamB Fourth Person
-                new(-1, FreelancerResolutionPhaseSubType.FREELANCER_TRADE),
-            };
+                phases = new()
+                {
+                    // Playerid (-1)                           Phase
+                    new(0, FreelancerResolutionPhaseSubType.PICK_BANS1),    // TeamA First Person
+                    new(4, FreelancerResolutionPhaseSubType.PICK_BANS1),    // TeamB First Person
+                    new(0, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamA First Person
+                    new(4, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamB * 2 First and Second Person
+                    new(5, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamB * 2 First and Second Person
+                    new(1, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamA Second Person
+                    new(5, FreelancerResolutionPhaseSubType.PICK_BANS2),    // TeamB Second Person
+                    new(1, FreelancerResolutionPhaseSubType.PICK_BANS2),    // TeamA Second Person
+                    new(6, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamB Third Person
+                    new(2, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamA * 2 Third and Fourth Person
+                    new(3, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamA * 2 Third and Fourth Person
+                    new(7, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamB Fourth Person
+                    // no trade
+                };
+            }
+            else
+            {
+                phases = new()
+                {
+                    // Playerid (-1)                           Phase
+                    new(0, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamA First Person
+                    new(4, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamB * 2 First and Second Person
+                    new(5, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamB * 2 First and Second Person
+                    new(1, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamA Second Person
+                    new(6, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamB Third Person
+                    new(2, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamA * 2 Third and Fourth Person
+                    new(3, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamA * 2 Third and Fourth Person
+                    new(7, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamB Fourth Person
+                };
+            } 
+            
         }
         else
         {
-            phases = new()
+            if (hasBans)
             {
-                new(0, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamA First Person
-                new(4, FreelancerResolutionPhaseSubType.PICK_FREELANCER2),  // TeamB * 2 First and Second Person
-                new(1, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamA Second Person
-                new(6, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamB Third Person
-                new(2, FreelancerResolutionPhaseSubType.PICK_FREELANCER2),  // TeamA * 2 Third and Fourth Person
-                new(7, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamB Fourth Person
-                new(-1, FreelancerResolutionPhaseSubType.FREELANCER_TRADE),
-            };
+                phases = new()
+                {
+                    // Playerid (-1)                           Phase
+                    new(0, FreelancerResolutionPhaseSubType.PICK_BANS1),    // TeamA First Person
+                    new(4, FreelancerResolutionPhaseSubType.PICK_BANS1),    // TeamB First Person
+                    new(0, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamA First Person
+                    new(4, FreelancerResolutionPhaseSubType.PICK_FREELANCER2),  // TeamB * 2 First and Second Person
+                    new(1, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamA Second Person
+                    new(5, FreelancerResolutionPhaseSubType.PICK_BANS2),    // TeamB Second Person
+                    new(1, FreelancerResolutionPhaseSubType.PICK_BANS2),    // TeamA Second Person
+                    new(6, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamB Third Person
+                    new(2, FreelancerResolutionPhaseSubType.PICK_FREELANCER2),  // TeamA * 2 Third and Fourth Person
+                    new(7, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamB Fourth Person
+                    new(-1, FreelancerResolutionPhaseSubType.FREELANCER_TRADE),
+                };
+            }
+            else
+            {
+                phases = new()
+                {
+                    new(0, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamA First Person
+                    new(4, FreelancerResolutionPhaseSubType.PICK_FREELANCER2),  // TeamB * 2 First and Second Person
+                    new(1, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamA Second Person
+                    new(6, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamB Third Person
+                    new(2, FreelancerResolutionPhaseSubType.PICK_FREELANCER2),  // TeamA * 2 Third and Fourth Person
+                    new(7, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamB Fourth Person
+                    new(-1, FreelancerResolutionPhaseSubType.FREELANCER_TRADE),
+                };
+            } 
         }
 
         bool sendGameInfoNotify = true;

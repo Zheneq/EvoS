@@ -152,7 +152,11 @@ public class CustomGame : Game
     }
 
     // TODO merge with MatchOrchestrator
-    public override bool UpdateCharacterInfo(long accountId, LobbyCharacterInfo characterInfo, LobbyPlayerInfoUpdate update)
+    public override bool UpdateCharacterInfo(
+        long accountId,
+        LobbyCharacterInfo characterInfo,
+        LobbyPlayerInfoUpdate update,
+        bool characterDataUpdate)
     {
         LobbyServerPlayerInfo serverPlayerInfo = update.PlayerId == 0 ? GetPlayerInfo(accountId) : GetPlayerById(update.PlayerId);
         LobbyCharacterInfo serverCharacterInfo = serverPlayerInfo.CharacterInfo;

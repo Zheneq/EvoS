@@ -2,6 +2,7 @@ using EvoS.Framework.Network;
 
 namespace EvoS.Framework.Constants.Enums
 {
+    // Client does not distinguish PICK_BANS1/PICK_BANS2 and PICK_FREELANCER1/PICK_FREELANCER2
     [EvosMessage(184)]
     public enum FreelancerResolutionPhaseSubType
     {

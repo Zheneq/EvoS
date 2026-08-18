@@ -68,6 +68,74 @@
     }
   },
   {
+    "LocalizedName": "Duos@SubTypes",
+    "GameMapConfigs": [
+      {
+        "Map": "Skyway_Deathmatch",
+        "IsActive": true
+      },
+      {
+        "Map": "SkywaySnow_Deathmatch",
+        "IsActive": false
+      },
+      {
+        "Map": "CargoShip_Deathmatch",
+        "IsActive": true
+      },
+      {
+        "Map": "Casino01_Deathmatch",
+        "IsActive": true
+      },
+      {
+        "Map": "EvosLab_Deathmatch",
+        "IsActive": true
+      },
+      {
+        "Map": "Oblivion_Deathmatch",
+        "IsActive": true
+      },
+      {
+        "Map": "Reactor_Deathmatch",
+        "IsActive": true
+      },
+      {
+        "Map": "RobotFactory_Deathmatch",
+        "IsActive": true
+      }
+    ],
+    "TeamAPlayers": 2,
+    "TeamBPlayers": 2,
+    "TeamABots": 2,
+    "TeamBBots": 2,
+    "TeamComposition": {
+      "Rules": {
+        "A1": {
+          "Roles": [
+            "Tank",
+            "Assassin",
+            "Support"
+          ]
+        },
+        "B1": {
+          "Roles": [
+            "Tank",
+            "Assassin",
+            "Support"
+          ]
+        }
+      }
+    },
+    "RewardBucket": "NoRewards",
+    "PersistedStatBucket": "DoNotPersist",
+    "Mods": [
+      "NotCheckedByDefault",
+      "ControlAllBots"
+    ],
+    "GameOverrides": {
+      "TurnTimeSpan": "00:00:25"
+    }
+  },
+  {
     "LocalizedName": "RankedCustom@SubTypes",
     "GameMapConfigs": [
       {
@@ -179,6 +247,59 @@
       "NotAllowedForGroups",
       "NotCheckedByDefault",
       "ControlAllBots"
+    ],
+    "TeamAPlayers": "4",
+    "TeamABots": "3",
+    "TeamBPlayers": "4",
+    "TeamBBots": "3",
+    "GameOverrides": {
+      "TurnTimeSpan": "00:01:00"
+    }
+  },
+  {
+    "LocalizedName": "AllFourCharactersDraft@SubTypes",
+    "GameMapConfigs": [
+      {
+        "Map": "CargoShip_Deathmatch",
+        "IsActive": true
+      },
+      {
+        "Map": "Skyway_Deathmatch",
+        "IsActive": true
+      },
+      {
+        "Map": "SkywaySnow_Deathmatch",
+        "IsActive": false
+      },
+      {
+        "Map": "EvosLab_Deathmatch",
+        "IsActive": true
+      },
+      {
+        "Map": "RobotFactory_Deathmatch",
+        "IsActive": true
+      },
+      {
+        "Map": "Oblivion_Deathmatch",
+        "IsActive": true
+      },
+      {
+        "Map": "Reactor_Deathmatch",
+        "IsActive": true
+      },
+      {
+        "Map": "Casino01_Deathmatch",
+        "IsActive": true
+      }
+    ],
+    "RewardBucket": "NoRewards",
+    "PersistedStatBucket": "DoNotPersist",
+    "Bans": true,
+    "Mods": [
+      "NotAllowedForGroups",
+      "NotCheckedByDefault",
+      "ControlAllBots",
+      "RankedFreelancerSelection"
     ],
     "TeamAPlayers": "4",
     "TeamABots": "3",

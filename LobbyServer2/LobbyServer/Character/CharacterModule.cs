@@ -50,6 +50,7 @@ public class CharacterModule : ILobbyModule
         }
 
         // TODO validate what player has purchased
+        // TODO validate it's legal? account.Id == _conn.AccountId || isCustomGameAdmin
 
         // building character info to validate it for current game
         CharacterType characterType = update.CharacterType ?? playerInfo.CharacterType;
@@ -88,7 +89,7 @@ public class CharacterModule : ILobbyModule
 
         if (_gameLifecycle.CurrentGame != null)
         {
-            if (!_gameLifecycle.CurrentGame.UpdateCharacterInfo(_conn.AccountId, characterInfo, update))
+            if (!_gameLifecycle.CurrentGame.UpdateCharacterInfo(_conn.AccountId, characterInfo, update, characterDataUpdate))
             {
                 _conn.Send(new PlayerInfoUpdateResponse
                 {
