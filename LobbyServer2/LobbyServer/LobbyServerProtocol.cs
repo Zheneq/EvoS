@@ -798,12 +798,12 @@ namespace CentralServer.LobbyServer
             if (game == null)
             {
                 log.Error($"{AccountId} is asked to leave null server (current server = {CurrentGame?.ProcessCode ?? "null"})");
-                return true;
+                return false;
             }
             if (CurrentGame == null)
             {
                 log.Debug($"{AccountId} is asked to leave {game.ProcessCode} while they are not on any server");
-                return true;
+                return false;
             }
             if (CurrentGame != game)
             {

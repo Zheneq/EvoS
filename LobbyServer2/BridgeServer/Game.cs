@@ -22,6 +22,7 @@ using EvoS.Framework.Misc;
 using EvoS.Framework.Network.NetworkMessages;
 using EvoS.Framework.Network.Static;
 using log4net;
+using MoreLinq;
 
 namespace CentralServer.BridgeServer;
 
@@ -89,7 +90,8 @@ public abstract class Game
 
     public virtual void DisconnectPlayer(long accountId)
     {
-        Server?.DisconnectPlayer(GetPlayerInfo(accountId));
+        if (Server is null) return;
+        GetPlayerInfos(accountId).ForEach(Server.DisconnectPlayer);
     }
 
     public virtual void OnPlayerDisconnectedFromLobby(long accountId)
@@ -262,6 +264,11 @@ public abstract class Game
     public LobbyServerPlayerInfo GetPlayerInfo(long accountId)
     {
         return TeamInfo.TeamPlayerInfo.Find(p => p.AccountId == accountId && !p.IsRemoteControlled);
+    }
+    
+    public IEnumerable<LobbyServerPlayerInfo> GetPlayerInfos(long accountId)
+    {
+        return TeamInfo.TeamPlayerInfo.Where(p => p.AccountId == accountId);
     }
 
     public LobbyServerPlayerInfo GetPlayerById(int playerId)
