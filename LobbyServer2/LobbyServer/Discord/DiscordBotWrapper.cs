@@ -330,9 +330,6 @@ namespace CentralServer.LobbyServer.Discord
             }
 
             SocketGuildUser guildUser = command.User as SocketGuildUser;
-            ulong? approvedRoleId = DiscordBotConfiguration.Get().ApprovedRoleId;
-            bool requesterHasApprovedRole = approvedRoleId is > 0
-                && guildUser?.Roles.Any(r => r.Id == approvedRoleId.Value) == true;
             RegistrationCodeDao.RegistrationCodeEntry entry = new RegistrationCodeDao.RegistrationCodeEntry
             {
                 Code = Guid.NewGuid().ToString(),
@@ -348,7 +345,7 @@ namespace CentralServer.LobbyServer.Discord
             };
             dao.Save(entry);
 
-            await SendUsernameRequestNotification(entry, requesterHasApprovedRole);
+            await SendUsernameRequestNotification(command, entry);
 
             await command.RespondAsync(
                 $"Your request for `{name}` has been submitted for review. " +
@@ -399,6 +396,9 @@ namespace CentralServer.LobbyServer.Discord
                 entry.ExpiresAt = default;
                 entry.RequestedAt = DateTime.UtcNow;
                 dao.Save(entry);
+
+                await SendUsernameRequestNotification(command, entry);
+
                 await command.RespondAsync(
                     "Your registration code has expired. Your request has been sent back for review.",
                     ephemeral: true);
@@ -589,8 +589,8 @@ namespace CentralServer.LobbyServer.Discord
         }
 
         private async Task SendUsernameRequestNotification(
-            RegistrationCodeDao.RegistrationCodeEntry entry,
-            bool requesterHasApprovedRole)
+            SocketSlashCommand command,
+            RegistrationCodeDao.RegistrationCodeEntry entry)
         {
             var adminRequestChannelId = DiscordBotConfiguration.Get().AdminNotificationChannelId;
             if (adminRequestChannelId is null or 0)
@@ -619,7 +619,7 @@ namespace CentralServer.LobbyServer.Discord
                 }
             };
 
-            if (requesterHasApprovedRole)
+            if (DoesRequesterHaveApprovedRole(command))
             {
                 builder.Color = Color.Orange;
                 builder.AddField(
@@ -643,6 +643,14 @@ namespace CentralServer.LobbyServer.Discord
             {
                 log.Error($"Failed to post username request {entry.Code} to the admin channel", e);
             }
+        }
+
+        private static bool DoesRequesterHaveApprovedRole(SocketSlashCommand command)
+        {
+            SocketGuildUser guildUser = command.User as SocketGuildUser;
+            ulong? approvedRoleId = DiscordBotConfiguration.Get().ApprovedRoleId;
+            return approvedRoleId is > 0
+                   && guildUser?.Roles.Any(r => r.Id == approvedRoleId.Value) == true;
         }
 
         // Request identity carried in button/modal custom ids: "<discordUserId>:<username>".
