@@ -14,6 +14,7 @@ import MatchPage from "./components/pages/MatchPage";
 import MatchHistoryPage from "./components/pages/MatchHistoryPage";
 import ReportHistoryPage from "./components/pages/ReportHistoryPage";
 import DebugPage from "./components/pages/DebugPage";
+import GameServersPage from "./components/pages/GameServersPage";
 
 const theme = createTheme({
     components: {
@@ -126,6 +127,7 @@ function App() {
                         <Route path="/account/:accountId/matches" element={page("Match History", <MatchHistoryPage/>)}/>
                         <Route path="/account/:accountId/feedback" element={page("Report History", <ReportHistoryPage/>)}/>
                         <Route path="/debug" element={page("Debug", <DebugPage/>)}/>
+                        <Route path="/game-servers" element={page("Game Servers", <GameServersPage/>)}/>
                     </Routes>
                 </Paper>
             </BrowserRouter>

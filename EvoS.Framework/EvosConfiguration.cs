@@ -34,6 +34,7 @@ namespace EvoS.Framework
         public int UserApiPort = 3002;
         public string AdminApiKey = "";
         public int AdminApiPort = 3001;
+        public int BridgeAuthPendingTimeoutMinutes = 15;
         public string TicketAuthKey = "";
         public string ClientIpHeader = "";
         public ushort MetricsPort = 1234;
@@ -104,6 +105,8 @@ namespace EvoS.Framework
         public static int GetAdminApiPort() => Instance.AdminApiPort;
 
         public static int GetUserApiPort() => Instance.UserApiPort;
+
+        public static TimeSpan GetBridgeAuthPendingTimeout() => TimeSpan.FromMinutes(Instance.BridgeAuthPendingTimeoutMinutes);
 
         public static ushort GetMetricsPort() => Instance.MetricsPort;
 

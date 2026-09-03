@@ -28,6 +28,7 @@ const pages = [
     { text: "Status", url: '/' },
     { text: "Admin panel", url: '/admin' },
     { text: "Codes", url: '/codes' },
+    { text: "Game servers", url: '/game-servers' },
 ];
 
 export const NavBarLink = styled(NavLink)({
