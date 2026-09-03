@@ -18,8 +18,24 @@ namespace CentralServer.BridgeServer
     {
         private static readonly ILog log = LogManager.GetLogger(typeof(GameServerKeyManager));
 
-        // fingerprint -> connection awaiting an admin decision
-        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, BridgeServerProtocol> Pending = new();
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<IGameServerConnection, string> Pending = new();
+
+        /// <summary>
+        /// Strict one-connection-per-key: a key identifies a single server. Returns true if another
+        /// connection is already using this key (awaiting approval, or live in the pool under a
+        /// different process code). A same-process-code reconnection is allowed (handled by ServerManager).
+        /// </summary>
+        public static bool IsKeyInUse(string fingerprint, string processCode)
+        {
+            foreach (string pendingFingerprint in Pending.Values)
+            {
+                if (pendingFingerprint == fingerprint)
+                {
+                    return true;
+                }
+            }
+            return ServerManager.HasOtherServerWithFingerprint(fingerprint, processCode);
+        }
 
         /// <summary>
         /// Records a connecting server's key (creating a Pending record on first sight) and returns the
@@ -63,15 +79,14 @@ namespace CentralServer.BridgeServer
             return key.Status;
         }
 
-        public static void AddPending(string fingerprint, BridgeServerProtocol connection)
+        public static void AddPending(string fingerprint, IGameServerConnection connection)
         {
-            Pending[fingerprint] = connection;
+            Pending[connection] = fingerprint;
             TimeSpan timeout = EvosConfiguration.GetBridgeAuthPendingTimeout();
-            Task.Delay(timeout).ContinueWith(_ =>
+            Task.Delay(timeout).ContinueWith(_task =>
             {
-                if (Pending.TryGetValue(fingerprint, out BridgeServerProtocol c) && c == connection)
+                if (Pending.TryRemove(connection, out _))
                 {
-                    Pending.TryRemove(new KeyValuePair<string, BridgeServerProtocol>(fingerprint, connection));
                     log.Info($"Pending game server {fingerprint} timed out awaiting approval");
                     if (connection.IsConnected)
                     {
@@ -81,13 +96,24 @@ namespace CentralServer.BridgeServer
             });
         }
 
-        public static void RemovePending(string fingerprint, BridgeServerProtocol connection)
+        public static void RemovePending(IGameServerConnection connection)
         {
-            if (fingerprint == null)
+            Pending.TryRemove(connection, out _);
+        }
+
+        // Atomically removes and returns all connections currently pending on the given key.
+        // Strict mode keeps this to at most one, but revocation still sweeps defensively.
+        private static List<IGameServerConnection> TakePendingFor(string fingerprint)
+        {
+            List<IGameServerConnection> taken = new List<IGameServerConnection>();
+            foreach (KeyValuePair<IGameServerConnection, string> entry in Pending)
             {
-                return;
+                if (entry.Value == fingerprint && Pending.TryRemove(entry.Key, out _))
+                {
+                    taken.Add(entry.Key);
+                }
             }
-            Pending.TryRemove(new KeyValuePair<string, BridgeServerProtocol>(fingerprint, connection));
+            return taken;
         }
 
         public static List<GameServerKeyDao.GameServerKey> GetAll()
@@ -114,9 +140,12 @@ namespace CentralServer.BridgeServer
             DB.Get().GameServerKeyDao.Save(key);
             log.Info($"Game server key {fingerprint} approved by {adminAccountId}");
 
-            if (Pending.TryRemove(fingerprint, out BridgeServerProtocol connection) && connection.IsConnected)
+            foreach (IGameServerConnection connection in TakePendingFor(fingerprint))
             {
-                connection.CompleteRegistration();
+                if (connection.IsConnected)
+                {
+                    connection.CompleteRegistration();
+                }
             }
             return true;
         }
@@ -138,9 +167,12 @@ namespace CentralServer.BridgeServer
             DB.Get().GameServerKeyDao.Save(key);
             log.Info($"Game server key {fingerprint} {(wasApproved ? "revoked" : "declined")} by {adminAccountId}");
 
-            if (Pending.TryRemove(fingerprint, out BridgeServerProtocol connection) && connection.IsConnected)
+            foreach (IGameServerConnection connection in TakePendingFor(fingerprint))
             {
-                connection.RejectRegistration();
+                if (connection.IsConnected)
+                {
+                    connection.RejectRegistration();
+                }
             }
             ServerManager.DisconnectByFingerprint(fingerprint);
             return true;

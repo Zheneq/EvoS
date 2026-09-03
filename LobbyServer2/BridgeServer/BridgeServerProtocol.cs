@@ -12,7 +12,7 @@ using log4net;
 
 namespace CentralServer.BridgeServer
 {
-    public class BridgeServerProtocol: WebSocketBehaviorBase<AllianceMessageBase>
+    public class BridgeServerProtocol: WebSocketBehaviorBase<AllianceMessageBase>, IGameServerConnection
     {
         private static readonly ILog log = LogManager.GetLogger(typeof(BridgeServerProtocol));
         
@@ -114,6 +114,13 @@ namespace CentralServer.BridgeServer
             IsPrivate = request.isPrivate;
             Fingerprint = fingerprint;
             _pendingCallbackId = callbackId;
+
+            if (GameServerKeyManager.IsKeyInUse(fingerprint, ProcessCode))
+            {
+                log.Warn($"Rejecting game server {Name} ({fingerprint}): key already in use by another connection");
+                RejectRegistration();
+                return;
+            }
 
             GameServerKeyStatus status = GameServerKeyManager.RegisterConnection(
                 fingerprint, request.PublicKey, Address, BuildVersion);
@@ -245,7 +252,7 @@ namespace CentralServer.BridgeServer
         protected override void HandleClose(WsCloseEventArgs e)
         {
             UnregisterAllHandlers();
-            GameServerKeyManager.RemovePending(Fingerprint, this);
+            GameServerKeyManager.RemovePending(this);
             ServerManager.RemoveServer(ProcessCode);
             OnServerDisconnect(this);
         }

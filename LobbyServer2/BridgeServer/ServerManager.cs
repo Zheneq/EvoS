@@ -132,6 +132,19 @@ namespace CentralServer.BridgeServer
             return ServerPool.Values.FirstOrDefault(server => address.Equals(server.URI));
         }
 
+        public static bool HasOtherServerWithFingerprint(string fingerprint, string processCode)
+        {
+            if (fingerprint == null)
+            {
+                return false;
+            }
+            lock (ServerPool)
+            {
+                return ServerPool.Values.Any(
+                    s => fingerprint.Equals(s.Fingerprint) && !string.Equals(s.ProcessCode, processCode));
+            }
+        }
+
         public static void DisconnectByFingerprint(string fingerprint)
         {
             if (fingerprint == null)
