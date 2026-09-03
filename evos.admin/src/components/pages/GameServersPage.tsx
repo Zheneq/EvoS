@@ -12,11 +12,10 @@ import {
     Typography,
 } from '@mui/material';
 import {
-    approveGameServerKey,
-    declineGameServerKey,
     formatDate,
     GameServerKey,
     getGameServerKeys,
+    setGameServerKeyStatus,
 } from '../../lib/Evos';
 import {useAuthHeader} from 'react-auth-kit';
 import {useNavigate} from 'react-router-dom';
@@ -50,16 +49,9 @@ export default function GameServersPage() {
         };
     }, [loadKeys]);
 
-    const handleApprove = (fingerprint: string) => {
+    const setStatus = (fingerprint: string, approve: boolean) => {
         const abort = new AbortController();
-        approveGameServerKey(abort, authHeader, fingerprint)
-            .then(() => loadKeys())
-            .catch(e => processError(e, setError, navigate));
-    };
-
-    const handleDecline = (fingerprint: string) => {
-        const abort = new AbortController();
-        declineGameServerKey(abort, authHeader, fingerprint)
+        setGameServerKeyStatus(abort, authHeader, fingerprint, approve)
             .then(() => loadKeys())
             .catch(e => processError(e, setError, navigate));
     };
@@ -68,7 +60,7 @@ export default function GameServersPage() {
         if (!confirmRevoke) return;
         const fingerprint = confirmRevoke.fingerprint;
         setConfirmRevoke(undefined);
-        handleDecline(fingerprint);
+        setStatus(fingerprint, false);
     };
 
     const statusColor = (status: string): 'success' | 'error' | 'warning' | 'default' => {
@@ -145,7 +137,7 @@ export default function GameServersPage() {
                                                     size="small"
                                                     color="success"
                                                     variant="contained"
-                                                    onClick={() => handleApprove(k.fingerprint)}
+                                                    onClick={() => setStatus(k.fingerprint, true)}
                                                     sx={{mr: 1}}
                                                 >
                                                     Approve
@@ -154,7 +146,7 @@ export default function GameServersPage() {
                                                     size="small"
                                                     color="error"
                                                     variant="outlined"
-                                                    onClick={() => handleDecline(k.fingerprint)}
+                                                    onClick={() => setStatus(k.fingerprint, false)}
                                                 >
                                                     Decline
                                                 </Button>

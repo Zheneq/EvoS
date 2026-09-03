@@ -15,8 +15,11 @@ public static class GameServerKeyController
 {
     private static readonly ILog log = LogManager.GetLogger(typeof(GameServerKeyController));
 
-    public class ApproveGameServerKeyRequest
+    public class SetGameServerKeyStatusRequest
     {
+        // true = approve, false = decline (pending) or revoke (approved).
+        public bool Approve { get; set; }
+        // Optional friendly name, applied when approving.
         public string Name { get; set; }
     }
 
@@ -49,35 +52,23 @@ public static class GameServerKeyController
         return Results.Ok(new GameServerKeysResponse { Keys = keys });
     }
 
-    public static IResult ApproveKey(string fingerprint, [FromBody] ApproveGameServerKeyRequest data, ClaimsPrincipal user)
+    public static IResult SetKeyStatus(string fingerprint, [FromBody] SetGameServerKeyStatusRequest data, ClaimsPrincipal user)
     {
         if (!AdminController.ValidateAdmin(user, out IResult error, out long adminAccountId, out string adminHandle))
         {
             return error;
         }
 
-        if (!GameServerKeyManager.Approve(fingerprint, adminAccountId, data?.Name))
+        bool approve = data?.Approve == true;
+        bool ok = approve
+            ? GameServerKeyManager.Approve(fingerprint, adminAccountId, data.Name)
+            : GameServerKeyManager.Reject(fingerprint, adminAccountId);
+        if (!ok)
         {
             return Results.NotFound();
         }
 
-        log.Info($"Game server key {fingerprint} approved by {adminHandle} ({adminAccountId})");
-        return Results.Ok();
-    }
-
-    public static IResult DeclineKey(string fingerprint, ClaimsPrincipal user)
-    {
-        if (!AdminController.ValidateAdmin(user, out IResult error, out long adminAccountId, out string adminHandle))
-        {
-            return error;
-        }
-
-        if (!GameServerKeyManager.Reject(fingerprint, adminAccountId))
-        {
-            return Results.NotFound();
-        }
-
-        log.Info($"Game server key {fingerprint} declined/revoked by {adminHandle} ({adminAccountId})");
+        log.Info($"Game server key {fingerprint} {(approve ? "approved" : "declined/revoked")} by {adminHandle} ({adminAccountId})");
         return Results.Ok();
     }
 

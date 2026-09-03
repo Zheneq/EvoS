@@ -817,16 +817,9 @@ export function getGameServerKeys(abort: AbortController, authHeader: string) {
         { headers: { 'Authorization': authHeader }, signal: abort.signal });
 }
 
-export function approveGameServerKey(abort: AbortController, authHeader: string, fingerprint: string, name?: string) {
+export function setGameServerKeyStatus(abort: AbortController, authHeader: string, fingerprint: string, approve: boolean, name?: string) {
     return axios.post(
-        baseUrl + "/api/admin/gameServer/keys/" + fingerprint + "/approve",
-        { name },
-        { headers: { 'Authorization': authHeader }, signal: abort.signal });
-}
-
-export function declineGameServerKey(abort: AbortController, authHeader: string, fingerprint: string) {
-    return axios.post(
-        baseUrl + "/api/admin/gameServer/keys/" + fingerprint + "/decline",
-        {},
+        baseUrl + "/api/admin/gameServer/keys/" + fingerprint,
+        { approve, name },
         { headers: { 'Authorization': authHeader }, signal: abort.signal });
 }
