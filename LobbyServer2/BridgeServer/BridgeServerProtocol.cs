@@ -23,7 +23,7 @@ namespace CentralServer.BridgeServer
         public event Action<BridgeServerProtocol> OnServerDisconnect = delegate {};
 
         private string ProtocolStr;
-        private string Address;
+        private string ConnectionAddress;
         private int Port;
         private string AddressForLog;
         private LobbySessionInfo SessionInfo;
@@ -32,7 +32,7 @@ namespace CentralServer.BridgeServer
         private int _pendingCallbackId;
         private bool _registered;
 
-        public string URI => ProtocolStr + "://" + Address + ":" + Port;
+        public string URI => ProtocolStr + "://" + ConnectionAddress + ":" + Port;
         public string BuildVersion => SessionInfo?.BuildVersion ?? "";
         public bool IsPrivate { get; private set; }
         public bool IsReserved { get; private set; }
@@ -122,8 +122,9 @@ namespace CentralServer.BridgeServer
                 return;
             }
 
+            string actualAddress = LobbyServerUtils.GetActualClientIpAddress(Context)?.ToString();
             GameServerKeyStatus status = GameServerKeyManager.RegisterConnection(
-                fingerprint, request.PublicKey, Address, BuildVersion);
+                fingerprint, request.PublicKey, ConnectionAddress, actualAddress, BuildVersion);
 
             switch (status)
             {
@@ -192,9 +193,9 @@ namespace CentralServer.BridgeServer
             }
 
             string[] hostPortParts = hostPort.Split(":");
-            Address = hostPortParts[0];
+            ConnectionAddress = hostPortParts[0];
             Port = Convert.ToInt32(hostPortParts[1]);
-            AddressForLog = Address.Truncate(16);
+            AddressForLog = ConnectionAddress.Truncate(16);
         }
 
         private void HandleServerGameSummaryNotification(ServerGameSummaryNotification notify)

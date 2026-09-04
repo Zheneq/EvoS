@@ -803,7 +803,9 @@ export interface GameServerKey {
     approvedAt?: string;
     approvedByHandle?: string;
     lastConnectedAt?: string;
-    lastAddress?: string;
+    lastConnectionAddress?: string;
+    lastActualAddress?: string;
+    approvedActualAddress?: string;
     lastBuildVersion?: string;
 }
 

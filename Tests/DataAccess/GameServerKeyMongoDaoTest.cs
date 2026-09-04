@@ -18,7 +18,7 @@ public class GameServerKeyMongoDaoTest(ITestOutputHelper testOutputHelper) : Evo
             PublicKey = "<RSAKeyValue><Modulus>abc</Modulus><Exponent>AQAB</Exponent></RSAKeyValue>",
             Status = status,
             FirstSeenAt = firstSeenAt,
-            LastAddress = "127.0.0.1",
+            LastConnectionAddress = "127.0.0.1",
             LastBuildVersion = "test-build",
         };
     }

@@ -107,6 +107,7 @@ export default function GameServersPage() {
                                 <TableCell>Name</TableCell>
                                 <TableCell>Fingerprint</TableCell>
                                 <TableCell>Status</TableCell>
+                                <TableCell>Source</TableCell>
                                 <TableCell>Last address</TableCell>
                                 <TableCell>Build</TableCell>
                                 <TableCell>First seen</TableCell>
@@ -126,7 +127,15 @@ export default function GameServersPage() {
                                     <TableCell>
                                         <Chip label={k.status} color={statusColor(k.status)} size="small" />
                                     </TableCell>
-                                    <TableCell>{k.lastAddress}</TableCell>
+                                    <TableCell>
+                                        {k.lastActualAddress}
+                                        {k.approvedActualAddress && k.lastActualAddress && k.approvedActualAddress !== k.lastActualAddress && (
+                                            <Tooltip title={`Pinned to ${k.approvedActualAddress}; connected from ${k.lastActualAddress}. Held pending — verify before approving.`}>
+                                                <Chip label="moved" color="warning" size="small" sx={{ml: 1}} />
+                                            </Tooltip>
+                                        )}
+                                    </TableCell>
+                                    <TableCell>{k.lastConnectionAddress}</TableCell>
                                     <TableCell>{k.lastBuildVersion}</TableCell>
                                     <TableCell>{formatDate(k.firstSeenAt)}</TableCell>
                                     <TableCell>{k.lastConnectedAt ? formatDate(k.lastConnectedAt) : ''}</TableCell>

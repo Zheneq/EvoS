@@ -32,7 +32,9 @@ public static class GameServerKeyController
         public DateTime? ApprovedAt { get; set; }
         public string ApprovedByHandle { get; set; }
         public DateTime? LastConnectedAt { get; set; }
-        public string LastAddress { get; set; }
+        public string LastConnectionAddress { get; set; }
+        public string LastActualAddress { get; set; }
+        public string ApprovedActualAddress { get; set; }
         public string LastBuildVersion { get; set; }
     }
 
@@ -84,7 +86,9 @@ public static class GameServerKeyController
             ApprovedAt = k.ApprovedAt,
             ApprovedByHandle = handle,
             LastConnectedAt = k.LastConnectedAt,
-            LastAddress = k.LastAddress,
+            LastConnectionAddress = k.LastConnectionAddress,
+            LastActualAddress = k.LastActualAddress,
+            ApprovedActualAddress = k.ApprovedActualAddress,
             LastBuildVersion = k.LastBuildVersion,
         };
     }

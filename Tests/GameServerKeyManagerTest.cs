@@ -92,6 +92,44 @@ public class GameServerKeyManagerTest
     }
 
     [Fact]
+    public void ApprovePinsToLastActualAddress()
+    {
+        string fp = Seed(GameServerKeyStatus.Pending);
+        GameServerKeyDao.GameServerKey key = DB.Get().GameServerKeyDao.Find(fp);
+        key.LastActualAddress = "203.0.113.7";
+        DB.Get().GameServerKeyDao.Save(key);
+
+        GameServerKeyManager.Approve(fp, adminAccountId: 1);
+
+        Assert.Equal("203.0.113.7", DB.Get().GameServerKeyDao.Find(fp).ApprovedActualAddress);
+    }
+
+    [Fact]
+    public void AddressMismatchDetectedOnlyForMovedApprovedKey()
+    {
+        GameServerKeyDao.GameServerKey approvedHere = new GameServerKeyDao.GameServerKey
+        {
+            Fingerprint = "x", PublicKey = "pk", Status = GameServerKeyStatus.Approved,
+            FirstSeenAt = DateTime.UtcNow, ApprovedActualAddress = "203.0.113.7",
+        };
+
+        Assert.True(GameServerKeyManager.IsAddressMismatch(approvedHere, "198.51.100.9"));  // moved
+        Assert.False(GameServerKeyManager.IsAddressMismatch(approvedHere, "203.0.113.7")); // same source
+
+        // Not-yet-pinned approved key (e.g. legacy) is not treated as a mismatch.
+        approvedHere.ApprovedActualAddress = null;
+        Assert.False(GameServerKeyManager.IsAddressMismatch(approvedHere, "198.51.100.9"));
+
+        // A pending key is never an address mismatch.
+        GameServerKeyDao.GameServerKey pending = new GameServerKeyDao.GameServerKey
+        {
+            Fingerprint = "y", PublicKey = "pk", Status = GameServerKeyStatus.Pending,
+            FirstSeenAt = DateTime.UtcNow, ApprovedActualAddress = "203.0.113.7",
+        };
+        Assert.False(GameServerKeyManager.IsAddressMismatch(pending, "198.51.100.9"));
+    }
+
+    [Fact]
     public void ApproveDoesNotCompleteDisconnectedConnection()
     {
         string fp = Seed(GameServerKeyStatus.Pending);

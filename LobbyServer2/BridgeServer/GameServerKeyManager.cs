@@ -38,10 +38,27 @@ namespace CentralServer.BridgeServer
         }
 
         /// <summary>
-        /// Records a connecting server's key (creating a Pending record on first sight) and returns the
-        /// effective status the caller should act on. In dev mode, unknown/pending keys are auto-approved.
+        /// True if an approved key is connecting from a source address other than the one it was pinned
+        /// to at approval — i.e. the server "moved". Used to re-pend the key for admin review.
         /// </summary>
-        public static GameServerKeyStatus RegisterConnection(string fingerprint, string publicKey, string address, string buildVersion)
+        public static bool IsAddressMismatch(GameServerKeyDao.GameServerKey key, string actualAddress)
+        {
+            return key.Status == GameServerKeyStatus.Approved
+                   && key.ApprovedActualAddress != null
+                   && !string.Equals(key.ApprovedActualAddress, actualAddress);
+        }
+
+        /// <summary>
+        /// Records a connecting server's key (creating a Pending record on first sight) and returns the
+        /// effective status the caller should act on. An approved key connecting from an unexpected source
+        /// address is re-pended for admin re-approval. In dev mode, pending keys are auto-approved.
+        /// </summary>
+        public static GameServerKeyStatus RegisterConnection(
+            string fingerprint,
+            string publicKey,
+            string connectionAddress,
+            string actualAddress,
+            string buildVersion)
         {
             GameServerKeyDao.GameServerKey key = DB.Get().GameServerKeyDao.Find(fingerprint);
             bool isNew = key == null;
@@ -57,23 +74,42 @@ namespace CentralServer.BridgeServer
             }
 
             key.LastConnectedAt = DateTime.UtcNow;
-            key.LastAddress = address;
+            key.LastConnectionAddress = connectionAddress;
+            key.LastActualAddress = actualAddress;
             key.LastBuildVersion = buildVersion;
+
+            bool movedAddress = IsAddressMismatch(key, actualAddress);
+            string pinnedActualAddress = key.ApprovedActualAddress;
+            if (movedAddress)
+            {
+                log.Warn($"Approved game server key {fingerprint} connected from unexpected address " +
+                         $"{actualAddress} (pinned {pinnedActualAddress}); re-pending for admin approval");
+                key.Status = GameServerKeyStatus.Pending;
+                key.ApprovedAt = null;
+                key.ApprovedByAccountId = null;
+            }
 
             if (EvosConfiguration.GetDevMode() && key.Status == GameServerKeyStatus.Pending)
             {
                 log.Warn($"Dev mode: auto-approving game server key {fingerprint}");
                 key.Status = GameServerKeyStatus.Approved;
                 key.ApprovedAt = DateTime.UtcNow;
+                key.ApprovedActualAddress = actualAddress;
             }
 
             DB.Get().GameServerKeyDao.Save(key);
 
             if (isNew && key.Status == GameServerKeyStatus.Pending)
             {
-                log.Info($"New game server key pending approval: {fingerprint} ({address})");
+                log.Info($"New game server key pending approval: {fingerprint} ({connectionAddress})");
                 DiscordManager.Get().SendAdminLogMessageAsync(
-                    $"A new game server is awaiting approval: `{fingerprint}` ({address}). Approve it in the admin panel.");
+                    $"A new game server is awaiting approval: `{fingerprint}` ({connectionAddress}). Approve it in the admin panel.");
+            }
+            else if (movedAddress && key.Status == GameServerKeyStatus.Pending)
+            {
+                DiscordManager.Get().SendAdminLogMessageAsync(
+                    $"Approved game server key `{fingerprint}` connected from a NEW source address " +
+                    $"({pinnedActualAddress} -> {actualAddress}) and was held pending re-approval. Verify this is expected before approving.");
             }
 
             return key.Status;
@@ -133,6 +169,9 @@ namespace CentralServer.BridgeServer
             key.Status = GameServerKeyStatus.Approved;
             key.ApprovedAt = DateTime.UtcNow;
             key.ApprovedByAccountId = adminAccountId;
+            // Pin the key to the source address it is currently connecting from; a later connection from
+            // a different address will re-pend it for review.
+            key.ApprovedActualAddress = key.LastActualAddress;
             if (!string.IsNullOrWhiteSpace(name))
             {
                 key.Name = name;

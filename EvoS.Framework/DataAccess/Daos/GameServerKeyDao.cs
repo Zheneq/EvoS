@@ -30,8 +30,14 @@ public interface GameServerKeyDao
         public required DateTime FirstSeenAt;
         public DateTime? ApprovedAt;
         public long? ApprovedByAccountId;
+        // Actual (TCP/proxy-resolved) source address this key was pinned to at approval. A connection
+        // from a different source re-pends the key for admin review (theft/relocation signal).
+        public string ApprovedActualAddress;
         public DateTime? LastConnectedAt;
-        public string LastAddress;
+        // Self-reported connection address (host:port other systems use to reach the server).
+        public string LastConnectionAddress;
+        // Actual (TCP/proxy-resolved) source address of the most recent connection.
+        public string LastActualAddress;
         public string LastBuildVersion;
 
         public bool IsApproved => Status == GameServerKeyStatus.Approved;
