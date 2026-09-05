@@ -1,0 +1,14 @@
+# Root context builds the lobby image only; keep it lean.
+**/bin
+**/obj
+**/.vs
+**/.idea
+.git
+.github
+TestResults
+UnitTests
+Tests
+evos.admin
+*.user
+debug.log
+**/*.log
