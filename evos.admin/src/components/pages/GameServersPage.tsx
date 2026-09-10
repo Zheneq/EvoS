@@ -118,7 +118,7 @@ export default function GameServersPage() {
                         <TableBody>
                             {keys.map(k => (
                                 <TableRow key={k.fingerprint} sx={{'&:last-child td, &:last-child th': {border: 0}}}>
-                                    <TableCell>{k.name || <em>unnamed</em>}</TableCell>
+                                    <TableCell>{k.lastName || <em>unnamed</em>}</TableCell>
                                     <TableCell>
                                         <Tooltip title={k.fingerprint}>
                                             <code>{k.fingerprint.substring(0, 16)}…</code>

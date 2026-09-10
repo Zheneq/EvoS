@@ -25,7 +25,6 @@ public interface GameServerKeyDao
         public required string Fingerprint;
         // RSA public key as RSA.ToXmlString(false)
         public required string PublicKey;
-        public string Name;
         public required GameServerKeyStatus Status;
         public required DateTime FirstSeenAt;
         public DateTime? ApprovedAt;
@@ -39,6 +38,7 @@ public interface GameServerKeyDao
         // Actual (TCP/proxy-resolved) source address of the most recent connection.
         public string LastActualAddress;
         public string LastBuildVersion;
+        public string LastName;
 
         public bool IsApproved => Status == GameServerKeyStatus.Approved;
     }

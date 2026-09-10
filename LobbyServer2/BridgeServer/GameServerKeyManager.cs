@@ -58,7 +58,8 @@ namespace CentralServer.BridgeServer
             string publicKey,
             string connectionAddress,
             string actualAddress,
-            string buildVersion)
+            string buildVersion,
+            string reportedName)
         {
             GameServerKeyDao.GameServerKey key = DB.Get().GameServerKeyDao.Find(fingerprint);
             bool isNew = key == null;
@@ -77,6 +78,7 @@ namespace CentralServer.BridgeServer
             key.LastConnectionAddress = connectionAddress;
             key.LastActualAddress = actualAddress;
             key.LastBuildVersion = buildVersion;
+            key.LastName = reportedName;
 
             bool movedAddress = IsAddressMismatch(key, actualAddress);
             string pinnedActualAddress = key.ApprovedActualAddress;
@@ -158,7 +160,7 @@ namespace CentralServer.BridgeServer
         }
 
         /// <summary>Approves a key. If a server is currently held pending on this key, it goes live immediately.</summary>
-        public static bool Approve(string fingerprint, long adminAccountId, string name = null)
+        public static bool Approve(string fingerprint, long adminAccountId)
         {
             GameServerKeyDao.GameServerKey key = DB.Get().GameServerKeyDao.Find(fingerprint);
             if (key == null)
@@ -172,10 +174,6 @@ namespace CentralServer.BridgeServer
             // Pin the key to the source address it is currently connecting from; a later connection from
             // a different address will re-pend it for review.
             key.ApprovedActualAddress = key.LastActualAddress;
-            if (!string.IsNullOrWhiteSpace(name))
-            {
-                key.Name = name;
-            }
             DB.Get().GameServerKeyDao.Save(key);
             log.Info($"Game server key {fingerprint} approved by {adminAccountId}");
 

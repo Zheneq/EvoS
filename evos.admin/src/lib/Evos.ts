@@ -797,7 +797,6 @@ export function getMatchHistory(
 
 export interface GameServerKey {
     fingerprint: string;
-    name: string;
     status: string;
     firstSeenAt: string;
     approvedAt?: string;
@@ -807,6 +806,7 @@ export interface GameServerKey {
     lastActualAddress?: string;
     approvedActualAddress?: string;
     lastBuildVersion?: string;
+    lastName?: string;
 }
 
 export interface GameServerKeysResponse {
@@ -819,9 +819,9 @@ export function getGameServerKeys(abort: AbortController, authHeader: string) {
         { headers: { 'Authorization': authHeader }, signal: abort.signal });
 }
 
-export function setGameServerKeyStatus(abort: AbortController, authHeader: string, fingerprint: string, approve: boolean, name?: string) {
+export function setGameServerKeyStatus(abort: AbortController, authHeader: string, fingerprint: string, approve: boolean) {
     return axios.post(
         baseUrl + "/api/admin/gameServer/keys/" + fingerprint,
-        { approve, name },
+        { approve },
         { headers: { 'Authorization': authHeader }, signal: abort.signal });
 }

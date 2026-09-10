@@ -124,7 +124,7 @@ namespace CentralServer.BridgeServer
 
             string actualAddress = LobbyServerUtils.GetActualClientIpAddress(Context)?.ToString();
             GameServerKeyStatus status = GameServerKeyManager.RegisterConnection(
-                fingerprint, request.PublicKey, ConnectionAddress, actualAddress, BuildVersion);
+                fingerprint, request.PublicKey, ConnectionAddress, actualAddress, BuildVersion, Name);
 
             switch (status)
             {

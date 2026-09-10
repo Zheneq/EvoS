@@ -19,14 +19,11 @@ public static class GameServerKeyController
     {
         // true = approve, false = decline (pending) or revoke (approved).
         public bool Approve { get; set; }
-        // Optional friendly name, applied when approving.
-        public string Name { get; set; }
     }
 
     public class GameServerKeyResponse
     {
         public string Fingerprint { get; set; }
-        public string Name { get; set; }
         public string Status { get; set; }
         public DateTime FirstSeenAt { get; set; }
         public DateTime? ApprovedAt { get; set; }
@@ -36,6 +33,7 @@ public static class GameServerKeyController
         public string LastActualAddress { get; set; }
         public string ApprovedActualAddress { get; set; }
         public string LastBuildVersion { get; set; }
+        public string LastName { get; set; }
     }
 
     public class GameServerKeysResponse
@@ -63,7 +61,7 @@ public static class GameServerKeyController
 
         bool approve = data?.Approve == true;
         bool ok = approve
-            ? GameServerKeyManager.Approve(fingerprint, adminAccountId, data.Name)
+            ? GameServerKeyManager.Approve(fingerprint, adminAccountId)
             : GameServerKeyManager.Reject(fingerprint, adminAccountId);
         if (!ok)
         {
@@ -80,7 +78,6 @@ public static class GameServerKeyController
         return new GameServerKeyResponse
         {
             Fingerprint = k.Fingerprint,
-            Name = k.Name,
             Status = k.Status.ToString(),
             FirstSeenAt = k.FirstSeenAt,
             ApprovedAt = k.ApprovedAt,
@@ -90,6 +87,7 @@ public static class GameServerKeyController
             LastActualAddress = k.LastActualAddress,
             ApprovedActualAddress = k.ApprovedActualAddress,
             LastBuildVersion = k.LastBuildVersion,
+            LastName = k.LastName,
         };
     }
 }
