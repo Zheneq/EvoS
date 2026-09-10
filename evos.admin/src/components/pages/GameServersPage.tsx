@@ -29,6 +29,7 @@ export default function GameServersPage() {
     const [keys, setKeys] = useState<GameServerKey[]>();
     const [error, setError] = useState<EvosError>();
     const [confirmRevoke, setConfirmRevoke] = useState<GameServerKey>();
+    const [confirmApprove, setConfirmApprove] = useState<GameServerKey>();
     const authHeader = useAuthHeader()();
     const navigate = useNavigate();
 
@@ -61,6 +62,13 @@ export default function GameServersPage() {
         const fingerprint = confirmRevoke.fingerprint;
         setConfirmRevoke(undefined);
         setStatus(fingerprint, false);
+    };
+
+    const doApprove = () => {
+        if (!confirmApprove) return;
+        const fingerprint = confirmApprove.fingerprint;
+        setConfirmApprove(undefined);
+        setStatus(fingerprint, true);
     };
 
     const statusColor = (status: string): 'success' | 'error' | 'warning' | 'default' => {
@@ -97,6 +105,14 @@ export default function GameServersPage() {
                 onDismiss={() => setConfirmRevoke(undefined)}
                 onAccept={doRevoke}
                 acceptText="Revoke"
+            />
+
+            <BaseDialog
+                title={confirmApprove ? 'Approve this key?' : undefined}
+                content="This re-approves a previously declined/revoked key. The server will go live the next time it reconnects."
+                onDismiss={() => setConfirmApprove(undefined)}
+                onAccept={doApprove}
+                acceptText="Approve"
             />
 
             {keys && (
@@ -169,6 +185,16 @@ export default function GameServersPage() {
                                                 onClick={() => setConfirmRevoke(k)}
                                             >
                                                 Revoke
+                                            </Button>
+                                        )}
+                                        {(k.status === 'Declined' || k.status === 'Revoked') && (
+                                            <Button
+                                                size="small"
+                                                color="success"
+                                                variant="outlined"
+                                                onClick={() => setConfirmApprove(k)}
+                                            >
+                                                Approve
                                             </Button>
                                         )}
                                     </TableCell>
