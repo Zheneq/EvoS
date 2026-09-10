@@ -157,6 +157,7 @@ namespace CentralServer.BridgeServer
         public void RejectRegistration()
         {
             Send(new RegisterGameServerResponse { Success = false }, _pendingCallbackId);
+            Shutdown();
             CloseConnection();
         }
 

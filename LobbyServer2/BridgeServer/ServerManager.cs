@@ -158,6 +158,7 @@ namespace CentralServer.BridgeServer
                              .ToList())
                 {
                     log.Info($"Disconnecting game server {server.ProcessCode}: key {fingerprint} was revoked");
+                    server.Shutdown();
                     server.CloseConnection();
                 }
             }

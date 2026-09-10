@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Threading.Tasks;
 using CentralServer.LobbyServer.Discord;
 using EvoS.Framework;
 using EvoS.Framework.DataAccess;
@@ -120,18 +119,6 @@ namespace CentralServer.BridgeServer
         public static void AddPending(string fingerprint, IGameServerConnection connection)
         {
             Pending[connection] = fingerprint;
-            TimeSpan timeout = EvosConfiguration.GetBridgeAuthPendingTimeout();
-            Task.Delay(timeout).ContinueWith(_task =>
-            {
-                if (Pending.TryRemove(connection, out _))
-                {
-                    log.Info($"Pending game server {fingerprint} timed out awaiting approval");
-                    if (connection.IsConnected)
-                    {
-                        connection.RejectRegistration();
-                    }
-                }
-            });
         }
 
         public static void RemovePending(IGameServerConnection connection)
