@@ -121,7 +121,7 @@ public abstract class ApiServer
         
         ConfigureApp(app);
         
-        string url = $"http://localhost:{apiPort}";
+        string url = $"http://0.0.0.0:{apiPort}";
         _ = app.RunAsync(url);
         
         log.Info($"Started {authContext} api server at {url}");
