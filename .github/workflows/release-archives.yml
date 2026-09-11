@@ -1,9 +1,11 @@
 name: Release archives
 
-# Publishes self-contained lobby builds (EvoS.Sandbox executable + Config) for
-# windows-x64 and linux-x64, plus the evos.admin static site, as zip archives
-# attached to a GitHub Release. Runs on version tags; also runnable manually
-# (workflow_dispatch) which builds+uploads artifacts but does not create a release.
+# Publishes lobby builds (EvoS.Sandbox executable + Config) for windows-x64 and
+# linux-x64 in two flavors -- self-contained (no .NET needed) and "slim"
+# framework-dependent single-file (needs the ASP.NET Core 9 runtime installed) --
+# plus the evos.admin static site, as zip archives attached to a GitHub Release.
+# Runs on version tags; also runnable manually (workflow_dispatch) which
+# builds+uploads artifacts but does not create a release.
 on:
   push:
     tags:
@@ -51,6 +53,50 @@ jobs:
           name: evos-${{ matrix.os }}-x64
           path: evos-${{ matrix.os }}-x64.zip
 
+  lobby-slim:
+    # "slim" = framework-dependent single-file builds: a native single-file launcher
+    # per RID (EvoS.Sandbox.exe on Windows, EvoS.Sandbox on Linux) that is much
+    # smaller than the self-contained builds because the .NET runtime is not bundled.
+    # Requires the ASP.NET Core 9 runtime to be installed on the target machine.
+    strategy:
+      matrix:
+        include:
+          - rid: win-x64
+            os: windows
+          - rid: linux-x64
+            os: linux
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+
+      # Not trimmed: EvosSerializer reflects over the assemblies at startup, so
+      # trimming would strip message types. Config files are copied to the publish
+      # output via CopyToOutputDirectory, so they land in ./publish automatically.
+      - name: Publish lobby (${{ matrix.rid }}, slim / framework-dependent)
+        run: >
+          dotnet publish EvoS.Sandbox/EvoS.Sandbox.csproj
+          -c Release
+          -r ${{ matrix.rid }}
+          --self-contained false
+          -p:PublishSingleFile=true
+          -p:DebugType=none
+          -p:DebugSymbols=false
+          -o publish
+
+      - name: Package
+        run: |
+          mv publish evos-${{ matrix.os }}-x64-slim
+          zip -r evos-${{ matrix.os }}-x64-slim.zip evos-${{ matrix.os }}-x64-slim
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: evos-${{ matrix.os }}-x64-slim
+          path: evos-${{ matrix.os }}-x64-slim.zip
+
   admin:
     runs-on: ubuntu-latest
     defaults:
@@ -87,7 +133,7 @@ jobs:
   release:
     # Attach the archives to the GitHub Release for the pushed tag.
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [lobby, admin]
+    needs: [lobby, lobby-slim, admin]
     runs-on: ubuntu-latest
     permissions:
       contents: write
