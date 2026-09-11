@@ -794,3 +794,34 @@ export function getMatchHistory(
         }
     );
 }
+
+export interface GameServerKey {
+    fingerprint: string;
+    status: string;
+    firstSeenAt: string;
+    approvedAt?: string;
+    approvedByHandle?: string;
+    lastConnectedAt?: string;
+    lastConnectionAddress?: string;
+    lastActualAddress?: string;
+    approvedActualAddress?: string;
+    lastBuildVersion?: string;
+    lastName?: string;
+}
+
+export interface GameServerKeysResponse {
+    keys: GameServerKey[];
+}
+
+export function getGameServerKeys(abort: AbortController, authHeader: string) {
+    return axios.get<GameServerKeysResponse>(
+        baseUrl + "/api/admin/gameServer/keys",
+        { headers: { 'Authorization': authHeader }, signal: abort.signal });
+}
+
+export function setGameServerKeyStatus(abort: AbortController, authHeader: string, fingerprint: string, approve: boolean) {
+    return axios.post(
+        baseUrl + "/api/admin/gameServer/keys/" + fingerprint,
+        { approve },
+        { headers: { 'Authorization': authHeader }, signal: abort.signal });
+}

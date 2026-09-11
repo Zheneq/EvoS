@@ -21,7 +21,7 @@ namespace EvoS.Framework.DataAccess
         public readonly ClientErrorDao ClientErrorDao;
         public readonly ClientErrorReportDao ClientErrorReportDao;
         public readonly UserMetadataDao UserMetadataDao;
-
+        public readonly GameServerKeyDao GameServerKeyDao;
         private DB()
         {
             switch (EvosConfiguration.GetDBConfig().Type)
@@ -39,6 +39,7 @@ namespace EvoS.Framework.DataAccess
                     ClientErrorDao = new ClientErrorDaoCached(new ClientErrorMongoDao());
                     ClientErrorReportDao = new ClientErrorReportMongoDao();
                     UserMetadataDao = new UserMetadataMongoDao();
+                    GameServerKeyDao = new GameServerKeyMongoDao();
                     break;
                 case EvosConfiguration.DBType.None:
                     log.Info("Not using any database, no data will be persisted");
@@ -53,6 +54,7 @@ namespace EvoS.Framework.DataAccess
                     ClientErrorDao = new ClientErrorDaoCached(new ClientErrorMockDao());
                     ClientErrorReportDao = new ClientErrorReportMockDao();
                     UserMetadataDao = new UserMetadataMockDao();
+                    GameServerKeyDao = new GameServerKeyMockDao();
                     break;
             }
         }

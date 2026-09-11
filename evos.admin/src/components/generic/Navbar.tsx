@@ -28,6 +28,7 @@ const pages = [
     { text: "Status", url: '/' },
     { text: "Admin panel", url: '/admin' },
     { text: "Codes", url: '/codes' },
+    { text: "Game servers", url: '/game-servers' },
 ];
 
 export const NavBarLink = styled(NavLink)({
@@ -102,7 +103,8 @@ export default function NavBar() {
             {error && <ErrorDialog error={error} onDismiss={() => setError(undefined)} />}
             <Container maxWidth="xl">
                 <Toolbar disableGutters>
-                    <Avatar alt="logo" variant="square" src={logo()} sx={{ flexShrink: 1, width: 255, height: 40, display: { xs: 'none', md: 'flex' } }}/>
+                    <Avatar alt="logo" variant="square" src={logo()} sx={{ flexShrink: 1, width: 255, height: 40, display: { xs: 'none', lg: 'flex' } }}/>
+                    <Avatar alt="logo" variant="square" src={logoSmall()} sx={{ flexShrink: 0, width: 40, height: 40, mr: 1, display: { xs: 'none', md: 'flex', lg: 'none' } }}/>
                     <Box sx={{ flexGrow: 1, display: { xs: 'flex', md: 'none' } }}>
                         <IconButton
                             size="large"

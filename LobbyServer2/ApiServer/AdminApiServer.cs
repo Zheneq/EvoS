@@ -79,6 +79,9 @@ public class AdminApiServer : ApiServer
         app.MapGet("/api/admin/moderation/sentFeedback", ModerationController.GetSentFeedback).RequireAuthorization("api_admin");
         app.MapGet("/api/admin/moderation/receivedFeedback", ModerationController.GetReceivedFeedback).RequireAuthorization("api_admin");
         app.MapGet("/api/admin/match", MatchController.GetMatch).RequireAuthorization("api_admin");
+        app.MapGet("/api/admin/gameServer/keys", GameServerKeyController.GetKeys).RequireAuthorization("api_readonly");
+        app.MapPost("/api/admin/gameServer/keys/{fingerprint}", GameServerKeyController.SetKeyStatus).RequireAuthorization("api_admin");
+
         app.UseAuthorization();
     }
 

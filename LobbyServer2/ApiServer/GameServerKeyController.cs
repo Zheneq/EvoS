@@ -1,0 +1,93 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Security.Claims;
+using CentralServer.BridgeServer;
+using EvoS.Framework.DataAccess;
+using EvoS.Framework.DataAccess.Daos;
+using log4net;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+
+namespace CentralServer.ApiServer;
+
+public static class GameServerKeyController
+{
+    private static readonly ILog log = LogManager.GetLogger(typeof(GameServerKeyController));
+
+    public class SetGameServerKeyStatusRequest
+    {
+        // true = approve, false = decline (pending) or revoke (approved).
+        public bool Approve { get; set; }
+    }
+
+    public class GameServerKeyResponse
+    {
+        public string Fingerprint { get; set; }
+        public string Status { get; set; }
+        public DateTime FirstSeenAt { get; set; }
+        public DateTime? ApprovedAt { get; set; }
+        public string ApprovedByHandle { get; set; }
+        public DateTime? LastConnectedAt { get; set; }
+        public string LastConnectionAddress { get; set; }
+        public string LastActualAddress { get; set; }
+        public string ApprovedActualAddress { get; set; }
+        public string LastBuildVersion { get; set; }
+        public string LastName { get; set; }
+    }
+
+    public class GameServerKeysResponse
+    {
+        public List<GameServerKeyResponse> Keys { get; set; }
+    }
+
+    public static IResult GetKeys(ClaimsPrincipal user)
+    {
+        if (!AdminController.ValidateAdmin(user, out IResult error, out _, out _))
+        {
+            return error;
+        }
+
+        List<GameServerKeyResponse> keys = GameServerKeyManager.GetAll().Select(ToResponse).ToList();
+        return Results.Ok(new GameServerKeysResponse { Keys = keys });
+    }
+
+    public static IResult SetKeyStatus(string fingerprint, [FromBody] SetGameServerKeyStatusRequest data, ClaimsPrincipal user)
+    {
+        if (!AdminController.ValidateAdmin(user, out IResult error, out long adminAccountId, out string adminHandle))
+        {
+            return error;
+        }
+
+        bool approve = data?.Approve == true;
+        bool ok = approve
+            ? GameServerKeyManager.Approve(fingerprint, adminAccountId)
+            : GameServerKeyManager.Reject(fingerprint, adminAccountId);
+        if (!ok)
+        {
+            return Results.NotFound();
+        }
+
+        log.Info($"Game server key {fingerprint} {(approve ? "approved" : "declined/revoked")} by {adminHandle} ({adminAccountId})");
+        return Results.Ok();
+    }
+
+    private static GameServerKeyResponse ToResponse(GameServerKeyDao.GameServerKey k)
+    {
+        string handle = k.ApprovedByAccountId is { } id ? DB.Get().AccountDao.GetAccount(id)?.Handle : null;
+        return new GameServerKeyResponse
+        {
+            Fingerprint = k.Fingerprint,
+            Status = k.Status.ToString(),
+            FirstSeenAt = k.FirstSeenAt,
+            ApprovedAt = k.ApprovedAt,
+            ApprovedByHandle = handle,
+            LastConnectedAt = k.LastConnectedAt,
+            LastConnectionAddress = k.LastConnectionAddress,
+            LastActualAddress = k.LastActualAddress,
+            ApprovedActualAddress = k.ApprovedActualAddress,
+            LastBuildVersion = k.LastBuildVersion,
+            LastName = k.LastName,
+        };
+    }
+}
