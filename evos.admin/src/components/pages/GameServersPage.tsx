@@ -116,7 +116,7 @@ export default function GameServersPage() {
             />
 
             {keys && (
-                <Box sx={{mt: 2, overflowX: 'auto'}}>
+                <Box sx={{mt: 2, width: '100%', maxWidth: 1400, overflowX: 'auto'}}>
                     <Table size="small">
                         <TableHead>
                             <TableRow>
