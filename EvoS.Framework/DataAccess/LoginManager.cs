@@ -13,13 +13,27 @@ using EvoS.Framework.DataAccess.Daos;
 using EvoS.Framework.Misc;
 using EvoS.Framework.Network.Static;
 using log4net;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Options;
 
 namespace EvoS.DirectoryServer.Account
 {
     public class LoginManager
     {
         private static readonly ILog log = LogManager.GetLogger(typeof(LoginManager));
-        private static readonly HashAlgorithm algorithm = SHA256.Create();
+
+        // PBKDF2-HMAC-SHA512 password hasher (ASP.NET Core Identity v3 format). The iteration count is
+        // raised above the framework default (100k) to meet OWASP's guidance for SHA512; it is embedded in
+        // each hash, so Identity transparently re-hashes on the next login when this value is increased.
+        private static readonly PasswordHasher<object> passwordHasher = new PasswordHasher<object>(
+            Options.Create(new PasswordHasherOptions { IterationCount = 210_000 }));
+
+        // Marks hashes produced by the current (KDF-based) scheme. Anything without this prefix is a legacy
+        // single-pass SHA-256 hash that is verified and then upgraded on successful login.
+        private const string HashV2Prefix = "v2:";
+        // Insecure default value of the password pepper (Database.Salt); rejected outside of DevMode.
+        private const string DefaultPepper = "salt";
+
         private static readonly Regex usernameRegex = new Regex(@"^[A-Za-z][A-Za-z_\-0-9]{3,23}$");
         private static readonly Regex bannedUsernameRegex = new Regex(@"^(?:(?:changeMeToYour)?user(?:name)?|admin|draft|gaia|maps)$", RegexOptions.IgnoreCase);
         private static readonly Regex bannedPasswordRegex = new Regex(@"^(?:(?:changeMeToYour)?password)$", RegexOptions.IgnoreCase);
@@ -266,12 +280,13 @@ namespace EvoS.DirectoryServer.Account
         private static void SaveLogin(long accountId, string username, string password, List<LinkedAccount> linkedAccounts)
         {
             LoginDao loginDao = DB.Get().LoginDao;
-            string salt = GenerateSalt();
-            string hash = Hash(salt, password);
+            string hash = HashV2(password);
             loginDao.Save(new LoginDao.LoginEntry
             {
                 AccountId = accountId,
-                Salt = salt,
+                // The per-user salt is embedded in the v2 hash; this field is kept only for verifying
+                // and upgrading pre-existing legacy (SHA-256) hashes.
+                Salt = string.Empty,
                 Hash = hash,
                 Username = username.ToLower(),
                 LinkedAccounts = linkedAccounts,
@@ -288,13 +303,20 @@ namespace EvoS.DirectoryServer.Account
                 throw new ArgumentException(UserNotFound);
             }
 
-            string hash = Hash(entry.Salt, password);
-            if (!entry.Hash.Equals(hash))
+            bool passwordMatches = VerifyPassword(entry.Hash, entry.Salt, password, out bool needsRehash);
+            bool usedTempPassword = false;
+            if (!passwordMatches)
             {
-                if (entry.TempPassword.Equals(hash) && entry.TempPasswordTimeout > DateTime.UtcNow)
+                if (!entry.TempPassword.IsNullOrEmpty()
+                    && entry.TempPasswordTimeout > DateTime.UtcNow
+                    && VerifyPassword(entry.TempPassword, entry.Salt, password, out _))
                 {
                     log.Warn($"{entry.AccountId}/{entry.Username} logged in using temporary password");
                     ClearTempPassword(entry.AccountId);
+                    // Also clear on the local copy so the Save below does not resurrect the temp password.
+                    entry.TempPassword = string.Empty;
+                    entry.TempPasswordTimeout = DateTime.MinValue;
+                    usedTempPassword = true;
                 }
                 else
                 {
@@ -308,9 +330,11 @@ namespace EvoS.DirectoryServer.Account
 
             entry.LinkedAccounts = linkedAccounts;
             DB.Get().LoginDao.Save(entry);
-            
+
             log.Info($"User {entry.AccountId}/{entry.Username} successfully logged in");
-            if (entry.Salt.IsNullOrEmpty())
+            // Transparently upgrade legacy or outdated password hashes on a successful real-password login.
+            // Never rehash from a temporary password - that would overwrite the real password.
+            if (!usedTempPassword && needsRehash)
             {
                 UpdatePassword(entry, password);
             }
@@ -421,19 +445,95 @@ namespace EvoS.DirectoryServer.Account
             return num + 1000000000000000L;
         }
 
-        private static string Hash(string customSaltPart, string password)
+        /// <summary>
+        /// Applies the server-side pepper (Database.Salt) as an HMAC key over the password before it is handed
+        /// to the KDF. Keeping the pepper out of the database means a database-only leak cannot be cracked
+        /// offline without also compromising the server configuration.
+        /// </summary>
+        private static string PreparePassword(string password)
         {
-            lock (algorithm)
+            byte[] pepper = Encoding.UTF8.GetBytes(EvosConfiguration.GetDBConfig().Salt ?? string.Empty);
+            byte[] mac = HMACSHA512.HashData(pepper, Encoding.UTF8.GetBytes(password ?? string.Empty));
+            return Convert.ToBase64String(mac);
+        }
+
+        /// <summary>
+        /// Hashes a password with the current KDF-based scheme (peppered, PBKDF2 via Identity), tagged so it
+        /// can be told apart from legacy hashes.
+        /// </summary>
+        internal static string HashV2(string password)
+        {
+            return HashV2Prefix + passwordHasher.HashPassword(null!, PreparePassword(password));
+        }
+
+        /// <summary>
+        /// Verifies a password against a stored hash, supporting both the current scheme and legacy SHA-256
+        /// hashes. <paramref name="needsRehash"/> is set when the stored hash should be replaced with a fresh
+        /// one - always for legacy hashes, and when the KDF parameters have since been strengthened.
+        /// </summary>
+        internal static bool VerifyPassword(string storedHash, string legacySalt, string password, out bool needsRehash)
+        {
+            needsRehash = false;
+            if (storedHash.IsNullOrEmpty())
             {
-                if (customSaltPart.IsNullOrEmpty()) customSaltPart = string.Empty;
-                byte[] bytes = Encoding.UTF8.GetBytes(EvosConfiguration.GetDBConfig().Salt + customSaltPart + password);
-                byte[] hashBytes = algorithm.ComputeHash(bytes);
-                StringBuilder sb = new StringBuilder();
-                foreach (byte b in hashBytes)
-                {
-                    sb.Append(b.ToString("X2"));
-                }
-                return sb.ToString();
+                return false;
+            }
+
+            if (storedHash.StartsWith(HashV2Prefix))
+            {
+                PasswordVerificationResult result = passwordHasher.VerifyHashedPassword(
+                    null!, storedHash.Substring(HashV2Prefix.Length), PreparePassword(password));
+                needsRehash = result == PasswordVerificationResult.SuccessRehashNeeded;
+                return result != PasswordVerificationResult.Failed;
+            }
+
+            // Legacy single-pass SHA-256 hash: verify, and flag for upgrade to the current scheme.
+            if (LegacyHash(legacySalt, password).Equals(storedHash))
+            {
+                needsRehash = true;
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Reproduces the original SHA-256 hashing scheme, used only to verify pre-existing hashes so they can
+        /// be upgraded on login. Not thread-affine: uses the stateless <see cref="SHA256.HashData(byte[])"/>.
+        /// </summary>
+        internal static string LegacyHash(string customSaltPart, string password)
+        {
+            if (customSaltPart.IsNullOrEmpty()) customSaltPart = string.Empty;
+            byte[] bytes = Encoding.UTF8.GetBytes(EvosConfiguration.GetDBConfig().Salt + customSaltPart + password);
+            byte[] hashBytes = SHA256.HashData(bytes);
+            StringBuilder sb = new StringBuilder();
+            foreach (byte b in hashBytes)
+            {
+                sb.Append(b.ToString("X2"));
+            }
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// Fails fast at startup if the password pepper (Database.Salt) is unset or left at the insecure
+        /// default. Logs a warning instead of throwing when DevMode is enabled.
+        /// </summary>
+        public static void ValidateConfiguration()
+        {
+            string pepper = EvosConfiguration.GetDBConfig().Salt;
+            if (!pepper.IsNullOrEmpty() && pepper != DefaultPepper)
+            {
+                return;
+            }
+
+            const string msg = "Database.Salt (password pepper) is unset or left at the insecure default. " +
+                               "Set it to a strong, unique secret stored separately from the database.";
+            if (EvosConfiguration.GetDevMode())
+            {
+                log.Warn($"INSECURE CONFIGURATION: {msg} Continuing because DevMode is enabled.");
+            }
+            else
+            {
+                throw new EvosException(msg);
             }
         }
 
@@ -463,7 +563,7 @@ namespace EvoS.DirectoryServer.Account
             }
 
             string tempPassword = GeneratePassword();
-            string hash = Hash(loginEntry.Salt, tempPassword);
+            string hash = HashV2(tempPassword);
             loginEntry.TempPassword = hash;
             loginEntry.TempPasswordTimeout = DateTime.UtcNow + EvosConfiguration.GetTempPasswordLifetime();
             loginDao.Save(loginEntry);

@@ -25,6 +25,7 @@ namespace EvoS.Sandbox
         private async void OnExecute()
         {
             Banner.PrintBanner();
+            EvoS.DirectoryServer.Account.LoginManager.ValidateConfiguration();
             DB.Get();
 
             // Start Central Server

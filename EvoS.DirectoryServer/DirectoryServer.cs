@@ -38,6 +38,7 @@ namespace EvoS.DirectoryServer
 
         public static void Main(string[] args = null)
         {
+            Account.LoginManager.ValidateConfiguration();
             host = WebHost.CreateDefaultBuilder()
                 .SuppressStatusMessages(true)
                 .UseKestrel(koptions => koptions.Listen(IPAddress.Parse("0.0.0.0"), EvosConfiguration.GetDirectoryServerPort()))
