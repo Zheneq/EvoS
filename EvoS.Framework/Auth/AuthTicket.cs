@@ -13,6 +13,8 @@ namespace EvoS.Framework.Auth;
 
 public class AuthTicket
 {
+	private const int MaxTicketXmlLength = 256 * 1024;
+
 	public const string TICKET_CORRUPT = "TICKET_CORRUPT";
 	public const string INVALID_IP_ADDRESS = "INVALID_IP_ADDRESS";
 	public const string INVALID_PROTOCOL_VERSION = "INVALID_PROTOCOL_VERSION";
@@ -93,8 +95,24 @@ public class AuthTicket
 		{
 			xml = ticketData;
 		}
-		XmlDocument xmlDocument = new XmlDocument();
-		xmlDocument.LoadXml(xml);
+		if (xml.Length > MaxTicketXmlLength)
+		{
+			throw new Exception("Ticket XML is too large");
+		}
+		// Ticket XML is attacker-controllable; parse with DTDs prohibited and no external resolver so it can
+		// never trigger XXE (file read / SSRF) or entity-expansion (billion laughs) DoS.
+		XmlDocument xmlDocument = new XmlDocument { XmlResolver = null };
+		XmlReaderSettings readerSettings = new XmlReaderSettings
+		{
+			DtdProcessing = DtdProcessing.Prohibit,
+			XmlResolver = null,
+			MaxCharactersFromEntities = 0,
+		};
+		using (StringReader stringReader = new StringReader(xml))
+		using (XmlReader xmlReader = XmlReader.Create(stringReader, readerSettings))
+		{
+			xmlDocument.Load(xmlReader);
+		}
 		XmlNode nodeTicket = xmlDocument.SelectSingleNode("authTicket/ticket");
 		XmlNode nodeAccount = xmlDocument.SelectSingleNode("authTicket/account")
 		                   ?? xmlDocument.SelectSingleNode("authAccount/account");
