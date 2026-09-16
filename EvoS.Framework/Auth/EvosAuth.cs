@@ -15,8 +15,8 @@ namespace EvoS.DirectoryServer;
 
 public class EvosAuth
 {
-    private static readonly string TokenIssuer = "AtlasReactorServer";
-    private static readonly string TokenAudience = "AtlasReactorPlayer";
+    internal const string TokenIssuer = "AtlasReactorServer";
+    internal const string TokenAudience = "AtlasReactorPlayer";
 
     public enum Context
     {
@@ -92,15 +92,25 @@ public class EvosAuth
             throw new EvosException(AuthTicket.TICKET_CORRUPT);
         }
 
-        TokenValidationParameters validationParameters = new TokenValidationParameters
-        {
-            ValidIssuer = TokenIssuer,
-            ValidAudience = TokenAudience,
-            IssuerSigningKey = GetSigningKey(context, accountId),
-            ClockSkew = TimeSpan.Zero,
-        };
+        TokenValidationParameters validationParameters = BuildValidationParameters(GetSigningKey(context, accountId));
 
         return tokenHandler.ValidateToken(token, validationParameters, out validatedToken);
+    }
+
+    internal static TokenValidationParameters BuildValidationParameters(SecurityKey signingKey)
+    {
+        return new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = TokenIssuer,
+            ValidAudience = TokenAudience,
+            IssuerSigningKey = signingKey,
+            ValidAlgorithms = [SecurityAlgorithms.HmacSha512],
+            ClockSkew = TimeSpan.Zero,
+        };
     }
 
     private static SecurityKey GetSigningKey(Context context, long accountId)
