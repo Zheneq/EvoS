@@ -45,6 +45,7 @@ namespace EvoS.DirectoryServer.Account
                         "Between 4 and 24 symbols.";
         public const string CannotUseThisUsername = "You cannot use this username. Please choose another.";
         public const string CannotUseThisPassword = "You cannot use this password. Please choose another.";
+        public const string PasswordTooShort = "Password is too short. It must be at least {0} characters. Please choose another.";
         public const string FailedToCreateAnAccount = "Failed to crate an account";
         public const string UserNotFound = "User not found";
         public const string LinkedAccountNotFound = "This third-party account is not linked to this account.";
@@ -111,11 +112,7 @@ namespace EvoS.DirectoryServer.Account
                 throw new ArgumentException(CannotUseThisUsername);
             }
 
-            if (bannedPasswordRegex.IsMatch(password))
-            {
-                log.Info($"Attempt to register with a bad password");
-                throw new ArgumentException(CannotUseThisPassword);
-            }
+            ValidatePassword(password, ignoreConditions ? 0 : EvosConfiguration.GetMinPasswordLength());
 
             List<LinkedAccount> linkedAccounts = ProcessLinkedAccountTickets(linkedAccountTickets);
             if (!ignoreConditions)
@@ -415,11 +412,7 @@ namespace EvoS.DirectoryServer.Account
         
         public static void ResetPassword(long accountId, string newPassword)
         {
-            if (bannedPasswordRegex.IsMatch(newPassword))
-            {
-                log.Info($"Attempt to reset password with a bad newPassword");
-                throw new ArgumentException(CannotUseThisPassword);
-            }
+            ValidatePassword(newPassword, EvosConfiguration.GetMinPasswordLength());
             var loginDao = DB.Get().LoginDao;
             var entry = loginDao.Find(accountId);
             if (entry == null)
@@ -608,6 +601,25 @@ namespace EvoS.DirectoryServer.Account
         {
             return IsValidUsername(username)
                    && !bannedUsernameRegex.IsMatch(username);
+        }
+
+        /// <summary>
+        /// Enforces the password policy on registration and reset: banned passwords are always rejected, and
+        /// when <paramref name="minLength"/> is positive, passwords shorter than it are rejected.
+        /// </summary>
+        internal static void ValidatePassword(string password, int minLength)
+        {
+            if (password is null || bannedPasswordRegex.IsMatch(password))
+            {
+                log.Info("Attempt to use a banned password");
+                throw new ArgumentException(CannotUseThisPassword);
+            }
+
+            if (minLength > 0 && password.Length < minLength)
+            {
+                log.Info("Attempt to use a password shorter than the configured minimum");
+                throw new ArgumentException(string.Format(PasswordTooShort, minLength));
+            }
         }
     }
 }

@@ -97,4 +97,31 @@ public class LoginManagerTest
     {
         WithPepper(TestPepper, LoginManager.ValidateConfiguration);
     }
+
+    [Fact]
+    public void ValidatePassword_RejectsBannedPasswords_RegardlessOfLengthPolicy()
+    {
+        Assert.Throws<ArgumentException>(() => LoginManager.ValidatePassword("password", 0));
+        Assert.Throws<ArgumentException>(() => LoginManager.ValidatePassword("changeMeToYourPassword", 8));
+    }
+
+    [Fact]
+    public void ValidatePassword_RejectsNull()
+    {
+        Assert.Throws<ArgumentException>(() => LoginManager.ValidatePassword(null, 0));
+    }
+
+    [Fact]
+    public void ValidatePassword_MinLengthZero_AllowsAnyLength()
+    {
+        // Policy disabled (default): short passwords are accepted.
+        LoginManager.ValidatePassword("ab", 0);
+    }
+
+    [Fact]
+    public void ValidatePassword_EnforcesMinLengthWhenSet()
+    {
+        Assert.Throws<ArgumentException>(() => LoginManager.ValidatePassword("short", 8));
+        LoginManager.ValidatePassword("longenough12", 8); // meets the minimum
+    }
 }

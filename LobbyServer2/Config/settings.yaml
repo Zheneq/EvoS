@@ -3,6 +3,11 @@ LobbyServerAddress: 127.0.0.1
 LobbyServerPort: 6060
 GameServerExecutable: ""
 SteamWebApiKey: ""
+# Creates an account automatically on first login. Convenient for small/private installs; set to false for
+# internet-exposed or large deployments so accounts are only created deliberately (e.g. via registration codes).
+AutoRegisterNewUsers: true
+# Minimum length enforced on new/reset passwords. 0 disables the check. Raise for exposed deployments.
+MinPasswordLength: 8
 Database:
   Type: "None" # Set to "Mongo" and fill out variables below to use database
   URI: "localhost:27017"

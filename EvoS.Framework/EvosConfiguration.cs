@@ -20,6 +20,7 @@ namespace EvoS.Framework
         public GameServerPickOrder GameServerPickOrder = GameServerPickOrder.RANDOM;
         public string SteamWebApiKey = "";
         public bool AutoRegisterNewUsers = true;
+        public int MinPasswordLength = 8;
         public HashSet<LinkedAccount.AccountType> LinkedAccountAllowedTypes = new HashSet<LinkedAccount.AccountType>();
         public List<List<LinkedAccount.Condition>> LinkedAccountRegistrationConditions = new List<List<LinkedAccount.Condition>>();
         public List<List<LinkedAccount.Condition>> LinkedAccountLoginConditions = null;
@@ -74,6 +75,8 @@ namespace EvoS.Framework
         public static bool SteamApiEnabled => !string.IsNullOrWhiteSpace(GetSteamWebApiKey());
 
         public static bool GetAutoRegisterNewUsers() => Instance.AutoRegisterNewUsers;
+
+        public static int GetMinPasswordLength() => Instance.MinPasswordLength;
         
         public static HashSet<LinkedAccount.AccountType> GetLinkedAccountAllowedTypes() => Instance.LinkedAccountAllowedTypes;
         
