@@ -115,6 +115,27 @@ namespace EvoS.Framework
 
         public static bool GetAllowTicketAuth() => !GetUserApiKey().IsNullOrEmpty() && !GetTicketAuthKey().IsNullOrEmpty();
 
+        /// <summary>
+        /// Validates dangerous configuration combinations at startup, failing fast before any server boots.
+        /// DevMode grants unrestricted admin/dev access (auto-admin account, per-player admin commands,
+        /// auto-approved game-server keys) and must never run against a persistent database.
+        /// </summary>
+        public static void ValidateConfiguration()
+        {
+            ValidateConfiguration(Instance.DevMode, Instance.Database.Type);
+        }
+
+        internal static void ValidateConfiguration(bool devMode, DBType dbType)
+        {
+            if (devMode && dbType != DBType.None)
+            {
+                throw new EvosException(
+                    $"DevMode is enabled together with a persistent database (Database.Type: {dbType}). " +
+                    "DevMode grants unrestricted admin/dev access and must never run against persistent data. " +
+                    "Set DevMode: false, or use Database.Type: None for local development.");
+            }
+        }
+
         public enum DBType
         {
             None,

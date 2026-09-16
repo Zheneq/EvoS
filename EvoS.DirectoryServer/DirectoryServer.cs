@@ -38,6 +38,7 @@ namespace EvoS.DirectoryServer
 
         public static void Main(string[] args = null)
         {
+            EvosConfiguration.ValidateConfiguration();
             Account.LoginManager.ValidateConfiguration();
             host = WebHost.CreateDefaultBuilder()
                 .SuppressStatusMessages(true)
@@ -350,7 +351,10 @@ namespace EvoS.DirectoryServer
         {
 
 #if DEBUG
-            account.AccountComponent.SetIsDev(true);
+            if (EvosConfiguration.GetDevMode())
+            {
+                account.AccountComponent.SetIsDev(true);
+            }
 #endif
 
             // Check if WillFill is missing in CharacterData, if it is add it

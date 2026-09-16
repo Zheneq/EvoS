@@ -65,6 +65,7 @@ namespace CentralServer
 
         public static async Task Init(string[] args, Action stopDirectoryServer)
         {
+            EvosConfiguration.ValidateConfiguration();
             _stopDirectoryServer = stopDirectoryServer;
             int port = EvosConfiguration.GetLobbyServerPort();
 
