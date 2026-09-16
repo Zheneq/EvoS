@@ -126,6 +126,9 @@ namespace EvoS.Framework
         public static void ValidateConfiguration()
         {
             ValidateConfiguration(Instance.DevMode, Instance.Database.Type);
+            ValidateApiKeyStrength(nameof(AdminApiKey), Instance.AdminApiKey);
+            ValidateApiKeyStrength(nameof(UserApiKey), Instance.UserApiKey);
+            ValidateApiKeyStrength(nameof(TicketAuthKey), Instance.TicketAuthKey);
         }
 
         internal static void ValidateConfiguration(bool devMode, DBType dbType)
@@ -136,6 +139,30 @@ namespace EvoS.Framework
                     $"DevMode is enabled together with a persistent database (Database.Type: {dbType}). " +
                     "DevMode grants unrestricted admin/dev access and must never run against persistent data. " +
                     "Set DevMode: false, or use Database.Type: None for local development.");
+            }
+        }
+
+        // Minimum length for a token-signing key. These keys sign HMAC-SHA512 JWTs, so a set key should carry
+        // real entropy; 32 chars (256 bits) is the floor.
+        internal const int MinApiKeyLength = 32;
+
+        /// <summary>
+        /// Rejects a token-signing key that is set but too weak. An empty key is a valid "feature disabled"
+        /// value (the corresponding API server does not start / ticket auth stays off), so strength is only
+        /// enforced when a key is actually configured.
+        /// </summary>
+        internal static void ValidateApiKeyStrength(string name, string key)
+        {
+            if (key.IsNullOrEmpty())
+            {
+                return;
+            }
+
+            if (key.Length < MinApiKeyLength)
+            {
+                throw new EvosException(
+                    $"{name} is set but too weak ({key.Length} characters). Use a random secret of at least " +
+                    $"{MinApiKeyLength} characters, or leave it empty to disable the corresponding feature.");
             }
         }
 

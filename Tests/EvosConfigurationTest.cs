@@ -19,4 +19,27 @@ public class EvosConfigurationTest
     {
         EvosConfiguration.ValidateConfiguration(devMode, dbType);
     }
+
+    [Theory]
+    [InlineData("")]    // disabled feature - valid
+    [InlineData(null)]  // disabled feature - valid
+    public void ValidateApiKeyStrength_EmptyKey_IsAllowed(string key)
+    {
+        EvosConfiguration.ValidateApiKeyStrength("TestKey", key);
+    }
+
+    [Fact]
+    public void ValidateApiKeyStrength_ShortKey_Throws()
+    {
+        Assert.Throws<EvosException>(() =>
+            EvosConfiguration.ValidateApiKeyStrength("TestKey", new string('x', EvosConfiguration.MinApiKeyLength - 1)));
+    }
+
+    [Theory]
+    [InlineData(EvosConfiguration.MinApiKeyLength)]      // exactly at the floor
+    [InlineData(EvosConfiguration.MinApiKeyLength + 20)] // comfortably above
+    public void ValidateApiKeyStrength_StrongKey_DoesNotThrow(int length)
+    {
+        EvosConfiguration.ValidateApiKeyStrength("TestKey", new string('x', length));
+    }
 }
