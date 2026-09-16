@@ -5,6 +5,7 @@ using System.Linq;
 using System.Net;
 using CentralServer.BridgeServer;
 using CentralServer.LobbyServer.Group;
+using EvoS.Framework;
 using EvoS.Framework.Constants.Enums;
 using EvoS.Framework.DataAccess;
 using EvoS.Framework.Exceptions;
@@ -208,11 +209,21 @@ namespace CentralServer.LobbyServer.Session
             }
         }
 
-        public static LobbySessionInfo CreateSession(long accountId, LobbySessionInfo connectingSessionInfo, IPAddress ipAddress)
+        /// <summary>
+        /// Creates a (connecting) session for an account. When <paramref name="rejectIfActive"/> is set (the
+        /// fresh-login path), the "already logged in" check and the session creation happen under the same lock
+        /// as OnPlayerConnect/OnPlayerDisconnect, so two concurrent logins cannot both pass the check.
+        /// The reconnection path leaves it false, since reconnecting to an existing session is expected.
+        /// </summary>
+        public static LobbySessionInfo CreateSession(long accountId, LobbySessionInfo connectingSessionInfo, IPAddress ipAddress, bool rejectIfActive = false)
         {
             PersistedAccountData account;
             LobbySessionInfo sessionInfo;
             lock (SessionInfos) {
+                if (rejectIfActive && SessionInfos.ContainsKey(accountId))
+                {
+                    throw new ConflictException("This account is already logged in");
+                }
                 // If we have a game with this accountId do not remove the session we need the info to be able to reconnect
                 // Else remove it and create a new Session
                 Game game = GameManager.GetGameWithPlayer(accountId);

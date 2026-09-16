@@ -242,6 +242,8 @@ namespace EvoS.DirectoryServer
                 ErrorMessage = ""
             };
 
+            // Fast path: reject an obvious concurrent login before doing any account work. The authoritative,
+            // race-free check happens atomically inside CreateSession below (rejectIfActive).
             if (SessionManager.GetSessionInfo(accountId) != null)
             {
                 log.Info($"Concurrent login: {accountId}");
@@ -276,7 +278,16 @@ namespace EvoS.DirectoryServer
                 DB.Get().AccountDao.UpdateAccount(account);
             }
 
-            response.SessionInfo = SessionManager.CreateSession(accountId, request.SessionInfo, LobbyServerUtils.GetActualClientIpAddress(context));
+            try
+            {
+                response.SessionInfo = SessionManager.CreateSession(
+                    accountId, request.SessionInfo, LobbyServerUtils.GetActualClientIpAddress(context), rejectIfActive: true);
+            }
+            catch (ConflictException)
+            {
+                log.Info($"Concurrent login (race): {accountId}");
+                return Fail(request, "This account is already logged in");
+            }
             response.LobbyServerAddress = GetLobbyServerAddress(accountId, context);
 
             LobbyGameClientProxyInfo proxyInfo = new LobbyGameClientProxyInfo
