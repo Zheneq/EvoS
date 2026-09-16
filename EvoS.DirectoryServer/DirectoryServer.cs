@@ -94,7 +94,7 @@ namespace EvoS.DirectoryServer
                 if (request?.SessionInfo is null || request.AuthInfo is null)
                 {
                     response = Fail(new AssignGameClientRequest(), "Network error. Please, restart the game.");
-                    log.Warn($"Fail during login (bad request) userAgent=\"{context.Request.Headers.UserAgent}\" body=\"{requestBody}\"");
+                    log.Warn($"Fail during login (bad request) userAgent=\"{context.Request.Headers.UserAgent}\" body=\"{LogRedaction.MaskSensitiveJsonFields(requestBody)}\"");
                 }
                 else
                 {

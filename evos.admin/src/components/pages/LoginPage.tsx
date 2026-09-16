@@ -26,7 +26,7 @@ function LoginPage() {
             .then(resp => {
                 signIn({
                     token: resp.data.token,
-                    expiresIn: 3600,
+                    expiresIn: 24 * 60,
                     tokenType: "bearer",
                     authState: resp.data
                 });

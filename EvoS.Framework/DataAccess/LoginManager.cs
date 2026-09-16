@@ -160,7 +160,7 @@ namespace EvoS.DirectoryServer.Account
                 }
             }
             
-            long accountId = GenerateAccountId(username);
+            long accountId = GenerateAccountId();
             for (int i = 0; loginDao.Find(accountId) != null; ++i)
             {
                 accountId++;
@@ -428,14 +428,11 @@ namespace EvoS.DirectoryServer.Account
             SaveLogin(entry.AccountId, entry.Username, newPassword, entry.LinkedAccounts);
         }
 
-        private static long GenerateAccountId(string a)
+        private static long GenerateAccountId()
         {
-            int num = (Guid.NewGuid() + a).GetHashCode();
-            if (num < 0)
-            {
-                num = -num;
-            }
-            return num + 1000000000000000L;
+            byte[] bytes = RandomNumberGenerator.GetBytes(8);
+            long value = BitConverter.ToInt64(bytes, 0) & long.MaxValue;
+            return value % 9_000_000_000_000_000L + 1_000_000_000_000_000L;
         }
 
         /// <summary>
