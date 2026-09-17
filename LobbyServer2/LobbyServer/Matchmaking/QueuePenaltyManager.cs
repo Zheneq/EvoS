@@ -121,27 +121,33 @@ public static class QueuePenaltyManager
         return true;
     }
 
-    public static LocalizationPayload CheckQueuePenalties(long accountId, GameType selectedGameType)
+    public static LocalizationPayload CheckQueuePenalties(long accountId, GameType selectedGameType, long requestedBy = 0)
     {
+        if (requestedBy == 0) requestedBy = accountId;
+        
         PersistedAccountData account = DB.Get().AccountDao.GetAccount(accountId);
         QueuePenalties queuePenalties = account?.AdminComponent.ActiveQueuePenalties?.GetValueOrDefault(selectedGameType);
         if (queuePenalties is not null && queuePenalties.QueueDodgeBlockTimeout > DateTime.UtcNow.Add(TimeSpan.FromSeconds(5)))
         {
             TimeSpan duration = queuePenalties.QueueDodgeBlockTimeout.Subtract(DateTime.UtcNow);
             LocalizationArg argDuration = LocalizationArg_TimeSpan.Create(duration);
-            LocalizationPayload failure = LocalizationPayload.Create("QueueDodgerPenaltyAppliedToSelf", "Matchmaking", argDuration);
+            LocalizationPayload failure = accountId == requestedBy
+                ? MakeSelfBlockedMessage(argDuration)
+                : MakeGroupmateBlockedMessage(accountId, argDuration);
             log.Info($"{account.Handle} cannot join {selectedGameType} queue until {queuePenalties.QueueDodgeBlockTimeout}");
             
             GroupInfo group = GroupManager.GetPlayerGroup(accountId);
             if (group != null)
             {
-                LocalizationArg argHandle = LocalizationArg_Handle.Create(account.Handle);
                 foreach (long groupMember in group.Members)
                 {
-                    if (groupMember == accountId) continue;
+                    if (groupMember == requestedBy) continue;
                     LobbyServerProtocol conn = SessionManager.GetClientConnection(groupMember);
-                    conn?.SendSystemMessage(
-                        LocalizationPayload.Create("QueueDodgerPenaltyAppliedToGroupmate", "Matchmaking", argHandle, argDuration));
+                    LocalizationPayload localizationPayload = accountId != groupMember
+                        ? MakeGroupmateBlockedMessage(account.AccountId, argDuration)
+                        : MakeSelfBlockedMessage(argDuration);
+                    
+                    conn?.SendSystemMessage(localizationPayload);
                 }
             }
             
@@ -159,5 +165,22 @@ public static class QueuePenaltyManager
         }
 
         return null;
+    }
+
+    private static LocalizationPayload MakeSelfBlockedMessage(LocalizationArg argDuration)
+    {
+        return LocalizationPayload.Create(
+            "QueueDodgerPenaltyAppliedToSelf",
+            "Matchmaking",
+            argDuration);
+    }
+
+    public static LocalizationPayload MakeGroupmateBlockedMessage(long accountId, LocalizationArg argDuration)
+    {
+        return LocalizationPayload.Create(
+            "QueueDodgerPenaltyAppliedToGroupmate",
+            "Matchmaking",
+            LocalizationArg_Handle.Create(LobbyServerUtils.GetHandle(accountId)),
+            argDuration);
     }
 }

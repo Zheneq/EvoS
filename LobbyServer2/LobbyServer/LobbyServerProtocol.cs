@@ -1469,11 +1469,14 @@ namespace CentralServer.LobbyServer
                     return;
                 }
 
-                LocalizationPayload failure = QueuePenaltyManager.CheckQueuePenalties(AccountId, SelectedGameType);
-                if (failure is not null)
+                foreach (long groupMember in group.Members)
                 {
-                    Send(new JoinMatchmakingQueueResponse { Success = false, ResponseId = request.RequestId, LocalizedFailure = failure });
-                    return;
+                    LocalizationPayload failure = QueuePenaltyManager.CheckQueuePenalties(groupMember, request.GameType, AccountId);
+                    if (failure is not null)
+                    {
+                        Send(new JoinMatchmakingQueueResponse { Success = false, ResponseId = request.RequestId, LocalizedFailure = failure });
+                        return;
+                    }
                 }
 
                 IsReady = true;
