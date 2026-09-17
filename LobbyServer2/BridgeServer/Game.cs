@@ -211,9 +211,15 @@ public abstract class Game
 
     protected async void OnServerDisconnect(BridgeServerProtocol server)
     {
-        if (GameStatus == GameStatus.Stopped || !IsDraft) {
-            QueuePenaltyManager.CapQueuePenalties(this);
+        if (GameStatus == GameStatus.Stopped)
+        {
+            QueuePenaltyManager.CapQueuePenalties(this, presentPlayersOnly: true);
         }
+        else if (!IsDraft)
+        {
+            QueuePenaltyManager.CapQueuePenalties(this, presentPlayersOnly: false);
+        }
+        // Draft still in progress: no cap — dodge penalties stick.
 
         await Task.Delay(LobbyConfiguration.GetServerReconnectionTimeout());
         if (Server == server && GameStatus != GameStatus.Stopped)

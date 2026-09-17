@@ -1,5 +1,5 @@
 import React, {useEffect, useState} from 'react';
-import {asDate, ban, getPlayer, mute, PlayerDetails, setVip} from "../../lib/Evos";
+import {asDate, ban, clearQueuePenalty, formatDate, getPlayer, mute, PlayerDetails, setVip} from "../../lib/Evos";
 import {EvosError, processError} from "../../lib/Error";
 import {useAuthHeader} from "react-auth-kit";
 import {useNavigate, useParams} from "react-router-dom";
@@ -21,6 +21,8 @@ export default function ProfilePage() {
     const [lastAction, setLastAction] = useState<Date>();
     const [confirmVipOpen, setConfirmVipOpen] = useState(false);
     const [vipProcessing, setVipProcessing] = useState(false);
+    const [confirmClearQueueOpen, setConfirmClearQueueOpen] = useState(false);
+    const [queueProcessing, setQueueProcessing] = useState(false);
 
     const {accountId} = useParams();
     const accountIdNumber = accountId && parseInt(accountId);
@@ -49,7 +51,20 @@ export default function ProfilePage() {
 
     const handle = `${playerDetails?.player.handle ?? "Nobody"}`;
     const isVip = playerDetails?.isVip;
-    
+    const queueBlockedUntil = playerDetails?.queueBlockedUntil;
+    const queueDodgeCount = playerDetails?.queueDodgeCount ?? 0;
+
+    const handleClearQueueConfirm = () => {
+        if (!accountIdNumber) return;
+        setQueueProcessing(true);
+        setConfirmClearQueueOpen(false);
+        const abort = new AbortController();
+        clearQueuePenalty(abort, authHeader, accountIdNumber)
+            .then(() => handleCommit())
+            .catch(e => processError(e, setError, navigate))
+            .finally(() => setQueueProcessing(false));
+    };
+
     const handleVipConfirm = () => {
         if (!accountIdNumber) return;
         setVipProcessing(true);
@@ -69,6 +84,12 @@ export default function ProfilePage() {
                 onDismiss={() => setConfirmVipOpen(false)}
                 onAccept={handleVipConfirm}
                 acceptText={isVip ? 'Revoke VIP' : 'Grant VIP'}
+            />
+            <BaseDialog
+                title={confirmClearQueueOpen ? `Clear queue penalty for ${handle}?` : undefined}
+                onDismiss={() => setConfirmClearQueueOpen(false)}
+                onAccept={handleClearQueueConfirm}
+                acceptText={'Clear queue penalty'}
             />
             <StackWrapper>
                 <EvosCard variant="outlined"><Player info={playerDetails?.player} /></EvosCard>
@@ -106,6 +127,19 @@ export default function ProfilePage() {
                     doneText={"banned"}
                     onCommit={handleCommit}
                 />
+                <EvosCard variant="outlined">
+                    <div>
+                        {queueBlockedUntil
+                            ? `Queue blocked until ${formatDate(queueBlockedUntil)} (offenses: ${queueDodgeCount})`
+                            : `No active queue penalty${queueDodgeCount > 0 ? ` (offenses: ${queueDodgeCount})` : ''}`}
+                    </div>
+                    <Button
+                        disabled={loading || queueProcessing || (!queueBlockedUntil && queueDodgeCount === 0)}
+                        onClick={() => setConfirmClearQueueOpen(true)}
+                    >
+                        Clear queue penalty
+                    </Button>
+                </EvosCard>
                 <AdminMessages accountId={playerDetails?.player.accountId ?? 0} />
                 <SendWhisper accountId={playerDetails?.player.accountId ?? 0} handle={handle} />
                 <EvosCard variant="outlined">

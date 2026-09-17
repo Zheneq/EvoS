@@ -153,15 +153,23 @@ namespace CentralServer.ApiServer
             public DateTime? bannedUntil { get; set; }
             public DateTime? mutedUntil { get; set; }
             public bool isVip { get; set; }
+            public DateTime? queueBlockedUntil { get; set; }
+            public int queueDodgeCount { get; set; }
 
             public static PlayerDetails Of(PersistedAccountData acc)
             {
+                QueuePenalties queuePenalties =
+                    acc.AdminComponent.ActiveQueuePenalties?.GetValueOrDefault(GameType.PvP);
                 return new PlayerDetails
                 {
                     player = StatusController.Player.Of(acc),
                     bannedUntil = acc.AdminComponent.Locked ? acc.AdminComponent.LockedUntil : null,
                     mutedUntil = acc.AdminComponent.Muted ? acc.AdminComponent.MutedUntil : null,
                     isVip = acc.AccountComponent.IsVip(),
+                    queueBlockedUntil = queuePenalties?.QueueDodgeBlockTimeout > DateTime.UtcNow
+                        ? queuePenalties.QueueDodgeBlockTimeout
+                        : null,
+                    queueDodgeCount = queuePenalties?.QueueDodgeCount ?? 0,
                 };
             }
         }
@@ -293,6 +301,22 @@ namespace CentralServer.ApiServer
                 : $"UNBAN {account.Handle}";
             log.Info($"API {logString} by {adminHandle} ({adminAccountId}): {data.description}");
             bool success = AdminManager.Get().Ban(data.accountId, TimeSpan.FromMinutes(data.durationMinutes), adminHandle, data.description);
+            return success ? Results.Ok() : Results.Problem();
+        }
+
+        public static IResult ClearQueuePenalty([FromBody] AccountIdModel data, ClaimsPrincipal user)
+        {
+            if (!ValidateAdmin(user, out IResult error, out long adminAccountId, out string adminHandle))
+            {
+                return error;
+            }
+            PersistedAccountData account = DB.Get().AccountDao.GetAccount(data.accountId);
+            if (account == null)
+            {
+                return Results.NotFound();
+            }
+            log.Info($"API CLEAR QUEUE PENALTY {account.Handle} by {adminHandle} ({adminAccountId})");
+            bool success = QueuePenaltyManager.ClearQueuePenalties(data.accountId);
             return success ? Results.Ok() : Results.Problem();
         }
 

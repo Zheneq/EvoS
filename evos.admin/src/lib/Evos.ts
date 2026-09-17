@@ -35,6 +35,8 @@ export interface PlayerDetails {
     bannedUntil?: string;
     mutedUntil?: string;
     isVip: boolean;
+    queueBlockedUntil?: string;
+    queueDodgeCount?: number;
 }
 
 export interface GroupData {
@@ -362,6 +364,13 @@ export function setVip(abort: AbortController, authHeader: string, accountId: nu
     return axios.post(
         baseUrl + "/api/admin/player/vip",
         { accountId, isVip },
+        { headers: { 'Authorization': authHeader }, signal: abort.signal });
+}
+
+export function clearQueuePenalty(abort: AbortController, authHeader: string, accountId: number) {
+    return axios.post(
+        baseUrl + "/api/admin/player/queuePenalty/clear",
+        { accountId },
         { headers: { 'Authorization': authHeader }, signal: abort.signal });
 }
 

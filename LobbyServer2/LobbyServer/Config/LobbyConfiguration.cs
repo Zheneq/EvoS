@@ -25,6 +25,8 @@ namespace EvoS.Framework
         public bool GameTypeRankedAvailable = false;
         public bool GameTypeCustomAvailable = true;
         public bool MatchAbandoningPenalty = true;
+        public TimeSpan QueuePenaltyEscalationCap = TimeSpan.FromHours(24);
+        public TimeSpan QueuePenaltyParoleWindow = TimeSpan.FromDays(7);
         public int ServerReserveSize = 0;
         public TimeSpan ServerGGTime = TimeSpan.FromSeconds(5);
         public TimeSpan ServerShutdownTime = TimeSpan.FromMinutes(1);
@@ -143,6 +145,16 @@ namespace EvoS.Framework
         public static bool GetMatchAbandoningPenalty()
         {
             return GetInstance().MatchAbandoningPenalty;
+        }
+
+        public static TimeSpan GetQueuePenaltyEscalationCap()
+        {
+            return GetInstance().QueuePenaltyEscalationCap;
+        }
+
+        public static TimeSpan GetQueuePenaltyParoleWindow()
+        {
+            return GetInstance().QueuePenaltyParoleWindow;
         }
 
         public static int GetTrustWarGamePlayedPoints()
