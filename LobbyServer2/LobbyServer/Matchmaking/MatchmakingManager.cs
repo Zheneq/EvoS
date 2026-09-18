@@ -84,9 +84,8 @@ namespace CentralServer.LobbyServer.Matchmaking
                 LocalizationPayload penalty = QueuePenaltyManager.CheckQueuePenalties(member, gameType, group.Leader);
                 if (penalty is not null)
                 {
-                    LobbyServerProtocol leader = SessionManager.GetClientConnection(group.Leader);
-                    leader?.SendSystemMessage(penalty);
-                    leader?.BroadcastRefreshGroup(true);
+                    ClientNotifier.Get().SendSystemMessage(group.Leader, penalty);
+                    ClientNotifier.Get().BroadcastRefreshGroup(group.Leader, true);
                     return false;
                 }
             }
@@ -104,8 +103,8 @@ namespace CentralServer.LobbyServer.Matchmaking
 
                 foreach (long member in group.Members)
                 {
-                    SessionManager.GetClientConnection(member)?.BroadcastRefreshFriendList();
-                    SessionManager.GetClientConnection(member)?.Send(new MatchmakingQueueToPlayersNotification
+                    ClientNotifier.Get().MarkFriendListForUpdate(member);
+                    ClientNotifier.Get().Send(member, new MatchmakingQueueToPlayersNotification
                     {
                         AccountId = member,
                         MessageToSend = MatchmakingQueueToPlayersNotification.MatchmakingQueueMessage.QueueConfirmed,
@@ -117,10 +116,10 @@ namespace CentralServer.LobbyServer.Matchmaking
             else
             {
                 GroupManager.Broadcast(group, new MatchmakingQueueAssignmentNotification { MatchmakingQueueInfo = null });
-                SessionManager.GetClientConnection(group.Leader)?.BroadcastRefreshGroup(true);
+                ClientNotifier.Get().BroadcastRefreshGroup(group.Leader, true);
                 foreach (long member in group.Members)
                 {
-                    SessionManager.GetClientConnection(member)?.BroadcastRefreshFriendList();
+                    ClientNotifier.Get().MarkFriendListForUpdate(member);
                 }
             }
 
@@ -142,7 +141,7 @@ namespace CentralServer.LobbyServer.Matchmaking
             {
                 foreach (long member in group.Members)
                 {
-                    SessionManager.GetClientConnection(member)?.BroadcastRefreshFriendList();
+                    ClientNotifier.Get().MarkFriendListForUpdate(member);
                 }
             }
             return removed;

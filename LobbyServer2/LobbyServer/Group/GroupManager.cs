@@ -52,7 +52,7 @@ namespace CentralServer.LobbyServer.Group
                 {
                     return ActiveGroups[groupId];
                 }
-                else if (SessionManager.GetClientConnection(accountId) is not null)
+                else if (ClientNotifier.Get().IsOnline(accountId))
                 {
                     log.Error($"Player {LobbyServerUtils.GetHandle(accountId)} wasn't in any group");
                     CreateGroup(accountId);
@@ -125,21 +125,21 @@ namespace CentralServer.LobbyServer.Group
                         continue;
                     }
                     
-                    LobbyServerProtocol requesterConn = SessionManager.GetClientConnection(request.RequesterAccountId);
-                    LobbyServerProtocol requesteeConn = SessionManager.GetClientConnection(request.RequesteeAccountId);
-                    if (requesteeConn is not null)
+                    bool requesteeOnline = ClientNotifier.Get().IsOnline(request.RequesteeAccountId);
+                    if (requesteeOnline)
                     {
                         log.Warn($"Request {id} to {LobbyServerUtils.GetHandleForLog(
                             request.RequesteeAccountId)} has expired while they were online");
                     }
-                        
-                    if (requesteeConn is null && !request.IsInvitation)
+
+                    if (!requesteeOnline && !request.IsInvitation)
                     {
-                        requesterConn?.SendSystemMessage(GroupMessages.LeaderLoggedOff);
+                        ClientNotifier.Get().SendSystemMessage(request.RequesterAccountId, GroupMessages.LeaderLoggedOff);
                     }
                     else
                     {
-                        requesterConn?.SendSystemMessage(
+                        ClientNotifier.Get().SendSystemMessage(
+                            request.RequesterAccountId,
                             request.IsInvitation
                                 ? GroupMessages.JoinGroupOfferExpired(request.RequesteeAccountId)
                                 : GroupMessages.FailedToJoinGroupInviteExpired(request.RequesteeAccountId));
@@ -255,7 +255,8 @@ namespace CentralServer.LobbyServer.Group
                     isGroupFull
                         ? GroupMessages.MemberFailedToJoinGroupIsFull(accountId)
                         : GroupMessages.MemberFailedToJoinUnknownError(accountId));
-                SessionManager.GetClientConnection(accountId)?.SendSystemMessage(
+                ClientNotifier.Get().SendSystemMessage(
+                    accountId,
                     isGroupFull
                         ? GroupMessages.FailedToJoinGroupIsFull
                         : GroupMessages.FailedToJoinUnknownError);
@@ -370,17 +371,17 @@ namespace CentralServer.LobbyServer.Group
 
         private static void OnJoinGroup(long accountId)
         {
-            SessionManager.GetClientConnection(accountId)?.OnJoinGroup();
+            ClientNotifier.Get().NotifyJoinedGroup(accountId);
         }
 
         private static void OnLeaveGroup(long accountId)
         {
-            SessionManager.GetClientConnection(accountId)?.OnLeaveGroup();
+            ClientNotifier.Get().NotifyLeftGroup(accountId);
         }
 
         private static void OnGroupDisbanded(long accountId)
         {
-            SessionManager.GetClientConnection(accountId)?.OnGroupDisbanded();
+            ClientNotifier.Get().NotifyGroupDisbanded(accountId);
         }
 
         private static void OnGroupMembersUpdated(GroupInfo groupInfo)
@@ -390,9 +391,9 @@ namespace CentralServer.LobbyServer.Group
             {
                 UpdateSelectedSubTypes(groupInfo);
             }
-            SessionManager.GetClientConnection(groupInfo.Leader)?.BroadcastRefreshGroup(true);
+            ClientNotifier.Get().BroadcastRefreshGroup(groupInfo.Leader, true);
         }
-        
+
         public static void OnLeaveQueue(long groupId)
         {
             GroupInfo groupInfo = GetGroup(groupId);
@@ -403,7 +404,7 @@ namespace CentralServer.LobbyServer.Group
             }
             UpdateSelectedSubTypes(groupInfo, false);
             Broadcast(groupInfo, new MatchmakingQueueAssignmentNotification { MatchmakingQueueInfo = null });
-            SessionManager.GetClientConnection(groupInfo.Leader)?.BroadcastRefreshGroup(false);
+            ClientNotifier.Get().BroadcastRefreshGroup(groupInfo.Leader, false);
         }
 
         public static void Broadcast(GroupInfo group, WebSocketMessage message, long skipAccountId = 0)
@@ -414,7 +415,7 @@ namespace CentralServer.LobbyServer.Group
                 {
                     continue;
                 }
-                SessionManager.GetClientConnection(groupMember)?.Send(message);
+                ClientNotifier.Get().Send(groupMember, message);
             }
         }
 
@@ -426,7 +427,7 @@ namespace CentralServer.LobbyServer.Group
                 {
                     continue;
                 }
-                SessionManager.GetClientConnection(groupMember)?.SendSystemMessage(message);
+                ClientNotifier.Get().SendSystemMessage(groupMember, message);
             }
         }
 
