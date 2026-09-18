@@ -48,6 +48,13 @@ connections call managers to mutate state; managers call back into connection me
 call site instead of being an outbound port. `SessionManager.Broadcast` routing through
 "any first connection" is the emblematic hack.
 
+**Partially fixed:** `IClientNotifier` outbound port introduced in
+`LobbyServer2/LobbyServer/Session/`; `QueuePenaltyManager`, `MatchmakingQueue`,
+`MatchmakingManager`, and `GroupManager` (20 notification sites) migrated. Tested via
+`RecordingClientNotifier` + `ClientNotifierScope`. Four read-only `GetClientConnection`
+sites remain in `GroupManager` (`GetMemberData`, `GetGroupInfo`, `UpdateSelectedSubTypes`)
+— deferred to Stage-3 (`ISessionRegistry`). ~48 sites in other files are follow-up PRs.
+
 ### A5. Mixed concurrency idioms
 
 - `lock (SessionInfos)` *around* a `ConcurrentDictionary` (the lock is what actually
@@ -151,7 +158,7 @@ Convert one manager at a time to an instance class with an interface
 
 ### Suggested first PRs (small, high leverage)
 
-1. `IClientNotifier` + convert `MatchmakingQueue`/`GroupManager` notification call sites.
+1. ~~`IClientNotifier` + convert `MatchmakingQueue`/`GroupManager` notification call sites.~~ **Done.**
 2. Extract `StoreService` from `LobbyServerProtocol` with tests (pure account math).
 3. Fix `PatchAccountData` return value + dedupe (removes a DB write per login).
 4. Deduplicate `SessionManager` lock/concurrent-dictionary idiom, document the invariant.

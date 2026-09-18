@@ -650,7 +650,7 @@ namespace CentralServer.LobbyServer.Matchmaking
             };
             foreach (long accountId in queuedAccountIds)
             {
-                SessionManager.GetClientConnection(accountId)?.Send(notify);
+                ClientNotifier.Get().Send(accountId, notify);
             }
         }
 

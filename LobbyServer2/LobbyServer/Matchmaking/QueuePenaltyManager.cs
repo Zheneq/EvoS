@@ -72,7 +72,7 @@ public static class QueuePenaltyManager
             if (SetQueuePenalty(accountId, GameType.PvP, duration, capPenalty: true))
             {
                 log.Info($"{LobbyServerUtils.GetHandle(accountId)}'s queue penalty is pardoned (reset to {duration})");
-                SessionManager.GetClientConnection(accountId)?.SendSystemMessage(msg);
+                ClientNotifier.Get().SendSystemMessage(accountId, msg);
             }
         }
     }
@@ -260,12 +260,10 @@ public static class QueuePenaltyManager
                 foreach (long groupMember in group.Members)
                 {
                     if (groupMember == requestedBy) continue;
-                    LobbyServerProtocol conn = SessionManager.GetClientConnection(groupMember);
                     LocalizationPayload localizationPayload = accountId != groupMember
                         ? MakeGroupmateBlockedMessage(account.AccountId, argDuration)
                         : MakeSelfBlockedMessage(argDuration);
-                    
-                    conn?.SendSystemMessage(localizationPayload);
+                    ClientNotifier.Get().SendSystemMessage(groupMember, localizationPayload);
                 }
             }
             
