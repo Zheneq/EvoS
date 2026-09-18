@@ -12,6 +12,8 @@
     <ProjectReference Include="..\LobbyServer2\CentralServer.csproj" />
   </ItemGroup>
 
-
+  <ItemGroup>
+    <InternalsVisibleTo Include="Tests" />
+  </ItemGroup>
 
 </Project>

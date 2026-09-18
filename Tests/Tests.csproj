@@ -26,6 +26,7 @@
 
     <ItemGroup>
       <ProjectReference Include="..\LobbyServer2\CentralServer.csproj" />
+      <ProjectReference Include="..\EvoS.DirectoryServer\EvoS.DirectoryServer.csproj" />
     </ItemGroup>
 
     

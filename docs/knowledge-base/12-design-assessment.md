@@ -70,8 +70,10 @@ account concurrently.
 
 ### A7. Login-path warts
 
-- `PatchAccountData` always returns true → full account rewrite on every login; contains
-  a 3× copy-pasted loadout-patch block.
+- ~~`PatchAccountData` always returns true → full account rewrite on every login; contains
+  a 3× copy-pasted loadout-patch block.~~ **Fixed:** now change-detected via JSON snapshot
+  comparison, deduplicated, and tested (`PatchAccountDataTest`); versioned migrations remain
+  future work.
 - DB failure during login silently creates `temp_user#N` accounts (state divergence that
   later persists partial data).
 

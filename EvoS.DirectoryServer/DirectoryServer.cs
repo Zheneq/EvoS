@@ -358,7 +358,69 @@ namespace EvoS.DirectoryServer
             };
         }
 
-        private static bool PatchAccountData(PersistedAccountData account)
+        // Placeholder freelancers used by Draft for random fill (and random fill for subcategory);
+        // every account must have them with a default loadout.
+        private static readonly CharacterType[] RequiredPlaceholderCharacters =
+        {
+            CharacterType.PendingWillFill,
+            CharacterType.TestFreelancer1,
+            CharacterType.TestFreelancer2,
+        };
+
+        // Someday we'll make a db migration tool but not today
+        internal static bool PatchAccountData(PersistedAccountData account)
+        {
+            string before = Snapshot(account);
+            ApplyAccountDataPatches(account);
+            string after = Snapshot(account);
+            // If a snapshot failed we cannot prove the account is unchanged, so persist it as before.
+            return before == null || after == null || before != after;
+        }
+
+        private static List<int> WithoutDuplicates(List<int> ids)
+        {
+            return ids?.Distinct().ToList();
+        }
+
+        private static string Snapshot(PersistedAccountData account)
+        {
+            try
+            {
+                return DefaultJsonSerializer.Serialize(account);
+            }
+            catch (Exception e)
+            {
+                log.Warn($"Failed to snapshot account {account.AccountId} for change detection", e);
+                return null;
+            }
+        }
+
+        private static void EnsureCharacterWithDefaultLoadout(PersistedAccountData account, CharacterType characterType)
+        {
+            account.CharacterData.TryGetValue(characterType, out PersistedCharacterData characterData);
+            if (characterData == null)
+            {
+                account.CharacterData.TryAdd(characterType, new PersistedCharacterData(characterType));
+                characterData = account.CharacterData[characterType];
+            }
+
+            if (characterData.CharacterComponent.CharacterLoadouts.Count == 0)
+            {
+                characterData.CharacterComponent.CharacterLoadouts = new List<CharacterLoadout>()
+                {
+                    new CharacterLoadout
+                    (
+                        new CharacterModInfo() { ModForAbility0 = 0, ModForAbility1 = 0, ModForAbility2 = 0, ModForAbility3 = 0, ModForAbility4 = 0 },
+                        new CharacterAbilityVfxSwapInfo() { VfxSwapForAbility0 = 0, VfxSwapForAbility1 = 0, VfxSwapForAbility2 = 0, VfxSwapForAbility3 = 0, VfxSwapForAbility4 = 0 },
+                        "Default",
+                        ModStrictness.AllModes
+                    )
+                };
+                characterData.CharacterComponent.LastSelectedLoadout = 0;
+            }
+        }
+
+        private static void ApplyAccountDataPatches(PersistedAccountData account)
         {
 
 #if DEBUG
@@ -368,77 +430,9 @@ namespace EvoS.DirectoryServer
             }
 #endif
 
-            // Check if WillFill is missing in CharacterData, if it is add it
-            account.CharacterData.TryGetValue(CharacterType.PendingWillFill, out PersistedCharacterData willFill);
-            if (willFill == null)
+            foreach (CharacterType characterType in RequiredPlaceholderCharacters)
             {
-                account.CharacterData.TryAdd(CharacterType.PendingWillFill, new PersistedCharacterData(CharacterType.PendingWillFill));
-                willFill = account.CharacterData[CharacterType.PendingWillFill];
-            }
-
-            // PATCH Make sure PendingWillFill has default CharacterLoadouts
-            if (willFill.CharacterComponent.CharacterLoadouts.Count == 0)
-            {
-                willFill.CharacterComponent.CharacterLoadouts = new List<CharacterLoadout>()
-                {
-                    new CharacterLoadout
-                    (
-                        new CharacterModInfo() { ModForAbility0 = 0, ModForAbility1 = 0, ModForAbility2 = 0, ModForAbility3 = 0, ModForAbility4 = 0 },
-                        new CharacterAbilityVfxSwapInfo() { VfxSwapForAbility0 = 0, VfxSwapForAbility1 = 0, VfxSwapForAbility2 = 0, VfxSwapForAbility3 = 0, VfxSwapForAbility4 = 0 },
-                        "Default",
-                        ModStrictness.AllModes
-                    )
-                };
-                willFill.CharacterComponent.LastSelectedLoadout = 0;
-            }
-
-            // These are used in Draft in random fill for subcategory
-            // Check if TestFreelancer1 is missing in CharacterData, if it is add it
-            account.CharacterData.TryGetValue(CharacterType.TestFreelancer1, out PersistedCharacterData testFreelancer1);
-            if (testFreelancer1 == null)
-            {
-                account.CharacterData.TryAdd(CharacterType.TestFreelancer1, new PersistedCharacterData(CharacterType.TestFreelancer1));
-                testFreelancer1 = account.CharacterData[CharacterType.TestFreelancer1];
-            }
-
-            // PATCH Make sure testFreelancer1 has default CharacterLoadouts
-            if (testFreelancer1.CharacterComponent.CharacterLoadouts.Count == 0)
-            {
-                testFreelancer1.CharacterComponent.CharacterLoadouts = new List<CharacterLoadout>()
-                {
-                    new CharacterLoadout
-                    (
-                        new CharacterModInfo() { ModForAbility0 = 0, ModForAbility1 = 0, ModForAbility2 = 0, ModForAbility3 = 0, ModForAbility4 = 0 },
-                        new CharacterAbilityVfxSwapInfo() { VfxSwapForAbility0 = 0, VfxSwapForAbility1 = 0, VfxSwapForAbility2 = 0, VfxSwapForAbility3 = 0, VfxSwapForAbility4 = 0 },
-                        "Default",
-                        ModStrictness.AllModes
-                    )
-                };
-                testFreelancer1.CharacterComponent.LastSelectedLoadout = 0;
-            }
-
-            // Check if TestFreelancer1 is missing in CharacterData, if it is add it
-            account.CharacterData.TryGetValue(CharacterType.TestFreelancer2, out PersistedCharacterData testFreelancer2);
-            if (testFreelancer2 == null)
-            {
-                account.CharacterData.TryAdd(CharacterType.TestFreelancer2, new PersistedCharacterData(CharacterType.TestFreelancer2));
-                testFreelancer2 = account.CharacterData[CharacterType.TestFreelancer2];
-            }
-
-            // PATCH Make sure testFreelancer1 has default CharacterLoadouts
-            if (testFreelancer2.CharacterComponent.CharacterLoadouts.Count == 0)
-            {
-                testFreelancer2.CharacterComponent.CharacterLoadouts = new List<CharacterLoadout>()
-                {
-                    new CharacterLoadout
-                    (
-                        new CharacterModInfo() { ModForAbility0 = 0, ModForAbility1 = 0, ModForAbility2 = 0, ModForAbility3 = 0, ModForAbility4 = 0 },
-                        new CharacterAbilityVfxSwapInfo() { VfxSwapForAbility0 = 0, VfxSwapForAbility1 = 0, VfxSwapForAbility2 = 0, VfxSwapForAbility3 = 0, VfxSwapForAbility4 = 0 },
-                        "Default",
-                        ModStrictness.AllModes
-                    )
-                };
-                testFreelancer2.CharacterComponent.LastSelectedLoadout = 0;
+                EnsureCharacterWithDefaultLoadout(account, characterType);
             }
 
             foreach (PersistedCharacterData persistedCharacterData in account.CharacterData.Values)
@@ -491,7 +485,15 @@ namespace EvoS.DirectoryServer
                 account.AccountComponent.UnlockedRibbonIDs = new List<int>();
             }
 
-            if (account.AccountComponent.IsDev())
+            // Heal duplicates that older versions of the unlock lists and the dev-title patch
+            // have baked into stored accounts.
+            AccountComponent accountComponent = account.AccountComponent;
+            accountComponent.UnlockedEmojiIDs = WithoutDuplicates(accountComponent.UnlockedEmojiIDs);
+            accountComponent.UnlockedOverconIDs = WithoutDuplicates(accountComponent.UnlockedOverconIDs);
+            accountComponent.UnlockedTitleIDs = WithoutDuplicates(accountComponent.UnlockedTitleIDs);
+            accountComponent.UnlockedBannerIDs = WithoutDuplicates(accountComponent.UnlockedBannerIDs);
+
+            if (account.AccountComponent.IsDev() && !account.AccountComponent.UnlockedTitleIDs.Contains(26))
             {
                 //Give developers access to the Developer title
                 account.AccountComponent.UnlockedTitleIDs.Add(26);
@@ -501,8 +503,6 @@ namespace EvoS.DirectoryServer
             {
                 account.SocialComponent.BlockedAccounts = new HashSet<long>();
             }
-
-            return true;
         }
 
         private static AssignGameClientResponse Fail(AssignGameClientRequest request, string reason)
