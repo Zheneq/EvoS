@@ -11,8 +11,7 @@ draft interactions, error/feedback reporting.
 | Class | Location | Notes |
 |-------|----------|-------|
 | `WebSocketBehaviorBase<TMessage>` | `LobbyServer2/WebSocketBehaviorBase.cs` | Generic websocket connection base: receive loop, typed handler registry (`RegisterHandler<T>`), serialized sends with websocket-sharp-compatible fragmentation, per-connection log context. One static `Connections` registry per closed generic type |
-| `LobbyServerProtocolBase` | `LobbyServer2/LobbyServer/LobbyServerProtocolBase.cs` | Client-flavored base: `Send(WebSocketMessage)`, `Broadcast`, error responses, `SendLobbyServerReadyNotification` (assembles the massive initial state dump, fetches GitHub patch notes) |
-| `LobbyServerProtocol` | `LobbyServer2/LobbyServer/LobbyServerProtocol.cs` | **2,896 lines, ~75 message handlers.** Connection identity (`AccountId`, `SessionToken`), `CurrentGame` pointer, and business logic for a dozen domains inline |
+| `LobbyServerProtocol` | `LobbyServer2/LobbyServer/LobbyServerProtocol.cs` | **~75 message handlers.** Connection identity (`AccountId`, `SessionToken`), `CurrentGame` pointer, transport plumbing (`Send(WebSocketMessage)`, `Broadcast`, error responses, `SendLobbyServerReadyNotification`), and business logic for a dozen domains inline. Implements `IClientConnection` and `IHandlerRegistry`; composes `ILobbyModule` instances (currently `StoreModule`) |
 | `SessionManager` | `LobbyServer2/LobbyServer/Session/SessionManager.cs` | Static session registry: `SessionInfos` (active), `ConnectingSessions` (login issued, WS not yet up, 30s expiry), `DisconnectedSessionInfos` (reconnect window, 10 min). Also Prometheus lobby gauges |
 | `AdminManager` | `LobbyServer2/LobbyServer/AdminManager.cs` | Singleton; ban/mute penalty bookkeeping, admin action events, muted-refresh loop |
 | `UsernameRequestManager` | `LobbyServer2/LobbyServer/UsernameRequestManager.cs` | Username change requests (approved via admin API) |

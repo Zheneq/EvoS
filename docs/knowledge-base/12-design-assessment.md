@@ -123,10 +123,10 @@ Design (supersedes the earlier "extract services" sketch): the connection *compo
 per-connection module instances; each module registers its own handlers into the existing
 `RegisterHandler<T>` dispatch table and owns its slice of per-session state.
 
-1. Merge `LobbyServerProtocolBase` into `LobbyServerProtocol` (the split is nominal, see
+1. ~~Merge `LobbyServerProtocolBase` into `LobbyServerProtocol` (the split is nominal, see
    A2). Its transport plumbing folds into the connection; its domain logic
    (`SendLobbyServerReadyNotification`, MOTD/patch notes) becomes Login/Status module
-   material.
+   material.~~ **Done.**
 2. Seam contracts:
    - `IClientConnection` (AccountId, Send, ... — grown only as modules need it),
      implemented by `LobbyServerProtocol`. Modules never see the concrete class.
@@ -149,12 +149,14 @@ per-connection module instances; each module registers its own handlers into the
    with its module, exposed to other modules via narrow interfaces.
 5. Safety nets: a snapshot test asserting the set of registered message types is
    unchanged after every module extraction (wire contract), plus per-module unit tests
-   against mock DAOs and a recording `IClientConnection`.
+   against mock DAOs and a recording `IClientConnection`. **Snapshot test
+   (`LobbyHandlerRegistrationTest`) added; 75 message types locked.**
 6. Order: Base merge → snapshot test → **Store** pilot (most self-contained: needs only
    `AccountId` + `Send`, no per-connection state) → Telemetry, Account (nearly
    stateless) → Group, Matchmaking, GameLifecycle (where state migration happens) →
    Login/Status. External callers of moved members keep working via delegation on the
-   connection during the transition.
+   connection during the transition. **Store pilot (`StoreModule`, 13 handlers) extracted
+   and tested (`StoreModuleTest`, 9 cases).**
 
 ### Stage 2 — Introduce an outbound notification port
 
@@ -196,9 +198,9 @@ Convert one manager at a time to an instance class with an interface
 ### Suggested first PRs (small, high leverage)
 
 1. ~~`IClientNotifier` + convert `MatchmakingQueue`/`GroupManager` notification call sites.~~ **Done.**
-2. Stage-1 kickoff: merge `LobbyServerProtocolBase` into `LobbyServerProtocol`, add the
+2. ~~Stage-1 kickoff: merge `LobbyServerProtocolBase` into `LobbyServerProtocol`, add the
    handler-set snapshot test, extract `StoreModule` as the pilot (pure account math,
-   tested against mock DAOs).
+   tested against mock DAOs).~~ **Done.**
 3. Fix `PatchAccountData` return value + dedupe (removes a DB write per login).
 4. Deduplicate `SessionManager` lock/concurrent-dictionary idiom, document the invariant.
 5. Extract `TeamAssembler` from `Game` with tests around `CheckDuplicatedAndFill`
