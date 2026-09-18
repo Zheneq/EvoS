@@ -50,13 +50,37 @@ namespace CentralServer.LobbyServer
         private static readonly ILog log = LogManager.GetLogger(typeof(LobbyServerProtocol));
 
         public long AccountId { get; set; }
-        public string UserName;
+        public string UserName { get; set; }
         public long SessionToken;
-        public GameType SelectedGameType;
-        public ushort SelectedSubTypeMask;
-        public BotDifficulty AllyDifficulty;
-        public BotDifficulty EnemyDifficulty;
         public bool SessionCleaned = false; // tracks clean up methods execution for reconnection
+
+        private readonly MatchmakingModule _matchmaking;
+
+        public GameType SelectedGameType
+        {
+            get => _matchmaking.SelectedGameType;
+            set => _matchmaking.SelectedGameType = value;
+        }
+
+        public ushort SelectedSubTypeMask
+        {
+            get => _matchmaking.SelectedSubTypeMask;
+            set => _matchmaking.SelectedSubTypeMask = value;
+        }
+
+        public BotDifficulty AllyDifficulty
+        {
+            get => _matchmaking.AllyDifficulty;
+            set => _matchmaking.AllyDifficulty = value;
+        }
+
+        public BotDifficulty EnemyDifficulty
+        {
+            get => _matchmaking.EnemyDifficulty;
+            set => _matchmaking.EnemyDifficulty = value;
+        }
+
+        public bool IsReady => _matchmaking.IsReady;
 
         protected ProxyConfiguration.Proxy Proxy = null;
 
@@ -283,25 +307,13 @@ namespace CentralServer.LobbyServer
             return LobbyConfiguration.GetMOTDPopUpText();
         }
 
-        public void SetGameType(GameType gameType)
-        {
-            SelectedGameType = gameType;
-        }
+        public void SetGameType(GameType gameType) => _matchmaking.SetGameType(gameType);
 
-        protected void SetAllyDifficulty(BotDifficulty difficulty)
-        {
-            AllyDifficulty = difficulty;
-        }
+        protected void SetAllyDifficulty(BotDifficulty difficulty) => _matchmaking.SetAllyDifficulty(difficulty);
 
-        protected void SetEnemyDifficulty(BotDifficulty difficulty)
-        {
-            EnemyDifficulty = difficulty;
-        }
+        protected void SetEnemyDifficulty(BotDifficulty difficulty) => _matchmaking.SetEnemyDifficulty(difficulty);
 
-        public ushort GetSubTypeMask()
-        {
-            return Math.Max((ushort)1, SelectedSubTypeMask);
-        }
+        public ushort GetSubTypeMask() => _matchmaking.GetSubTypeMask();
 
         private Game _currentGame;
 
@@ -331,8 +343,6 @@ namespace CentralServer.LobbyServer
 
         public bool IsInQueue() => MatchmakingManager.IsQueued(GroupManager.GetPlayerGroup(AccountId));
 
-        public bool IsReady { get; private set; }
-
         public LobbyServerPlayerInfo PlayerInfo => CurrentGame?.GetPlayerInfo(AccountId);
 
         public string Handle => LobbyServerUtils.GetHandle(AccountId);
@@ -357,6 +367,8 @@ namespace CentralServer.LobbyServer
 
         public LobbyServerProtocol()
         {
+            _matchmaking = new MatchmakingModule(this);
+
             RegisterHandler<RegisterGameClientRequest>(HandleRegisterGame);
             RegisterHandler<PlayerUpdateStatusRequest>(HandlePlayerUpdateStatusRequest);
             RegisterHandler<SetGameSubTypeRequest>(HandleSetGameSubTypeRequest);
@@ -394,7 +406,7 @@ namespace CentralServer.LobbyServer
 
             RegisterHandler<FriendUpdateRequest>(HandleFriendUpdate);
 
-            ILobbyModule[] modules = { new StoreModule(this), new TelemetryModule(this), new AccountModule(this), new GroupModule(this) };
+            ILobbyModule[] modules = { new StoreModule(this), new TelemetryModule(this), new AccountModule(this), new GroupModule(this), _matchmaking };
             foreach (ILobbyModule module in modules)
             {
                 module.Register(this);
@@ -1062,42 +1074,7 @@ namespace CentralServer.LobbyServer
             Send(FriendManager.GetFriendStatusNotification(AccountId));
         }
 
-        public void UpdateGroupReadyState()
-        {
-            GroupInfo group = GroupManager.GetPlayerGroup(AccountId);
-            if (group == null)
-            {
-                log.Error($"Attempted to update group ready state of {AccountId} who is not in a group");
-                return;
-            }
-            LobbyServerProtocol leader = null;
-            bool allAreReady = true;
-            foreach (long groupMember in group.Members)
-            {
-                LobbyServerProtocol conn = SessionManager.GetClientConnection(groupMember);
-                allAreReady &= conn?.IsReady ?? false;
-                if (group.IsLeader(groupMember))
-                {
-                    leader = conn;
-                }
-            }
-
-            bool isGroupQueued = MatchmakingManager.IsQueued(group);
-
-            if (allAreReady && !isGroupQueued)
-            {
-                if (leader == null)
-                {
-                    log.Error($"Attempted to update group {group.GroupId} ready state with not connected leader {group.Leader}");
-                    return;
-                }
-                MatchmakingManager.AddGroupToQueue(leader.SelectedGameType, group);
-            }
-            else if (!allAreReady && isGroupQueued)
-            {
-                MatchmakingManager.RemoveGroupFromQueue(group, true);
-            }
-        }
+        public void UpdateGroupReadyState() => _matchmaking.UpdateGroupReadyState();
 
         public void BroadcastRefreshGroup(bool resetReadyState = false)
         {
@@ -1119,8 +1096,7 @@ namespace CentralServer.LobbyServer
         {
             if (resetReadyState)
             {
-                IsReady = false;
-                UpdateGroupReadyState();
+                _matchmaking.ResetReadyState();
             }
             LobbyPlayerGroupInfo info = GroupManager.GetGroupInfo(AccountId);
 
@@ -1501,57 +1477,10 @@ namespace CentralServer.LobbyServer
             });
         }
 
-        protected void SetContextualReadyState(ContextualReadyState contextualReadyState)
-        {
-            log.Info($"SetContextualReadyState {contextualReadyState.ReadyState} {contextualReadyState.GameProcessCode}");
+        protected void SetContextualReadyState(ContextualReadyState contextualReadyState) =>
+            _matchmaking.SetContextualReadyState(contextualReadyState);
 
-            LocalizationPayload failure = QueuePenaltyManager.CheckQueuePenalties(AccountId, SelectedGameType);
-            if (failure is not null)
-            {
-                ResetReadyState();
-                SendSystemMessage(failure);
-                return;
-            }
-
-            GroupInfo group = GroupManager.GetPlayerGroup(AccountId);
-            IsReady = contextualReadyState.ReadyState == ReadyState.Ready;  // TODO can be Accepted and others
-            if (group == null)
-            {
-                log.Error($"{LobbyServerUtils.GetHandle(AccountId)} is not in a group when setting contextual ready state");
-                return;
-            }
-            if (CurrentGame != null)
-            {
-                if (CurrentGame.ProcessCode != contextualReadyState.GameProcessCode)
-                {
-                    log.Error($"Received ready state {contextualReadyState.ReadyState} " +
-                              $"from {LobbyServerUtils.GetHandle(AccountId)} " +
-                              $"for game {contextualReadyState.GameProcessCode} " +
-                              $"while they are in game {CurrentGame.ProcessCode}");
-                    return;
-                }
-
-                if (contextualReadyState.ReadyState == ReadyState.Ready) // TODO can be Accepted and others
-                {
-                    CurrentGame.SetPlayerReady(AccountId);
-                }
-                else
-                {
-                    CurrentGame.SetPlayerUnReady(AccountId);
-                }
-            }
-            else
-            {
-                UpdateGroupReadyState();
-                BroadcastRefreshGroup();
-            }
-        }
-
-        private void ResetReadyState()
-        {
-            IsReady = false;
-            UpdateGroupReadyState();
-        }
+        private void ResetReadyState() => _matchmaking.ResetReadyState();
 
         public void HandleJoinMatchmakingQueueRequest(JoinMatchmakingQueueRequest request)
         {
@@ -1576,7 +1505,7 @@ namespace CentralServer.LobbyServer
                     }
                 }
 
-                IsReady = true;
+                _matchmaking.Ready();
                 MatchmakingManager.AddGroupToQueue(request.GameType, group);
                 Send(new JoinMatchmakingQueueResponse { Success = true, ResponseId = request.RequestId });
             }
@@ -1606,7 +1535,7 @@ namespace CentralServer.LobbyServer
                 }
 
                 Send(new LeaveMatchmakingQueueResponse { Success = true, ResponseId = request.RequestId });
-                IsReady = false;
+                _matchmaking.Unready();
                 MatchmakingManager.RemoveGroupFromQueue(group);
             }
             catch (Exception e)
@@ -1880,14 +1809,14 @@ namespace CentralServer.LobbyServer
 
         public void OnLeaveGroup()
         {
-            IsReady = false;
+            _matchmaking.Unready();
             RefreshGroup();
             BroadcastRefreshFriendList();
         }
 
         public void OnJoinGroup()
         {
-            IsReady = false;
+            _matchmaking.Unready();
             BroadcastRefreshFriendList();
         }
 
@@ -1898,7 +1827,7 @@ namespace CentralServer.LobbyServer
 
         public void OnStartGame(Game game)
         {
-            IsReady = false;
+            _matchmaking.Unready();
         }
 
         public void OnGameAssigned(Game game)
