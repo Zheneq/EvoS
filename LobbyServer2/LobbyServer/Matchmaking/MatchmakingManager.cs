@@ -163,7 +163,7 @@ namespace CentralServer.LobbyServer.Matchmaking
             return false;
         }
 
-        public static void StartPractice(LobbyServerProtocolBase client)
+        public static void StartPractice(LobbyServerProtocol client)
         {
             /*
             MatchmakingQueueConfig queueConfig = new MatchmakingQueueConfig();
