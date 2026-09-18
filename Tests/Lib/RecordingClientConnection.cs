@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using CentralServer.BridgeServer;
 using CentralServer.LobbyServer.Session;
 using EvoS.Framework.Network.WebSocket;
 
@@ -11,6 +12,7 @@ namespace Tests.Lib;
 public class RecordingClientConnection : IClientConnection
 {
     public long AccountId { get; set; }
+    public Game CurrentGame { get; set; } = null!;
     public readonly List<WebSocketMessage> Sent = new();
 
     public void Send(WebSocketMessage message) => Sent.Add(message);

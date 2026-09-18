@@ -394,16 +394,6 @@ namespace CentralServer.LobbyServer
             RegisterHandler<DEBUG_AdminSlashCommandNotification>(HandleDEBUG_AdminSlashCommandNotification);
             RegisterHandler<SelectRibbonRequest>(HandleSelectRibbonRequest);
 
-            RegisterHandler<UIActionNotification>(HandleUIActionNotification);
-            
-            RegisterHandler<CrashReportArchiveNameRequest>(HandleCrashReportArchiveNameRequest);
-            RegisterHandler<ClientStatusReport>(HandleClientStatusReport);
-            RegisterHandler<ClientErrorSummary>(HandleClientErrorSummary);
-            RegisterHandler<ClientErrorReport>(HandleClientErrorReport);
-            RegisterHandler<ErrorReportSummaryResponse>(HandleErrorReportSummaryResponse);
-            RegisterHandler<ClientFeedbackReport>(HandleClientFeedbackReport);
-            RegisterHandler<ClientPerformanceReport>(HandleClientPerformanceReport);
-            
             RegisterHandler<SubscribeToCustomGamesRequest>(HandleSubscribeToCustomGamesRequest);
             RegisterHandler<UnsubscribeFromCustomGamesRequest>(HandleUnsubscribeFromCustomGamesRequest);
             RegisterHandler<CreateGameRequest>(HandleCreateGameRequest);
@@ -428,7 +418,7 @@ namespace CentralServer.LobbyServer
             RegisterHandler<EvosOptionsNotificationLegacy>(HandleEvosOptionsNotificationLegacy);
             RegisterHandler<EvosOptionsNotification>(HandleEvosOptionsNotification);
 
-            ILobbyModule[] modules = { new StoreModule(this) };
+            ILobbyModule[] modules = { new StoreModule(this), new TelemetryModule(this) };
             foreach (ILobbyModule module in modules)
             {
                 module.Register(this);
@@ -2364,77 +2354,6 @@ namespace CentralServer.LobbyServer
             log.Info($"Player {AccountId} requested UIState {request.UIState} {request.StateValue}");
             account.AccountComponent.UIStates[request.UIState] = request.StateValue;
             DB.Get().AccountDao.UpdateAccountComponent(account);
-        }
-
-        private void HandleUIActionNotification(UIActionNotification notify)
-        {
-        }
-
-        private void HandleCrashReportArchiveNameRequest(CrashReportArchiveNameRequest request)
-        {
-            CrashReportArchiveNameResponse response = new CrashReportArchiveNameResponse
-            {
-                Success = false,
-                ResponseId = request.RequestId
-            };
-            
-            LobbySessionInfo sessionInfo = SessionManager.GetSessionInfo(AccountId);
-            if (sessionInfo is not null)
-            {
-                BuildVersionInfo info = sessionInfo.BuildVersionInfo;
-                if (info.IsPatched)
-                {
-                    response.Success = true;
-                    response.ArchiveName = CrashReportManager.Add(AccountId).ToString();
-                }
-            }
-            Send(response);
-        }
-
-        private void HandleClientStatusReport(ClientStatusReport msg)
-        {
-            string shortDetails = msg.StatusDetails != null ? msg.StatusDetails.Split('\n', 2)[0] : "";
-            log.Info($"ClientStatusReport {msg.Status}: {shortDetails} ({msg.UserMessage})");
-            CrashReportManager.ProcessClientStatusReport(AccountId, msg);
-        }
-
-        public void HandleClientErrorSummary(ClientErrorSummary msg)
-        {
-            foreach (var (key, count) in msg.ReportCount)
-            {
-                log.Info($"ClientErrorSummary {key}: {count}");
-            }
-            CrashReportManager.ProcessClientErrorSummary(AccountId, msg);
-        }
-
-        private void HandleClientErrorReport(ClientErrorReport msg)
-        {
-            log.Info($"ClientErrorReport {msg.StackTraceHash}: {msg.LogString} {msg.StackTrace} {msg.Time}");
-            CrashReportManager.ProcessClientErrorReport(AccountId, msg);
-        }
-
-        private void HandleErrorReportSummaryResponse(ErrorReportSummaryResponse response)
-        {
-            log.Info($"ErrorReportSummaryResponse {response.ClientErrorReport.StackTraceHash}: {
-                response.ClientErrorReport.LogString} {response.ClientErrorReport.StackTrace
-                } {response.ClientErrorReport.Time}");
-            CrashReportManager.ProcessErrorReportSummaryResponse(AccountId, response);
-        }
-
-        private void HandleClientFeedbackReport(ClientFeedbackReport message)
-        {
-            string context = CurrentGame is not null ? GameIdString(CurrentGame.GameInfo) : "";
-            if (message.ReportedPlayerAccountId == 0 && message.ReportedPlayerHandle is not null)
-            {
-                message.ReportedPlayerAccountId = LobbyServerUtils.ResolveAccountId(message.ReportedPlayerHandle);
-            }
-            DB.Get().UserFeedbackDao.Save(new UserFeedbackDao.UserFeedback(AccountId, message, context));
-            DiscordManager.Get().SendPlayerFeedback(AccountId, message);
-        }
-
-        private void HandleClientPerformanceReport(ClientPerformanceReport msg)
-        {
-            log.Info($"ClientPerformanceReport {msg.PerformanceInfo}");
         }
 
         private void HandleSubscribeToCustomGamesRequest(SubscribeToCustomGamesRequest request)
