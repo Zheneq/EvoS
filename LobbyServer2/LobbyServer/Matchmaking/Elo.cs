@@ -62,8 +62,8 @@ public static class Elo
             }
             int result = gameSummary.GameResult == GameResult.TeamAWon ? 1 : 0;
             float eloChange = GetEloChange(teamA, teamB, conf, result);
-            AwardEloTeam(teamA, conf, eloChange, accountUpdater);
-            AwardEloTeam(teamB, conf, -eloChange, accountUpdater);
+            AwardEloTeam(teamA, conf, eloChange, accountProvider, accountUpdater);
+            AwardEloTeam(teamB, conf, -eloChange, accountProvider, accountUpdater);
         }
     }
 
@@ -151,11 +151,11 @@ public static class Elo
         return conf.EloConfidenceFactor[Math.Clamp(cf, 0, conf.EloConfidenceFactor.Count-1)];
     }
 
-    private static void AwardElo(MatchPlayerData data, string eloKey, float delta, IAccountUpdater accountUpdater)
+    private static void AwardElo(MatchPlayerData data, string eloKey, float delta, IAccountProvider accountProvider, IAccountUpdater accountUpdater)
     {
         float currentElo = data.GetElo();
         log.Info($"Updating {data.Handle}'s {eloKey} elo {currentElo} -> {currentElo + delta}");
-        var acc = DB.Get().AccountDao.GetAccount(data.AccountId);
+        var acc = accountProvider(data.AccountId);
         acc.ExperienceComponent.EloValues.ApplyDelta(eloKey, delta, 0);
         accountUpdater(acc);
     }
@@ -180,12 +180,12 @@ public static class Elo
         accountUpdater(account);
     }
 
-    private static void AwardEloTeam(List<MatchPlayerData> team, MatchmakingConfiguration conf, float eloDelta, IAccountUpdater accountUpdater)
+    private static void AwardEloTeam(List<MatchPlayerData> team, MatchmakingConfiguration conf, float eloDelta, IAccountProvider accountProvider, IAccountUpdater accountUpdater)
     {
         float avgConf = team.Select(p => GetEloConfidenceFactor(p, conf)).Sum() / team.Count;
         foreach (MatchPlayerData data in team)
         {
-            AwardElo(data, data.EloKey, eloDelta * GetEloConfidenceFactor(data, conf) * data.NumControlledCharacters / avgConf, accountUpdater);
+            AwardElo(data, data.EloKey, eloDelta * GetEloConfidenceFactor(data, conf) * data.NumControlledCharacters / avgConf, accountProvider, accountUpdater);
         }
     }
 

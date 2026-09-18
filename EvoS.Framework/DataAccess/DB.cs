@@ -1,3 +1,4 @@
+using System;
 using EvoS.Framework.DataAccess.Daos;
 using EvoS.Framework.DataAccess.Mock;
 using EvoS.Framework.DataAccess.Mongo;
@@ -9,7 +10,7 @@ namespace EvoS.Framework.DataAccess
     {
         private static readonly ILog log = LogManager.GetLogger(typeof(DB));
         
-        private static DB Instance;
+        private static readonly Lazy<DB> Instance = new(() => new DB());
         public readonly AccountDao AccountDao;
         public readonly LoginDao LoginDao;
         public readonly MatchHistoryDao MatchHistoryDao;
@@ -61,7 +62,7 @@ namespace EvoS.Framework.DataAccess
 
         public static DB Get()
         {
-            return Instance ??= new DB();
+            return Instance.Value;
         }
     }
 }
