@@ -14,6 +14,7 @@ public class RecordingClientConnection : IClientConnection
 {
     public long AccountId { get; set; }
     public string Handle { get; set; } = "Test#1";
+    public string UserName { get; set; } = "testuser";
     public Game CurrentGame { get; set; } = null!;
     public readonly List<WebSocketMessage> Sent = new();
     public readonly List<LocalizationPayload> SystemMessages = new();
