@@ -25,9 +25,11 @@ public class PvpGame: Game
         List<MatchPlayerData> teamB,
         GameType gameType,
         List<GameSubType> gameSubTypes,
-        int subTypeIndex)
+        int subTypeIndex,
+        Dictionary<long, DateTime> queueEntryTimes = null)
     {
         GameSubType = gameSubTypes[subTypeIndex];
+        QueueEntryTimes = queueEntryTimes ?? new Dictionary<long, DateTime>();
 
         // Fill Teams
         if (!FillTeam(teamA, Team.TeamA, GameSubType) || !FillTeam(teamB, Team.TeamB, GameSubType))

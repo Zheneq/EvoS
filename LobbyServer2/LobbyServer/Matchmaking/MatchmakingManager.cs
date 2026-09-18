@@ -237,7 +237,8 @@ namespace CentralServer.LobbyServer.Matchmaking
             List<MatchPlayerData> teamB,
             GameType gameType,
             List<GameSubType> gameSubTypes,
-            int subTypeIndex)
+            int subTypeIndex,
+            Dictionary<long, System.DateTime> queueEntryTimes = null)
         {
             log.Info($"Starting {gameType} game...");
             PvpGame game = GameManager.CreatePvpGame();
@@ -246,7 +247,7 @@ namespace CentralServer.LobbyServer.Matchmaking
                 log.Info($"Failed to create {gameType} game");
                 return;
             }
-            await game.StartGameAsync(teamA.Shuffle().ToList(), teamB.Shuffle().ToList(), gameType, gameSubTypes, subTypeIndex);
+            await game.StartGameAsync(teamA.Shuffle().ToList(), teamB.Shuffle().ToList(), gameType, gameSubTypes, subTypeIndex, queueEntryTimes);
         }
 
         public static void OnGameEnded(LobbyGameInfo gameInfo, LobbyGameSummary gameSummary, GameSubType gameSubType, List<MatchPlayerData> players)

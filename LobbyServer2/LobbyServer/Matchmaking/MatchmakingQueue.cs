@@ -264,7 +264,18 @@ namespace CentralServer.LobbyServer.Matchmaking
 
             // TODO also check QueueRequirement
             
-            added = QueuedGroups.TryAdd(groupId, DateTime.UtcNow);
+            List<long> members = groupInfo.Members;
+            bool restoredPriority = QueuePriorityManager.TryGetGroupQueueTime(members, out DateTime queueTime);
+            if (!restoredPriority)
+            {
+                queueTime = DateTime.UtcNow;
+            }
+            added = QueuedGroups.TryAdd(groupId, queueTime);
+            if (added && restoredPriority)
+            {
+                QueuePriorityManager.Consume(members);
+                log.Info($"Group {groupId} requeued with retained priority (queue time {queueTime:o})");
+            }
             UpdateQueueInfo();
             if (added)
             {
@@ -549,8 +560,13 @@ namespace CentralServer.LobbyServer.Matchmaking
                 log.Warn("No available game server to start a match");
                 return;
             }
+            Dictionary<long, DateTime> queueEntryTimes = new();
             foreach (Matchmaker.MatchmakingGroup groupInfo in match.Match.Groups)
             {
+                foreach (QueuePlayerData member in groupInfo.Members)
+                {
+                    queueEntryTimes[member.AccountId] = groupInfo.QueueTime;
+                }
                 RemoveGroup(groupInfo.GroupID);
             }
 
@@ -565,7 +581,8 @@ namespace CentralServer.LobbyServer.Matchmaking
                 match.Match.TeamB.MatchPlayerDataList,
                 GameType,
                 MatchmakingQueueInfo.GameConfig.SubTypes.Select(st => st.Clone()).ToList(),
-                subTypeIndex)
+                subTypeIndex,
+                queueEntryTimes)
                 .LogError();
         }
         

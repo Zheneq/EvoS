@@ -47,6 +47,8 @@ public abstract class Game
 
     public GameSubType GameSubType { protected set; get; } // can be null
 
+    protected IReadOnlyDictionary<long, DateTime> QueueEntryTimes { get; set; } = new Dictionary<long, DateTime>();
+
     public string ProcessCode => GameInfo?.GameServerProcessCode;
     public GameStatus GameStatus => GameInfo?.GameStatus ?? GameStatus.None;
 
@@ -104,6 +106,11 @@ public abstract class Game
         if (GameInfo is not null) // we can end up here before the game started assembling
         {
             GameInfo.GameResult = summary?.GameResult ?? GameResult.TieGame;
+            
+            if (GameInfo.GameResult is GameResult.NoResult or GameResult.TieGame)
+            {
+                GrantQueuePriorityToInnocents(null);
+            }
         }
 
         GameSummary = summary;
@@ -517,8 +524,48 @@ public abstract class Game
             }
         }
 
+        long? dodgerAccountId = dodgerHandle != null
+            ? SessionManager.GetOnlinePlayerByHandleOrUsername(dodgerHandle)
+            : null;
+        GrantQueuePriorityToInnocents(dodgerAccountId);
+
         UpdateFriendStatuses();
         Terminate();
+    }
+
+    // Match "formation" time; used to decide whether a cancellation happened early enough to
+    // warrant retaining queue priority. Null GameInfo means we never got past assembling.
+    private bool WithinQueuePriorityWindow()
+    {
+        if (GameInfo is null)
+        {
+            return true;
+        }
+        DateTime formedAt = new DateTime(GameInfo.CreateTimestamp, DateTimeKind.Utc);
+        return DateTime.UtcNow - formedAt <= LobbyConfiguration.GetQueuePriorityMatchAgeWindow();
+    }
+
+    // Grants a queue priority credit to every matched human who is not at fault for the
+    // cancellation (i.e. not the dodger and not someone who left / was replaced with bots).
+    private void GrantQueuePriorityToInnocents(long? culpritAccountId)
+    {
+        if (!WithinQueuePriorityWindow())
+        {
+            return;
+        }
+        foreach (KeyValuePair<long, DateTime> entry in QueueEntryTimes)
+        {
+            long accountId = entry.Key;
+            if (accountId == culpritAccountId)
+            {
+                continue;
+            }
+            if (GetPlayerInfo(accountId)?.ReplacedWithBots == true)
+            {
+                continue;
+            }
+            QueuePriorityManager.GrantCredit(accountId, entry.Value);
+        }
     }
 
     protected virtual void LogDodge(string dodgerHandle)

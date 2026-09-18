@@ -27,6 +27,8 @@ namespace EvoS.Framework
         public bool MatchAbandoningPenalty = true;
         public TimeSpan QueuePenaltyEscalationCap = TimeSpan.FromHours(24);
         public TimeSpan QueuePenaltyParoleWindow = TimeSpan.FromDays(7);
+        public TimeSpan QueuePriorityMatchAgeWindow = TimeSpan.FromMinutes(7);
+        public TimeSpan QueuePriorityRequeueWindow = TimeSpan.FromMinutes(2);
         public int ServerReserveSize = 0;
         public TimeSpan ServerGGTime = TimeSpan.FromSeconds(5);
         public TimeSpan ServerShutdownTime = TimeSpan.FromMinutes(1);
@@ -155,6 +157,16 @@ namespace EvoS.Framework
         public static TimeSpan GetQueuePenaltyParoleWindow()
         {
             return GetInstance().QueuePenaltyParoleWindow;
+        }
+
+        public static TimeSpan GetQueuePriorityMatchAgeWindow()
+        {
+            return GetInstance().QueuePriorityMatchAgeWindow;
+        }
+
+        public static TimeSpan GetQueuePriorityRequeueWindow()
+        {
+            return GetInstance().QueuePriorityRequeueWindow;
         }
 
         public static int GetTrustWarGamePlayedPoints()
