@@ -318,9 +318,9 @@ namespace CentralServer.LobbyServer.Friend
         {
             DB.Get().AccountDao.UpdateSocialComponent(accountA);
             DB.Get().AccountDao.UpdateSocialComponent(accountB);
-            
-            SessionManager.GetClientConnection(accountA.AccountId)?.RefreshFriendList();
-            SessionManager.GetClientConnection(accountB.AccountId)?.RefreshFriendList();
+
+            ClientNotifier.Get().RefreshFriendList(accountA.AccountId);
+            ClientNotifier.Get().RefreshFriendList(accountB.AccountId);
         }
 
         public static bool SetFriendNote(long accountId, long friendAccountId, string note)

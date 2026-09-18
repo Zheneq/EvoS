@@ -207,7 +207,7 @@ public class MapPickBanSession
             {
                 if ((memberId != captainId || includeCaptains) && sent.Add(memberId))
                 {
-                    SessionManager.GetClientConnection(memberId)?.SendSystemMessage(text);
+                    ClientNotifier.Get().SendSystemMessage(memberId, text);
                 }
             }
         }

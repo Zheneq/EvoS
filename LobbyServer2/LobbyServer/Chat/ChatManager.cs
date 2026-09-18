@@ -326,7 +326,7 @@ namespace CentralServer.LobbyServer.Chat
             isBlocked = socialComponent?.IsBlocked(message.SenderAccountId) == true;
             if (!isBlocked)
             {
-                SessionManager.GetClientConnection(player)?.Send(message);
+                ClientNotifier.Get().Send(player, message);
             }
         }
 
@@ -369,7 +369,7 @@ namespace CentralServer.LobbyServer.Chat
                 Text = msg,
             };
 
-            SessionManager.GetClientConnection(accountId)?.Send(message);
+            ClientNotifier.Get().Send(accountId, message);
 
             DB.Get().ChatHistoryDao.Save(new ChatHistoryDao.Entry(
                 message,
@@ -402,7 +402,7 @@ namespace CentralServer.LobbyServer.Chat
                 DisplayDevTag = false,
             };
 
-            SessionManager.GetClientConnection(recipientAccountId)?.Send(message);
+            ClientNotifier.Get().Send(recipientAccountId, message);
 
             DB.Get().ChatHistoryDao.Save(new ChatHistoryDao.Entry(
                 message,
