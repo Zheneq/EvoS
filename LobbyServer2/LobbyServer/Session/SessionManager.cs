@@ -40,11 +40,20 @@ namespace CentralServer.LobbyServer.Session
             }
         }
 
+        private class ConnectingSessionInfo(LobbySessionInfo sessionInfo, DateTime createdAt)
+        {
+            public readonly LobbySessionInfo sessionInfo = sessionInfo;
+            public readonly DateTime createdAt = createdAt;
+        }
+
         private static readonly TimeSpan SessionExpiry = new TimeSpan(0, 10, 0);
+        // Entries in ConnectingSessions are only removed on a successful websocket connect, so an abandoned
+        // login attempt must stop counting as "active" after a while, or it would lock the account out.
+        private static readonly TimeSpan ConnectingSessionExpiry = TimeSpan.FromSeconds(30);
         private static readonly ConcurrentDictionary<long, SessionInfo> SessionInfos =
             new ConcurrentDictionary<long, SessionInfo>();
-        private static readonly ConcurrentDictionary<long, LobbySessionInfo> ConnectingSessions =
-            new ConcurrentDictionary<long, LobbySessionInfo>();
+        private static readonly ConcurrentDictionary<long, ConnectingSessionInfo> ConnectingSessions =
+            new ConcurrentDictionary<long, ConnectingSessionInfo>();
         private static readonly ConcurrentDictionary<long, DisconnectedSessionInfo> DisconnectedSessionInfos =
             new ConcurrentDictionary<long, DisconnectedSessionInfo>();
         
@@ -97,7 +106,7 @@ namespace CentralServer.LobbyServer.Session
                 if (registerRequest.SessionInfo.SessionToken == 0)
                     throw new RegisterGameException("Session Info not received");
                 
-                LobbySessionInfo sessionInfo = ConnectingSessions.GetValueOrDefault(registerRequest.SessionInfo.AccountId);
+                LobbySessionInfo sessionInfo = ConnectingSessions.GetValueOrDefault(registerRequest.SessionInfo.AccountId)?.sessionInfo;
 
                 if (sessionInfo == null)
                     throw new RegisterGameException("Session not found. User not logged"); // Session not found
@@ -211,8 +220,9 @@ namespace CentralServer.LobbyServer.Session
 
         /// <summary>
         /// Creates a (connecting) session for an account. When <paramref name="rejectIfActive"/> is set (the
-        /// fresh-login path), the "already logged in" check and the session creation happen under the same lock
-        /// as OnPlayerConnect/OnPlayerDisconnect, so two concurrent logins cannot both pass the check.
+        /// fresh-login path), the "already logged in" check covers both established sessions and logins still
+        /// waiting for their websocket connect, and it happens under the same lock as
+        /// OnPlayerConnect/OnPlayerDisconnect, so two concurrent logins cannot both pass the check.
         /// The reconnection path leaves it false, since reconnecting to an existing session is expected.
         /// </summary>
         public static LobbySessionInfo CreateSession(long accountId, LobbySessionInfo connectingSessionInfo, IPAddress ipAddress, bool rejectIfActive = false)
@@ -220,9 +230,17 @@ namespace CentralServer.LobbyServer.Session
             PersistedAccountData account;
             LobbySessionInfo sessionInfo;
             lock (SessionInfos) {
-                if (rejectIfActive && SessionInfos.ContainsKey(accountId))
+                if (rejectIfActive)
                 {
-                    throw new ConflictException("This account is already logged in");
+                    if (SessionInfos.ContainsKey(accountId))
+                    {
+                        throw new ConflictException("This account is already logged in");
+                    }
+                    if (ConnectingSessions.TryGetValue(accountId, out ConnectingSessionInfo connecting)
+                        && DateTime.UtcNow - connecting.createdAt < ConnectingSessionExpiry)
+                    {
+                        throw new ConflictException("This account is already logging in");
+                    }
                 }
                 // If we have a game with this accountId do not remove the session we need the info to be able to reconnect
                 // Else remove it and create a new Session
@@ -261,7 +279,7 @@ namespace CentralServer.LobbyServer.Session
                 };
                 
                 KillSession(accountId);
-                ConnectingSessions[accountId] = sessionInfo;
+                ConnectingSessions[accountId] = new ConnectingSessionInfo(sessionInfo, DateTime.UtcNow);
             }
 
             account.AdminComponent.RecordLogin(ipAddress);
