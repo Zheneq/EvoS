@@ -8,4 +8,5 @@ public interface IClientConnection
     long AccountId { get; }
     void Send(WebSocketMessage message);
     Game CurrentGame { get; }
+    void OnAccountVisualsUpdated();
 }
