@@ -50,10 +50,15 @@ call site instead of being an outbound port. `SessionManager.Broadcast` routing 
 
 **Partially fixed:** `IClientNotifier` outbound port introduced in
 `LobbyServer2/LobbyServer/Session/`; `QueuePenaltyManager`, `MatchmakingQueue`,
-`MatchmakingManager`, and `GroupManager` (20 notification sites) migrated. Tested via
-`RecordingClientNotifier` + `ClientNotifierScope`. Four read-only `GetClientConnection`
-sites remain in `GroupManager` (`GetMemberData`, `GetGroupInfo`, `UpdateSelectedSubTypes`)
-— deferred to Stage-3 (`ISessionRegistry`). ~48 sites in other files are follow-up PRs.
+`MatchmakingManager`, `GroupManager`, `ChatManager`, `TrustWarManager`, `MapPickBanSession`,
+`CrashReportManager`, `FriendsTask`, `FriendManager`, `CustomGame`, and `Game` (37
+notification sites total) migrated. Tested via `RecordingClientNotifier` +
+`ClientNotifierScope`. Remaining `GetClientConnection` call sites are read-then-use or
+connection-mutating and are deferred: `LobbyServerProtocol` (10, Stage 1 service
+extraction), `Game.cs` (8, Stage 4 split), `CustomGame.cs` (3, Stage 3/4), `GroupManager`
+(4), `AdminManager` (1, `CloseConnection` = session control), `StatusController` (2),
+Discord classes (4, `DiscordManager` 1 + `DiscordBotWrapper` 1 + `DiscordLobbyUtils` 2),
+`FriendManager` (1) — Stage 3 `ISessionRegistry`.
 
 ### A5. Mixed concurrency idioms
 
