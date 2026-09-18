@@ -21,7 +21,6 @@ public class MatchmakingModule : ILobbyModule
     public BotDifficulty EnemyDifficulty { get; set; }
     public bool IsReady { get; private set; }
 
-    public void Ready() => IsReady = true;
     public void Unready() => IsReady = false;
 
     public MatchmakingModule(IClientConnection conn)
