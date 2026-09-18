@@ -14,6 +14,8 @@ public class RecordingClientConnection : IClientConnection
     public long AccountId { get; set; }
     public Game CurrentGame { get; set; } = null!;
     public readonly List<WebSocketMessage> Sent = new();
+    public int VisualsUpdates;
 
     public void Send(WebSocketMessage message) => Sent.Add(message);
+    public void OnAccountVisualsUpdated() => VisualsUpdates++;
 }

@@ -18,6 +18,7 @@ using CentralServer.LobbyServer.Group;
 using CentralServer.LobbyServer.Matchmaking;
 using CentralServer.LobbyServer.Quest;
 using CentralServer.LobbyServer.Session;
+using CentralServer.LobbyServer.Account;
 using CentralServer.LobbyServer.Store;
 using CentralServer.LobbyServer.TrustWar;
 using CentralServer.LobbyServer.Utils;
@@ -357,15 +358,10 @@ namespace CentralServer.LobbyServer
         public LobbyServerProtocol()
         {
             RegisterHandler<RegisterGameClientRequest>(HandleRegisterGame);
-            RegisterHandler<OptionsNotification>(HandleOptionsNotification);
-            RegisterHandler<CustomKeyBindNotification>(HandleCustomKeyBindNotification);
             RegisterHandler<PlayerUpdateStatusRequest>(HandlePlayerUpdateStatusRequest);
-            RegisterHandler<PlayerMatchDataRequest>(HandlePlayerMatchDataRequest);
             RegisterHandler<SetGameSubTypeRequest>(HandleSetGameSubTypeRequest);
             RegisterHandler<PlayerInfoUpdateRequest>(HandlePlayerInfoUpdateRequest);
             RegisterHandler<PlayerGroupInfoUpdateRequest>(HandlePlayerGroupInfoUpdateRequest);
-            RegisterHandler<CheckAccountStatusRequest>(HandleCheckAccountStatusRequest);
-            RegisterHandler<CheckRAFStatusRequest>(HandleCheckRAFStatusRequest);
             RegisterHandler<PreviousGameInfoRequest>(HandlePreviousGameInfoRequest);
             RegisterHandler<LeaveGameRequest>(HandleLeaveGameRequest);
             RegisterHandler<JoinMatchmakingQueueRequest>(HandleJoinMatchmakingQueueRequest);
@@ -380,19 +376,14 @@ namespace CentralServer.LobbyServer
             RegisterHandler<GroupPromoteRequest>(HandleGroupPromoteRequest);
             RegisterHandler<GameInvitationRequest>(HandleGameInvitationRequest);
             RegisterHandler<GameInviteConfirmationResponse>(HandleGameInviteConfirmationResponse);
-            
-            RegisterHandler<SelectBannerRequest>(HandleSelectBannerRequest);
-            RegisterHandler<SelectTitleRequest>(HandleSelectTitleRequest);
+
             RegisterHandler<UseOverconRequest>(HandleUseOverconRequest);
             RegisterHandler<UseGGPackRequest>(HandleUseGGPackRequest);
-            RegisterHandler<UpdateUIStateRequest>(HandleUpdateUIStateRequest);
             RegisterHandler<GroupChatRequest>(HandleGroupChatRequest);
             RegisterHandler<RejoinGameRequest>(HandleRejoinGameRequest);
             RegisterHandler<JoinGameRequest>(HandleJoinGameRequest);
             RegisterHandler<BalancedTeamRequest>(HandleBalancedTeamRequest);
-            RegisterHandler<SetDevTagRequest>(HandleSetDevTagRequest);
             RegisterHandler<DEBUG_AdminSlashCommandNotification>(HandleDEBUG_AdminSlashCommandNotification);
-            RegisterHandler<SelectRibbonRequest>(HandleSelectRibbonRequest);
 
             RegisterHandler<SubscribeToCustomGamesRequest>(HandleSubscribeToCustomGamesRequest);
             RegisterHandler<UnsubscribeFromCustomGamesRequest>(HandleUnsubscribeFromCustomGamesRequest);
@@ -406,19 +397,12 @@ namespace CentralServer.LobbyServer
             RegisterHandler<RankedBanRequest>(HandlePlayerRankedBanRequest);
             RegisterHandler<RankedSelectionRequest>(HandleRankedSelectionRequest);
             RegisterHandler<RankedTradeRequest>(HandleRankedTradeRequest);
-            
-            RegisterHandler<SetRegionRequest>(HandleSetRegionRequest);
-            RegisterHandler<LoadingScreenToggleRequest>(HandleLoadingScreenToggleRequest);
-            RegisterHandler<SendRAFReferralEmailsRequest>(HandleSendRAFReferralEmailsRequest);
 
             RegisterHandler<UpdateRemoteCharacterRequest>(HandleUpdateRemoteCharacterRequest);
 
             RegisterHandler<FriendUpdateRequest>(HandleFriendUpdate);
-            
-            RegisterHandler<EvosOptionsNotificationLegacy>(HandleEvosOptionsNotificationLegacy);
-            RegisterHandler<EvosOptionsNotification>(HandleEvosOptionsNotification);
 
-            ILobbyModule[] modules = { new StoreModule(this), new TelemetryModule(this) };
+            ILobbyModule[] modules = { new StoreModule(this), new TelemetryModule(this), new AccountModule(this) };
             foreach (ILobbyModule module in modules)
             {
                 module.Register(this);
@@ -2230,7 +2214,7 @@ namespace CentralServer.LobbyServer
         {
         }
         
-        private void OnAccountVisualsUpdated()
+        public void OnAccountVisualsUpdated()
         {
             BroadcastRefreshFriendList();
             BroadcastRefreshGroup();
