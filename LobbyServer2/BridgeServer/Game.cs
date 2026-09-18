@@ -490,7 +490,7 @@ public abstract class Game
             if (playerConnection == null || !playerConnection.IsConnected || playerConnection.CurrentGame != this)
             {
                 log.Info($"Player {playerInfo.Handle}/{playerInfo.AccountId} who was to participate in game {GameInfo.Name} has disconnected");
-                CancelMatch(playerInfo.Handle);
+                CancelMatch(playerInfo.Handle, playerInfo.AccountId);
                 return false;
             }
         }
@@ -498,7 +498,7 @@ public abstract class Game
         return true;
     }
 
-    protected void CancelMatch(string dodgerHandle = null)
+    protected void CancelMatch(string dodgerHandle = null, long? dodgerAccountId = null)
     {
         foreach (LobbyServerProtocol client in GetClients())
         {
@@ -524,7 +524,9 @@ public abstract class Game
             }
         }
 
-        long? dodgerAccountId = dodgerHandle != null
+        // Fallback for callers that only know the handle; the dodger has usually already dropped
+        // their session by now, so an online lookup alone would come back null.
+        dodgerAccountId ??= dodgerHandle != null
             ? SessionManager.GetOnlinePlayerByHandleOrUsername(dodgerHandle)
             : null;
         GrantQueuePriorityToInnocents(dodgerAccountId);
@@ -685,7 +687,7 @@ public abstract class Game
             if (client == null)
             {
                 log.Error($"Tried to add {account.Handle} to a game but they are not connected!");
-                CancelMatch(account.Handle);
+                CancelMatch(account.Handle, accountId);
                 return false;
             }
             int Playerid = TeamInfo.TeamPlayerInfo.Count + 1;
@@ -1309,7 +1311,7 @@ public abstract class Game
                 else if (playersInDeck.Intention == CharacterType.None)
                 {
                     // Cancel Match AFK Player
-                    CancelMatch(player.Handle);
+                    CancelMatch(player.Handle, player.AccountId);
                     QueuePenaltyManager.IssueQueuePenalties(player.AccountId, this);
                     return;
                 }
