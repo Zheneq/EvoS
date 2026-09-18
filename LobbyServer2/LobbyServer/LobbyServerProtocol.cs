@@ -13,6 +13,7 @@ using CentralServer.LobbyServer.Config;
 using CentralServer.LobbyServer.CustomGames;
 using CentralServer.LobbyServer.Discord;
 using CentralServer.LobbyServer.Friend;
+using CentralServer.LobbyServer.GameLifecycle;
 using CentralServer.LobbyServer.Gamemode;
 using CentralServer.LobbyServer.Group;
 using CentralServer.LobbyServer.Matchmaking;
@@ -55,6 +56,7 @@ namespace CentralServer.LobbyServer
         public bool SessionCleaned = false; // tracks clean up methods execution for reconnection
 
         private readonly MatchmakingModule _matchmaking;
+        private readonly GameLifecycleModule _gameLifecycle;
 
         public GameType SelectedGameType
         {
@@ -315,27 +317,13 @@ namespace CentralServer.LobbyServer
 
         public ushort GetSubTypeMask() => _matchmaking.GetSubTypeMask();
 
-        private Game _currentGame;
-
         public PlayerOnlineStatus Status = PlayerOnlineStatus.Online;
 
-        public Game CurrentGame
-        {
-            get => _currentGame;
-            private set
-            {
-                if (_currentGame != value)
-                {
-                    _currentGame = value;
-                    BroadcastRefreshFriendList();
-                    BroadcastRefreshGroup();
-                }
-            }
-        }
+        public Game CurrentGame => _gameLifecycle.CurrentGame;
 
-        public bool IsInGame() => CurrentGame != null;
+        public bool IsInGame() => _gameLifecycle.IsInGame();
 
-        public bool IsInCharacterSelect() => CurrentGame != null && CurrentGame.GameStatus <= GameStatus.FreelancerSelecting;
+        public bool IsInCharacterSelect() => _gameLifecycle.IsInCharacterSelect();
 
         public bool IsInGroup() => !GroupManager.GetPlayerGroup(AccountId)?.IsSolo() ?? false;
 
@@ -343,7 +331,7 @@ namespace CentralServer.LobbyServer
 
         public bool IsInQueue() => MatchmakingManager.IsQueued(GroupManager.GetPlayerGroup(AccountId));
 
-        public LobbyServerPlayerInfo PlayerInfo => CurrentGame?.GetPlayerInfo(AccountId);
+        public LobbyServerPlayerInfo PlayerInfo => _gameLifecycle.PlayerInfo;
 
         public string Handle => LobbyServerUtils.GetHandle(AccountId);
 
@@ -368,6 +356,7 @@ namespace CentralServer.LobbyServer
         public LobbyServerProtocol()
         {
             _matchmaking = new MatchmakingModule(this);
+            _gameLifecycle = new GameLifecycleModule(this);
 
             RegisterHandler<RegisterGameClientRequest>(HandleRegisterGame);
             RegisterHandler<PlayerUpdateStatusRequest>(HandlePlayerUpdateStatusRequest);
@@ -403,7 +392,7 @@ namespace CentralServer.LobbyServer
 
             RegisterHandler<FriendUpdateRequest>(HandleFriendUpdate);
 
-            ILobbyModule[] modules = { new StoreModule(this), new TelemetryModule(this), new AccountModule(this), new GroupModule(this), _matchmaking };
+            ILobbyModule[] modules = { new StoreModule(this), new TelemetryModule(this), new AccountModule(this), new GroupModule(this), _matchmaking, _gameLifecycle };
             foreach (ILobbyModule module in modules)
             {
                 module.Register(this);
@@ -1024,42 +1013,9 @@ namespace CentralServer.LobbyServer
             BroadcastRefreshFriendList();
         }
 
-        public void JoinGame(Game game)
-        {
-            Game prevServer = CurrentGame;
-            CurrentGame = game;
-            log.Info($"{LobbyServerUtils.GetHandle(AccountId)} joined {game?.ProcessCode} (was in {prevServer?.ProcessCode ?? "lobby"})");
-        }
+        public void JoinGame(Game game) => _gameLifecycle.JoinGame(game);
 
-        public bool LeaveGame(Game game)
-        {
-            if (game == null)
-            {
-                log.Error($"{AccountId} is asked to leave null server (current server = {CurrentGame?.ProcessCode ?? "null"})");
-                return false;
-            }
-            if (CurrentGame == null)
-            {
-                log.Debug($"{AccountId} is asked to leave {game.ProcessCode} while they are not on any server");
-                return false;
-            }
-            if (CurrentGame != game)
-            {
-                log.Debug($"{AccountId} is asked to leave {game.ProcessCode} while they are on {CurrentGame.ProcessCode}. Ignoring.");
-                return false;
-            }
-
-            CurrentGame = null;
-            log.Info($"{LobbyServerUtils.GetHandle(AccountId)} leaves {game.ProcessCode}");
-
-            // forcing catalyst panel update -- otherwise it would show catas for the character from the last game
-            Send(new ForcedCharacterChangeFromServerNotification
-            {
-                ChararacterInfo = DB.Get().AccountDao.GetAccount(AccountId).GetCharacterInfo(),
-            });
-
-            return true;
-        }
+        public bool LeaveGame(Game game) => _gameLifecycle.LeaveGame(game);
 
         public void BroadcastRefreshFriendList()
         {
@@ -1469,7 +1425,7 @@ namespace CentralServer.LobbyServer
         protected void SetContextualReadyState(ContextualReadyState contextualReadyState) =>
             _matchmaking.SetContextualReadyState(contextualReadyState);
 
-        private void ResetReadyState() => _matchmaking.ResetReadyState();
+        public void ResetReadyState() => _matchmaking.ResetReadyState();
 
         public void HandleChatNotification(ChatNotification notification)
         {

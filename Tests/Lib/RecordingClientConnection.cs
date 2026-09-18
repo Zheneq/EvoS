@@ -21,10 +21,14 @@ public class RecordingClientConnection : IClientConnection
     public int FriendListRefreshes;
     public readonly List<bool> GroupRefreshes = new();
     public int VisualsUpdates;
+    public int ResetReadyStateCalls;
+    public int GameUnassignmentCalls;
 
     public void Send(WebSocketMessage message) => Sent.Add(message);
     public void SendSystemMessage(LocalizationPayload message) => SystemMessages.Add(message);
     public void BroadcastRefreshFriendList() => FriendListRefreshes++;
     public void BroadcastRefreshGroup(bool resetReadyState = false) => GroupRefreshes.Add(resetReadyState);
     public void OnAccountVisualsUpdated() => VisualsUpdates++;
+    public void ResetReadyState() => ResetReadyStateCalls++;
+    public void SendGameUnassignmentNotification() => GameUnassignmentCalls++;
 }

@@ -15,4 +15,6 @@ public interface IClientConnection
     void BroadcastRefreshGroup(bool resetReadyState = false);
     Game CurrentGame { get; }
     void OnAccountVisualsUpdated();
+    void ResetReadyState();
+    void SendGameUnassignmentNotification();
 }
