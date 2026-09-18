@@ -34,11 +34,17 @@ internal sealed class SessionManagerClientNotifier : IClientNotifier
     public void SendSystemMessage(long accountId, LocalizationPayload message) =>
         SessionManager.GetClientConnection(accountId)?.SendSystemMessage(message);
 
+    public void SendSystemMessage(long accountId, string text) =>
+        SessionManager.GetClientConnection(accountId)?.SendSystemMessage(text);
+
     public void MarkFriendListForUpdate(long accountId) =>
         SessionManager.GetClientConnection(accountId)?.BroadcastRefreshFriendList();
 
     public void BroadcastRefreshGroup(long accountId, bool resetReadyState) =>
         SessionManager.GetClientConnection(accountId)?.BroadcastRefreshGroup(resetReadyState);
+
+    public void RefreshFriendList(long accountId) =>
+        SessionManager.GetClientConnection(accountId)?.RefreshFriendList();
 
     public void NotifyJoinedGroup(long accountId) =>
         SessionManager.GetClientConnection(accountId)?.OnJoinGroup();

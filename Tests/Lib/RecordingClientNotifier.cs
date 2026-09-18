@@ -15,7 +15,9 @@ public class RecordingClientNotifier : IClientNotifier
     public readonly HashSet<long> OnlineAccounts = new();
     public readonly List<(long AccountId, WebSocketMessage Message)> Sent = new();
     public readonly List<(long AccountId, LocalizationPayload Message)> SystemMessages = new();
+    public readonly List<(long AccountId, string Text)> SystemMessageTexts = new();
     public readonly List<long> FriendListUpdates = new();
+    public readonly List<long> FriendListRefreshes = new();
     public readonly List<(long AccountId, bool ResetReadyState)> GroupRefreshes = new();
     public readonly List<long> JoinedGroup = new();
     public readonly List<long> LeftGroup = new();
@@ -24,7 +26,9 @@ public class RecordingClientNotifier : IClientNotifier
     public bool IsOnline(long accountId) => OnlineAccounts.Contains(accountId);
     public void Send(long accountId, WebSocketMessage message) => Sent.Add((accountId, message));
     public void SendSystemMessage(long accountId, LocalizationPayload message) => SystemMessages.Add((accountId, message));
+    public void SendSystemMessage(long accountId, string text) => SystemMessageTexts.Add((accountId, text));
     public void MarkFriendListForUpdate(long accountId) => FriendListUpdates.Add(accountId);
+    public void RefreshFriendList(long accountId) => FriendListRefreshes.Add(accountId);
     public void BroadcastRefreshGroup(long accountId, bool resetReadyState) => GroupRefreshes.Add((accountId, resetReadyState));
     public void NotifyJoinedGroup(long accountId) => JoinedGroup.Add(accountId);
     public void NotifyLeftGroup(long accountId) => LeftGroup.Add(accountId);
