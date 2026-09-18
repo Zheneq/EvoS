@@ -77,6 +77,20 @@ namespace CentralServer.LobbyServer.Matchmaking
         /// <param name="group">group</param>
         public static bool AddGroupToQueue(GameType gameType, GroupInfo group)
         {
+            // Penalties are also checked in HandleJoinMatchmakingQueueRequest for a proper response payload,
+            // but this is the only choke point for every path into the queue (e.g. group ready-up).
+            foreach (long member in group.Members)
+            {
+                LocalizationPayload penalty = QueuePenaltyManager.CheckQueuePenalties(member, gameType, group.Leader);
+                if (penalty is not null)
+                {
+                    LobbyServerProtocol leader = SessionManager.GetClientConnection(group.Leader);
+                    leader?.SendSystemMessage(penalty);
+                    leader?.BroadcastRefreshGroup(true);
+                    return false;
+                }
+            }
+
             // Get the queue
             MatchmakingQueue queue = Queues[gameType];
 
