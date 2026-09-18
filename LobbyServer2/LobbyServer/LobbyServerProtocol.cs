@@ -44,11 +44,11 @@ using CharacterManager = EvoS.DirectoryServer.Character.CharacterManager;
 
 namespace CentralServer.LobbyServer
 {
-    public class LobbyServerProtocol : WebSocketBehaviorBase<WebSocketMessage>
+    public class LobbyServerProtocol : WebSocketBehaviorBase<WebSocketMessage>, IClientConnection, IHandlerRegistry
     {
         private static readonly ILog log = LogManager.GetLogger(typeof(LobbyServerProtocol));
 
-        public long AccountId;
+        public long AccountId { get; set; }
         public string UserName;
         public long SessionToken;
         public GameType SelectedGameType;
@@ -349,12 +349,16 @@ namespace CentralServer.LobbyServer
                     MaxAge = TimeSpan.FromHours(1)
                 });
 
+        void IHandlerRegistry.Register<T>(Action<T> handler)
+        {
+            RegisterHandler<T>(handler);
+        }
+
         public LobbyServerProtocol()
         {
             RegisterHandler<RegisterGameClientRequest>(HandleRegisterGame);
             RegisterHandler<OptionsNotification>(HandleOptionsNotification);
             RegisterHandler<CustomKeyBindNotification>(HandleCustomKeyBindNotification);
-            RegisterHandler<PricesRequest>(HandlePricesRequest);
             RegisterHandler<PlayerUpdateStatusRequest>(HandlePlayerUpdateStatusRequest);
             RegisterHandler<PlayerMatchDataRequest>(HandlePlayerMatchDataRequest);
             RegisterHandler<SetGameSubTypeRequest>(HandleSetGameSubTypeRequest);
@@ -363,7 +367,6 @@ namespace CentralServer.LobbyServer
             RegisterHandler<CheckAccountStatusRequest>(HandleCheckAccountStatusRequest);
             RegisterHandler<CheckRAFStatusRequest>(HandleCheckRAFStatusRequest);
             RegisterHandler<PreviousGameInfoRequest>(HandlePreviousGameInfoRequest);
-            RegisterHandler<PurchaseTintRequest>(HandlePurchaseTintRequest);
             RegisterHandler<LeaveGameRequest>(HandleLeaveGameRequest);
             RegisterHandler<JoinMatchmakingQueueRequest>(HandleJoinMatchmakingQueueRequest);
             RegisterHandler<LeaveMatchmakingQueueRequest>(HandleLeaveMatchmakingQueueRequest);
@@ -391,13 +394,6 @@ namespace CentralServer.LobbyServer
             RegisterHandler<DEBUG_AdminSlashCommandNotification>(HandleDEBUG_AdminSlashCommandNotification);
             RegisterHandler<SelectRibbonRequest>(HandleSelectRibbonRequest);
 
-            RegisterHandler<PurchaseModRequest>(HandlePurchaseModRequest);
-            RegisterHandler<PurchaseTitleRequest>(HandlePurchaseTitleRequest);
-            RegisterHandler<PurchaseTauntRequest>(HandlePurchaseTauntRequest);
-            RegisterHandler<PurchaseChatEmojiRequest>(HandlePurchaseChatEmojiRequest);
-            RegisterHandler<PurchaseLoadoutSlotRequest>(HandlePurchaseLoadoutSlotRequest);
-            RegisterHandler<PaymentMethodsRequest>(HandlePaymentMethodsRequest);
-            RegisterHandler<StoreOpenedMessage>(HandleStoreOpenedMessage);
             RegisterHandler<UIActionNotification>(HandleUIActionNotification);
             
             RegisterHandler<CrashReportArchiveNameRequest>(HandleCrashReportArchiveNameRequest);
@@ -425,17 +421,18 @@ namespace CentralServer.LobbyServer
             RegisterHandler<LoadingScreenToggleRequest>(HandleLoadingScreenToggleRequest);
             RegisterHandler<SendRAFReferralEmailsRequest>(HandleSendRAFReferralEmailsRequest);
 
-            RegisterHandler<PurchaseBannerForegroundRequest>(HandlePurchaseEmblemRequest);
-            RegisterHandler<PurchaseBannerBackgroundRequest>(HandlePurchaseBannerRequest);
-            RegisterHandler<PurchaseAbilityVfxRequest>(HandlePurchasAbilityVfx);
-            RegisterHandler<PurchaseInventoryItemRequest>(HandlePurchaseInventoryItemRequest);
-
             RegisterHandler<UpdateRemoteCharacterRequest>(HandleUpdateRemoteCharacterRequest);
 
             RegisterHandler<FriendUpdateRequest>(HandleFriendUpdate);
             
             RegisterHandler<EvosOptionsNotificationLegacy>(HandleEvosOptionsNotificationLegacy);
             RegisterHandler<EvosOptionsNotification>(HandleEvosOptionsNotification);
+
+            ILobbyModule[] modules = { new StoreModule(this) };
+            foreach (ILobbyModule module in modules)
+            {
+                module.Register(this);
+            }
         }
 
         private void HandleRankedTradeRequest(RankedTradeRequest request)
@@ -1334,13 +1331,6 @@ namespace CentralServer.LobbyServer
             DB.Get().AccountDao.GetAccount(AccountId).AccountComponent.KeyCodeMapping = notification.CustomKeyBinds;
         }
 
-        public void HandlePricesRequest(PricesRequest request)
-        {
-            PricesResponse response = StoreManager.GetPricesResponse();
-            response.ResponseId = request.RequestId;
-            Send(response);
-        }
-
         public void HandlePlayerUpdateStatusRequest(PlayerUpdateStatusRequest request)
         {
             log.Info($"{this.UserName} is now {request.StatusString}");
@@ -1615,27 +1605,6 @@ namespace CentralServer.LobbyServer
                 ResponseId = request.RequestId
             };
             Send(response);
-        }
-
-        public void HandlePurchaseTintRequest(PurchaseTintRequest request)
-        {
-            Console.WriteLine("PurchaseTintRequest " + JsonConvert.SerializeObject(request));
-
-            PurchaseTintResponse response = new PurchaseTintResponse()
-            {
-                Result = PurchaseResult.Success,
-                CurrencyType = request.CurrencyType,
-                CharacterType = request.CharacterType,
-                SkinId = request.SkinId,
-                TextureId = request.TextureId,
-                TintId = request.TintId,
-                ResponseId = request.RequestId
-            };
-            Send(response);
-
-            SkinHelper sk = new SkinHelper();
-            sk.AddSkin(request.CharacterType, request.SkinId, request.TextureId, request.TintId);
-            sk.Save();
         }
 
         public void HandleLeaveGameRequest(LeaveGameRequest request)
@@ -2395,266 +2364,6 @@ namespace CentralServer.LobbyServer
             log.Info($"Player {AccountId} requested UIState {request.UIState} {request.StateValue}");
             account.AccountComponent.UIStates[request.UIState] = request.StateValue;
             DB.Get().AccountDao.UpdateAccountComponent(account);
-        }
-
-        private void HandlePurchaseEmblemRequest(PurchaseBannerForegroundRequest request)
-        {
-            //Get the users account
-            PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
-
-            // Never trust the client double check plus we need this info to deduct it from account
-            int cost = InventoryManager.GetBannerCost(request.BannerForegroundId);
-
-            log.Info($"Player {AccountId} trying to purchase emblem {request.BannerForegroundId} with {request.CurrencyType} for the price {cost}");
-
-            if (account.BankComponent.CurrentAmounts.GetCurrentAmount(request.CurrencyType) < cost)
-            {
-                PurchaseBannerForegroundResponse failedResponse = new PurchaseBannerForegroundResponse()
-                {
-                    ResponseId = request.RequestId,
-                    Result = PurchaseResult.Failed,
-                    CurrencyType = request.CurrencyType,
-                    BannerForegroundId = request.BannerForegroundId
-                };
-
-                Send(failedResponse);
-
-                return;
-            }
-
-            account.AccountComponent.UnlockedBannerIDs.Add(request.BannerForegroundId);
-
-            account.BankComponent.ChangeValue(request.CurrencyType, -cost, $"Purchase emblem");
-
-            DB.Get().AccountDao.UpdateBankComponent(account);
-            DB.Get().AccountDao.UpdateAccountComponent(account);
-
-            PurchaseBannerForegroundResponse response = new PurchaseBannerForegroundResponse()
-            {
-                ResponseId = request.RequestId,
-                Result = PurchaseResult.Success,
-                CurrencyType = request.CurrencyType,
-                BannerForegroundId = request.BannerForegroundId
-            };
-
-            Send(response);
-
-            //Update account curency
-            Send(new PlayerAccountDataUpdateNotification(account));
-
-        }
-
-        private void HandlePurchaseBannerRequest(PurchaseBannerBackgroundRequest request)
-        {
-            //Get the users account
-            PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
-
-            // Never trust the client double check plus we need this info to deduct it from account
-            int cost = InventoryManager.GetBannerCost(request.BannerBackgroundId);
-
-            log.Info($"Player {AccountId} trying to purchase banner {request.BannerBackgroundId} with {request.CurrencyType} for the price {cost}");
-
-            if (account.BankComponent.CurrentAmounts.GetCurrentAmount(request.CurrencyType) < cost)
-            {
-                PurchaseBannerBackgroundResponse failedResponse = new PurchaseBannerBackgroundResponse()
-                {
-                    ResponseId = request.RequestId,
-                    Result = PurchaseResult.Failed,
-                    CurrencyType = request.CurrencyType,
-                    BannerBackgroundId = request.BannerBackgroundId
-                };
-
-                Send(failedResponse);
-
-                return;
-            }
-
-            account.AccountComponent.UnlockedBannerIDs.Add(request.BannerBackgroundId);
-            account.BankComponent.ChangeValue(request.CurrencyType, -cost, $"Purchase banner");
-
-            DB.Get().AccountDao.UpdateBankComponent(account);
-            DB.Get().AccountDao.UpdateAccountComponent(account);
-
-            PurchaseBannerBackgroundResponse response = new PurchaseBannerBackgroundResponse()
-            {
-                ResponseId = request.RequestId,
-                Result = PurchaseResult.Success,
-                CurrencyType = request.CurrencyType,
-                BannerBackgroundId = request.BannerBackgroundId
-            };
-
-            Send(response);
-
-            //Update account curency
-            Send(new PlayerAccountDataUpdateNotification(account));
-        }
-
-        private void HandlePurchasAbilityVfx(PurchaseAbilityVfxRequest request)
-        {
-            //Get the users account
-            PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
-
-            // Never trust the client double check plus we need this info to deduct it from account
-            int cost = InventoryManager.GetVfxCost(request.VfxId, request.AbilityId);
-
-            log.Info($"Player {AccountId} trying to purchase vfx {request.VfxId} with {request.CurrencyType} for character {request.CharacterType} and ability {request.AbilityId} for price {cost}");
-
-            if (account.BankComponent.CurrentAmounts.GetCurrentAmount(request.CurrencyType) < cost)
-            {
-                PurchaseAbilityVfxResponse failedResponse = new PurchaseAbilityVfxResponse()
-                {
-                    ResponseId = request.RequestId,
-                    Result = PurchaseResult.Failed,
-                    CurrencyType = request.CurrencyType,
-                    CharacterType = request.CharacterType,
-                    AbilityId = request.AbilityId,
-                    VfxId = request.VfxId
-                };
-
-                Send(failedResponse);
-
-                return;
-            }
-
-            PlayerAbilityVfxSwapData abilityVfxSwapData = new PlayerAbilityVfxSwapData()
-            {
-                AbilityId = request.AbilityId,
-                AbilityVfxSwapID = request.VfxId
-            };
-
-            account.CharacterData[request.CharacterType].CharacterComponent.AbilityVfxSwaps.Add(abilityVfxSwapData);
-            account.BankComponent.ChangeValue(request.CurrencyType, -cost, $"Purchase vfx");
-
-            DB.Get().AccountDao.UpdateBankComponent(account);
-            DB.Get().AccountDao.UpdateCharacterComponent(account, request.CharacterType);
-
-            PurchaseAbilityVfxResponse response = new PurchaseAbilityVfxResponse()
-            {
-                ResponseId = request.RequestId,
-                Result = PurchaseResult.Success,
-                CurrencyType = request.CurrencyType,
-                CharacterType = request.CharacterType,
-                AbilityId = request.AbilityId,
-                VfxId = request.VfxId
-            };
-
-            Send(response);
-
-            // Update character
-            Send(new PlayerCharacterDataUpdateNotification()
-            {
-                CharacterData = account.CharacterData[request.CharacterType],
-            });
-
-            //Update account curency
-            Send(new PlayerAccountDataUpdateNotification(account));
-        }
-
-        private void HandlePurchaseInventoryItemRequest(PurchaseInventoryItemRequest request)
-        {
-            Send(new PurchaseInventoryItemResponse
-            {
-                Result = PurchaseResult.Failed,
-                InventoryItemID = request.InventoryItemID,
-                CurrencyType = request.CurrencyType,
-                Success = false,
-                ResponseId = request.RequestId
-            });
-        }
-
-        private void HandlePurchaseModRequest(PurchaseModRequest request)
-        {
-            Send(new PurchaseModResponse
-            {
-                Character = request.Character,
-                UnlockData = request.UnlockData,
-                Success = false,
-                ResponseId = request.RequestId
-            });
-        }
-
-        private void HandlePurchaseTitleRequest(PurchaseTitleRequest request)
-        {
-            Send(new PurchaseTitleResponse
-            {
-                Result = PurchaseResult.Failed,
-                CurrencyType = request.CurrencyType,
-                TitleId = request.TitleId,
-                Success = false,
-                ResponseId = request.RequestId
-            });
-        }
-
-        private void HandlePurchaseTauntRequest(PurchaseTauntRequest request)
-        {
-            Send(new PurchaseTauntResponse
-            {
-                Result = PurchaseResult.Failed,
-                CurrencyType = request.CurrencyType,
-                CharacterType = request.CharacterType,
-                TauntId = request.TauntId,
-                Success = false,
-                ResponseId = request.RequestId
-            });
-        }
-
-        private void HandlePurchaseChatEmojiRequest(PurchaseChatEmojiRequest request)
-        {
-            Send(new PurchaseChatEmojiResponse
-            {
-                Result = PurchaseResult.Failed,
-                CurrencyType = request.CurrencyType,
-                EmojiID = request.EmojiID,
-                Success = false,
-                ResponseId = request.RequestId
-            });
-        }
-
-        private void HandlePurchaseLoadoutSlotRequest(PurchaseLoadoutSlotRequest request)
-        {
-            PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
-            if (account == null
-                || !account.CharacterData.TryGetValue(request.Character, out PersistedCharacterData characterData)
-                || characterData.CharacterComponent.CharacterLoadouts.Count >= 10) // hardcoded on the client side too
-            {
-                Send(new PurchaseLoadoutSlotResponse
-                {
-                    Character = request.Character,
-                    Success = false,
-                    ResponseId = request.RequestId
-                });
-                return;
-            }
-
-            List<CharacterLoadout> loadouts = characterData.CharacterComponent.CharacterLoadouts;
-            loadouts.Add(new CharacterLoadout(
-                new CharacterModInfo(),
-                new CharacterAbilityVfxSwapInfo(),
-                $"Loadout {loadouts.Count}",
-                ModStrictness.AllModes));
-
-            // DB.Get().AccountDao.UpdateBankComponent(account);
-            DB.Get().AccountDao.UpdateCharacterComponent(account, request.Character);
-
-            Send(new PurchaseLoadoutSlotResponse
-            {
-                Character = request.Character,
-                Success = true,
-                ResponseId = request.RequestId
-            });
-            Send(new PlayerCharacterDataUpdateNotification
-            {
-                CharacterData = account.CharacterData[request.Character],
-            });
-            Send(new PlayerAccountDataUpdateNotification(account));
-        }
-
-        private void HandlePaymentMethodsRequest(PaymentMethodsRequest request)
-        {
-        }
-
-        private void HandleStoreOpenedMessage(StoreOpenedMessage msg)
-        {
         }
 
         private void HandleUIActionNotification(UIActionNotification notify)
