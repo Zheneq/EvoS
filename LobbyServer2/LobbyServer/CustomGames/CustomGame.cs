@@ -80,8 +80,7 @@ public class CustomGame : Game
 
         foreach (long groupAccountId in teamA.SelectMany(group => group.Members).ToList())
         {
-            LobbyServerProtocol client = SessionManager.GetClientConnection(groupAccountId);
-            if (client != null)
+            if (ClientNotifier.Get().IsOnline(groupAccountId))
             {
                 SendGameAssignmentNotification(groupAccountId);
             }
@@ -128,7 +127,7 @@ public class CustomGame : Game
             GameplayOverrides = GameConfig.GetGameplayOverrides()
         };
 
-        SessionManager.GetClientConnection(accountId)?.Send(notification);
+        ClientNotifier.Get().Send(accountId, notification);
     }
 
     // TODO HACK - BuildGameInfo currently doesn't work for custom
@@ -145,7 +144,7 @@ public class CustomGame : Game
             GameplayOverrides = GameConfig.GetGameplayOverrides()
         };
 
-        SessionManager.GetClientConnection(data.AccountId)?.Send(notification);
+        ClientNotifier.Get().Send(data.AccountId, notification);
     }
 
     protected override TimeSpan GetFinalizeGameDelay()
@@ -426,14 +425,13 @@ public class CustomGame : Game
             if (player.AccountId != 0 && teamInfo.TeamPlayerInfo.All(u => u.AccountId != player.AccountId))
             {
                 log.Info($"Player {player.AccountId} was kicked from the game {ProcessCode}");
-                LobbyServerProtocol playerConnection = SessionManager.GetClientConnection(player.AccountId);
-                playerConnection?.Send(new GameAssignmentNotification
+                ClientNotifier.Get().Send(player.AccountId, new GameAssignmentNotification
                 {
                     GameInfo = null,
                     GameResult = GameResult.ClientKicked,
                     Reconnection = false
                 });
-                playerConnection?.LeaveGame(this);
+                SessionManager.GetClientConnection(player.AccountId)?.LeaveGame(this);
             }
         }
         

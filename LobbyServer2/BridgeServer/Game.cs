@@ -380,7 +380,7 @@ public abstract class Game
             GameplayOverrides = GameConfig.GetGameplayOverrides()
         };
 
-        SessionManager.GetClientConnection(data.AccountId)?.Send(notification);
+        ClientNotifier.Get().Send(data.AccountId, notification);
     }
 
     public void SendGameInfoNotifications()
@@ -956,16 +956,15 @@ public abstract class Game
                 log.Info("We have duplicates/fills, going into DUPLICATE_FREELANCER subphase");
                 foreach (long player in GetPlayers())
                 {
-                    LobbyServerProtocol playerConnection = SessionManager.GetClientConnection(player);
-                    if (playerConnection == null)
-                    {
-                        continue;
-                    }
-                    playerConnection.Send(new EnterFreelancerResolutionPhaseNotification()
+                    ClientNotifier.Get().Send(player, new EnterFreelancerResolutionPhaseNotification()
                     {
                         SubPhase = FreelancerResolutionPhaseSubType.DUPLICATE_FREELANCER
                     });
-                    SendGameInfo(playerConnection);
+                    LobbyServerProtocol playerConnection = SessionManager.GetClientConnection(player);
+                    if (playerConnection != null)
+                    {
+                        SendGameInfo(playerConnection);
+                    }
                 }
             }
 
