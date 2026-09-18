@@ -161,6 +161,14 @@ per-connection module instances; each module registers its own handlers into the
    (15 handlers: options, keybinds, UI state, dev tag, customization selects, match data,
    RAF stubs, check account/loading screen) extracted and tested (`AccountModuleTest`,
    13 cases) — third module; `IClientConnection` grown with `OnAccountVisualsUpdated()`.
+   `GroupModule` (8 handlers: invite/join/confirm/suggest/kick/promote/leave/group-info-update)
+   extracted and tested (`GroupModuleTest`, 6 cases) — fourth module; `IClientConnection` grown
+   with `Handle`, `SendSystemMessage`, `BroadcastRefreshFriendList`, `BroadcastRefreshGroup`.
+   State-ownership decision: `IsReady`, `RefreshGroup`, `BroadcastRefreshGroup`,
+   `UpdateGroupReadyState`, and the `OnJoinGroup`/`OnLeaveGroup`/`OnGroupDisbanded` callbacks
+   are intentionally left on `LobbyServerProtocol` — `IsReady` is written primarily by
+   matchmaking code, so its natural owner is the future Matchmaking module; moving it now
+   would be premature churn.
    Deferred to GameLifecycle: `UseOverconRequest`, `UseGGPackRequest`,
    `PlayerUpdateStatusRequest`, `PreviousGameInfoRequest`, `UpdateRemoteCharacterRequest`.**
 
