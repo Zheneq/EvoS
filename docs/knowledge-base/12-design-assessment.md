@@ -24,6 +24,12 @@ any manager), initialization-order fragility (lazy singletons under concurrency 
 - `LobbyServerProtocol` (2,896 lines, ~75 handlers): store purchases, friends, groups,
   draft, telemetry, chat — all as methods on a websocket connection. Domain logic is
   unreachable without a socket, and the class is a merge-conflict magnet.
+  The `LobbyServerProtocolBase` split is nominal: `LobbyServerProtocol` is its only
+  subclass, the base is not abstract, all its state fields are public, and it mixes
+  transport plumbing (serialization, proxy patching) with domain logic
+  (`SendLobbyServerReadyNotification` composes the login state dump, fetches GitHub patch
+  notes over HTTP, reads MOTD from the DB). The real transport abstraction is
+  `WebSocketBehaviorBase<TMessage>`; the middle layer earns nothing.
 - `Game` (1,699 lines): team assembly, bot filling, character validation, ranked draft
   state machine, dodge penalties, queue-priority compensation, result finalization,
   Discord/Elo/TrustWar integration.
@@ -111,18 +117,44 @@ Core 2.2 while the code targets modern .NET (9 in Docker).
 
 ## C. Refactoring roadmap (staged, each stage shippable)
 
-### Stage 1 — Extract domain services out of `LobbyServerProtocol` (no behavior change)
+### Stage 1 — Decompose `LobbyServerProtocol` into composed handler modules (no behavior change)
 
-Carve handler groups into service classes that take the connection as an *interface*:
+Design (supersedes the earlier "extract services" sketch): the connection *composes*
+per-connection module instances; each module registers its own handlers into the existing
+`RegisterHandler<T>` dispatch table and owns its slice of per-session state.
 
-1. Define `IClientConnection` (AccountId, Send, SendSystemMessage, CloseConnection, ...)
-   implemented by `LobbyServerProtocol`.
-2. Move handler bodies into services: `StoreService` (all `HandlePurchase*`),
-   `FriendService` (`HandleFriendUpdate`), `GroupRequestService` (invite/join/confirm),
-   `TelemetryService` (crash/error/feedback), `DraftService` (ranked handlers).
-   The protocol class keeps only registration + delegation (target: < 400 lines).
-3. Each service takes its DAOs/config via constructor with the established
-   static-default convenience pattern → immediately unit-testable.
+1. Merge `LobbyServerProtocolBase` into `LobbyServerProtocol` (the split is nominal, see
+   A2). Its transport plumbing folds into the connection; its domain logic
+   (`SendLobbyServerReadyNotification`, MOTD/patch notes) becomes Login/Status module
+   material.
+2. Seam contracts:
+   - `IClientConnection` (AccountId, Send, ... — grown only as modules need it),
+     implemented by `LobbyServerProtocol`. Modules never see the concrete class.
+   - `IHandlerRegistry` (`Register<T>(Action<T>)`), implemented by the connection over
+     the dispatch table. `Dictionary.Add` throwing on duplicates gives fail-fast when
+     two modules claim the same message type.
+   - `ILobbyModule` (`Register(IHandlerRegistry)`; lifecycle hooks such as
+     `OnDisconnect` added when the first module needs them).
+3. Module map (~8 modules, 5–10 handlers each): **Store** (all `Purchase*`, prices,
+   store stubs), **Group** (invite/join/confirm/suggest/kick/promote/leave),
+   **Matchmaking** (queue join/leave, subtype, ready state), **GameLifecycle**
+   (join/rejoin/leave/spectate/create), **Chat**, **Account** (options, keybinds, UI
+   state, dev tag, customization selects), **Telemetry** (crash/error/feedback),
+   **Login/Status** (ready notification, MOTD, patch notes).
+4. State ownership is the point of the exercise — modules that only split methods but
+   share `conn.IsReady`/`conn.CurrentGame` stay coupled through a god-state object.
+   Target owners: `SelectedGameType`/`SelectedSubTypeMask`/difficulties → Matchmaking;
+   `IsReady` → Matchmaking/Group; `CurrentGame`/`Status` → GameLifecycle;
+   `AccountId`/`SessionToken`/`UserName`/`Proxy` stay on the connection. State migrates
+   with its module, exposed to other modules via narrow interfaces.
+5. Safety nets: a snapshot test asserting the set of registered message types is
+   unchanged after every module extraction (wire contract), plus per-module unit tests
+   against mock DAOs and a recording `IClientConnection`.
+6. Order: Base merge → snapshot test → **Store** pilot (most self-contained: needs only
+   `AccountId` + `Send`, no per-connection state) → Telemetry, Account (nearly
+   stateless) → Group, Matchmaking, GameLifecycle (where state migration happens) →
+   Login/Status. External callers of moved members keep working via delegation on the
+   connection during the transition.
 
 ### Stage 2 — Introduce an outbound notification port
 
@@ -164,7 +196,9 @@ Convert one manager at a time to an instance class with an interface
 ### Suggested first PRs (small, high leverage)
 
 1. ~~`IClientNotifier` + convert `MatchmakingQueue`/`GroupManager` notification call sites.~~ **Done.**
-2. Extract `StoreService` from `LobbyServerProtocol` with tests (pure account math).
+2. Stage-1 kickoff: merge `LobbyServerProtocolBase` into `LobbyServerProtocol`, add the
+   handler-set snapshot test, extract `StoreModule` as the pilot (pure account math,
+   tested against mock DAOs).
 3. Fix `PatchAccountData` return value + dedupe (removes a DB write per login).
 4. Deduplicate `SessionManager` lock/concurrent-dictionary idiom, document the invariant.
 5. Extract `TeamAssembler` from `Game` with tests around `CheckDuplicatedAndFill`
