@@ -442,7 +442,13 @@ namespace EvoS.DirectoryServer.Account
         /// </summary>
         private static string PreparePassword(string password)
         {
-            byte[] pepper = Encoding.UTF8.GetBytes(EvosConfiguration.GetDBConfig().Salt ?? string.Empty);
+            string pepperString = EvosConfiguration.GetDBConfig().Salt;
+            if (pepperString.IsNullOrEmpty() && !EvosConfiguration.GetDevMode())
+            {
+                // Startup validation should have rejected this; never hash with an empty pepper outside DevMode.
+                throw new EvosException("Database.Salt (password pepper) is not configured");
+            }
+            byte[] pepper = Encoding.UTF8.GetBytes(pepperString ?? string.Empty);
             byte[] mac = HMACSHA512.HashData(pepper, Encoding.UTF8.GetBytes(password ?? string.Empty));
             return Convert.ToBase64String(mac);
         }
