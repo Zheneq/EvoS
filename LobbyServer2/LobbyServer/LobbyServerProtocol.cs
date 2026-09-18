@@ -361,27 +361,16 @@ namespace CentralServer.LobbyServer
             RegisterHandler<RegisterGameClientRequest>(HandleRegisterGame);
             RegisterHandler<PlayerUpdateStatusRequest>(HandlePlayerUpdateStatusRequest);
             RegisterHandler<PlayerInfoUpdateRequest>(HandlePlayerInfoUpdateRequest);
-            RegisterHandler<PreviousGameInfoRequest>(HandlePreviousGameInfoRequest);
-            RegisterHandler<LeaveGameRequest>(HandleLeaveGameRequest);
             RegisterHandler<ChatNotification>(HandleChatNotification);
-            RegisterHandler<GameInvitationRequest>(HandleGameInvitationRequest);
-            RegisterHandler<GameInviteConfirmationResponse>(HandleGameInviteConfirmationResponse);
 
             RegisterHandler<UseOverconRequest>(HandleUseOverconRequest);
             RegisterHandler<UseGGPackRequest>(HandleUseGGPackRequest);
             RegisterHandler<GroupChatRequest>(HandleGroupChatRequest);
             RegisterHandler<RejoinGameRequest>(HandleRejoinGameRequest);
-            RegisterHandler<JoinGameRequest>(HandleJoinGameRequest);
-            RegisterHandler<BalancedTeamRequest>(HandleBalancedTeamRequest);
             RegisterHandler<DEBUG_AdminSlashCommandNotification>(HandleDEBUG_AdminSlashCommandNotification);
 
             RegisterHandler<SubscribeToCustomGamesRequest>(HandleSubscribeToCustomGamesRequest);
             RegisterHandler<UnsubscribeFromCustomGamesRequest>(HandleUnsubscribeFromCustomGamesRequest);
-            RegisterHandler<CreateGameRequest>(HandleCreateGameRequest);
-            RegisterHandler<GameInfoUpdateRequest>(HandleGameInfoUpdateRequest);
-            RegisterHandler<RankedLeaderboardOverviewRequest>(HandleRankedLeaderboardOverviewRequest);
-            RegisterHandler<CalculateFreelancerStatsRequest>(HandleCalculateFreelancerStatsRequest);
-            RegisterHandler<PlayerPanelUpdatedNotification>(HandlePlayerPanelUpdatedNotification);
 
             RegisterHandler<RankedHoverClickRequest>(HandlePlayerRankedHoverClickRequest);
             RegisterHandler<RankedBanRequest>(HandlePlayerRankedBanRequest);
@@ -897,102 +886,6 @@ namespace CentralServer.LobbyServer
             }
         }
 
-        private void HandleBalancedTeamRequest(BalancedTeamRequest request)
-        {
-            bool success = CustomGameManager.BalanceTeams(AccountId, request.Slots);
-            Send(new BalancedTeamResponse
-            {
-                Success = success,
-                ResponseId = request.RequestId,
-                Slots = request.Slots
-            });
-        }
-
-        private void HandleJoinGameRequest(JoinGameRequest joinGameRequest)
-        {
-            ResetReadyState();
-            Game game = CustomGameManager.JoinGame(
-                AccountId,
-                joinGameRequest.GameServerProcessCode,
-                joinGameRequest.AsSpectator,
-                out LocalizationPayload failure);
-            if (game == null)
-            {
-                Send(new JoinGameResponse
-                {
-                    ResponseId = joinGameRequest.RequestId,
-                    LocalizedFailure = failure,
-                    Success = false
-                });
-                return;
-            }
-
-            JoinGame(game);
-            Send(new JoinGameResponse
-            {
-                ResponseId = joinGameRequest.RequestId
-            });
-        }
-
-        private void HandleGameInfoUpdateRequest(GameInfoUpdateRequest gameInfoUpdateRequest)
-        {
-            Game game = CustomGameManager.GetMyGame(AccountId);
-
-            if (game.GameSubType.Mods.Contains(GameSubType.SubTypeMods.RankedFreelancerSelection)) {
-                List<LobbyPlayerInfo> hasControllingPlayerId = gameInfoUpdateRequest.TeamInfo.TeamPlayerInfo.FindAll(p => p.ControllingPlayerId != 0);
-                if (hasControllingPlayerId.Count > 0) {
-                    bool success1 = CustomGameManager.BalanceTeams(AccountId, new List<BalanceTeamSlot>());
-                    Send(new BalancedTeamResponse
-                    {
-                        Success = success1,
-                        ResponseId = gameInfoUpdateRequest.RequestId,
-                        Slots = new List<BalanceTeamSlot>()
-                    });
-                    Send(new ChatNotification
-                    {
-                        ConsoleMessageType = ConsoleMessageType.SystemMessage,
-                        Text = "Controlling multiple characters is not allowed in this mode. "
-                               + "If you want to control multiple characters, please select Deathmatch mode. "
-                               + "Normal bots are allowed, however."
-                    });
-                    return;
-                }
-            }
-
-            bool success = CustomGameManager.UpdateGameInfo(AccountId, gameInfoUpdateRequest.GameInfo, gameInfoUpdateRequest.TeamInfo);
-
-            Send(new GameInfoUpdateResponse
-            {
-                Success = success,
-                ResponseId = gameInfoUpdateRequest.RequestId,
-                GameInfo = game?.GameInfo,
-                TeamInfo = LobbyTeamInfo.FromServer(game?.TeamInfo, 0, new MatchmakingQueueConfig()),
-            });
-        }
-
-        private void HandleCreateGameRequest(CreateGameRequest createGameRequest)
-        {
-            ResetReadyState();
-            Game game = CustomGameManager.CreateGame(AccountId, createGameRequest.GameConfig, out LocalizationPayload error);
-            if (game == null)
-            {
-                Send(new CreateGameResponse
-                {
-                    ResponseId = createGameRequest.RequestId,
-                    LocalizedFailure = error,
-                    Success = false,
-                    AllowRetry = true,
-                });
-                return;
-            }
-            GroupManager.GetPlayerGroup(AccountId).Members
-                .ForEach(groupMember => SessionManager.GetClientConnection(groupMember)?.JoinGame(game));
-            Send(new CreateGameResponse
-            {
-                ResponseId = createGameRequest.RequestId,
-                AllowRetry = true,
-            });
-        }
 
         protected override void HandleClose(WsCloseEventArgs e)
         {
@@ -1359,58 +1252,6 @@ namespace CentralServer.LobbyServer
             Send(response);
         }
 
-        public void HandlePreviousGameInfoRequest(PreviousGameInfoRequest request)
-        {
-            Game game = GameManager.GetGameWithPlayer(AccountId);
-            LobbyGameInfo lobbyGameInfo = null;
-
-            if (game != null && game.Server != null && game.Server.IsConnected)
-            {
-                if (game.GameStatus != GameStatus.Stopped && !game.GetPlayerInfo(AccountId).ReplacedWithBots)
-                {
-                    game.DisconnectPlayer(AccountId);
-                    log.Info($"{LobbyServerUtils.GetHandle(AccountId)} was in game {game.ProcessCode}, requesting disconnect");
-                }
-                else
-                {
-                    log.Info($"{LobbyServerUtils.GetHandle(AccountId)} was in game {game.ProcessCode}");
-                }
-                lobbyGameInfo = game.GameInfo;
-            }
-            else
-            {
-                log.Info($"{LobbyServerUtils.GetHandle(AccountId)} wasn't in any game");
-            }
-
-            PreviousGameInfoResponse response = new PreviousGameInfoResponse
-            {
-                PreviousGameInfo = lobbyGameInfo,
-                ResponseId = request.RequestId
-            };
-            Send(response);
-        }
-
-        public void HandleLeaveGameRequest(LeaveGameRequest request)
-        {
-            Game game = CurrentGame;
-            log.Info($"{AccountId} leaves game {game?.ProcessCode}");
-            if (game != null)
-            {
-                LeaveGame(game);
-                game.DisconnectPlayer(AccountId);
-            }
-            Send(new LeaveGameResponse
-            {
-                Success = true,
-                ResponseId = request.RequestId
-            });
-            Send(new GameStatusNotification
-            {
-                GameServerProcessCode = game?.ProcessCode,
-                GameStatus = GameStatus.Stopped
-            });
-            SendGameUnassignmentNotification();
-        }
 
         public void SendGameUnassignmentNotification()
         {
@@ -1432,20 +1273,6 @@ namespace CentralServer.LobbyServer
             OnChatNotification(this, notification);
         }
 
-        public void HandleGameInvitationRequest(GameInvitationRequest request)
-        {
-            Send(new GameInvitationResponse
-            {
-                Success = false,
-                InviteeHandle = request.InviteeHandle,
-                ResponseId = request.RequestId
-            });
-        }
-
-        public void HandleGameInviteConfirmationResponse(GameInviteConfirmationResponse response)
-        {
-        }
-        
         public void OnAccountVisualsUpdated()
         {
             BroadcastRefreshFriendList();
@@ -1580,32 +1407,6 @@ namespace CentralServer.LobbyServer
         private void HandleUnsubscribeFromCustomGamesRequest(UnsubscribeFromCustomGamesRequest request)
         {
             CustomGameManager.Unsubscribe(this);
-        }
-
-        private void HandleRankedLeaderboardOverviewRequest(RankedLeaderboardOverviewRequest request)
-        {
-            Send(new RankedLeaderboardOverviewResponse
-            {
-                GameType = GameType.PvP,
-                TierInfoPerGroupSize = new Dictionary<int, PerGroupSizeTierInfo>(),
-                Success = false,
-                ResponseId = request.RequestId
-            });
-        }
-
-        private void HandleCalculateFreelancerStatsRequest(CalculateFreelancerStatsRequest request)
-        {
-            Send(new CalculateFreelancerStatsResponse
-            {
-                GlobalPercentiles = new Dictionary<StatDisplaySettings.StatType, PercentileInfo>(),
-                FreelancerSpecificPercentiles = new Dictionary<int, PercentileInfo>(),
-                Success = false,
-                ResponseId = request.RequestId
-            });
-        }
-
-        private void HandlePlayerPanelUpdatedNotification(PlayerPanelUpdatedNotification msg)
-        {
         }
 
         private void HandleSetRegionRequest(SetRegionRequest request)
