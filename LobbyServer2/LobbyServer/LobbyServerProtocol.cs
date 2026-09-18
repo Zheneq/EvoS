@@ -712,33 +712,6 @@ namespace CentralServer.LobbyServer
             }
         }
 
-        private void HandleSelectRibbonRequest(SelectRibbonRequest request)
-        {
-            PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
-
-            if (account == null || !(account.AccountComponent.UnlockedRibbonIDs.Contains(request.RibbonID) || request.RibbonID == -1))
-            {
-                Send(new SelectRibbonResponse()
-                {
-                    Success = false,
-                    ResponseId = request.RequestId,
-                });
-                return;
-            }
-
-            account.AccountComponent.SelectedRibbonID = request.RibbonID;
-            DB.Get().AccountDao.UpdateAccountComponent(account);
-
-            OnAccountVisualsUpdated();
-
-            Send(new SelectRibbonResponse()
-            {
-                CurrentRibbonID = request.RibbonID,
-                Success = true,
-                ResponseId = request.RequestId,
-            });
-        }
-
         private void HandleUpdateRemoteCharacterRequest(UpdateRemoteCharacterRequest request)
         {
             UpdateRemoteCharacterResponse response = new UpdateRemoteCharacterResponse
@@ -861,31 +834,6 @@ namespace CentralServer.LobbyServer
                 }
             }
         }
-
-        private void HandleSetDevTagRequest(SetDevTagRequest request)
-        {
-            PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
-            if (account == null)
-            {
-                return;
-            }
-            if (account.AccountComponent.IsDev())
-            {
-                account.AccountComponent.DisplayDevTag = request.active;
-                Send(new SetDevTagResponse()
-                {
-                    Success = true,
-                });
-            }
-            else
-            {
-                Send(new SetDevTagResponse()
-                {
-                    Success = false,
-                });
-            }
-        }
-
 
         protected override void HandleClose(WsCloseEventArgs e)
         {
@@ -1021,41 +969,11 @@ namespace CentralServer.LobbyServer
             BroadcastRefreshFriendList();
         }
 
-        public void HandleOptionsNotification(OptionsNotification notification)
-        {
-            HandleEvosOptionsNotification(EvosOptionsNotification.Of(notification));
-        }
-
-        public void HandleEvosOptionsNotification(EvosOptionsNotification notification)
-        {
-            DB.Get().UserMetadataDao.UpsertOptions(AccountId, notification);
-        }
-
-        public void HandleEvosOptionsNotificationLegacy(EvosOptionsNotificationLegacy notification)
-        {
-            DB.Get().UserMetadataDao.UpsertOptions(AccountId, notification.ToCurrent());
-        }
-
-        public void HandleCustomKeyBindNotification(CustomKeyBindNotification notification)
-        {
-            DB.Get().AccountDao.GetAccount(AccountId).AccountComponent.KeyCodeMapping = notification.CustomKeyBinds;
-        }
-
         public void HandlePlayerUpdateStatusRequest(PlayerUpdateStatusRequest request)
         {
             log.Info($"{this.UserName} is now {request.StatusString}");
             PlayerUpdateStatusResponse response = FriendManager.OnPlayerUpdateStatusRequest(this, request);
 
-            Send(response);
-        }
-
-        public void HandlePlayerMatchDataRequest(PlayerMatchDataRequest request)
-        {
-            PlayerMatchDataResponse response = new PlayerMatchDataResponse
-            {
-                MatchData = DB.Get().MatchHistoryDao.Find(AccountId),
-                ResponseId = request.RequestId
-            };
             Send(response);
         }
 
@@ -1215,44 +1133,6 @@ namespace CentralServer.LobbyServer
             return characterDataUpdate;
         }
 
-        public void HandleCheckAccountStatusRequest(CheckAccountStatusRequest request)
-        {
-            CheckAccountStatusResponse response = new CheckAccountStatusResponse()
-            {
-                QuestOffers = new QuestOfferNotification() { OfferDailyQuest = false },
-                ResponseId = request.RequestId
-            };
-            Send(response);
-
-            if (LobbyConfiguration.IsTrustWarEnabled())
-            {
-                PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
-
-                for (int i = 0; i < 3; i++)
-                {
-                    Send(new PlayerFactionContributionChangeNotification()
-                    {
-                        CompetitionId = 1,
-                        FactionId = i,
-                        AmountChanged = 0,
-                        TotalXP = TrustWarManager.GetTotalXPByFactionID(account, i),
-                        AccountID = account.AccountId,
-                    });
-                }
-            }
-        }
-
-        public void HandleCheckRAFStatusRequest(CheckRAFStatusRequest request)
-        {
-            CheckRAFStatusResponse response = new CheckRAFStatusResponse()
-            {
-                ReferralCode = "sampletext",
-                ResponseId = request.RequestId
-            };
-            Send(response);
-        }
-
-
         public void SendGameUnassignmentNotification()
         {
             Send(new GameAssignmentNotification
@@ -1278,53 +1158,6 @@ namespace CentralServer.LobbyServer
             BroadcastRefreshFriendList();
             BroadcastRefreshGroup();
             CurrentGame?.OnAccountVisualsUpdated(AccountId);
-        }
-
-        public void HandleSelectBannerRequest(SelectBannerRequest request)
-        {
-            PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
-
-            //  Modify the correct type of banner
-            if (InventoryManager.BannerIsForeground(request.BannerID))
-            {
-                account.AccountComponent.SelectedForegroundBannerID = request.BannerID;
-            }
-            else
-            {
-                account.AccountComponent.SelectedBackgroundBannerID = request.BannerID;
-            }
-
-            // Update the account
-            DB.Get().AccountDao.UpdateAccountComponent(account);
-
-            OnAccountVisualsUpdated();
-
-            // Send response
-            Send(new SelectBannerResponse()
-            {
-                BackgroundBannerID = account.AccountComponent.SelectedBackgroundBannerID,
-                ForegroundBannerID = account.AccountComponent.SelectedForegroundBannerID,
-                ResponseId = request.RequestId
-            });
-        }
-
-        public void HandleSelectTitleRequest(SelectTitleRequest request)
-        {
-            PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
-
-            if (account.AccountComponent.UnlockedTitleIDs.Contains(request.TitleID) || request.TitleID == -1)
-            {
-                account.AccountComponent.SelectedTitleID = request.TitleID;
-                DB.Get().AccountDao.UpdateAccountComponent(account);
-
-                OnAccountVisualsUpdated();
-            }
-
-            Send(new SelectTitleResponse
-            {
-                CurrentTitleID = account.AccountComponent.SelectedTitleID,
-                ResponseId = request.RequestId
-            });
         }
 
         public void HandleUseOverconRequest(UseOverconRequest request)
@@ -1390,15 +1223,6 @@ namespace CentralServer.LobbyServer
             }
         }
 
-        //Allows to get rid of the flashy New tag next to store for existing users
-        public void HandleUpdateUIStateRequest(UpdateUIStateRequest request)
-        {
-            PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
-            log.Info($"Player {AccountId} requested UIState {request.UIState} {request.StateValue}");
-            account.AccountComponent.UIStates[request.UIState] = request.StateValue;
-            DB.Get().AccountDao.UpdateAccountComponent(account);
-        }
-
         private void HandleSubscribeToCustomGamesRequest(SubscribeToCustomGamesRequest request)
         {
             CustomGameManager.Subscribe(this);
@@ -1407,46 +1231,6 @@ namespace CentralServer.LobbyServer
         private void HandleUnsubscribeFromCustomGamesRequest(UnsubscribeFromCustomGamesRequest request)
         {
             CustomGameManager.Unsubscribe(this);
-        }
-
-        private void HandleSetRegionRequest(SetRegionRequest request)
-        {
-        }
-
-        private void HandleLoadingScreenToggleRequest(LoadingScreenToggleRequest request)
-        {
-            PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
-            Dictionary<int, bool> bgs = account.AccountComponent.UnlockedLoadingScreenBackgroundIdsToActivatedState;
-            if (bgs.ContainsKey(request.LoadingScreenId))
-            {
-                bgs[request.LoadingScreenId] = request.NewState;
-                DB.Get().AccountDao.UpdateAccountComponent(account);
-                Send(new LoadingScreenToggleResponse
-                {
-                    LoadingScreenId = request.LoadingScreenId,
-                    CurrentState = request.NewState,
-                    Success = true,
-                    ResponseId = request.RequestId
-                });
-            }
-            else
-            {
-                Send(new LoadingScreenToggleResponse
-                {
-                    LoadingScreenId = request.LoadingScreenId,
-                    Success = false,
-                    ResponseId = request.RequestId
-                });
-            }
-        }
-
-        private void HandleSendRAFReferralEmailsRequest(SendRAFReferralEmailsRequest request)
-        {
-            Send(new SendRAFReferralEmailsResponse
-            {
-                Success = false,
-                ResponseId = request.RequestId
-            });
         }
 
         public void HandleGroupChatRequest(GroupChatRequest request)
