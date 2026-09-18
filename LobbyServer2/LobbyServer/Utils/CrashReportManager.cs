@@ -50,18 +50,16 @@ public static class CrashReportManager
     public static void ProcessClientErrorSummary(long accountId, ClientErrorSummary summary)
     {
         var clientErrorDao = DB.Get().ClientErrorDao;
-        LobbyServerProtocol conn = null;
-        
+
         foreach (var (stackTraceHash, errorCount) in summary.ReportCount)
         {
             ClientErrorDao.Entry entry = clientErrorDao.GetEntry(stackTraceHash);
             if (entry is null)
             {
                 // request details on errors we've never seen
-                conn ??= SessionManager.GetClientConnection(accountId);
-                conn?.Send(new ErrorReportSummaryRequest { CrashReportHash = stackTraceHash });
+                ClientNotifier.Get().Send(accountId, new ErrorReportSummaryRequest { CrashReportHash = stackTraceHash });
             }
-            
+
             HandleErrorOccurrence(accountId, stackTraceHash, errorCount, entry);
         }
     }

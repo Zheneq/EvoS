@@ -29,7 +29,7 @@ public class FriendsTask : PeriodicRunner
         log.Debug($"Got {pendingUpdate.Count} updates total for {receivers.Count} players");
         foreach (long accId in receivers)
         {
-            SessionManager.GetClientConnection(accId)?.RefreshFriendList();
+            ClientNotifier.Get().RefreshFriendList(accId);
         }
 
         return Task.CompletedTask;

@@ -125,14 +125,12 @@ namespace CentralServer.LobbyServer.TrustWar
 
             foreach (PlayerFactionContributionChangeNotification notification in notificationsToSend)
             {
-                LobbyServerProtocol session = SessionManager.GetClientConnection(notification.AccountID);
-                session?.Send(notification);
+                ClientNotifier.Get().Send(notification.AccountID, notification);
             }
 
             foreach (long playerAccountId in SessionManager.GetOnlinePlayers())
             {
-                LobbyServerProtocol player = SessionManager.GetClientConnection(playerAccountId);
-                player?.Send(new FactionCompetitionNotification { ActiveIndex = 1, Scores = factionScores });
+                ClientNotifier.Get().Send(playerAccountId, new FactionCompetitionNotification { ActiveIndex = 1, Scores = factionScores });
             }
         }
     }
