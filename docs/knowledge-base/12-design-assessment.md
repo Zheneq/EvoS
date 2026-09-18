@@ -164,11 +164,15 @@ per-connection module instances; each module registers its own handlers into the
    `GroupModule` (8 handlers: invite/join/confirm/suggest/kick/promote/leave/group-info-update)
    extracted and tested (`GroupModuleTest`, 6 cases) — fourth module; `IClientConnection` grown
    with `Handle`, `SendSystemMessage`, `BroadcastRefreshFriendList`, `BroadcastRefreshGroup`.
-   State-ownership decision: `IsReady`, `RefreshGroup`, `BroadcastRefreshGroup`,
-   `UpdateGroupReadyState`, and the `OnJoinGroup`/`OnLeaveGroup`/`OnGroupDisbanded` callbacks
-   are intentionally left on `LobbyServerProtocol` — `IsReady` is written primarily by
-   matchmaking code, so its natural owner is the future Matchmaking module; moving it now
-   would be premature churn.
+   `MatchmakingModule` (3 handlers: `JoinMatchmakingQueueRequest`, `LeaveMatchmakingQueueRequest`,
+   `SetGameSubTypeRequest`) extracted and tested (`MatchmakingModuleTest`, 7 cases) — **fifth
+   module and first state migration**: `IsReady`, `SelectedGameType`, `SelectedSubTypeMask`,
+   `AllyDifficulty`, `EnemyDifficulty` now live in the module; `LobbyServerProtocol` keeps
+   delegating properties and thin delegator methods so external callers (`SessionManager` login
+   defaults, `GroupManager` reads, cross-connection `SetGameType` from `GroupModule`) compile
+   unchanged. This is the Stage 3 transition point: those delegation seams stay until a
+   `ISessionRegistry` interface replaces direct `GetClientConnection` reads.
+   `IClientConnection` grown with `UserName`.
    Deferred to GameLifecycle: `UseOverconRequest`, `UseGGPackRequest`,
    `PlayerUpdateStatusRequest`, `PreviousGameInfoRequest`, `UpdateRemoteCharacterRequest`.**
 
