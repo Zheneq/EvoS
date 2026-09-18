@@ -173,8 +173,31 @@ per-connection module instances; each module registers its own handlers into the
    unchanged. This is the Stage 3 transition point: those delegation seams stay until a
    `ISessionRegistry` interface replaces direct `GetClientConnection` reads.
    `IClientConnection` grown with `UserName`.
-   Deferred to GameLifecycle: `UseOverconRequest`, `UseGGPackRequest`,
-   `PlayerUpdateStatusRequest`, `PreviousGameInfoRequest`, `UpdateRemoteCharacterRequest`.**
+   `GameLifecycleModule` (11 handlers: `JoinGameRequest`, `CreateGameRequest`,
+   `GameInfoUpdateRequest`, `BalancedTeamRequest`, `LeaveGameRequest`,
+   `PreviousGameInfoRequest`, `GameInvitationRequest`, `GameInviteConfirmationResponse`,
+   `RankedLeaderboardOverviewRequest`, `CalculateFreelancerStatsRequest`,
+   `PlayerPanelUpdatedNotification`) extracted and tested (`GameLifecycleModuleTest`, 11 cases) —
+   **sixth module and second state migration**: `CurrentGame` now lives in the module;
+   `LobbyServerProtocol` keeps thin delegators (`CurrentGame`, `JoinGame`, `LeaveGame`,
+   `IsInGame`, `IsInCharacterSelect`, `PlayerInfo`) so `Game.cs`, `PvpGame.cs`,
+   `CustomGame.cs`, `GameManager.cs`, `FriendManager.cs`, `ChatManager.cs`, `GroupManager.cs`,
+   `GroupModule.cs`, `MatchmakingModule.cs`, and Discord classes compile unchanged.
+   `IClientConnection` grown with `ResetReadyState` and `SendGameUnassignmentNotification`.
+   **`Status` (`PlayerOnlineStatus`) deliberately left on the connection** (friend-status
+   concern, not game-lifecycle state). **Game callbacks (`OnStartGame`, `OnGameAssigned`,
+   `SendGameUnassignmentNotification`) deliberately left on the connection** (invoked by
+   `Game`/`PvpGame`/`CustomGame`/`GameManager` on concrete connections; no state ownership).
+   **Chat module deferred entirely**: its two handlers (`ChatNotification`,
+   `GroupChatRequest`) are one-line event raises, and `ChatManager` subscribes to those events
+   per connection with `LobbyServerProtocol`-typed signatures and reads `conn.PlayerInfo` —
+   extracting them means redesigning that coupling for no handler-logic gain. Revisit at Stage 3.
+   **What remains on the connection for Stage 1**: `HandleRegisterGame` + login pile,
+   `HandlePlayerInfoUpdateRequest`, `HandlePlayerUpdateStatusRequest`, chat handlers
+   (`ChatNotification`, `GroupChatRequest`), ranked draft handlers (`RankedTradeRequest`,
+   `RankedSelectionRequest`, `RankedBanRequest`, `RankedHoverClickRequest`), custom-game
+   subscription handlers (`SubscribeToCustomGamesRequest`,
+   `UnsubscribeFromCustomGamesRequest`), and `HandleRejoinGameRequest`.**
 
 ### Stage 2 — Introduce an outbound notification port
 
