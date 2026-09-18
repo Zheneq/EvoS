@@ -52,6 +52,18 @@ public class LoginManagerTest
     }
 
     [Fact]
+    public void Login_UnknownUser_ThrowsUserNotFound()
+    {
+        // Also exercises the dummy KDF verification on the missing-user path (anti-enumeration).
+        WithPepper(TestPepper, () =>
+        {
+            ArgumentException e = Assert.Throws<ArgumentException>(
+                () => LoginManager.Login("no_such_user_x1", "hunter2!"));
+            Assert.Equal(LoginManager.UserNotFound, e.Message);
+        });
+    }
+
+    [Fact]
     public void VerifyPassword_LegacyHash_VerifiesAndRequestsRehash()
     {
         WithPepper(TestPepper, () =>

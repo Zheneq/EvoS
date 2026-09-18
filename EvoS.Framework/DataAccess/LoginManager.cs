@@ -291,11 +291,18 @@ namespace EvoS.DirectoryServer.Account
             log.Info($"Successfully generated new password hash for {accountId}/{username}");
         }
 
+        // Verified against when a login targets a non-existent user, so that a miss costs a full KDF
+        // pass just like a wrong password; otherwise a remote caller could enumerate valid usernames
+        // by timing the responses.
+        private static readonly Lazy<string> UnknownUserDummyHash =
+            new(() => HashV2(Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))));
+
         public static long Login(string username, string password)
         {
             LoginDao.LoginEntry entry = DB.Get().LoginDao.Find(username.ToLower());
             if (entry == null)
             {
+                VerifyPassword(UnknownUserDummyHash.Value, string.Empty, password, out _);
                 log.Warn($"Attempt to log is as non-existing user {username}");
                 throw new ArgumentException(UserNotFound);
             }
