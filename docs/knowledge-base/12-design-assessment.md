@@ -156,7 +156,8 @@ per-connection module instances; each module registers its own handlers into the
    stateless) → Group, Matchmaking, GameLifecycle (where state migration happens) →
    Login/Status. External callers of moved members keep working via delegation on the
    connection during the transition. **Store pilot (`StoreModule`, 13 handlers) extracted
-   and tested (`StoreModuleTest`, 9 cases).**
+   and tested (`StoreModuleTest`, 9 cases). `TelemetryModule` (8 handlers) extracted and
+   tested (`TelemetryModuleTest`, 4 cases) — second module after Store.**
 
 ### Stage 2 — Introduce an outbound notification port
 
