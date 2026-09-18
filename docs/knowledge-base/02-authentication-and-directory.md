@@ -33,9 +33,10 @@ and JWT-based auth for the REST APIs and launcher tickets.
      `SessionManager.CreateSession(rejectIfActive: true)` (throws `ConflictException`).
    - Loads or creates the account; **on any DB exception falls back to creating a temp
      account** (`temp_user#N`) — questionable resilience-over-correctness choice.
-   - `PatchAccountData`: in-login data migration (WillFill/TestFreelancer loadouts ×3
-     copy-pasted blocks, free-store unlocks, Trust War init). Always returns `true`, so the
-     account is written back to the DB **on every login**.
+   - `PatchAccountData`: in-login data migration (placeholder-character loadouts,
+     free-store unlocks, Trust War init). Applies patches then reports whether the account
+     actually changed (JSON snapshot comparison), so the DB write is skipped on the common
+     no-op path. Covered by `Tests/PatchAccountDataTest.cs`.
 
 ## Password handling (`LoginManager`)
 
