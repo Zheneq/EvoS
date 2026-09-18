@@ -108,6 +108,37 @@ public class QueuePenaltyManagerTest
         Assert.Equal(TimeSpan.FromSeconds(3200), eval.AppliedSpan);
     }
 
+    [Fact]
+    public void Escalation_LongerActiveBlock_RecordsOffenseWithoutLoweringBlock()
+    {
+        // Parole lapsed -> streak restarts at 1 -> span is just Base, far below the active block.
+        // The offense must still be recorded (count + parole), while the block must not shrink.
+        DateTime block = Now.Add(TimeSpan.FromHours(6));
+        QueuePenalties current = Penalties(count: 3, block: block, parole: Now.Subtract(TimeSpan.FromSeconds(1)));
+
+        QueuePenaltyManager.PenaltyEvaluation eval = Escalate(current, Base);
+
+        Assert.True(eval.Apply);
+        Assert.Equal(1, eval.Count);
+        Assert.Equal(block, eval.BlockTimeout);                     // not lowered
+        Assert.Equal(Now.Add(Parole), eval.ParoleTimeout);          // parole refreshed
+    }
+
+    [Fact]
+    public void Escalation_LongerActiveBlock_ActiveParole_ContinuesStreakWithoutLoweringBlock()
+    {
+        DateTime block = Now.Add(TimeSpan.FromHours(6));
+        QueuePenalties current = Penalties(count: 1, block: block, parole: Now.Add(TimeSpan.FromHours(1)));
+
+        // 200 * 4^1 = 800s, still below the active block.
+        QueuePenaltyManager.PenaltyEvaluation eval = Escalate(current, Base);
+
+        Assert.True(eval.Apply);
+        Assert.Equal(2, eval.Count);
+        Assert.Equal(block, eval.BlockTimeout);
+        Assert.Equal(Now.Add(Parole), eval.ParoleTimeout);
+    }
+
     // --- Direction check (normal mode raises only) ---
 
     [Fact]

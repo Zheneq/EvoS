@@ -140,10 +140,14 @@ public static class QueuePenaltyManager
         DateTime newTimeout = now.Add(span);
         DateTime oldTimeout = current.QueueDodgeBlockTimeout;
 
-        // Normal mode applies only if it raises the timeout; cap mode only if it lowers it;
+        // Normal mode moves the timeout only if it raises it; cap mode only if it lowers it;
         // overridePenalty bypasses the direction check.
         bool lowersTimeout = oldTimeout > newTimeout;
-        if (oldTimeout == newTimeout || (capPenalty != lowersTimeout && !overridePenalty))
+        bool moveTimeout = oldTimeout != newTimeout && (capPenalty == lowersTimeout || overridePenalty);
+
+        // An escalating offense is recorded (count + parole) even when it cannot extend the block,
+        // otherwise a repeat offense during a longer active block would not count towards the streak.
+        if (!moveTimeout && !escalate)
         {
             return new PenaltyEvaluation(false, current.QueueDodgeCount, oldTimeout, current.QueueDodgeParoleTimeout, span);
         }
@@ -162,7 +166,7 @@ public static class QueuePenaltyManager
             resultCount = Math.Max(0, current.QueueDodgeCount - 1);
         }
 
-        return new PenaltyEvaluation(true, resultCount, newTimeout, resultParole, span);
+        return new PenaltyEvaluation(true, resultCount, moveTimeout ? newTimeout : oldTimeout, resultParole, span);
     }
 
     internal static bool IsQueueBlocked(QueuePenalties penalties, DateTime now)
@@ -208,12 +212,16 @@ public static class QueuePenaltyManager
         }
 
         DateTime oldTimeout = penalties.QueueDodgeBlockTimeout;
+        bool blockChanged = eval.BlockTimeout != oldTimeout;
         penalties.QueueDodgeCount = eval.Count;
         penalties.QueueDodgeParoleTimeout = eval.ParoleTimeout;
         penalties.QueueDodgeBlockTimeout = eval.BlockTimeout;
-        log.Info($"{gameType} queue penalty for {account.Handle}: {eval.AppliedSpan}"
+        log.Info($"{gameType} queue penalty for {account.Handle}: "
+                 + (blockChanged
+                     ? $"{eval.AppliedSpan}"
+                     : $"block unchanged ({oldTimeout.Subtract(referenceDateTime)} remaining)")
                  + (escalate ? $" (offense #{eval.Count})" : "")
-                 + (oldTimeout > referenceDateTime ? $" (was {oldTimeout.Subtract(referenceDateTime)})" : ""));
+                 + (blockChanged && oldTimeout > referenceDateTime ? $" (was {oldTimeout.Subtract(referenceDateTime)})" : ""));
 
         account.AdminComponent.ActiveQueuePenalties[gameType] = penalties;
         DB.Get().AccountDao.UpdateAdminComponent(account);
