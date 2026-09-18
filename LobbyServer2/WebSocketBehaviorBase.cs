@@ -47,6 +47,7 @@ namespace CentralServer
         private static readonly ConcurrentDictionary<WebSocketBehaviorBase<TMessage>, byte> Connections = new();
 
         private readonly Dictionary<Type, Action<TMessage, int>> messageHandlers = new Dictionary<Type, Action<TMessage, int>>();
+        internal IReadOnlyCollection<Type> RegisteredMessageTypes => messageHandlers.Keys;
         private readonly SemaphoreSlim _sendLock = new(1, 1);
         private bool unregistered = false;
         private int closeFired = 0;
