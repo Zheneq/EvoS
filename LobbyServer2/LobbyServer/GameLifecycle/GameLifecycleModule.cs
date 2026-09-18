@@ -1,4 +1,8 @@
+using System.Collections.Generic;
 using CentralServer.BridgeServer;
+using CentralServer.LobbyServer.CustomGames;
+using CentralServer.LobbyServer.Group;
+using CentralServer.LobbyServer.Matchmaking;
 using CentralServer.LobbyServer.Session;
 using CentralServer.LobbyServer.Utils;
 using EvoS.Framework.Constants.Enums;
@@ -44,6 +48,17 @@ public class GameLifecycleModule : ILobbyModule
 
     public void Register(IHandlerRegistry registry)
     {
+        registry.Register<JoinGameRequest>(HandleJoinGameRequest);
+        registry.Register<CreateGameRequest>(HandleCreateGameRequest);
+        registry.Register<GameInfoUpdateRequest>(HandleGameInfoUpdateRequest);
+        registry.Register<BalancedTeamRequest>(HandleBalancedTeamRequest);
+        registry.Register<LeaveGameRequest>(HandleLeaveGameRequest);
+        registry.Register<PreviousGameInfoRequest>(HandlePreviousGameInfoRequest);
+        registry.Register<GameInvitationRequest>(HandleGameInvitationRequest);
+        registry.Register<GameInviteConfirmationResponse>(HandleGameInviteConfirmationResponse);
+        registry.Register<RankedLeaderboardOverviewRequest>(HandleRankedLeaderboardOverviewRequest);
+        registry.Register<CalculateFreelancerStatsRequest>(HandleCalculateFreelancerStatsRequest);
+        registry.Register<PlayerPanelUpdatedNotification>(HandlePlayerPanelUpdatedNotification);
     }
 
     public void JoinGame(Game game)
@@ -81,5 +96,195 @@ public class GameLifecycleModule : ILobbyModule
         });
 
         return true;
+    }
+
+    private void HandleJoinGameRequest(JoinGameRequest joinGameRequest)
+    {
+        _conn.ResetReadyState();
+        Game game = CustomGameManager.JoinGame(
+            _conn.AccountId,
+            joinGameRequest.GameServerProcessCode,
+            joinGameRequest.AsSpectator,
+            out LocalizationPayload failure);
+        if (game == null)
+        {
+            _conn.Send(new JoinGameResponse
+            {
+                ResponseId = joinGameRequest.RequestId,
+                LocalizedFailure = failure,
+                Success = false
+            });
+            return;
+        }
+
+        JoinGame(game);
+        _conn.Send(new JoinGameResponse
+        {
+            ResponseId = joinGameRequest.RequestId
+        });
+    }
+
+    private void HandleCreateGameRequest(CreateGameRequest createGameRequest)
+    {
+        _conn.ResetReadyState();
+        Game game = CustomGameManager.CreateGame(_conn.AccountId, createGameRequest.GameConfig, out LocalizationPayload error);
+        if (game == null)
+        {
+            _conn.Send(new CreateGameResponse
+            {
+                ResponseId = createGameRequest.RequestId,
+                LocalizedFailure = error,
+                Success = false,
+                AllowRetry = true,
+            });
+            return;
+        }
+        GroupManager.GetPlayerGroup(_conn.AccountId).Members
+            .ForEach(groupMember => SessionManager.GetClientConnection(groupMember)?.JoinGame(game));
+        _conn.Send(new CreateGameResponse
+        {
+            ResponseId = createGameRequest.RequestId,
+            AllowRetry = true,
+        });
+    }
+
+    private void HandleGameInfoUpdateRequest(GameInfoUpdateRequest gameInfoUpdateRequest)
+    {
+        Game game = CustomGameManager.GetMyGame(_conn.AccountId);
+
+        if (game.GameSubType.Mods.Contains(GameSubType.SubTypeMods.RankedFreelancerSelection)) {
+            List<LobbyPlayerInfo> hasControllingPlayerId = gameInfoUpdateRequest.TeamInfo.TeamPlayerInfo.FindAll(p => p.ControllingPlayerId != 0);
+            if (hasControllingPlayerId.Count > 0) {
+                bool success1 = CustomGameManager.BalanceTeams(_conn.AccountId, new List<BalanceTeamSlot>());
+                _conn.Send(new BalancedTeamResponse
+                {
+                    Success = success1,
+                    ResponseId = gameInfoUpdateRequest.RequestId,
+                    Slots = new List<BalanceTeamSlot>()
+                });
+                _conn.Send(new ChatNotification
+                {
+                    ConsoleMessageType = ConsoleMessageType.SystemMessage,
+                    Text = "Controlling multiple characters is not allowed in this mode. "
+                           + "If you want to control multiple characters, please select Deathmatch mode. "
+                           + "Normal bots are allowed, however."
+                });
+                return;
+            }
+        }
+
+        bool success = CustomGameManager.UpdateGameInfo(_conn.AccountId, gameInfoUpdateRequest.GameInfo, gameInfoUpdateRequest.TeamInfo);
+
+        _conn.Send(new GameInfoUpdateResponse
+        {
+            Success = success,
+            ResponseId = gameInfoUpdateRequest.RequestId,
+            GameInfo = game?.GameInfo,
+            TeamInfo = LobbyTeamInfo.FromServer(game?.TeamInfo, 0, new MatchmakingQueueConfig()),
+        });
+    }
+
+    private void HandleBalancedTeamRequest(BalancedTeamRequest request)
+    {
+        bool success = CustomGameManager.BalanceTeams(_conn.AccountId, request.Slots);
+        _conn.Send(new BalancedTeamResponse
+        {
+            Success = success,
+            ResponseId = request.RequestId,
+            Slots = request.Slots
+        });
+    }
+
+    private void HandleLeaveGameRequest(LeaveGameRequest request)
+    {
+        Game game = CurrentGame;
+        log.Info($"{_conn.AccountId} leaves game {game?.ProcessCode}");
+        if (game != null)
+        {
+            LeaveGame(game);
+            game.DisconnectPlayer(_conn.AccountId);
+        }
+        _conn.Send(new LeaveGameResponse
+        {
+            Success = true,
+            ResponseId = request.RequestId
+        });
+        _conn.Send(new GameStatusNotification
+        {
+            GameServerProcessCode = game?.ProcessCode,
+            GameStatus = GameStatus.Stopped
+        });
+        _conn.SendGameUnassignmentNotification();
+    }
+    
+    private void HandlePreviousGameInfoRequest(PreviousGameInfoRequest request)
+    {
+        Game game = GameManager.GetGameWithPlayer(_conn.AccountId);
+        LobbyGameInfo lobbyGameInfo = null;
+
+        if (game != null && game.Server != null && game.Server.IsConnected)
+        {
+            if (game.GameStatus != GameStatus.Stopped && !game.GetPlayerInfo(_conn.AccountId).ReplacedWithBots)
+            {
+                game.DisconnectPlayer(_conn.AccountId);
+                log.Info($"{LobbyServerUtils.GetHandle(_conn.AccountId)} was in game {game.ProcessCode}, requesting disconnect");
+            }
+            else
+            {
+                log.Info($"{LobbyServerUtils.GetHandle(_conn.AccountId)} was in game {game.ProcessCode}");
+            }
+            lobbyGameInfo = game.GameInfo;
+        }
+        else
+        {
+            log.Info($"{LobbyServerUtils.GetHandle(_conn.AccountId)} wasn't in any game");
+        }
+
+        PreviousGameInfoResponse response = new PreviousGameInfoResponse
+        {
+            PreviousGameInfo = lobbyGameInfo,
+            ResponseId = request.RequestId
+        };
+        _conn.Send(response);
+    }
+
+    private void HandleGameInvitationRequest(GameInvitationRequest request)
+    {
+        _conn.Send(new GameInvitationResponse
+        {
+            Success = false,
+            InviteeHandle = request.InviteeHandle,
+            ResponseId = request.RequestId
+        });
+    }
+
+    private void HandleGameInviteConfirmationResponse(GameInviteConfirmationResponse response)
+    {
+    }
+
+    private void HandleRankedLeaderboardOverviewRequest(RankedLeaderboardOverviewRequest request)
+    {
+        _conn.Send(new RankedLeaderboardOverviewResponse
+        {
+            GameType = GameType.PvP,
+            TierInfoPerGroupSize = new Dictionary<int, PerGroupSizeTierInfo>(),
+            Success = false,
+            ResponseId = request.RequestId
+        });
+    }
+
+    private void HandleCalculateFreelancerStatsRequest(CalculateFreelancerStatsRequest request)
+    {
+        _conn.Send(new CalculateFreelancerStatsResponse
+        {
+            GlobalPercentiles = new Dictionary<StatDisplaySettings.StatType, PercentileInfo>(),
+            FreelancerSpecificPercentiles = new Dictionary<int, PercentileInfo>(),
+            Success = false,
+            ResponseId = request.RequestId
+        });
+    }
+
+    private void HandlePlayerPanelUpdatedNotification(PlayerPanelUpdatedNotification msg)
+    {
     }
 }
