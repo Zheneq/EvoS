@@ -5,6 +5,7 @@ using CentralServer.LobbyServer.Utils;
 using EvoS.Framework.Constants.Enums;
 using EvoS.Framework.Network.NetworkMessages;
 using EvoS.Framework.Network.Static;
+using EvoS.Framework.Network.WebSocket;
 using log4net;
 
 namespace CentralServer.LobbyServer.Matchmaking;
@@ -30,7 +31,80 @@ public class MatchmakingModule : ILobbyModule
 
     public void Register(IHandlerRegistry registry)
     {
-        // Handlers will be added in Batch 2
+        registry.Register<JoinMatchmakingQueueRequest>(HandleJoinMatchmakingQueueRequest);
+        registry.Register<LeaveMatchmakingQueueRequest>(HandleLeaveMatchmakingQueueRequest);
+        registry.Register<SetGameSubTypeRequest>(HandleSetGameSubTypeRequest);
+    }
+
+    private void HandleJoinMatchmakingQueueRequest(JoinMatchmakingQueueRequest request)
+    {
+        try
+        {
+            GroupInfo group = GroupManager.GetPlayerGroup(_conn.AccountId);
+            if (!group.IsLeader(_conn.AccountId))
+            {
+                log.Warn($"{_conn.UserName} attempted to join {request.GameType} queue " +
+                         $"while not being the leader of their group");
+                _conn.Send(new JoinMatchmakingQueueResponse { Success = false, ResponseId = request.RequestId });
+                return;
+            }
+
+            foreach (long groupMember in group.Members)
+            {
+                LocalizationPayload failure = QueuePenaltyManager.CheckQueuePenalties(groupMember, request.GameType, _conn.AccountId);
+                if (failure is not null)
+                {
+                    _conn.Send(new JoinMatchmakingQueueResponse { Success = false, ResponseId = request.RequestId, LocalizedFailure = failure });
+                    return;
+                }
+            }
+
+            IsReady = true;
+            MatchmakingManager.AddGroupToQueue(request.GameType, group);
+            _conn.Send(new JoinMatchmakingQueueResponse { Success = true, ResponseId = request.RequestId });
+        }
+        catch (Exception e)
+        {
+            _conn.Send(new JoinMatchmakingQueueResponse
+            {
+                Success = false,
+                ResponseId = request.RequestId,
+                LocalizedFailure = LocalizationPayload.Create("ServerError@Global")
+            });
+            log.Error("Failed to process join queue request", e);
+        }
+    }
+
+    private void HandleLeaveMatchmakingQueueRequest(LeaveMatchmakingQueueRequest request)
+    {
+        try
+        {
+            GroupInfo group = GroupManager.GetPlayerGroup(_conn.AccountId);
+            if (!group.IsLeader(_conn.AccountId))
+            {
+                log.Warn($"{_conn.UserName} attempted to leave queue " +
+                         $"while not being the leader of their group");
+                _conn.Send(new LeaveMatchmakingQueueResponse { Success = false, ResponseId = request.RequestId });
+                return;
+            }
+
+            _conn.Send(new LeaveMatchmakingQueueResponse { Success = true, ResponseId = request.RequestId });
+            IsReady = false;
+            MatchmakingManager.RemoveGroupFromQueue(group);
+        }
+        catch (Exception e)
+        {
+            _conn.Send(new LeaveMatchmakingQueueResponse { Success = false, ResponseId = request.RequestId });
+            log.Error("Failed to process leave queue request", e);
+        }
+    }
+
+    private void HandleSetGameSubTypeRequest(SetGameSubTypeRequest request)
+    {
+        // SubType update comes before GameType update in PlayerInfoUpdateRequest
+        SelectedSubTypeMask = request.SubTypeMask;
+        _conn.Send(new SetGameSubTypeResponse { ResponseId = request.RequestId }); // we need to confirm success before sending a group update
+        GroupManager.UpdateSelectedSubTypesForAccount(_conn.AccountId);
     }
 
     public ushort GetSubTypeMask()

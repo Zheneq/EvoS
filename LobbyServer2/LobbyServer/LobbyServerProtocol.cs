@@ -371,12 +371,9 @@ namespace CentralServer.LobbyServer
 
             RegisterHandler<RegisterGameClientRequest>(HandleRegisterGame);
             RegisterHandler<PlayerUpdateStatusRequest>(HandlePlayerUpdateStatusRequest);
-            RegisterHandler<SetGameSubTypeRequest>(HandleSetGameSubTypeRequest);
             RegisterHandler<PlayerInfoUpdateRequest>(HandlePlayerInfoUpdateRequest);
             RegisterHandler<PreviousGameInfoRequest>(HandlePreviousGameInfoRequest);
             RegisterHandler<LeaveGameRequest>(HandleLeaveGameRequest);
-            RegisterHandler<JoinMatchmakingQueueRequest>(HandleJoinMatchmakingQueueRequest);
-            RegisterHandler<LeaveMatchmakingQueueRequest>(HandleLeaveMatchmakingQueueRequest);
             RegisterHandler<ChatNotification>(HandleChatNotification);
             RegisterHandler<GameInvitationRequest>(HandleGameInvitationRequest);
             RegisterHandler<GameInviteConfirmationResponse>(HandleGameInviteConfirmationResponse);
@@ -1213,14 +1210,6 @@ namespace CentralServer.LobbyServer
             Send(response);
         }
 
-        public void HandleSetGameSubTypeRequest(SetGameSubTypeRequest request)
-        {
-            // SubType update comes before GameType update in PlayerInfoUpdateRequest
-            SelectedSubTypeMask = request.SubTypeMask;
-            Send(new SetGameSubTypeResponse { ResponseId = request.RequestId }); // we need to confirm success before sending a group update
-            GroupManager.UpdateSelectedSubTypesForAccount(AccountId);
-        }
-
         public void HandlePlayerInfoUpdateRequest(PlayerInfoUpdateRequest request)
         {
             LobbyPlayerInfoUpdate update = request.PlayerInfoUpdate;
@@ -1481,70 +1470,6 @@ namespace CentralServer.LobbyServer
             _matchmaking.SetContextualReadyState(contextualReadyState);
 
         private void ResetReadyState() => _matchmaking.ResetReadyState();
-
-        public void HandleJoinMatchmakingQueueRequest(JoinMatchmakingQueueRequest request)
-        {
-            try
-            {
-                GroupInfo group = GroupManager.GetPlayerGroup(AccountId);
-                if (!group.IsLeader(AccountId))
-                {
-                    log.Warn($"{UserName} attempted to join {request.GameType} queue " +
-                             $"while not being the leader of their group");
-                    Send(new JoinMatchmakingQueueResponse { Success = false, ResponseId = request.RequestId });
-                    return;
-                }
-
-                foreach (long groupMember in group.Members)
-                {
-                    LocalizationPayload failure = QueuePenaltyManager.CheckQueuePenalties(groupMember, request.GameType, AccountId);
-                    if (failure is not null)
-                    {
-                        Send(new JoinMatchmakingQueueResponse { Success = false, ResponseId = request.RequestId, LocalizedFailure = failure });
-                        return;
-                    }
-                }
-
-                _matchmaking.Ready();
-                MatchmakingManager.AddGroupToQueue(request.GameType, group);
-                Send(new JoinMatchmakingQueueResponse { Success = true, ResponseId = request.RequestId });
-            }
-            catch (Exception e)
-            {
-                Send(new JoinMatchmakingQueueResponse
-                {
-                    Success = false,
-                    ResponseId = request.RequestId,
-                    LocalizedFailure = LocalizationPayload.Create("ServerError@Global")
-                });
-                log.Error("Failed to process join queue request", e);
-            }
-        }
-
-        public void HandleLeaveMatchmakingQueueRequest(LeaveMatchmakingQueueRequest request)
-        {
-            try
-            {
-                GroupInfo group = GroupManager.GetPlayerGroup(AccountId);
-                if (!group.IsLeader(AccountId))
-                {
-                    log.Warn($"{UserName} attempted to leave queue " +
-                             $"while not being the leader of their group");
-                    Send(new LeaveMatchmakingQueueResponse { Success = false, ResponseId = request.RequestId });
-                    return;
-                }
-
-                Send(new LeaveMatchmakingQueueResponse { Success = true, ResponseId = request.RequestId });
-                _matchmaking.Unready();
-                MatchmakingManager.RemoveGroupFromQueue(group);
-            }
-            catch (Exception e)
-            {
-                Send(new LeaveMatchmakingQueueResponse { Success = false, ResponseId = request.RequestId });
-                log.Error("Failed to process leave queue request", e);
-            }
-        }
-
 
         public void HandleChatNotification(ChatNotification notification)
         {
