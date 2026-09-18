@@ -1,0 +1,157 @@
+# 12 – Design Assessment & Refactoring Roadmap
+
+Goal: clearer, more modular, more testable. This doc lists the shortcomings observed in
+docs 01–11, why they matter, and a staged refactoring plan that respects the constraint
+that this is a live, working emulator (wire compatibility with an unmodifiable client and
+game server must be preserved).
+
+## A. Shortcomings
+
+### A1. Pervasive static singletons / global state (highest impact)
+
+`SessionManager`, `GroupManager`, `MatchmakingManager`, `ServerManager`, `GameManager`,
+`CustomGameManager`, `Elo` are static classes; `ChatManager`, `DiscordManager`,
+`AdminManager`, `StatsApi`, `DB` are `Get()` singletons; `EvosConfiguration` and all
+`GameData` classes are static-lazy. `CentralServer.Init` even carries the comment
+`// TODO Dependency injection`.
+
+Consequences: no seams for testing (doc 11), hidden dependency graph (any file may call
+any manager), initialization-order fragility (lazy singletons under concurrency — the
+`DB.Get()` race that once flaked tests), and impossible-to-scale-out state.
+
+### A2. God classes fusing transport and domain logic
+
+- `LobbyServerProtocol` (2,896 lines, ~75 handlers): store purchases, friends, groups,
+  draft, telemetry, chat — all as methods on a websocket connection. Domain logic is
+  unreachable without a socket, and the class is a merge-conflict magnet.
+- `Game` (1,699 lines): team assembly, bot filling, character validation, ranked draft
+  state machine, dodge penalties, queue-priority compensation, result finalization,
+  Discord/Elo/TrustWar integration.
+- `MatchmakingQueue` (788 lines): queue bookkeeping + sub-type mask algebra + match
+  scoring orchestration + client notification composition.
+
+### A3. Layering violations & naming drift
+
+- Framework hosts app-layer logic under foreign namespaces (`EvoS.DirectoryServer.Account.LoginManager`
+  in `EvoS.Framework/DataAccess/`, `InventoryManager`, `CharacterManager`, lobby config
+  types in `CentralServer.LobbyServer.Config`) — see doc 08. Dependency direction is
+  only enforced by project references, not by structure or namespaces.
+- Folder `LobbyServer2` / project `CentralServer` / namespace `CentralServer.LobbyServer`.
+- Two `CharacterManager`s disambiguated by using-aliases.
+- `EvoS.DirectoryServer` is a 1-file project whose actual logic lives in Framework.
+
+### A4. Bidirectional coupling between managers and connections
+
+Managers call `SessionManager.GetClientConnection(id)?.Send(...)` to push state;
+connections call managers to mutate state; managers call back into connection methods
+(`BroadcastRefreshGroup`, `OnLeaveGroup`). Notification fan-out is duplicated at every
+call site instead of being an outbound port. `SessionManager.Broadcast` routing through
+"any first connection" is the emblematic hack.
+
+### A5. Mixed concurrency idioms
+
+- `lock (SessionInfos)` *around* a `ConcurrentDictionary` (the lock is what actually
+  provides atomicity; the concurrent type suggests otherwise).
+- Plain `Dictionary` + `lock` in `ServerManager`/`CustomGameManager`/`GroupManager`;
+  lock objects sometimes shared across classes (`Game.characterSelectionLock` is a
+  `public static object` also taken by `LobbyServerProtocol`).
+- Sync-over-async (`Send` → `.GetAwaiter().GetResult()`), `async void` methods
+  (`Game.OnServerDisconnect`, `Sandbox Program.OnExecute`), fire-and-forget `Task.Run`
+  for the periodic tasks with `CancellationToken.None` (no orderly shutdown).
+- Time and delays hard-coded (`DateTime.Now` vs `DateTime.UtcNow` inconsistently;
+  `Task.Delay` in `ServerManager.DisconnectServer`, draft timers).
+
+### A6. Shared mutable cached entities
+
+`AccountDao` (cached) returns shared `PersistedAccountData` instances mutated in place by
+many subsystems, then saved wholesale (`UpdateAccount`) or per-component. No unit of work,
+no optimistic concurrency; lost updates are possible whenever two handlers touch the same
+account concurrently.
+
+### A7. Login-path warts
+
+- `PatchAccountData` always returns true → full account rewrite on every login; contains
+  a 3× copy-pasted loadout-patch block.
+- DB failure during login silently creates `temp_user#N` accounts (state divergence that
+  later persists partial data).
+
+### A8. Config sprawl
+
+Five formats/loaders, only one hot-reloadable, all static, all CWD-relative (doc 10).
+
+### A9. Dead code & stubs
+
+Commented-out `MatchmakingManager.StartPractice`, `QuestManager` stub, disabled queue
+types, `.idea/shelf` archives checked into the repo, `README.md` describing VS2019/.NET
+Core 2.2 while the code targets modern .NET (9 in Docker).
+
+## B. What already points the right way (build on these)
+
+- `MatchmakerRanked(AccountDao, ..., Func<Config>)` + convenience ctor defaulting to
+  `DB.Get()` — incremental DI without breaking callers.
+- `Elo` parameterized by `IAccountProvider`/`IMatchHistoryProvider`/`IAccountUpdater`.
+- `BridgeServerProtocol` ↔ `Game` decoupled via events; `IGameServerConnection` interface.
+- DAO interface / impl / cached-decorator / mock structure.
+- `PeriodicRunner`, `ReloadableConfig` as reusable mechanisms.
+- `WebSocketBehaviorBase` cleanly isolates websocket mechanics.
+
+## C. Refactoring roadmap (staged, each stage shippable)
+
+### Stage 1 — Extract domain services out of `LobbyServerProtocol` (no behavior change)
+
+Carve handler groups into service classes that take the connection as an *interface*:
+
+1. Define `IClientConnection` (AccountId, Send, SendSystemMessage, CloseConnection, ...)
+   implemented by `LobbyServerProtocol`.
+2. Move handler bodies into services: `StoreService` (all `HandlePurchase*`),
+   `FriendService` (`HandleFriendUpdate`), `GroupRequestService` (invite/join/confirm),
+   `TelemetryService` (crash/error/feedback), `DraftService` (ranked handlers).
+   The protocol class keeps only registration + delegation (target: < 400 lines).
+3. Each service takes its DAOs/config via constructor with the established
+   static-default convenience pattern → immediately unit-testable.
+
+### Stage 2 — Introduce an outbound notification port
+
+Create `IClientNotifier` (send-to-account, broadcast-to-group, broadcast-to-all) backed by
+`SessionManager`. Replace direct `SessionManager.GetClientConnection(x)?.Send(...)`
+call sites in managers. This kills the manager→connection coupling and makes fan-out
+testable (assert on a recording notifier).
+
+### Stage 3 — De-static the managers behind interfaces
+
+Convert one manager at a time to an instance class with an interface
+(`ISessionRegistry`, `IGroupRegistry`, `IServerPool`, `IGameRegistry`), keeping a static
+`Instance` shim so call sites migrate gradually. Compose them in `CentralServer.Init`
+(or Microsoft DI, which ASP.NET already provides). Priority order:
+`SessionManager` → `GroupManager` → `ServerManager`/`GameManager` → `MatchmakingManager`.
+
+### Stage 4 — Split `Game`
+
+- `GameLifecycle` (status transitions, server binding, reconnection),
+- `TeamAssembler` (FillTeam/bots/duplicate resolution — pure given inputs; highly testable),
+- `DraftController` (ranked resolution state machine, injected clock/timer),
+- `MatchFinalizer` (summary → history/Elo/TrustWar/accolades/Discord, behind interfaces).
+`Game` becomes a thin aggregate wiring these together.
+
+### Stage 5 — Consistency & hygiene
+
+- Move misnamespaced Framework code to real homes (`LoginManager` → DirectoryServer or an
+  `EvoS.Accounts` library); align folder/project/namespace names (`LobbyServer2` →
+  `CentralServer`); delete dead code; update README.
+- One concurrency idiom per structure (drop `ConcurrentDictionary` where a lock is
+  authoritative, or drop the lock where the dictionary suffices); replace `async void`;
+  give background tasks a real `CancellationTokenSource` tied to shutdown.
+- `IClock` abstraction for penalty/draft/session-expiry logic (Elo already takes `now`).
+- Make `PatchAccountData` report whether it changed anything; dedupe the loadout blocks;
+  turn it into versioned migrations.
+- Migrate remaining configs onto `ReloadableConfig`/one loader; inject config objects
+  instead of static getters in new/refactored code.
+
+### Suggested first PRs (small, high leverage)
+
+1. `IClientNotifier` + convert `MatchmakingQueue`/`GroupManager` notification call sites.
+2. Extract `StoreService` from `LobbyServerProtocol` with tests (pure account math).
+3. Fix `PatchAccountData` return value + dedupe (removes a DB write per login).
+4. Deduplicate `SessionManager` lock/concurrent-dictionary idiom, document the invariant.
+5. Extract `TeamAssembler` from `Game` with tests around `CheckDuplicatedAndFill`
+   (historically bug-prone: dodge/fill edge cases).
