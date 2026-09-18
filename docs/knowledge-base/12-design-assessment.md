@@ -157,7 +157,12 @@ per-connection module instances; each module registers its own handlers into the
    Login/Status. External callers of moved members keep working via delegation on the
    connection during the transition. **Store pilot (`StoreModule`, 13 handlers) extracted
    and tested (`StoreModuleTest`, 9 cases). `TelemetryModule` (8 handlers) extracted and
-   tested (`TelemetryModuleTest`, 4 cases) — second module after Store.**
+   tested (`TelemetryModuleTest`, 4 cases) — second module after Store. `AccountModule`
+   (15 handlers: options, keybinds, UI state, dev tag, customization selects, match data,
+   RAF stubs, check account/loading screen) extracted and tested (`AccountModuleTest`,
+   13 cases) — third module; `IClientConnection` grown with `OnAccountVisualsUpdated()`.
+   Deferred to GameLifecycle: `UseOverconRequest`, `UseGGPackRequest`,
+   `PlayerUpdateStatusRequest`, `PreviousGameInfoRequest`, `UpdateRemoteCharacterRequest`.**
 
 ### Stage 2 — Introduce an outbound notification port
 
