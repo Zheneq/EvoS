@@ -244,6 +244,36 @@ Convert one manager at a time to an instance class with an interface
 (or Microsoft DI, which ASP.NET already provides). Priority order:
 `SessionManager` → `GroupManager` → `ServerManager`/`GameManager` → `MatchmakingManager`.
 
+**Step 1 complete (branch `refactor`):**
+- `ISessionRegistry` introduced in `LobbyServer2/LobbyServer/Session/ISessionRegistry.cs`
+  with members: `GetClientConnection`, `GetSessionInfo`, `GetOnlinePlayers`,
+  `GetOnlinePlayerByHandle`, `GetOnlinePlayerByHandleOrUsername`, `CreateSession`,
+  `GetDisconnectedSessionInfo`, `KillSession`, `Broadcast`. `OnPlayerConnect`,
+  `OnPlayerDisconnect`, `OnServerShutdown`, and the events are not on the interface.
+- `SessionManager` converted from `static class` to `public class SessionManager : ISessionRegistry`
+  with a `public static SessionManager Instance { get; internal set; }` shim.
+  State fields (`SessionInfos`, `ConnectingSessions`, `DisconnectedSessionInfos`) became
+  instance fields. Prometheus `Gauge` fields stayed `static readonly` to avoid metric
+  re-registration. All existing `public static` methods are static forwarders calling
+  private `*Core` instance methods. `ISessionRegistry` implemented explicitly.
+  `Instance` pre-initialized to `new SessionManager()` so tests (which never call
+  `CentralServer.Init`) still get an empty-state instance and all static forwarders
+  remain callable without any test-setup change.
+- DI wired in `CentralServer.Init`: `AddSingleton<ISessionRegistry, SessionManager>` +
+  `AddTransient<LobbyServerProtocol>`; `SessionManager.Instance` overwritten from DI after
+  `builder.Build()` so production uses the DI-managed singleton; the lobby map lambda
+  resolves `LobbyServerProtocol` from `context.RequestServices` instead of `new`.
+- `LobbyServerProtocol` receives `ISessionRegistry sessionRegistry` via constructor and
+  stores it as `private readonly ISessionRegistry _sessionRegistry`.
+
+**Deferred to follow-up steps:**
+- Static call sites in modules/managers (`SessionManager.GetClientConnection(...)` etc.)
+  still call the static shim; migration to `ISessionRegistry` injection is follow-up work.
+- `OnPlayerConnect`/`OnPlayerDisconnect` interface widening (they set concrete
+  `LobbyServerProtocol` fields directly and are not yet on `ISessionRegistry`).
+- Full concrete-type removal: `GroupManager`, `Game`, `CustomGame`, `FriendManager` etc.
+  still receive `LobbyServerProtocol` from static `GetClientConnection`.
+
 ### Stage 4 — Split `Game`
 
 - `GameLifecycle` (status transitions, server binding, reconnection),
