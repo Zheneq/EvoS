@@ -19,6 +19,7 @@ using EvoS.Framework.Misc;
 using log4net;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace CentralServer
@@ -76,13 +77,17 @@ namespace CentralServer
             {
                 LogLevelTranslator = new ApiServer.ApiServer.CustomLogLevelTranslator(),
             });
+            builder.Services.AddSingleton<ISessionRegistry, SessionManager>();
+            builder.Services.AddTransient<LobbyServerProtocol>();
             _app = builder.Build();
+            SessionManager.Instance = (SessionManager)_app.Services.GetRequiredService<ISessionRegistry>();
             _app.UseWebSockets(new WebSocketOptions
             {
                 KeepAliveInterval = EvosConfiguration.GetLobbyServerTimeOut()
             });
             _app.Map("/LobbyGameClientSessionManager",
-                sub => sub.Run(context => AcceptConnection(context, new LobbyServerProtocol())));
+                sub => sub.Run(context => AcceptConnection(context,
+                    context.RequestServices.GetRequiredService<LobbyServerProtocol>())));
             _app.Map("/BridgeServer",
                 sub => sub.Run(context => AcceptConnection(context, new BridgeServerProtocol())));
 
