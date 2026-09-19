@@ -51,7 +51,7 @@ public class GroupModuleTest : EvosTest
         MakeModule(long accountId)
     {
         var conn = new RecordingClientConnection { AccountId = accountId };
-        var module = new GroupModule(conn);
+        var module = new GroupModule(conn, GroupManager.Instance);
         var registry = new CapturingRegistry();
         module.Register(registry);
         return (module, conn, registry);

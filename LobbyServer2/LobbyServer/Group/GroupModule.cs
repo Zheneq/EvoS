@@ -19,10 +19,12 @@ public class GroupModule : ILobbyModule
 {
     private static readonly ILog log = LogManager.GetLogger(typeof(GroupModule));
     private readonly IClientConnection _conn;
+    private readonly IGroupRegistry _groupRegistry;
 
-    public GroupModule(IClientConnection conn)
+    public GroupModule(IClientConnection conn, IGroupRegistry groupRegistry)
     {
         _conn = conn;
+        _groupRegistry = groupRegistry;
     }
 
     public void Register(IHandlerRegistry registry)
@@ -39,7 +41,7 @@ public class GroupModule : ILobbyModule
 
     private void HandleGroupPromoteRequest(GroupPromoteRequest request)
     {
-        GroupInfo group = GroupManager.GetPlayerGroup(_conn.AccountId);
+        GroupInfo group = _groupRegistry.GetPlayerGroup(_conn.AccountId);
         //Sadly message.AccountId returns 0 so look it up by name/handle
         long? accountId = SessionManager.GetOnlinePlayerByHandleOrUsername(request.Name);
 
@@ -61,7 +63,7 @@ public class GroupModule : ILobbyModule
         {
             response.LocalizedFailure = GroupMessages.AlreadyTheLeader;
         }
-        else if (accountId.HasValue && GroupManager.PromoteMember(group, (long)accountId))
+        else if (accountId.HasValue && _groupRegistry.PromoteMember(group, (long)accountId))
         {
             response.Success = true;
             _conn.BroadcastRefreshGroup();
@@ -76,7 +78,7 @@ public class GroupModule : ILobbyModule
 
     private void HandleGroupKickRequest(GroupKickRequest request)
     {
-        GroupInfo group = GroupManager.GetPlayerGroup(_conn.AccountId);
+        GroupInfo group = _groupRegistry.GetPlayerGroup(_conn.AccountId);
         GroupKickResponse response = new GroupKickResponse
         {
             ResponseId = request.RequestId,
@@ -101,7 +103,7 @@ public class GroupModule : ILobbyModule
             }
             else
             {
-                response.Success = GroupManager.LeaveGroup(accountId.Value, false, true);
+                response.Success = _groupRegistry.LeaveGroup(accountId.Value, false, true);
             }
             if (!response.Success)
             {
@@ -109,7 +111,7 @@ public class GroupModule : ILobbyModule
             }
             else if (accountId.HasValue)
             {
-                GroupManager.BroadcastSystemMessage(group, GroupMessages.MemberKickedFromGroup(accountId.Value));
+                _groupRegistry.BroadcastSystemMessage(group, GroupMessages.MemberKickedFromGroup(accountId.Value));
             }
         }
         _conn.Send(response);
@@ -144,7 +146,7 @@ public class GroupModule : ILobbyModule
             return;
         }
 
-        GroupInfo group = GroupManager.GetPlayerGroup(_conn.AccountId);
+        GroupInfo group = _groupRegistry.GetPlayerGroup(_conn.AccountId);
         if (group.Members.Contains(friendAccountId))
         {
             log.Info($"{_conn.Handle} attempted to invite {request.FriendHandle} to a group when they are already there");
@@ -201,7 +203,7 @@ public class GroupModule : ILobbyModule
             return;
         }
 
-        GroupInfo friendGroup = GroupManager.GetPlayerGroup(friendAccountId);
+        GroupInfo friendGroup = _groupRegistry.GetPlayerGroup(friendAccountId);
         if (!friendGroup.IsSolo())
         {
             log.Info($"{_conn.Handle} attempted to invite {request.FriendHandle} who is already in a group");
@@ -223,7 +225,7 @@ public class GroupModule : ILobbyModule
                 LeaderFullHandle = account.Handle,
                 JoinerName = friendAccount.Handle,
                 JoinerAccountId = friendAccount.AccountId,
-                ConfirmationNumber = GroupManager.CreateGroupRequest(
+                ConfirmationNumber = _groupRegistry.CreateGroupRequest(
                     _conn.AccountId, friendAccount.AccountId, group.GroupId, joinType, expirationTime),
                 ExpirationTime = expirationTime,
                 Type = joinType
@@ -243,7 +245,7 @@ public class GroupModule : ILobbyModule
             response.Success = true;
             _conn.Send(response);
 
-            GroupManager.BroadcastSystemMessage(
+            _groupRegistry.BroadcastSystemMessage(
                 group,
                 GroupMessages.InvitedFriendToGroup(friendAccount.AccountId),
                 _conn.AccountId);
@@ -258,7 +260,7 @@ public class GroupModule : ILobbyModule
                 SuggesterAccountName = account.Handle,
                 SuggesterAccountId = _conn.AccountId,
             });
-            GroupManager.BroadcastSystemMessage(
+            _groupRegistry.BroadcastSystemMessage(
                 group,
                 GroupMessages.InviteToGroupWithYou(_conn.AccountId, friendAccount.AccountId),
                 _conn.AccountId);
@@ -274,7 +276,7 @@ public class GroupModule : ILobbyModule
             Success = false
         };
 
-        GroupInfo myGroup = GroupManager.GetPlayerGroup(_conn.AccountId);
+        GroupInfo myGroup = _groupRegistry.GetPlayerGroup(_conn.AccountId);
         if (!myGroup.IsSolo())
         {
             log.Info($"{_conn.Handle} attempted to join {request.FriendHandle}'s group while being in another group.");
@@ -333,7 +335,7 @@ public class GroupModule : ILobbyModule
             return;
         }
 
-        GroupInfo friendGroup = GroupManager.GetPlayerGroup(friendAccountId);
+        GroupInfo friendGroup = _groupRegistry.GetPlayerGroup(friendAccountId);
         if (friendGroup.IsSolo())
         {
             log.Info($"{_conn.Handle} attempted to join {request.FriendHandle}'s ({friendAccountId}) group while they are solo.");
@@ -369,12 +371,12 @@ public class GroupModule : ILobbyModule
             LeaderFullHandle = account.Handle,
             JoinerName = account.Handle,
             JoinerAccountId = _conn.AccountId,
-            ConfirmationNumber = GroupManager.CreateGroupRequest(
+            ConfirmationNumber = _groupRegistry.CreateGroupRequest(
                 _conn.AccountId, friendGroup.Leader, friendGroup.GroupId, joinType, expirationTime),
             ExpirationTime = expirationTime,
             Type = joinType
         });
-        GroupManager.BroadcastSystemMessage(
+        _groupRegistry.BroadcastSystemMessage(
             friendGroup,
             GroupMessages.RequestToJoinGroup(_conn.AccountId),
             leaderAccount.AccountId);
@@ -385,7 +387,7 @@ public class GroupModule : ILobbyModule
 
     private void HandleGroupSuggestionResponse(GroupSuggestionResponse response)
     {
-        GroupInfo group = GroupManager.GetPlayerGroup(_conn.AccountId);
+        GroupInfo group = _groupRegistry.GetPlayerGroup(_conn.AccountId);
         if (group is null)
         {
             return;
@@ -393,7 +395,7 @@ public class GroupModule : ILobbyModule
 
         if (response.SuggestionStatus == GroupSuggestionResponse.Status.Denied)
         {
-            GroupManager.BroadcastSystemMessage(
+            _groupRegistry.BroadcastSystemMessage(
                 group,
                 GroupMessages.LeaderRejectedSuggestion); // no param for response.SuggesterAccountId
         }
@@ -402,8 +404,8 @@ public class GroupModule : ILobbyModule
 
     private void HandleGroupConfirmationResponse(GroupConfirmationResponse response)
     {
-        GroupInfo myGroup = GroupManager.GetPlayerGroup(_conn.AccountId);
-        GroupRequestInfo groupRequestInfo = GroupManager.PopGroupRequest(response.ConfirmationNumber);
+        GroupInfo myGroup = _groupRegistry.GetPlayerGroup(_conn.AccountId);
+        GroupRequestInfo groupRequestInfo = _groupRegistry.PopGroupRequest(response.ConfirmationNumber);
 
         if (groupRequestInfo is null)
         {
@@ -444,14 +446,14 @@ public class GroupModule : ILobbyModule
             }
             else
             {
-                GroupManager.BroadcastSystemMessage(
+                _groupRegistry.BroadcastSystemMessage(
                     myGroup,
                     GroupMessages.MemberFailedToJoinGroupPlayerNotFound(groupRequestInfo.RequesterAccountId));
             }
             return;
         }
 
-        GroupInfo requesterGroup = GroupManager.GetPlayerGroup(groupRequestInfo.RequesterAccountId);
+        GroupInfo requesterGroup = _groupRegistry.GetPlayerGroup(groupRequestInfo.RequesterAccountId);
         if (groupRequestInfo.IsInvitation)
         {
             if (groupRequestInfo.GroupId != requesterGroup.GroupId)
@@ -469,7 +471,7 @@ public class GroupModule : ILobbyModule
                          + $"to {groupRequestInfo.RequesteeAccountId} to join group {response.GroupId} "
                          + $"by {response.JoinerAccountId} but they are already in a group");
                 _conn.SendSystemMessage(GroupMessages.FailedToJoinGroupCantJoinIfInGroup);
-                GroupManager.BroadcastSystemMessage(
+                _groupRegistry.BroadcastSystemMessage(
                     requesterGroup,
                     GroupMessages.MemberFailedToJoinGroupOtherPlayerInOtherGroup(_conn.AccountId));
                 return;
@@ -493,7 +495,7 @@ public class GroupModule : ILobbyModule
                          + $"to {groupRequestInfo.RequesteeAccountId} to join group {response.GroupId} "
                          + $"by {response.JoinerAccountId} who is already in a group");
                 _conn.SendSystemMessage(GroupMessages.MemberFailedToJoinGroupOtherPlayerInOtherGroup(groupRequestInfo.RequesterAccountId));
-                GroupManager.BroadcastSystemMessage(
+                _groupRegistry.BroadcastSystemMessage(
                     requesterGroup,
                     GroupMessages.MemberFailedToJoinGroupOtherPlayerInOtherGroup(groupRequestInfo.RequesterAccountId));
                 return;
@@ -514,29 +516,29 @@ public class GroupModule : ILobbyModule
         switch (response.Acceptance)
         {
             case GroupInviteResponseType.PlayerRejected:
-                GroupManager.BroadcastSystemMessage(
+                _groupRegistry.BroadcastSystemMessage(
                     requesterGroup,
                     GroupMessages.RejectedGroupInvite(_conn.AccountId));
                 break;
             case GroupInviteResponseType.OfferExpired:
-                GroupManager.BroadcastSystemMessage(
+                _groupRegistry.BroadcastSystemMessage(
                     requesterGroup,
                     groupRequestInfo.IsInvitation
                         ? GroupMessages.JoinGroupOfferExpired(_conn.AccountId)
                         : GroupMessages.FailedToJoinGroupInviteExpired(_conn.AccountId));
                 break;
             case GroupInviteResponseType.RequestorSpamming:
-                GroupManager.BroadcastSystemMessage(
+                _groupRegistry.BroadcastSystemMessage(
                     requesterGroup,
                     GroupMessages.AlreadyRejectedInvite(_conn.AccountId));
                 break;
             case GroupInviteResponseType.PlayerInCustomMatch:
-                GroupManager.BroadcastSystemMessage(
+                _groupRegistry.BroadcastSystemMessage(
                     requesterGroup,
                     GroupMessages.PlayerInACustomMatchAtTheMoment(_conn.AccountId));
                 break;
             case GroupInviteResponseType.PlayerStillAwaitingPreviousQuery:
-                GroupManager.BroadcastSystemMessage(
+                _groupRegistry.BroadcastSystemMessage(
                     requesterGroup,
                     GroupMessages.PlayerStillConsideringYourPreviousInviteRequest(_conn.AccountId));
                 break;
@@ -556,7 +558,7 @@ public class GroupModule : ILobbyModule
                         if (lobbyServerOtherPlayerInfo?.TeamId != lobbyServerPlayerInfo?.TeamId)
                         {
                             log.Info($"Player {_conn.AccountId} is trying to accept a group invite but is currently on the opposing team.");
-                            GroupManager.BroadcastSystemMessage(
+                            _groupRegistry.BroadcastSystemMessage(
                                 requesterGroup,
                                 GroupMessages.FailedToJoinGroupCantInviteActiveOpponent);
                             break;
@@ -564,7 +566,7 @@ public class GroupModule : ILobbyModule
                     }
                 }
 
-                GroupManager.JoinGroup(
+                _groupRegistry.JoinGroup(
                     groupRequestInfo.GroupId,
                     groupRequestInfo.IsInvitation
                         ? groupRequestInfo.RequesteeAccountId
@@ -577,13 +579,13 @@ public class GroupModule : ILobbyModule
 
     private void HandleGroupLeaveRequest(GroupLeaveRequest request)
     {
-        GroupManager.CreateGroup(_conn.AccountId);
+        _groupRegistry.CreateGroup(_conn.AccountId);
         _conn.BroadcastRefreshFriendList();
     }
 
     private void HandlePlayerGroupInfoUpdateRequest(PlayerGroupInfoUpdateRequest request)
     {
-        GroupInfo group = GroupManager.GetPlayerGroup(_conn.AccountId);
+        GroupInfo group = _groupRegistry.GetPlayerGroup(_conn.AccountId);
         if (!group.IsLeader(_conn.AccountId))
         {
             _conn.Send(new PlayerGroupInfoUpdateResponse
