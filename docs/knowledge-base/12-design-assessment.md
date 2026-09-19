@@ -21,7 +21,7 @@ any manager), initialization-order fragility (lazy singletons under concurrency 
 
 ### A2. God classes fusing transport and domain logic
 
-- `LobbyServerProtocol` (2,896 lines, ~75 handlers): store purchases, friends, groups,
+- ~~`LobbyServerProtocol` (2,896 lines, ~75 handlers): store purchases, friends, groups,
   draft, telemetry, chat — all as methods on a websocket connection. Domain logic is
   unreachable without a socket, and the class is a merge-conflict magnet.
   The `LobbyServerProtocolBase` split is nominal: `LobbyServerProtocol` is its only
@@ -29,7 +29,11 @@ any manager), initialization-order fragility (lazy singletons under concurrency 
   transport plumbing (serialization, proxy patching) with domain logic
   (`SendLobbyServerReadyNotification` composes the login state dump, fetches GitHub patch
   notes over HTTP, reads MOTD from the DB). The real transport abstraction is
-  `WebSocketBehaviorBase<TMessage>`; the middle layer earns nothing.
+  `WebSocketBehaviorBase<TMessage>`; the middle layer earns nothing.~~ **Partially
+  addressed (Stage 1 in progress):** `LobbyServerProtocolBase` merged; 8 modules extracted
+  (Store, Telemetry, Account, Group, Matchmaking, GameLifecycle, Character, Friend) — ~2,100
+  lines moved out; protocol file reduced from ~2,900 to ~800 lines. Remaining handlers
+  blocked on Stage 3 or deferred to Stage 4 (see §C Stage 1).
 - `Game` (1,699 lines): team assembly, bot filling, character validation, ranked draft
   state machine, dodge penalties, queue-priority compensation, result finalization,
   Discord/Elo/TrustWar integration.
@@ -210,13 +214,20 @@ per-connection module instances; each module registers its own handlers into the
    `LobbyServerProtocol` and writes `client.Status` — moving them without growing
    `IClientConnection` with `Status` requires Stage 3 manager refactoring.
    `IClientConnection` unchanged (no new members added for this module).
-   **What remains on the connection for Stage 1**: `HandleRegisterGame` + login pile,
-   `HandlePlayerUpdateStatusRequest`, chat handlers (`ChatNotification`, `GroupChatRequest`),
-   overcon/GG pack handlers (`UseOverconRequest`, `UseGGPackRequest`), custom-game subscription
-   handlers (`SubscribeToCustomGamesRequest`, `UnsubscribeFromCustomGamesRequest`),
-   `HandleRejoinGameRequest`, ranked draft handlers (`RankedTradeRequest`,
-   `RankedSelectionRequest`, `RankedBanRequest`, `RankedHoverClickRequest`),
-   `DEBUG_AdminSlashCommandNotification`.**
+   **What remains on the connection — categorized:**
+   - *Could still move in Stage 1 (deferred, not blocked)*: `UseOverconRequest` /
+     `UseGGPackRequest` (iterate `CurrentGame.GetClients()` — natural fit in
+     `GameLifecycleModule`); `DEBUG_AdminSlashCommandNotification` (self-contained, ~30
+     lines, could be an `AdminModule`).
+   - *Blocked on Stage 3* (`FriendManager`, `SessionManager`, `CustomGameManager`,
+     `Game.ReconnectPlayer` take concrete `LobbyServerProtocol`): `HandleRegisterGame`,
+     `HandlePlayerUpdateStatusRequest` + `Status`, chat handlers (`ChatNotification`,
+     `GroupChatRequest`), `SubscribeToCustomGamesRequest`, `UnsubscribeFromCustomGamesRequest`,
+     `HandleRejoinGameRequest`.
+   - *Stage 4*: ranked draft handlers (`RankedTradeRequest`, `RankedSelectionRequest`,
+     `RankedBanRequest`, `RankedHoverClickRequest`) — belong in `DraftController`.
+   **Stage 1 is substantially complete. Proceeding to Stage 3 (de-static the managers)
+   unlocks the blocked group and makes the remaining small extractions straightforward.**
 
 ### Stage 2 — Introduce an outbound notification port
 
