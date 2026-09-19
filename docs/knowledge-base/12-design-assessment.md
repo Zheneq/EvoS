@@ -203,14 +203,20 @@ per-connection module instances; each module registers its own handlers into the
    `SetContextualReadyState` deleted from `LobbyServerProtocol` (their only caller,
    `HandlePlayerInfoUpdateRequest`, moved with the module). `SetGameType` kept (public —
    `GroupModule` calls it cross-connection).
+   `FriendModule` (1 handler: `FriendUpdateRequest`; 1 private helper: `Unblock`) extracted and
+   tested (`FriendModuleTest`, 5 cases) — **eighth module; stateless (no state migration)**.
+   `HandlePlayerUpdateStatusRequest` and `Status` (`PlayerOnlineStatus`) deliberately left on the
+   connection: `FriendManager.OnPlayerUpdateStatusRequest(this, request)` takes a concrete
+   `LobbyServerProtocol` and writes `client.Status` — moving them without growing
+   `IClientConnection` with `Status` requires Stage 3 manager refactoring.
+   `IClientConnection` unchanged (no new members added for this module).
    **What remains on the connection for Stage 1**: `HandleRegisterGame` + login pile,
    `HandlePlayerUpdateStatusRequest`, chat handlers (`ChatNotification`, `GroupChatRequest`),
    overcon/GG pack handlers (`UseOverconRequest`, `UseGGPackRequest`), custom-game subscription
    handlers (`SubscribeToCustomGamesRequest`, `UnsubscribeFromCustomGamesRequest`),
    `HandleRejoinGameRequest`, ranked draft handlers (`RankedTradeRequest`,
    `RankedSelectionRequest`, `RankedBanRequest`, `RankedHoverClickRequest`),
-   `DEBUG_AdminSlashCommandNotification`, `FriendUpdateRequest` + `PlayerUpdateStatusRequest`
-   (Friend module candidate, `Status` ownership).**
+   `DEBUG_AdminSlashCommandNotification`.**
 
 ### Stage 2 — Introduce an outbound notification port
 
