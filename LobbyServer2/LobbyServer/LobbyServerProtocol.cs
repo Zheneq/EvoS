@@ -54,6 +54,7 @@ namespace CentralServer.LobbyServer
         public long SessionToken;
         public bool SessionCleaned = false; // tracks clean up methods execution for reconnection
 
+        private readonly ISessionRegistry _sessionRegistry;
         private readonly MatchmakingModule _matchmaking;
         private readonly GameLifecycleModule _gameLifecycle;
 
@@ -348,8 +349,9 @@ namespace CentralServer.LobbyServer
             RegisterHandler<T>(handler);
         }
 
-        public LobbyServerProtocol()
+        public LobbyServerProtocol(ISessionRegistry sessionRegistry)
         {
+            _sessionRegistry = sessionRegistry;
             _matchmaking = new MatchmakingModule(this);
             _gameLifecycle = new GameLifecycleModule(this);
 
