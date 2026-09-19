@@ -9,18 +9,44 @@ using MoreLinq;
 
 namespace CentralServer.BridgeServer
 {
-    public static class ServerManager
+    public class ServerManager : IServerPool
     {
         private static readonly ILog log = LogManager.GetLogger(typeof(ServerManager));
 
-        private static readonly Dictionary<string, BridgeServerProtocol> ServerPool = new Dictionary<string, BridgeServerProtocol>();
+        public static ServerManager Instance { get; internal set; } = new ServerManager();
 
-        public static void AddServer(BridgeServerProtocol gameServer)
+        private readonly Dictionary<string, BridgeServerProtocol> _serverPool = new Dictionary<string, BridgeServerProtocol>();
+
+        // --- Static forwarders (keep existing call sites compiling) ---
+
+        public static void AddServer(BridgeServerProtocol gameServer) => Instance.AddServerCore(gameServer);
+        public static void RemoveServer(string processCode) => Instance.RemoveServerCore(processCode);
+        public static BridgeServerProtocol GetServer(bool custom = false) => Instance.GetServerCore(custom);
+        public static bool IsAnyServerAvailable() => Instance.IsAnyServerAvailableCore();
+        public static List<BridgeServerProtocol> GetServers() => Instance.GetServersCore();
+        public static BridgeServerProtocol FindServerByAddress(string address) => Instance.FindServerByAddressCore(address);
+        public static bool HasOtherServerWithFingerprint(string fingerprint, string processCode) => Instance.HasOtherServerWithFingerprintCore(fingerprint, processCode);
+        public static void DisconnectByFingerprint(string fingerprint) => Instance.DisconnectByFingerprintCore(fingerprint);
+
+        // --- IServerPool explicit implementation ---
+
+        void IServerPool.AddServer(BridgeServerProtocol gameServer) => AddServerCore(gameServer);
+        void IServerPool.RemoveServer(string processCode) => RemoveServerCore(processCode);
+        BridgeServerProtocol IServerPool.GetServer(bool custom) => GetServerCore(custom);
+        bool IServerPool.IsAnyServerAvailable() => IsAnyServerAvailableCore();
+        List<BridgeServerProtocol> IServerPool.GetServers() => GetServersCore();
+        BridgeServerProtocol IServerPool.FindServerByAddress(string address) => FindServerByAddressCore(address);
+        bool IServerPool.HasOtherServerWithFingerprint(string fingerprint, string processCode) => HasOtherServerWithFingerprintCore(fingerprint, processCode);
+        void IServerPool.DisconnectByFingerprint(string fingerprint) => DisconnectByFingerprintCore(fingerprint);
+
+        // --- Core instance methods ---
+
+        private void AddServerCore(BridgeServerProtocol gameServer)
         {
-            lock (ServerPool)
+            lock (_serverPool)
             {
-                bool isReconnection = ServerPool.Remove(gameServer.ProcessCode, out BridgeServerProtocol oldServer);
-                ServerPool.TryAdd(gameServer.ProcessCode, gameServer);
+                bool isReconnection = _serverPool.Remove(gameServer.ProcessCode, out BridgeServerProtocol oldServer);
+                _serverPool.TryAdd(gameServer.ProcessCode, gameServer);
 
                 log.Info($"{(isReconnection ? "A server reconnected" : "New game server connected")} " +
                          $"with address {gameServer.URI} (IsPrivate={gameServer.IsPrivate})");
@@ -33,29 +59,29 @@ namespace CentralServer.BridgeServer
             }
         }
 
-        public static void RemoveServer(string processCode)
+        private void RemoveServerCore(string processCode)
         {
             if (processCode == null)
             {
                 return;
             }
-            lock (ServerPool)
+            lock (_serverPool)
             {
-                ServerPool.Remove(processCode);
+                _serverPool.Remove(processCode);
                 log.Info($"Game server disconnected");
             }
         }
 
-        public static BridgeServerProtocol GetServer(bool custom = false)
+        private BridgeServerProtocol GetServerCore(bool custom = false)
         {
-            lock (ServerPool)
+            lock (_serverPool)
             {
                 if (custom && !IsReserveFilled())
                 {
                     log.Info("Failed to find a server: all servers are reserved");
                     return null;
                 }
-                
+
                 foreach (BridgeServerProtocol server in GetServersInPickOrder())
                 {
                     if (server.IsAvailable())
@@ -65,37 +91,37 @@ namespace CentralServer.BridgeServer
                     }
                 }
             }
-            
+
             log.Info("Failed to find a server for the game");
             return null;
         }
 
-        private static IEnumerable<BridgeServerProtocol> GetServersInPickOrder()
+        private IEnumerable<BridgeServerProtocol> GetServersInPickOrder()
         {
             switch (EvosConfiguration.GetGameServerPickOrder())
             {
                 case GameServerPickOrder.RANDOM:
-                    return ServerPool.Values.Shuffle();
+                    return _serverPool.Values.Shuffle();
                 case GameServerPickOrder.ALPHABETICAL:
-                    return ServerPool.Values.OrderBy(server => server.Name);
+                    return _serverPool.Values.OrderBy(server => server.Name);
                 case GameServerPickOrder.ALPHABETICAL_REVERSED:
-                    return ServerPool.Values.OrderByDescending(server => server.Name);
+                    return _serverPool.Values.OrderByDescending(server => server.Name);
                 default:
                     log.Error("Unknown game server pick order: " + EvosConfiguration.GetGameServerPickOrder());
                     goto case GameServerPickOrder.RANDOM;
             }
         }
 
-        private static bool IsReserveFilled()
+        private bool IsReserveFilled()
         {
-            return ServerPool.Values.Count(server => server.IsAvailable()) > LobbyConfiguration.GetServerReserveSize();
+            return _serverPool.Values.Count(server => server.IsAvailable()) > LobbyConfiguration.GetServerReserveSize();
         }
 
-        public static bool IsAnyServerAvailable()
+        private bool IsAnyServerAvailableCore()
         {
-            lock (ServerPool)
+            lock (_serverPool)
             {
-                foreach (BridgeServerProtocol server in ServerPool.Values)
+                foreach (BridgeServerProtocol server in _serverPool.Values)
                 {
                     if (server.IsAvailable()) return true;
                 }
@@ -103,8 +129,8 @@ namespace CentralServer.BridgeServer
                 return false;
             }
         }
-        
-        private static async Task DisconnectServer(BridgeServerProtocol server)
+
+        private async Task DisconnectServer(BridgeServerProtocol server)
         {
             await Task.Delay(
                 LobbyConfiguration.GetServerGGTime()
@@ -122,38 +148,38 @@ namespace CentralServer.BridgeServer
             }
         }
 
-        public static List<BridgeServerProtocol> GetServers()
+        private List<BridgeServerProtocol> GetServersCore()
         {
-            return ServerPool.Values.ToList();
+            return _serverPool.Values.ToList();
         }
 
-        public static BridgeServerProtocol FindServerByAddress(string address)
+        private BridgeServerProtocol FindServerByAddressCore(string address)
         {
-            return ServerPool.Values.FirstOrDefault(server => address.Equals(server.URI));
+            return _serverPool.Values.FirstOrDefault(server => address.Equals(server.URI));
         }
 
-        public static bool HasOtherServerWithFingerprint(string fingerprint, string processCode)
+        private bool HasOtherServerWithFingerprintCore(string fingerprint, string processCode)
         {
             if (fingerprint == null)
             {
                 return false;
             }
-            lock (ServerPool)
+            lock (_serverPool)
             {
-                return ServerPool.Values.Any(
+                return _serverPool.Values.Any(
                     s => fingerprint.Equals(s.Fingerprint) && !string.Equals(s.ProcessCode, processCode));
             }
         }
 
-        public static void DisconnectByFingerprint(string fingerprint)
+        private void DisconnectByFingerprintCore(string fingerprint)
         {
             if (fingerprint == null)
             {
                 return;
             }
-            lock (ServerPool)
+            lock (_serverPool)
             {
-                foreach (BridgeServerProtocol server in ServerPool.Values
+                foreach (BridgeServerProtocol server in _serverPool.Values
                              .Where(s => fingerprint.Equals(s.Fingerprint))
                              .ToList())
                 {
