@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -14,37 +14,127 @@ using log4net;
 
 namespace CentralServer.LobbyServer.Group
 {
-    class GroupManager
+    public class GroupManager : IGroupRegistry
     {
         private static readonly ILog log = LogManager.GetLogger(typeof(GroupManager));
-        
-        private static readonly Dictionary<long, GroupInfo> ActiveGroups = new();
-        private static readonly Dictionary<long, long> PlayerToGroup = new();
-        private static readonly Dictionary<long, GroupRequestInfo> GroupRequests = new();
-        
-        private static long _lastGroupId = -1;
-        private static long _lastGroupRequestId = -1;
-        private static readonly object _lock = new object();
 
-        public static object Lock => _lock;
-        
-        public static GroupInfo GetGroup(long groupId)
+        public static GroupManager Instance { get; internal set; } = new GroupManager();
+
+        private readonly Dictionary<long, GroupInfo> ActiveGroups = new();
+        private readonly Dictionary<long, long> PlayerToGroup = new();
+        private readonly Dictionary<long, GroupRequestInfo> GroupRequests = new();
+
+        private long _lastGroupId = -1;
+        private long _lastGroupRequestId = -1;
+        private readonly object _lock = new object();
+
+        // Static accessor for callers that use GroupManager.Lock directly
+        public static object Lock => Instance._lock;
+
+        // ---- Static forwarders (preserve all existing call sites unchanged) ----
+
+        public static GroupInfo GetGroup(long groupId) => Instance.GetGroupCore(groupId);
+
+        public static List<long> GetGroupMembers(long groupId) => Instance.GetGroupMembersCore(groupId);
+
+        public static List<GroupInfo> GetGroups() => Instance.GetGroupsCore();
+
+        public static GroupInfo GetPlayerGroup(long accountId) => Instance.GetPlayerGroupCore(accountId);
+
+        public static long CreateGroupRequest(
+            long requesterAccountId,
+            long requesteeAccountId,
+            long groupId,
+            GroupConfirmationRequest.JoinType joinType,
+            TimeSpan expirationTime)
+            => Instance.CreateGroupRequestCore(requesterAccountId, requesteeAccountId, groupId, joinType, expirationTime);
+
+        public static GroupRequestInfo PopGroupRequest(long requestId) => Instance.PopGroupRequestCore(requestId);
+
+        public static void PingGroupRequests() => Instance.PingGroupRequestsCore();
+
+        public static void CreateGroup(long leader) => Instance.CreateGroupCore(leader);
+
+        public static bool LeaveGroup(long accountId, bool warnIfNotInAGroup = true, bool wasKicked = false)
+            => Instance.LeaveGroupCore(accountId, warnIfNotInAGroup, wasKicked);
+
+        public static void JoinGroup(long groupId, long accountId) => Instance.JoinGroupCore(groupId, accountId);
+
+        public static bool PromoteMember(GroupInfo groupInfo, long accountId)
+            => Instance.PromoteMemberCore(groupInfo, accountId);
+
+        public static LobbyPlayerGroupInfo GetGroupInfo(long accountId) => Instance.GetGroupInfoCore(accountId);
+
+        public static long GetGroupID(long accountId) => Instance.GetGroupIDCore(accountId);
+
+        public static void OnLeaveQueue(long groupId) => Instance.OnLeaveQueueCore(groupId);
+
+        public static void Broadcast(GroupInfo group, WebSocketMessage message, long skipAccountId = 0)
+            => Instance.BroadcastCore(group, message, skipAccountId);
+
+        public static void BroadcastSystemMessage(GroupInfo group, LocalizationPayload message, long skipAccountId = 0)
+            => Instance.BroadcastSystemMessageCore(group, message, skipAccountId);
+
+        public static ushort GetGroupSubTypeMask(long groupId) => Instance.GetGroupSubTypeMaskCore(groupId);
+
+        public static ushort GetGroupSubTypeMask(GroupInfo groupInfo) => Instance.GetGroupSubTypeMaskCore(groupInfo);
+
+        public static void UpdateSelectedSubTypes(GroupInfo groupInfo, bool resetReadyStateIfUpdated = true)
+            => Instance.UpdateSelectedSubTypesCore(groupInfo, resetReadyStateIfUpdated);
+
+        public static void UpdateSelectedSubTypesForAccount(long accountId)
+            => Instance.UpdateSelectedSubTypesForAccountCore(accountId);
+
+        // ---- Explicit IGroupRegistry implementation ----
+
+        object IGroupRegistry.Lock => _lock;
+        GroupInfo IGroupRegistry.GetGroup(long groupId) => GetGroupCore(groupId);
+        List<long> IGroupRegistry.GetGroupMembers(long groupId) => GetGroupMembersCore(groupId);
+        List<GroupInfo> IGroupRegistry.GetGroups() => GetGroupsCore();
+        GroupInfo IGroupRegistry.GetPlayerGroup(long accountId) => GetPlayerGroupCore(accountId);
+        long IGroupRegistry.CreateGroupRequest(long requesterAccountId, long requesteeAccountId, long groupId,
+            GroupConfirmationRequest.JoinType joinType, TimeSpan expirationTime)
+            => CreateGroupRequestCore(requesterAccountId, requesteeAccountId, groupId, joinType, expirationTime);
+        GroupRequestInfo IGroupRegistry.PopGroupRequest(long requestId) => PopGroupRequestCore(requestId);
+        void IGroupRegistry.PingGroupRequests() => PingGroupRequestsCore();
+        void IGroupRegistry.CreateGroup(long leader) => CreateGroupCore(leader);
+        bool IGroupRegistry.LeaveGroup(long accountId, bool warnIfNotInAGroup, bool wasKicked)
+            => LeaveGroupCore(accountId, warnIfNotInAGroup, wasKicked);
+        void IGroupRegistry.JoinGroup(long groupId, long accountId) => JoinGroupCore(groupId, accountId);
+        bool IGroupRegistry.PromoteMember(GroupInfo groupInfo, long accountId) => PromoteMemberCore(groupInfo, accountId);
+        LobbyPlayerGroupInfo IGroupRegistry.GetGroupInfo(long accountId) => GetGroupInfoCore(accountId);
+        long IGroupRegistry.GetGroupID(long accountId) => GetGroupIDCore(accountId);
+        void IGroupRegistry.OnLeaveQueue(long groupId) => OnLeaveQueueCore(groupId);
+        void IGroupRegistry.Broadcast(GroupInfo group, WebSocketMessage message, long skipAccountId)
+            => BroadcastCore(group, message, skipAccountId);
+        void IGroupRegistry.BroadcastSystemMessage(GroupInfo group, LocalizationPayload message, long skipAccountId)
+            => BroadcastSystemMessageCore(group, message, skipAccountId);
+        ushort IGroupRegistry.GetGroupSubTypeMask(long groupId) => GetGroupSubTypeMaskCore(groupId);
+        ushort IGroupRegistry.GetGroupSubTypeMask(GroupInfo groupInfo) => GetGroupSubTypeMaskCore(groupInfo);
+        void IGroupRegistry.UpdateSelectedSubTypes(GroupInfo groupInfo, bool resetReadyStateIfUpdated)
+            => UpdateSelectedSubTypesCore(groupInfo, resetReadyStateIfUpdated);
+        void IGroupRegistry.UpdateSelectedSubTypesForAccount(long accountId)
+            => UpdateSelectedSubTypesForAccountCore(accountId);
+
+        // ---- Core (instance) implementations ----
+
+        private GroupInfo GetGroupCore(long groupId)
         {
             return ActiveGroups.GetValueOrDefault(groupId);
         }
-        
-        public static List<long> GetGroupMembers(long groupId)
+
+        private List<long> GetGroupMembersCore(long groupId)
         {
-            GroupInfo groupInfo = GetGroup(groupId);
+            GroupInfo groupInfo = GetGroupCore(groupId);
             return groupInfo is null ? new List<long>() : groupInfo.Members;
         }
-        
-        public static List<GroupInfo> GetGroups()
+
+        private List<GroupInfo> GetGroupsCore()
         {
             return ActiveGroups.Values.ToList();
         }
-        
-        public static GroupInfo GetPlayerGroup(long accountId)
+
+        private GroupInfo GetPlayerGroupCore(long accountId)
         {
             lock (_lock)
             {
@@ -55,7 +145,7 @@ namespace CentralServer.LobbyServer.Group
                 else if (ClientNotifier.Get().IsOnline(accountId))
                 {
                     log.Error($"Player {LobbyServerUtils.GetHandle(accountId)} wasn't in any group");
-                    CreateGroup(accountId);
+                    CreateGroupCore(accountId);
                     return PlayerToGroup.TryGetValue(accountId, out groupId)
                         ? ActiveGroups[groupId]
                         : null;
@@ -64,8 +154,8 @@ namespace CentralServer.LobbyServer.Group
 
             return null;
         }
-        
-        public static long CreateGroupRequest(
+
+        private long CreateGroupRequestCore(
             long requesterAccountId,
             long requesteeAccountId,
             long groupId,
@@ -93,7 +183,7 @@ namespace CentralServer.LobbyServer.Group
             }
         }
 
-        public static GroupRequestInfo PopGroupRequest(long requestId)
+        private GroupRequestInfo PopGroupRequestCore(long requestId)
         {
             lock (_lock)
             {
@@ -113,7 +203,7 @@ namespace CentralServer.LobbyServer.Group
             }
         }
 
-        public static void PingGroupRequests()
+        private void PingGroupRequestsCore()
         {
             lock (_lock)
             {
@@ -124,7 +214,7 @@ namespace CentralServer.LobbyServer.Group
                     {
                         continue;
                     }
-                    
+
                     bool requesteeOnline = ClientNotifier.Get().IsOnline(request.RequesteeAccountId);
                     if (requesteeOnline)
                     {
@@ -147,23 +237,24 @@ namespace CentralServer.LobbyServer.Group
 
                     requestsToRemove.Add(id);
                 }
-                
+
                 requestsToRemove.ForEach(id => GroupRequests.Remove(id));
             }
         }
-        
-        public static void CreateGroup(long leader) {
-            LeaveGroup(leader, false);
+
+        private void CreateGroupCore(long leader)
+        {
+            LeaveGroupCore(leader, false);
             long groupId;
             lock (_lock)
             {
                 groupId = Interlocked.Increment(ref _lastGroupId);
                 ActiveGroups.Add(groupId, new GroupInfo(groupId));
             }
-            JoinGroup(groupId, leader);
+            JoinGroupCore(groupId, leader);
         }
 
-        public static bool LeaveGroup(long accountId, bool warnIfNotInAGroup = true, bool wasKicked = false)
+        private bool LeaveGroupCore(long accountId, bool warnIfNotInAGroup = true, bool wasKicked = false)
         {
             GroupInfo leftGroup = null;
             bool wasLeader = false;
@@ -193,33 +284,33 @@ namespace CentralServer.LobbyServer.Group
             {
                 OnLeaveGroup(accountId);
                 OnGroupMembersUpdated(leftGroup);
-                BroadcastSystemMessage(
+                BroadcastSystemMessageCore(
                     leftGroup,
                     wasKicked
                         ? GroupMessages.MemberKickedFromGroup(accountId)
                         : GroupMessages.MemberLeftGroup(accountId));
                 if (leftGroup.IsSolo())
                 {
-                    BroadcastSystemMessage(leftGroup, GroupMessages.GroupDisbanded);
+                    BroadcastSystemMessageCore(leftGroup, GroupMessages.GroupDisbanded);
                     OnGroupDisbanded(leftGroup.Leader);
                 }
                 else if (wasLeader)
                 {
-                    BroadcastSystemMessage(leftGroup, GroupMessages.NewLeader(leftGroup.Leader));
+                    BroadcastSystemMessageCore(leftGroup, GroupMessages.NewLeader(leftGroup.Leader));
                 }
             }
 
             return leftGroup != null;
         }
 
-        public static void JoinGroup(long groupId, long accountId)
+        private void JoinGroupCore(long groupId, long accountId)
         {
             GroupInfo joinedGroup = null;
             GroupInfo groupInfo = null;
             bool isGroupFull = false;
             lock (_lock)
             {
-                LeaveGroup(accountId, false);
+                LeaveGroupCore(accountId, false);
                 if (ActiveGroups.TryGetValue(groupId, out groupInfo))
                 {
                     if (groupInfo.Members.Count < LobbyConfiguration.GetMaxGroupSize())
@@ -228,7 +319,7 @@ namespace CentralServer.LobbyServer.Group
                         PlayerToGroup.Add(accountId, groupId);
                         log.Info($"Added {accountId} to group {groupId}");
                         joinedGroup = groupInfo;
-                    } 
+                    }
                     else
                     {
                         log.Error($"Player {accountId} attempted to join a full group {groupId}");
@@ -245,12 +336,12 @@ namespace CentralServer.LobbyServer.Group
             {
                 OnJoinGroup(accountId);
                 OnGroupMembersUpdated(joinedGroup);
-                
-                BroadcastSystemMessage(joinedGroup, GroupMessages.MemberJoinedGroup(accountId), accountId);
+
+                BroadcastSystemMessageCore(joinedGroup, GroupMessages.MemberJoinedGroup(accountId), accountId);
             }
             else
             {
-                BroadcastSystemMessage(
+                BroadcastSystemMessageCore(
                     groupInfo,
                     isGroupFull
                         ? GroupMessages.MemberFailedToJoinGroupIsFull(accountId)
@@ -260,30 +351,30 @@ namespace CentralServer.LobbyServer.Group
                     isGroupFull
                         ? GroupMessages.FailedToJoinGroupIsFull
                         : GroupMessages.FailedToJoinUnknownError);
-                
-                
-                CreateGroup(accountId);
+
+
+                CreateGroupCore(accountId);
             }
         }
 
-        public static bool PromoteMember(GroupInfo groupInfo, long accountId)
+        private bool PromoteMemberCore(GroupInfo groupInfo, long accountId)
         {
             bool success;
-            lock (Lock)
+            lock (_lock)
             {
                 success = groupInfo.SetLeader(accountId);
             }
 
             if (success)
             {
-                UpdateSelectedSubTypes(groupInfo);
-                BroadcastSystemMessage(groupInfo, GroupMessages.NewLeader(accountId));
+                UpdateSelectedSubTypesCore(groupInfo);
+                BroadcastSystemMessageCore(groupInfo, GroupMessages.NewLeader(accountId));
             }
 
             return success;
         }
 
-        private static UpdateGroupMemberData GetMemberData(GroupInfo groupInfo, long accountId)
+        private UpdateGroupMemberData GetMemberData(GroupInfo groupInfo, long accountId)
         {
             PersistedAccountData account = DB.Get().AccountDao.GetAccount(accountId);
             LobbyServerProtocol session = SessionManager.GetClientConnection(accountId);
@@ -312,8 +403,8 @@ namespace CentralServer.LobbyServer.Group
                 GameLeavingPoints = 0
             };
         }
-        
-        public static LobbyPlayerGroupInfo GetGroupInfo(long accountId)
+
+        private LobbyPlayerGroupInfo GetGroupInfoCore(long accountId)
         {
             GroupInfo groupInfo = null;
             lock (_lock)
@@ -356,7 +447,7 @@ namespace CentralServer.LobbyServer.Group
             return response;
         }
 
-        public static long GetGroupID(long accountId)
+        private long GetGroupIDCore(long accountId)
         {
             lock (_lock)
             {
@@ -369,45 +460,45 @@ namespace CentralServer.LobbyServer.Group
             return -1;
         }
 
-        private static void OnJoinGroup(long accountId)
+        private void OnJoinGroup(long accountId)
         {
             ClientNotifier.Get().NotifyJoinedGroup(accountId);
         }
 
-        private static void OnLeaveGroup(long accountId)
+        private void OnLeaveGroup(long accountId)
         {
             ClientNotifier.Get().NotifyLeftGroup(accountId);
         }
 
-        private static void OnGroupDisbanded(long accountId)
+        private void OnGroupDisbanded(long accountId)
         {
             ClientNotifier.Get().NotifyGroupDisbanded(accountId);
         }
 
-        private static void OnGroupMembersUpdated(GroupInfo groupInfo)
+        private void OnGroupMembersUpdated(GroupInfo groupInfo)
         {
             MatchmakingManager.RemoveGroupFromQueue(groupInfo, true);
             if (!groupInfo.IsEmpty())
             {
-                UpdateSelectedSubTypes(groupInfo);
+                UpdateSelectedSubTypesCore(groupInfo);
             }
             ClientNotifier.Get().BroadcastRefreshGroup(groupInfo.Leader, true);
         }
 
-        public static void OnLeaveQueue(long groupId)
+        private void OnLeaveQueueCore(long groupId)
         {
-            GroupInfo groupInfo = GetGroup(groupId);
+            GroupInfo groupInfo = GetGroupCore(groupId);
             if (groupInfo is null)
             {
                 log.Info($"Received OnLeaveQueue for group {groupId} that does not exist");
                 return;
             }
-            UpdateSelectedSubTypes(groupInfo, false);
-            Broadcast(groupInfo, new MatchmakingQueueAssignmentNotification { MatchmakingQueueInfo = null });
+            UpdateSelectedSubTypesCore(groupInfo, false);
+            BroadcastCore(groupInfo, new MatchmakingQueueAssignmentNotification { MatchmakingQueueInfo = null });
             ClientNotifier.Get().BroadcastRefreshGroup(groupInfo.Leader, false);
         }
 
-        public static void Broadcast(GroupInfo group, WebSocketMessage message, long skipAccountId = 0)
+        private void BroadcastCore(GroupInfo group, WebSocketMessage message, long skipAccountId = 0)
         {
             foreach (long groupMember in group.Members)
             {
@@ -419,7 +510,7 @@ namespace CentralServer.LobbyServer.Group
             }
         }
 
-        public static void BroadcastSystemMessage(GroupInfo group, LocalizationPayload message, long skipAccountId = 0)
+        private void BroadcastSystemMessageCore(GroupInfo group, LocalizationPayload message, long skipAccountId = 0)
         {
             foreach (long groupMember in group.Members)
             {
@@ -431,12 +522,12 @@ namespace CentralServer.LobbyServer.Group
             }
         }
 
-        public static ushort GetGroupSubTypeMask(long groupId)
+        private ushort GetGroupSubTypeMaskCore(long groupId)
         {
-            return GetGroupSubTypeMask(GetGroup(groupId));
+            return GetGroupSubTypeMaskCore(GetGroupCore(groupId));
         }
 
-        public static ushort GetGroupSubTypeMask(GroupInfo groupInfo)
+        private ushort GetGroupSubTypeMaskCore(GroupInfo groupInfo)
         {
             if (groupInfo is null)
             {
@@ -446,7 +537,7 @@ namespace CentralServer.LobbyServer.Group
             return groupInfo.SubTypeMask;
         }
 
-        public static void UpdateSelectedSubTypes(GroupInfo groupInfo, bool resetReadyStateIfUpdated = true)
+        private void UpdateSelectedSubTypesCore(GroupInfo groupInfo, bool resetReadyStateIfUpdated = true)
         {
             LobbyServerProtocol leaderConn = SessionManager.GetClientConnection(groupInfo.Leader);
             if (leaderConn is null)
@@ -461,7 +552,7 @@ namespace CentralServer.LobbyServer.Group
                 log.Error($"UpdateSelectedSubTypes for group {groupInfo.GroupId} with unavailable queue {leaderConn.SelectedGameType}");
                 return;
             }
-            
+
             ushort newMask = queue.FilterSubTypeMask(groupInfo, leaderConn.GetSubTypeMask());
 
             ushort oldMask = groupInfo.SubTypeMask;
@@ -477,12 +568,12 @@ namespace CentralServer.LobbyServer.Group
             }
         }
 
-        public static void UpdateSelectedSubTypesForAccount(long accountId)
+        private void UpdateSelectedSubTypesForAccountCore(long accountId)
         {
-            var groupInfo = GetPlayerGroup(accountId);
+            var groupInfo = GetPlayerGroupCore(accountId);
             if (groupInfo is not null)
             {
-                UpdateSelectedSubTypes(groupInfo);
+                UpdateSelectedSubTypesCore(groupInfo);
             }
         }
     }
