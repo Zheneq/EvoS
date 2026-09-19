@@ -128,8 +128,10 @@ per-connection module instances; each module registers its own handlers into the
    (`SendLobbyServerReadyNotification`, MOTD/patch notes) becomes Login/Status module
    material.~~ **Done.**
 2. Seam contracts:
-   - `IClientConnection` (AccountId, Send, ... — grown only as modules need it),
-     implemented by `LobbyServerProtocol`. Modules never see the concrete class.
+   - `IClientConnection` (AccountId, Send, ... — grown only as modules need connection-shaped
+     members: identity, send, refresh hooks). Modules that need other modules receive them via
+     constructor from the composition root (see `CharacterModule` — module-to-module dependency
+     precedent), not through `IClientConnection`.
    - `IHandlerRegistry` (`Register<T>(Action<T>)`), implemented by the connection over
      the dispatch table. `Dictionary.Add` throwing on duplicates gives fail-fast when
      two modules claim the same message type.
@@ -192,12 +194,23 @@ per-connection module instances; each module registers its own handlers into the
    `GroupChatRequest`) are one-line event raises, and `ChatManager` subscribes to those events
    per connection with `LobbyServerProtocol`-typed signatures and reads `conn.PlayerInfo` —
    extracting them means redesigning that coupling for no handler-logic gain. Revisit at Stage 3.
+   `CharacterModule` (2 handlers: `PlayerInfoUpdateRequest`, `UpdateRemoteCharacterRequest`;
+   2 private helpers: `HandlePlayerInfoUpdateRequest`, `UpdateCharacterSlots`) extracted and
+   tested (`CharacterModuleTest`, 6 cases) — **seventh module and first module-to-module
+   dependency**: `CharacterModule` takes `MatchmakingModule` and `GameLifecycleModule` via
+   constructor from the composition root; `IClientConnection` stays connection-shaped (no new
+   members added). Unused delegators `SetAllyDifficulty`, `SetEnemyDifficulty`,
+   `SetContextualReadyState` deleted from `LobbyServerProtocol` (their only caller,
+   `HandlePlayerInfoUpdateRequest`, moved with the module). `SetGameType` kept (public —
+   `GroupModule` calls it cross-connection).
    **What remains on the connection for Stage 1**: `HandleRegisterGame` + login pile,
-   `HandlePlayerInfoUpdateRequest`, `HandlePlayerUpdateStatusRequest`, chat handlers
-   (`ChatNotification`, `GroupChatRequest`), ranked draft handlers (`RankedTradeRequest`,
-   `RankedSelectionRequest`, `RankedBanRequest`, `RankedHoverClickRequest`), custom-game
-   subscription handlers (`SubscribeToCustomGamesRequest`,
-   `UnsubscribeFromCustomGamesRequest`), and `HandleRejoinGameRequest`.**
+   `HandlePlayerUpdateStatusRequest`, chat handlers (`ChatNotification`, `GroupChatRequest`),
+   overcon/GG pack handlers (`UseOverconRequest`, `UseGGPackRequest`), custom-game subscription
+   handlers (`SubscribeToCustomGamesRequest`, `UnsubscribeFromCustomGamesRequest`),
+   `HandleRejoinGameRequest`, ranked draft handlers (`RankedTradeRequest`,
+   `RankedSelectionRequest`, `RankedBanRequest`, `RankedHoverClickRequest`),
+   `DEBUG_AdminSlashCommandNotification`, `FriendUpdateRequest` + `PlayerUpdateStatusRequest`
+   (Friend module candidate, `Status` ownership).**
 
 ### Stage 2 — Introduce an outbound notification port
 
