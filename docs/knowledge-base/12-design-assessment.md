@@ -308,7 +308,53 @@ Convert one manager at a time to an instance class with an interface
 - `GetGroupInfo`, `UpdateSelectedSubTypes`, `GetMemberData` internally call
   `SessionManager.GetClientConnection(...)` via the static shim for `SelectedGameType`,
   `GetSubTypeMask()`, `IsReady` — those retain the concrete `LobbyServerProtocol` internally.
-- Priority order: `SessionManager` ✓ → `GroupManager` ✓ → `ServerManager`/`GameManager`
+- Priority order: `SessionManager` ✓ → `GroupManager` ✓ → `ServerManager`/`GameManager` ✓
+  → `MatchmakingManager` next.
+
+**Step 3 complete (branch `refactor`):**
+- `IServerPool` introduced in `LobbyServer2/BridgeServer/IServerPool.cs` with 8 members:
+  `AddServer`, `RemoveServer`, `GetServer`, `IsAnyServerAvailable`, `GetServers`,
+  `FindServerByAddress`, `HasOtherServerWithFingerprint`, `DisconnectByFingerprint`.
+- `IGameRegistry` introduced in `LobbyServer2/BridgeServer/IGameRegistry.cs` with 9 members:
+  `CreatePvpGame`, `RegisterGame`, `UnregisterGame`, `GetGameWithPlayer`, `ReconnectServer`,
+  `GetGames`, `GetRunningGamesNum` (two overloads), `StopAllGames`.
+- `ServerManager` converted from `static class` to `public class ServerManager : IServerPool`
+  with `public static ServerManager Instance { get; internal set; }` pre-initialized to
+  `new ServerManager()`. `ServerPool` dict became private instance field `_serverPool`.
+  All `public static` methods are static forwarders calling private `*Core` instance methods.
+  `IServerPool` implemented explicitly. Private helpers (`GetServersInPickOrder`,
+  `IsReserveFilled`, `DisconnectServer`) became private instance methods — bodies unchanged.
+  `AddServerCore` still calls `GameManager.ReconnectServer(gameServer)` via static shim.
+- `GameManager` converted from `public class` (with static fields) to
+  `public class GameManager : IGameRegistry` with `public static GameManager Instance`
+  pre-initialized to `new GameManager()`. `Games` ConcurrentDictionary became private
+  instance field `_games`. `GameNum` gauge and `GameTypesForStats` stayed `static readonly`
+  (Prometheus re-registration concern). The static constructor's `AddBeforeCollectCallback`
+  now calls `inst.GetRunningGamesNumCore(...)` via a local `GameManager inst = Instance`
+  variable (avoids the static-member-via-instance-reference compiler error). All `public
+  static` methods are static forwarders; `IGameRegistry` implemented explicitly.
+  `CreatePvpGameCore` still calls `ServerManager.GetServer()` via static shim.
+- DI wired in `CentralServer.Init`: `AddSingleton<IServerPool, ServerManager>` and
+  `AddSingleton<IGameRegistry, GameManager>` after the `IGroupRegistry` registration.
+  `ServerManager.Instance` and `GameManager.Instance` overwritten from DI after
+  `builder.Build()` so production uses the DI-managed singletons.
+- `LobbyServerProtocol` receives `IGameRegistry gameRegistry` as third constructor
+  parameter; stores as `private readonly IGameRegistry _gameRegistry`; passes it to
+  `GameLifecycleModule`.
+- `GameLifecycleModule` receives `IGameRegistry gameRegistry` as second constructor
+  parameter; stores as `private readonly IGameRegistry _gameRegistry`. The one static
+  call (`GameManager.GetGameWithPlayer` in `HandlePreviousGameInfoRequest`) replaced with
+  `_gameRegistry.GetGameWithPlayer`. Tests updated minimally (pass `GameManager.Instance`
+  at the three new-`GameLifecycleModule` call sites and at the `new LobbyServerProtocol`
+  call site).
+
+**Deferred callers (still use static shims after step 3):**
+- `BridgeServerProtocol`, `CustomGameManager`, `MatchmakingManager`, `MatchmakingQueue`,
+  `CustomGame`, `Game` still call `ServerManager.X()` and/or `GameManager.X()` statically.
+- `LobbyServerProtocol.HandleDEBUG_AdminSlashCommandNotification` and
+  `HandleRejoinGameRequest` still call `GameManager.GetGameWithPlayer` statically (not in
+  `GameLifecycleModule`; blocked on Stage 3 service extraction or Stage 4 `DraftController`).
+- Priority order: `SessionManager` ✓ → `GroupManager` ✓ → `ServerManager`/`GameManager` ✓
   → `MatchmakingManager` next.
 
 ### Stage 4 — Split `Game`
