@@ -266,13 +266,50 @@ Convert one manager at a time to an instance class with an interface
 - `LobbyServerProtocol` receives `ISessionRegistry sessionRegistry` via constructor and
   stores it as `private readonly ISessionRegistry _sessionRegistry`.
 
-**Deferred to follow-up steps:**
+**Deferred to follow-up steps (after step 1):**
 - Static call sites in modules/managers (`SessionManager.GetClientConnection(...)` etc.)
   still call the static shim; migration to `ISessionRegistry` injection is follow-up work.
 - `OnPlayerConnect`/`OnPlayerDisconnect` interface widening (they set concrete
   `LobbyServerProtocol` fields directly and are not yet on `ISessionRegistry`).
 - Full concrete-type removal: `GroupManager`, `Game`, `CustomGame`, `FriendManager` etc.
   still receive `LobbyServerProtocol` from static `GetClientConnection`.
+
+**Step 2 complete (branch `refactor`):**
+- `IGroupRegistry` introduced in `LobbyServer2/LobbyServer/Group/IGroupRegistry.cs`
+  with all public method members of `GroupManager`: `Lock`, `GetGroup`, `GetGroupMembers`,
+  `GetGroups`, `GetPlayerGroup`, `CreateGroupRequest`, `PopGroupRequest`, `PingGroupRequests`,
+  `CreateGroup`, `LeaveGroup`, `JoinGroup`, `PromoteMember`, `GetGroupInfo`, `GetGroupID`,
+  `OnLeaveQueue`, `Broadcast`, `BroadcastSystemMessage`, `GetGroupSubTypeMask` (two overloads),
+  `UpdateSelectedSubTypes`, `UpdateSelectedSubTypesForAccount`.
+- `GroupManager` converted from non-public `static class` to `public class GroupManager : IGroupRegistry`
+  with a `public static GroupManager Instance { get; internal set; }` shim pre-initialized to
+  `new GroupManager()`. All static state fields (`ActiveGroups`, `PlayerToGroup`, `GroupRequests`,
+  `_lastGroupId`, `_lastGroupRequestId`, `_lock`) became private instance fields. Every
+  `public static` method is a static forwarder calling a private `*Core` instance method.
+  `IGroupRegistry` implemented explicitly. Private helpers (`GetMemberData`, `OnJoinGroup`,
+  `OnLeaveGroup`, `OnGroupDisbanded`, `OnGroupMembersUpdated`) became private instance methods
+  with bodies unchanged.
+- DI wired in `CentralServer.Init`: `AddSingleton<IGroupRegistry, GroupManager>` after
+  `ISessionRegistry`; `GroupManager.Instance` overwritten from DI after `builder.Build()`.
+- `LobbyServerProtocol` receives `IGroupRegistry groupRegistry` as second constructor
+  parameter; stores as `private readonly IGroupRegistry _groupRegistry`; passes it to
+  `GroupModule`.
+- `GroupModule` receives `IGroupRegistry groupRegistry` as second constructor parameter;
+  all 31 `GroupManager.X(...)` static calls replaced with `_groupRegistry.X(...)`.
+  Tests (`GroupModuleTest`, `LobbyHandlerRegistrationTest`) updated to pass the new
+  constructor arguments using `GroupManager.Instance`.
+
+**Deferred to follow-up steps (after step 2):**
+- Other modules (`MatchmakingModule`, `GameLifecycleModule`, `CharacterModule`, `FriendModule`)
+  and managers (`MatchmakingManager`, `MatchmakingQueue`, `QueuePenaltyManager`,
+  `SessionManager`, `LobbyServerProtocol`, `GroupsTask`, `ChatManager`, `CustomGame`,
+  `GameLifecycleModule`, `StatusController`, `DiscordLobbyUtils`) still call
+  `GroupManager.X()` statically via the shim.
+- `GetGroupInfo`, `UpdateSelectedSubTypes`, `GetMemberData` internally call
+  `SessionManager.GetClientConnection(...)` via the static shim for `SelectedGameType`,
+  `GetSubTypeMask()`, `IsReady` — those retain the concrete `LobbyServerProtocol` internally.
+- Priority order: `SessionManager` ✓ → `GroupManager` ✓ → `ServerManager`/`GameManager`
+  → `MatchmakingManager` next.
 
 ### Stage 4 — Split `Game`
 
