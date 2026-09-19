@@ -78,9 +78,11 @@ namespace CentralServer
                 LogLevelTranslator = new ApiServer.ApiServer.CustomLogLevelTranslator(),
             });
             builder.Services.AddSingleton<ISessionRegistry, SessionManager>();
+            builder.Services.AddSingleton<IGroupRegistry, GroupManager>();
             builder.Services.AddTransient<LobbyServerProtocol>();
             _app = builder.Build();
             SessionManager.Instance = (SessionManager)_app.Services.GetRequiredService<ISessionRegistry>();
+            GroupManager.Instance = (GroupManager)_app.Services.GetRequiredService<IGroupRegistry>();
             _app.UseWebSockets(new WebSocketOptions
             {
                 KeepAliveInterval = EvosConfiguration.GetLobbyServerTimeOut()

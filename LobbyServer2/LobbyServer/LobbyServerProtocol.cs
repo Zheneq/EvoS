@@ -55,6 +55,7 @@ namespace CentralServer.LobbyServer
         public bool SessionCleaned = false; // tracks clean up methods execution for reconnection
 
         private readonly ISessionRegistry _sessionRegistry;
+        private readonly IGroupRegistry _groupRegistry;
         private readonly MatchmakingModule _matchmaking;
         private readonly GameLifecycleModule _gameLifecycle;
 
@@ -349,9 +350,10 @@ namespace CentralServer.LobbyServer
             RegisterHandler<T>(handler);
         }
 
-        public LobbyServerProtocol(ISessionRegistry sessionRegistry)
+        public LobbyServerProtocol(ISessionRegistry sessionRegistry, IGroupRegistry groupRegistry)
         {
             _sessionRegistry = sessionRegistry;
+            _groupRegistry = groupRegistry;
             _matchmaking = new MatchmakingModule(this);
             _gameLifecycle = new GameLifecycleModule(this);
 
@@ -373,7 +375,7 @@ namespace CentralServer.LobbyServer
             RegisterHandler<RankedSelectionRequest>(HandleRankedSelectionRequest);
             RegisterHandler<RankedTradeRequest>(HandleRankedTradeRequest);
 
-            ILobbyModule[] modules = { new StoreModule(this), new TelemetryModule(this), new AccountModule(this), new GroupModule(this), new FriendModule(this), _matchmaking, _gameLifecycle, new CharacterModule(this, _matchmaking, _gameLifecycle) };
+            ILobbyModule[] modules = { new StoreModule(this), new TelemetryModule(this), new AccountModule(this), new GroupModule(this, _groupRegistry), new FriendModule(this), _matchmaking, _gameLifecycle, new CharacterModule(this, _matchmaking, _gameLifecycle) };
             foreach (ILobbyModule module in modules)
             {
                 module.Register(this);
