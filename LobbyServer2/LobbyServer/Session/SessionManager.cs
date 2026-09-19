@@ -18,10 +18,12 @@ using Prometheus;
 
 namespace CentralServer.LobbyServer.Session
 {
-    public static class SessionManager
+    public class SessionManager : ISessionRegistry
     {
         private static readonly ILog log = LogManager.GetLogger(typeof(SessionManager));
-        
+
+        public static SessionManager Instance { get; internal set; } = new SessionManager();
+
         private class SessionInfo
         {
             public LobbyServerProtocol conn;
@@ -50,38 +52,38 @@ namespace CentralServer.LobbyServer.Session
         // Entries in ConnectingSessions are only removed on a successful websocket connect, so an abandoned
         // login attempt must stop counting as "active" after a while, or it would lock the account out.
         private static readonly TimeSpan ConnectingSessionExpiry = TimeSpan.FromSeconds(30);
-        private static readonly ConcurrentDictionary<long, SessionInfo> SessionInfos =
+        private readonly ConcurrentDictionary<long, SessionInfo> SessionInfos =
             new ConcurrentDictionary<long, SessionInfo>();
-        private static readonly ConcurrentDictionary<long, ConnectingSessionInfo> ConnectingSessions =
+        private readonly ConcurrentDictionary<long, ConnectingSessionInfo> ConnectingSessions =
             new ConcurrentDictionary<long, ConnectingSessionInfo>();
-        private static readonly ConcurrentDictionary<long, DisconnectedSessionInfo> DisconnectedSessionInfos =
+        private readonly ConcurrentDictionary<long, DisconnectedSessionInfo> DisconnectedSessionInfos =
             new ConcurrentDictionary<long, DisconnectedSessionInfo>();
-        
+
         public static event Action<LobbyServerProtocol> OnPlayerConnected = delegate {};
         public static event Action<LobbyServerProtocol> OnPlayerDisconnected = delegate {};
-        
+
         private static readonly Gauge LobbySize = Metrics
             .CreateGauge(
                 "evos_lobby_size",
                 "Number of people in the lobby.");
-        
+
         private static readonly Gauge ClientVersions = Metrics
             .CreateGauge(
                 "evos_lobby_client_branch",
                 "How many players currently online use which branch of the client.",
                 "branch");
 
-        static SessionManager()
+        public SessionManager()
         {
             Metrics.DefaultRegistry.AddBeforeCollectCallback(() =>
             {
-                LobbySize.Set(GetOnlinePlayers().Count);
-                
+                LobbySize.Set(GetOnlinePlayersCore().Count());
+
                 Dictionary<string, int> branches = SessionInfos
                     .Values
                     .GroupBy(s => s.session.BuildVersionInfo.Branch)
                     .ToDictionary(g => g.Key, g => g.Count());
-                
+
                 var branchesToClear = ClientVersions
                     .GetAllLabelValues()
                     .Where(label => !branches.ContainsKey(label[0]));
@@ -89,7 +91,7 @@ namespace CentralServer.LobbyServer.Session
                 {
                     ClientVersions.WithLabels(branch).Set(0);
                 }
-                
+
                 foreach (var (branch, count) in branches)
                 {
                     ClientVersions.WithLabels(branch).Set(count);
@@ -97,16 +99,20 @@ namespace CentralServer.LobbyServer.Session
             });
         }
 
+        // -----------------------------------------------------------------------
+        // Static lifecycle methods — not on the interface; access state via Instance
+        // -----------------------------------------------------------------------
+
         public static void OnPlayerConnect(LobbyServerProtocol client, RegisterGameClientRequest registerRequest)
         {
-            lock (SessionInfos)
+            lock (Instance.SessionInfos)
             {
-                if (registerRequest.SessionInfo == null) 
+                if (registerRequest.SessionInfo == null)
                     throw new RegisterGameException("Session Info not received");
                 if (registerRequest.SessionInfo.SessionToken == 0)
                     throw new RegisterGameException("Session Info not received");
-                
-                LobbySessionInfo sessionInfo = ConnectingSessions.GetValueOrDefault(registerRequest.SessionInfo.AccountId)?.sessionInfo;
+
+                LobbySessionInfo sessionInfo = Instance.ConnectingSessions.GetValueOrDefault(registerRequest.SessionInfo.AccountId)?.sessionInfo;
 
                 if (sessionInfo == null)
                     throw new RegisterGameException("Session not found. User not logged"); // Session not found
@@ -114,9 +120,9 @@ namespace CentralServer.LobbyServer.Session
                     throw new RegisterGameException("This session is not valid anymore"); // Session token do not match
 
                 long accountId = sessionInfo.AccountId;
-            
+
                 PersistedAccountData account = DB.Get().AccountDao.GetAccount(accountId);
-                
+
                 AdminManager.Get().UpdatePenalties(accountId);
                 if (account.AdminComponent.Locked)
                 {
@@ -130,31 +136,31 @@ namespace CentralServer.LobbyServer.Session
                 client.SessionToken = sessionInfo.SessionToken;
 
                 GroupManager.CreateGroup(client.AccountId);
-                
-                SessionInfos.TryRemove(client.AccountId, out _);
-                SessionInfos.TryAdd(client.AccountId, new SessionInfo
+
+                Instance.SessionInfos.TryRemove(client.AccountId, out _);
+                Instance.SessionInfos.TryAdd(client.AccountId, new SessionInfo
                 {
                     conn = client,
                     session = sessionInfo
                 });
-                ConnectingSessions.TryRemove(client.AccountId, out _);
+                Instance.ConnectingSessions.TryRemove(client.AccountId, out _);
             }
-                
+
             OnPlayerConnected(client);
         }
 
         public static void OnPlayerDisconnect(LobbyServerProtocol client)
         {
-            lock (SessionInfos)
+            lock (Instance.SessionInfos)
             {
-                SessionInfos.TryGetValue(client.AccountId, out SessionInfo sessionInfo);
+                Instance.SessionInfos.TryGetValue(client.AccountId, out SessionInfo sessionInfo);
                 // Sometimes on reconnections we first have the new connection and then we receive the previous disconnection
                 // To avoid deleting the new connection, we check if the session token is the same
                 if (sessionInfo != null && sessionInfo.session.SessionToken == client.SessionToken)
                 {
-                    if (SessionInfos.TryRemove(client.AccountId, out SessionInfo disconnectedSession))
+                    if (Instance.SessionInfos.TryRemove(client.AccountId, out SessionInfo disconnectedSession))
                     {
-                        DisconnectedSessionInfos.TryAdd(client.AccountId, new DisconnectedSessionInfo(disconnectedSession.session, DateTime.Now));
+                        Instance.DisconnectedSessionInfos.TryAdd(client.AccountId, new DisconnectedSessionInfo(disconnectedSession.session, DateTime.Now));
                         // TODO: this sends to every player even if its in game and the disconnected player is not
                         //client.Broadcast(new ChatNotification() { Text = $"{client.UserName} disconnected", ConsoleMessageType = ConsoleMessageType.SystemMessage });
                     }
@@ -169,39 +175,10 @@ namespace CentralServer.LobbyServer.Session
             OnPlayerDisconnected(client);
 
             if (CentralServer.PendingShutdown == CentralServer.PendingShutdownType.WaitForPlayersToLeave
-                && SessionInfos.IsEmpty)
+                && Instance.SessionInfos.IsEmpty)
             {
                 CentralServer.PendingShutdown = CentralServer.PendingShutdownType.Now;
             }
-        }
-
-        public static LobbyServerProtocol GetClientConnection(long accountId)
-        {
-            SessionInfos.TryGetValue(accountId, out SessionInfo sessionInfo);
-            return sessionInfo?.conn;
-        }
-
-        public static LobbySessionInfo GetSessionInfo(long accountId)
-        {
-            SessionInfos.TryGetValue(accountId, out SessionInfo sessionInfo);
-            return sessionInfo?.session;
-        }
-
-        public static long? GetOnlinePlayerByHandle(string handle)
-        {
-            return SessionInfos.Values.FirstOrDefault(si => si.session?.Handle == handle)?.session?.AccountId;
-        }
-
-        public static long? GetOnlinePlayerByHandleOrUsername(string handleOrUsername)
-        {
-            return SessionInfos.Values.FirstOrDefault(si =>
-                si.session?.Handle == handleOrUsername
-                || si.session?.UserName == handleOrUsername)?.session?.AccountId;
-        }
-
-        public static HashSet<long> GetOnlinePlayers()
-        {
-            return new HashSet<long>(SessionInfos.Keys);
         }
 
         public static void OnServerShutdown()
@@ -212,11 +189,30 @@ namespace CentralServer.LobbyServer.Session
                 LocalizedFailure = LocalizationPayload.Create("ServerShutdown@KickSession"),
                 AllowRelogin = false,
             };
-            foreach (SessionInfo session in SessionInfos.Values)
+            foreach (SessionInfo session in Instance.SessionInfos.Values)
             {
                 session.conn?.Send(notify);
             }
         }
+
+        // -----------------------------------------------------------------------
+        // Public static forwarders — preserve all existing call sites unchanged
+        // -----------------------------------------------------------------------
+
+        public static LobbyServerProtocol? GetClientConnection(long accountId)
+            => Instance.GetClientConnectionCore(accountId);
+
+        public static LobbySessionInfo GetSessionInfo(long accountId)
+            => Instance.GetSessionInfoCore(accountId);
+
+        public static long? GetOnlinePlayerByHandle(string handle)
+            => Instance.GetOnlinePlayerByHandleCore(handle);
+
+        public static long? GetOnlinePlayerByHandleOrUsername(string handleOrUsername)
+            => Instance.GetOnlinePlayerByHandleOrUsernameCore(handleOrUsername);
+
+        public static HashSet<long> GetOnlinePlayers()
+            => new HashSet<long>(Instance.GetOnlinePlayersCore());
 
         /// <summary>
         /// Creates a (connecting) session for an account. When <paramref name="rejectIfActive"/> is set (the
@@ -226,6 +222,82 @@ namespace CentralServer.LobbyServer.Session
         /// The reconnection path leaves it false, since reconnecting to an existing session is expected.
         /// </summary>
         public static LobbySessionInfo CreateSession(long accountId, LobbySessionInfo connectingSessionInfo, IPAddress ipAddress, bool rejectIfActive = false)
+            => Instance.CreateSessionCore(accountId, connectingSessionInfo, ipAddress, rejectIfActive);
+
+        public static LobbySessionInfo GetDisconnectedSessionInfo(long accountId)
+            => Instance.GetDisconnectedSessionInfoCore(accountId);
+
+        public static LobbySessionInfo KillSession(long accountId)
+            => Instance.KillSessionCore(accountId);
+
+        public static void Broadcast(WebSocketMessage message)
+            => Instance.BroadcastCore(message);
+
+        // -----------------------------------------------------------------------
+        // ISessionRegistry explicit implementation
+        // -----------------------------------------------------------------------
+
+        IClientConnection? ISessionRegistry.GetClientConnection(long accountId)
+            => GetClientConnectionCore(accountId);
+
+        LobbySessionInfo? ISessionRegistry.GetSessionInfo(long accountId)
+            => GetSessionInfoCore(accountId);
+
+        IEnumerable<long> ISessionRegistry.GetOnlinePlayers()
+            => GetOnlinePlayersCore();
+
+        long? ISessionRegistry.GetOnlinePlayerByHandle(string handle)
+            => GetOnlinePlayerByHandleCore(handle);
+
+        long? ISessionRegistry.GetOnlinePlayerByHandleOrUsername(string handleOrUsername)
+            => GetOnlinePlayerByHandleOrUsernameCore(handleOrUsername);
+
+        LobbySessionInfo ISessionRegistry.CreateSession(long accountId, LobbySessionInfo connectingSessionInfo, IPAddress ipAddress, bool rejectIfActive)
+            => CreateSessionCore(accountId, connectingSessionInfo, ipAddress, rejectIfActive);
+
+        LobbySessionInfo? ISessionRegistry.GetDisconnectedSessionInfo(long accountId)
+            => GetDisconnectedSessionInfoCore(accountId);
+
+        LobbySessionInfo? ISessionRegistry.KillSession(long accountId)
+            => KillSessionCore(accountId);
+
+        void ISessionRegistry.Broadcast(WebSocketMessage message)
+            => BroadcastCore(message);
+
+        // -----------------------------------------------------------------------
+        // Private core methods — contain the original logic
+        // -----------------------------------------------------------------------
+
+        private LobbyServerProtocol? GetClientConnectionCore(long accountId)
+        {
+            SessionInfos.TryGetValue(accountId, out SessionInfo sessionInfo);
+            return sessionInfo?.conn;
+        }
+
+        private LobbySessionInfo GetSessionInfoCore(long accountId)
+        {
+            SessionInfos.TryGetValue(accountId, out SessionInfo sessionInfo);
+            return sessionInfo?.session;
+        }
+
+        private long? GetOnlinePlayerByHandleCore(string handle)
+        {
+            return SessionInfos.Values.FirstOrDefault(si => si.session?.Handle == handle)?.session?.AccountId;
+        }
+
+        private long? GetOnlinePlayerByHandleOrUsernameCore(string handleOrUsername)
+        {
+            return SessionInfos.Values.FirstOrDefault(si =>
+                si.session?.Handle == handleOrUsername
+                || si.session?.UserName == handleOrUsername)?.session?.AccountId;
+        }
+
+        private IEnumerable<long> GetOnlinePlayersCore()
+        {
+            return SessionInfos.Keys;
+        }
+
+        private LobbySessionInfo CreateSessionCore(long accountId, LobbySessionInfo connectingSessionInfo, IPAddress ipAddress, bool rejectIfActive = false)
         {
             PersistedAccountData account;
             LobbySessionInfo sessionInfo;
@@ -248,10 +320,10 @@ namespace CentralServer.LobbyServer.Session
                 LobbySessionInfo oldSession = null;
                 if (game != null)
                 {
-                    oldSession = GetDisconnectedSessionInfo(accountId);
+                    oldSession = GetDisconnectedSessionInfoCore(accountId);
                     if (oldSession == null)
                     {
-                        oldSession = KillSession(accountId);
+                        oldSession = KillSessionCore(accountId);
                         if (oldSession != null)
                         {
                             log.Warn($"Account {accountId} reconnected before disconnecting previous session");
@@ -277,8 +349,8 @@ namespace CentralServer.LobbyServer.Session
                     ReconnectSessionToken = GenerateToken(account.Handle), // This can be regenerated even on reconnection since we send ReconnectPlayerRequest that sends the new ReconnectSessionToken
                     Region = connectingSessionInfo?.Region ?? Region.EU,
                 };
-                
-                KillSession(accountId);
+
+                KillSessionCore(accountId);
                 ConnectingSessions[accountId] = new ConnectingSessionInfo(sessionInfo, DateTime.UtcNow);
             }
 
@@ -287,7 +359,7 @@ namespace CentralServer.LobbyServer.Session
             return sessionInfo;
         }
 
-        public static LobbySessionInfo GetDisconnectedSessionInfo(long accountId)
+        private LobbySessionInfo GetDisconnectedSessionInfoCore(long accountId)
         {
             if (!DisconnectedSessionInfos.TryGetValue(accountId, out DisconnectedSessionInfo session))
             {
@@ -302,7 +374,7 @@ namespace CentralServer.LobbyServer.Session
             return session.sessionInfo;
         }
 
-        public static LobbySessionInfo KillSession(long accountId)
+        private LobbySessionInfo KillSessionCore(long accountId)
         {
             if (SessionInfos.TryRemove(accountId, out SessionInfo sessionInfo))
             {
@@ -323,7 +395,7 @@ namespace CentralServer.LobbyServer.Session
             return num;
         }
 
-        public static void Broadcast(WebSocketMessage message)
+        private void BroadcastCore(WebSocketMessage message)
         {
             SessionInfos.Values.FirstOrDefault()?.conn.Broadcast(message);
         }
