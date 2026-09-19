@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using CentralServer.BridgeServer;
 using CentralServer.LobbyServer.GameLifecycle;
 using CentralServer.LobbyServer.Session;
 using EvoS.Framework.Constants.Enums;
@@ -51,7 +52,7 @@ public class GameLifecycleModuleTest : EvosTest
         MakeModuleWithRegistry(long accountId)
     {
         var conn = new RecordingClientConnection { AccountId = accountId };
-        var module = new GameLifecycleModule(conn);
+        var module = new GameLifecycleModule(conn, GameManager.Instance);
         var registry = new CapturingRegistry();
         module.Register(registry);
         return (module, conn, registry);
@@ -61,7 +62,7 @@ public class GameLifecycleModuleTest : EvosTest
         MakeModule(long accountId)
     {
         var conn = new RecordingClientConnection { AccountId = accountId };
-        var module = new GameLifecycleModule(conn);
+        var module = new GameLifecycleModule(conn, GameManager.Instance);
         return (module, conn);
     }
 

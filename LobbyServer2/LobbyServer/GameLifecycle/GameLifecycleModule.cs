@@ -18,6 +18,7 @@ public class GameLifecycleModule : ILobbyModule
 {
     private static readonly ILog log = LogManager.GetLogger(typeof(GameLifecycleModule));
     private readonly IClientConnection _conn;
+    private readonly IGameRegistry _gameRegistry;
 
     private Game _currentGame;
 
@@ -41,9 +42,10 @@ public class GameLifecycleModule : ILobbyModule
 
     public LobbyServerPlayerInfo PlayerInfo => CurrentGame?.GetPlayerInfo(_conn.AccountId);
 
-    public GameLifecycleModule(IClientConnection conn)
+    public GameLifecycleModule(IClientConnection conn, IGameRegistry gameRegistry)
     {
         _conn = conn;
+        _gameRegistry = gameRegistry;
     }
 
     public void Register(IHandlerRegistry registry)
@@ -219,7 +221,7 @@ public class GameLifecycleModule : ILobbyModule
     
     private void HandlePreviousGameInfoRequest(PreviousGameInfoRequest request)
     {
-        Game game = GameManager.GetGameWithPlayer(_conn.AccountId);
+        Game game = _gameRegistry.GetGameWithPlayer(_conn.AccountId);
         LobbyGameInfo lobbyGameInfo = null;
 
         if (game != null && game.Server != null && game.Server.IsConnected)

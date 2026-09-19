@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using CentralServer.BridgeServer;
 using CentralServer.LobbyServer.Character;
 using CentralServer.LobbyServer.GameLifecycle;
 using CentralServer.LobbyServer.Group;
@@ -57,7 +58,7 @@ public class CharacterModuleTest : EvosTest
     {
         var conn = new RecordingClientConnection { AccountId = accountId };
         var matchmaking = new MatchmakingModule(conn);
-        var gameLifecycle = new GameLifecycleModule(conn);
+        var gameLifecycle = new GameLifecycleModule(conn, GameManager.Instance);
         var module = new CharacterModule(conn, matchmaking, gameLifecycle);
         var registry = new CapturingRegistry();
         module.Register(registry);
