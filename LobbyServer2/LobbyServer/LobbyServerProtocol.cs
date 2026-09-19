@@ -56,6 +56,7 @@ namespace CentralServer.LobbyServer
 
         private readonly ISessionRegistry _sessionRegistry;
         private readonly IGroupRegistry _groupRegistry;
+        private readonly IGameRegistry _gameRegistry;
         private readonly MatchmakingModule _matchmaking;
         private readonly GameLifecycleModule _gameLifecycle;
 
@@ -350,12 +351,13 @@ namespace CentralServer.LobbyServer
             RegisterHandler<T>(handler);
         }
 
-        public LobbyServerProtocol(ISessionRegistry sessionRegistry, IGroupRegistry groupRegistry)
+        public LobbyServerProtocol(ISessionRegistry sessionRegistry, IGroupRegistry groupRegistry, IGameRegistry gameRegistry)
         {
             _sessionRegistry = sessionRegistry;
             _groupRegistry = groupRegistry;
+            _gameRegistry = gameRegistry;
             _matchmaking = new MatchmakingModule(this);
-            _gameLifecycle = new GameLifecycleModule(this);
+            _gameLifecycle = new GameLifecycleModule(this, gameRegistry);
 
             RegisterHandler<RegisterGameClientRequest>(HandleRegisterGame);
             RegisterHandler<PlayerUpdateStatusRequest>(HandlePlayerUpdateStatusRequest);
