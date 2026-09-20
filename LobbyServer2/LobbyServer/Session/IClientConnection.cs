@@ -21,4 +21,5 @@ public interface IClientConnection
     PlayerOnlineStatus Status { get; set; }
     void JoinGame(Game game);
     void OnStartGame(Game game);
+    bool IsConnected { get; }
 }
