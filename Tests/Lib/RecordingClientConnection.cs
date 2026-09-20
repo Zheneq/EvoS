@@ -33,4 +33,6 @@ public class RecordingClientConnection : IClientConnection
     public void OnAccountVisualsUpdated() => VisualsUpdates++;
     public void ResetReadyState() => ResetReadyStateCalls++;
     public void SendGameUnassignmentNotification() => GameUnassignmentCalls++;
+    public void JoinGame(Game game) { }
+    public void OnStartGame(Game game) { }
 }

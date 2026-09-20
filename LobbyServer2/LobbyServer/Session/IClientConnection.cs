@@ -19,4 +19,6 @@ public interface IClientConnection
     void ResetReadyState();
     void SendGameUnassignmentNotification();
     PlayerOnlineStatus Status { get; set; }
+    void JoinGame(Game game);
+    void OnStartGame(Game game);
 }
