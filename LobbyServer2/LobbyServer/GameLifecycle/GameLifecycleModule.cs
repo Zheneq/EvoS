@@ -64,6 +64,8 @@ public class GameLifecycleModule : ILobbyModule
         registry.Register<UseOverconRequest>(HandleUseOverconRequest);
         registry.Register<UseGGPackRequest>(HandleUseGGPackRequest);
         registry.Register<RejoinGameRequest>(HandleRejoinGameRequest);
+        registry.Register<SubscribeToCustomGamesRequest>(HandleSubscribeToCustomGamesRequest);
+        registry.Register<UnsubscribeFromCustomGamesRequest>(HandleUnsubscribeFromCustomGamesRequest);
     }
 
     public void JoinGame(Game game)
@@ -383,5 +385,15 @@ public class GameLifecycleModule : ILobbyModule
         log.Info($"Reconnecting {_conn.UserName} to game {game.GameInfo.GameServerProcessCode} ({game.ProcessCode})");
         _conn.ResetReadyState();
         game.ReconnectPlayer(_conn);
+    }
+
+    private void HandleSubscribeToCustomGamesRequest(SubscribeToCustomGamesRequest request)
+    {
+        CustomGameManager.Subscribe(_conn);
+    }
+
+    private void HandleUnsubscribeFromCustomGamesRequest(UnsubscribeFromCustomGamesRequest request)
+    {
+        CustomGameManager.Unsubscribe(_conn);
     }
 }

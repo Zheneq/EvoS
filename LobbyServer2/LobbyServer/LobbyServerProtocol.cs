@@ -365,9 +365,6 @@ namespace CentralServer.LobbyServer
 
             RegisterHandler<GroupChatRequest>(HandleGroupChatRequest);
 
-            RegisterHandler<SubscribeToCustomGamesRequest>(HandleSubscribeToCustomGamesRequest);
-            RegisterHandler<UnsubscribeFromCustomGamesRequest>(HandleUnsubscribeFromCustomGamesRequest);
-
             RegisterHandler<RankedHoverClickRequest>(HandlePlayerRankedHoverClickRequest);
             RegisterHandler<RankedBanRequest>(HandlePlayerRankedBanRequest);
             RegisterHandler<RankedSelectionRequest>(HandleRankedSelectionRequest);
@@ -861,16 +858,6 @@ namespace CentralServer.LobbyServer
             BroadcastRefreshFriendList();
             BroadcastRefreshGroup();
             CurrentGame?.OnAccountVisualsUpdated(AccountId);
-        }
-
-        private void HandleSubscribeToCustomGamesRequest(SubscribeToCustomGamesRequest request)
-        {
-            CustomGameManager.Subscribe(this);
-        }
-
-        private void HandleUnsubscribeFromCustomGamesRequest(UnsubscribeFromCustomGamesRequest request)
-        {
-            CustomGameManager.Unsubscribe(this);
         }
 
         public void HandleGroupChatRequest(GroupChatRequest request)
