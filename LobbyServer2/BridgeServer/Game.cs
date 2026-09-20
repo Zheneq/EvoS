@@ -403,7 +403,7 @@ public abstract class Game
         }
     }
 
-    public void SendGameInfo(LobbyServerProtocol playerConnection, GameStatus gamestatus = GameStatus.None)
+    public void SendGameInfo(IClientConnection playerConnection, GameStatus gamestatus = GameStatus.None)
     {
         // TODO do not mutate on send
         if (gamestatus != GameStatus.None)
@@ -1169,7 +1169,7 @@ public abstract class Game
         SendGameInfo(playerConnection);
     }
 
-    public bool ReconnectPlayer(LobbyServerProtocol conn)
+    public bool ReconnectPlayer(IClientConnection conn)
     {
         LobbyServerPlayerInfo playerInfo = GetPlayerInfo(conn.AccountId);
         var playerData = Players.FirstOrDefault(p => p.AccountId == conn.AccountId);
