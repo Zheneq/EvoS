@@ -25,6 +25,7 @@ public class RecordingClientConnection : IClientConnection
     public int ResetReadyStateCalls;
     public int GameUnassignmentCalls;
 
+    public bool IsConnected { get; set; } = true;
     public PlayerOnlineStatus Status { get; set; } = PlayerOnlineStatus.Online;
     public void Send(WebSocketMessage message) => Sent.Add(message);
     public void SendSystemMessage(LocalizationPayload message) => SystemMessages.Add(message);
