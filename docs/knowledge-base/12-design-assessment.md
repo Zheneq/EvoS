@@ -357,6 +357,47 @@ Convert one manager at a time to an instance class with an interface
 - Priority order: `SessionManager` ✓ → `GroupManager` ✓ → `ServerManager`/`GameManager` ✓
   → `MatchmakingManager` next.
 
+**Step 4 complete (branch `refactor`):**
+- `IMatchmakingManager` introduced in
+  `LobbyServer2/LobbyServer/Matchmaking/IMatchmakingManager.cs` with 10 members: `Enabled`,
+  `GetQueues`, `GetQueue`, `Update`, `AddGroupToQueue`, `RemoveGroupFromQueue`, `IsQueued`,
+  `StartPractice`, `StartGameAsync`, `OnGameEnded`.
+- `MatchmakingManager` converted from `public static class` to
+  `public class MatchmakingManager : IMatchmakingManager` with a
+  `public static MatchmakingManager Instance { get; internal set; }` shim pre-initialized
+  to `new MatchmakingManager()`. The `Queues` dict and `_enabled`/`_queueUpdateRunning`
+  fields became private instance fields; the queue dict initialization moved to the instance
+  constructor. `Enabled` retains the existing `public static bool Enabled` property
+  (forwarding to `Instance._enabled` with its log-on-change side effect); the interface
+  member is implemented explicitly as `bool IMatchmakingManager.Enabled`. All other
+  `public static` methods are static forwarders calling private `*Core` instance methods;
+  `IMatchmakingManager` implemented explicitly throughout. `AddGroupToQueueCore` and
+  `RemoveGroupFromQueueCore` still call `GroupManager.Broadcast/GetGroupSubTypeMask` via
+  static shim; `StartGameAsyncCore` still calls `GameManager.CreatePvpGame()` via static shim.
+- DI wired in `CentralServer.Init`: `AddSingleton<IMatchmakingManager, MatchmakingManager>`
+  after the `IGameRegistry` registration; `MatchmakingManager.Instance` overwritten from DI
+  after `builder.Build()` so production uses the DI-managed singleton.
+- `LobbyServerProtocol` receives `IMatchmakingManager matchmakingManager` as fourth
+  constructor parameter; stores it and passes it to `MatchmakingModule`.
+- `MatchmakingModule` receives `IMatchmakingManager matchmakingManager` as second constructor
+  parameter. All 5 static `MatchmakingManager.X(...)` call sites replaced with
+  `_matchmakingManager.X(...)`: `AddGroupToQueue` (×2), `RemoveGroupFromQueue` (×2),
+  `IsQueued` (×1). Tests updated minimally (pass `MatchmakingManager.Instance` at the three
+  `new MatchmakingModule` call sites and the `new LobbyServerProtocol` call site in
+  `LobbyHandlerRegistrationTest`).
+
+**Deferred callers (still use static shims after step 4):**
+- `MatchmakingTask` calls `MatchmakingManager.Update()` statically.
+- `CentralServer.PendingShutdown` setter accesses `MatchmakingManager.Enabled` statically.
+- `MatchmakingQueue` calls `MatchmakingManager.StartGameAsync(...)` statically.
+- `GroupManager.UpdateSelectedSubTypes`, `MatchmakingModule.UpdateGroupReadyState`,
+  `MatchmakingModule.SetContextualReadyState` still call `GroupManager.X()` statically via shim.
+- All four named managers now converted ✓. Remaining static singletons
+  (`CustomGameManager`, `ChatManager`, `AdminManager`, `FriendManager`, `QueuePenaltyManager`,
+  `DiscordManager`, `StatsApi`) are future work.
+- Priority order: `SessionManager` ✓ → `GroupManager` ✓ → `ServerManager`/`GameManager` ✓
+  → `MatchmakingManager` ✓.
+
 ### Stage 4 — Split `Game`
 
 - `GameLifecycle` (status transitions, server binding, reconnection),
