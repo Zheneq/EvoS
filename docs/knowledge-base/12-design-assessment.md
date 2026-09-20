@@ -224,11 +224,10 @@ per-connection module instances; each module registers its own handlers into the
    `CentralServer.LobbyServer.Admin`, 1 handler; registered in `LobbyServerProtocol`
    constructor after the module `foreach` loop.
    **What remains on the connection — categorized:**
-   - *Blocked on Stage 3* (`SessionManager`, `CustomGameManager`,
-     `Game.ReconnectPlayer` take concrete `LobbyServerProtocol`): `HandleRegisterGame`,
+   - *Blocked on Stage 3* (`SessionManager`, `CustomGameManager` take concrete
+     `LobbyServerProtocol`): `HandleRegisterGame`,
      chat handlers (`ChatNotification`, `GroupChatRequest`),
-     `SubscribeToCustomGamesRequest`, `UnsubscribeFromCustomGamesRequest`,
-     `HandleRejoinGameRequest`.
+     `SubscribeToCustomGamesRequest`, `UnsubscribeFromCustomGamesRequest`.
    - *Stage 4*: ranked draft handlers (`RankedTradeRequest`, `RankedSelectionRequest`,
      `RankedBanRequest`, `RankedHoverClickRequest`) — belong in `DraftController`.
    **Stage 1 is fully complete. All handlers that could move in Stage 1 have been extracted.
@@ -422,6 +421,28 @@ Convert one manager at a time to an instance class with an interface
   type (reads `IsInGame`, `IsInCharacterSelect`, `IsInQueue`, `IsInGroup` which are not on
   `IClientConnection`); all its call sites already have a concrete `LobbyServerProtocol` from
   `SessionManager.GetClientConnection` and are unaffected.
+
+**Step 6 complete (branch `refactor`):**
+- `JoinGame(Game)` and `OnStartGame(Game)` added to `IClientConnection`; stub
+  implementations added to `RecordingClientConnection`.
+- `Game.ReconnectPlayer` widened from `LobbyServerProtocol` to `IClientConnection`;
+  `Game.SendGameInfo` widened from `LobbyServerProtocol` to `IClientConnection`. Both
+  methods only use `conn.AccountId`, `conn.Send`, `conn.JoinGame`, and `conn.OnStartGame`
+  — all already on the interface. All existing callers (`PvpGame`, `CustomGame`,
+  `SendGameInfoNotifications`) pass `LobbyServerProtocol` which implements `IClientConnection`
+  and compile unchanged.
+- `HandleRejoinGameRequest` moved from `LobbyServerProtocol` to `GameLifecycleModule`:
+  registration added in `Register`; handler adapted to use `_conn.X` instead of `this.X`;
+  `game.ReconnectPlayer(this)` replaced with `game.ReconnectPlayer(_conn)`.
+  Registration line and method body removed from `LobbyServerProtocol`.
+
+**Deferred (still blocked after step 6):**
+- `SubscribeToCustomGamesRequest` / `UnsubscribeFromCustomGamesRequest` — blocked on
+  `CustomGameManager.Subscribers` dict analysis (takes concrete `LobbyServerProtocol`).
+- `HandleRegisterGame` — blocked on `SessionManager.OnPlayerConnect` field-mutation
+  pattern (sets concrete `LobbyServerProtocol` fields directly).
+- Chat handlers (`ChatNotification`, `GroupChatRequest`) — blocked on `ChatManager`
+  event redesign (`LobbyServerProtocol`-typed event signatures).
 
 ### Stage 4 — Split `Game`
 
