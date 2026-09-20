@@ -16,6 +16,8 @@ public class RecordingClientConnection : IClientConnection
     public long AccountId { get; set; }
     public string Handle { get; set; } = "Test#1";
     public string UserName { get; set; } = "testuser";
+    public long SessionToken { get; set; }
+    public int CloseConnectionCalls;
     public Game CurrentGame { get; set; } = null!;
     public readonly List<WebSocketMessage> Sent = new();
     public readonly List<LocalizationPayload> SystemMessages = new();
@@ -36,4 +38,12 @@ public class RecordingClientConnection : IClientConnection
     public void SendGameUnassignmentNotification() => GameUnassignmentCalls++;
     public void JoinGame(Game game) { }
     public void OnStartGame(Game game) { }
+    public void Initialize(long accountId, string userName, long sessionToken)
+    {
+        AccountId = accountId;
+        UserName = userName;
+        SessionToken = sessionToken;
+    }
+    public void CloseConnection() => CloseConnectionCalls++;
+    public string? ProxyName => null;
 }

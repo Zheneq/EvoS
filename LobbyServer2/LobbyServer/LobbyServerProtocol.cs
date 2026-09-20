@@ -312,6 +312,15 @@ namespace CentralServer.LobbyServer
             return LobbyConfiguration.GetMOTDPopUpText();
         }
 
+        public void Initialize(long accountId, string userName, long sessionToken)
+        {
+            AccountId = accountId;
+            UserName = userName;
+            SessionToken = sessionToken;
+        }
+
+        public string? ProxyName => Proxy?.Name;
+
         public void SetGameType(GameType gameType) => _matchmaking.SetGameType(gameType);
 
         public ushort GetSubTypeMask() => _matchmaking.GetSubTypeMask();
