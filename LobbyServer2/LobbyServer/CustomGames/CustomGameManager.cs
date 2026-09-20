@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using CentralServer.BridgeServer;
+using CentralServer.LobbyServer.Session;
 using CentralServer.LobbyServer.Utils;
 using EvoS.Framework.Network.NetworkMessages;
 using EvoS.Framework.Network.Static;
@@ -16,7 +17,7 @@ namespace CentralServer.LobbyServer.CustomGames
 
         private static readonly Dictionary<long, CustomGame> Games = new Dictionary<long, CustomGame>();
         private static readonly Dictionary<string, CustomGame> GamesByCode = new Dictionary<string, CustomGame>();
-        private static readonly Dictionary<long, LobbyServerProtocol> Subscribers = new Dictionary<long, LobbyServerProtocol>();
+        private static readonly Dictionary<long, IClientConnection> Subscribers = new Dictionary<long, IClientConnection>();
 
         public static bool Enabled { get; set; } = true;
 
@@ -92,7 +93,7 @@ namespace CentralServer.LobbyServer.CustomGames
             return game;
         }
 
-        public static void Subscribe(LobbyServerProtocol client)
+        public static void Subscribe(IClientConnection client)
         {
             lock (Subscribers)
             {
@@ -101,7 +102,7 @@ namespace CentralServer.LobbyServer.CustomGames
             }
         }
 
-        public static void Unsubscribe(LobbyServerProtocol client)
+        public static void Unsubscribe(IClientConnection client)
         {
             lock (Subscribers)
             {
@@ -115,7 +116,7 @@ namespace CentralServer.LobbyServer.CustomGames
             List<long> toRemove = new List<long>();
             lock (Subscribers)
             {
-                foreach ((long key, LobbyServerProtocol value) in Subscribers)
+                foreach ((long key, IClientConnection value) in Subscribers)
                 {
                     if (value is null || !value.IsConnected)
                     {
