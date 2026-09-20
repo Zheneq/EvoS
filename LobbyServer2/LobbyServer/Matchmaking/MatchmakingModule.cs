@@ -14,6 +14,7 @@ public class MatchmakingModule : ILobbyModule
 {
     private static readonly ILog log = LogManager.GetLogger(typeof(MatchmakingModule));
     private readonly IClientConnection _conn;
+    private readonly IMatchmakingManager _matchmakingManager;
 
     public GameType SelectedGameType { get; set; }
     public ushort SelectedSubTypeMask { get; set; }
@@ -23,9 +24,10 @@ public class MatchmakingModule : ILobbyModule
 
     public void Unready() => IsReady = false;
 
-    public MatchmakingModule(IClientConnection conn)
+    public MatchmakingModule(IClientConnection conn, IMatchmakingManager matchmakingManager)
     {
         _conn = conn;
+        _matchmakingManager = matchmakingManager;
     }
 
     public void Register(IHandlerRegistry registry)
@@ -59,7 +61,7 @@ public class MatchmakingModule : ILobbyModule
             }
 
             IsReady = true;
-            MatchmakingManager.AddGroupToQueue(request.GameType, group);
+            _matchmakingManager.AddGroupToQueue(request.GameType, group);
             _conn.Send(new JoinMatchmakingQueueResponse { Success = true, ResponseId = request.RequestId });
         }
         catch (Exception e)
@@ -89,7 +91,7 @@ public class MatchmakingModule : ILobbyModule
 
             _conn.Send(new LeaveMatchmakingQueueResponse { Success = true, ResponseId = request.RequestId });
             IsReady = false;
-            MatchmakingManager.RemoveGroupFromQueue(group);
+            _matchmakingManager.RemoveGroupFromQueue(group);
         }
         catch (Exception e)
         {
@@ -198,7 +200,7 @@ public class MatchmakingModule : ILobbyModule
             }
         }
 
-        bool isGroupQueued = MatchmakingManager.IsQueued(group);
+        bool isGroupQueued = _matchmakingManager.IsQueued(group);
 
         if (allAreReady && !isGroupQueued)
         {
@@ -207,11 +209,11 @@ public class MatchmakingModule : ILobbyModule
                 log.Error($"Attempted to update group {group.GroupId} ready state with not connected leader {group.Leader}");
                 return;
             }
-            MatchmakingManager.AddGroupToQueue(leader.SelectedGameType, group);
+            _matchmakingManager.AddGroupToQueue(leader.SelectedGameType, group);
         }
         else if (!allAreReady && isGroupQueued)
         {
-            MatchmakingManager.RemoveGroupFromQueue(group, true);
+            _matchmakingManager.RemoveGroupFromQueue(group, true);
         }
     }
 }
