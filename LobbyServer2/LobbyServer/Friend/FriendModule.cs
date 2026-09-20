@@ -22,6 +22,14 @@ public class FriendModule : ILobbyModule
     public void Register(IHandlerRegistry registry)
     {
         registry.Register<FriendUpdateRequest>(HandleFriendUpdate);
+        registry.Register<PlayerUpdateStatusRequest>(HandlePlayerUpdateStatusRequest);
+    }
+
+    private void HandlePlayerUpdateStatusRequest(PlayerUpdateStatusRequest request)
+    {
+        log.Info($"{_conn.UserName} is now {request.StatusString}");
+        PlayerUpdateStatusResponse response = FriendManager.OnPlayerUpdateStatusRequest(_conn, request);
+        _conn.Send(response);
     }
 
     private void HandleFriendUpdate(FriendUpdateRequest request)
