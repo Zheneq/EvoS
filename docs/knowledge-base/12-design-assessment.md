@@ -214,11 +214,16 @@ per-connection module instances; each module registers its own handlers into the
    `IClientConnection`; `HandlePlayerUpdateStatusRequest` moved from `LobbyServerProtocol` to
    `FriendModule`; `FriendManager.MarkForUpdate(LobbyServerProtocol)` overload deleted.
    `IClientConnection` grown with `Status { get; set; }` (Step 5, see §C Stage 3).
+   ~~`UseOverconRequest` / `UseGGPackRequest` (iterate `CurrentGame.GetClients()` — natural fit
+   in `GameLifecycleModule`)~~ **Done:** moved to `GameLifecycleModule` (ninth and tenth
+   handlers added to that module; no new `IClientConnection` members; covariance on
+   `IEnumerable<T>` allows `foreach (IClientConnection client in CurrentGame.GetClients())`).
+   ~~`DEBUG_AdminSlashCommandNotification` (self-contained, ~30 lines, could be an
+   `AdminModule`)~~ **Done:** `AdminModule` extracted to
+   `LobbyServer2/LobbyServer/Admin/AdminModule.cs`, namespace
+   `CentralServer.LobbyServer.Admin`, 1 handler; registered in `LobbyServerProtocol`
+   constructor after the module `foreach` loop.
    **What remains on the connection — categorized:**
-   - *Could still move in Stage 1 (deferred, not blocked)*: `UseOverconRequest` /
-     `UseGGPackRequest` (iterate `CurrentGame.GetClients()` — natural fit in
-     `GameLifecycleModule`); `DEBUG_AdminSlashCommandNotification` (self-contained, ~30
-     lines, could be an `AdminModule`).
    - *Blocked on Stage 3* (`SessionManager`, `CustomGameManager`,
      `Game.ReconnectPlayer` take concrete `LobbyServerProtocol`): `HandleRegisterGame`,
      chat handlers (`ChatNotification`, `GroupChatRequest`),
@@ -226,8 +231,9 @@ per-connection module instances; each module registers its own handlers into the
      `HandleRejoinGameRequest`.
    - *Stage 4*: ranked draft handlers (`RankedTradeRequest`, `RankedSelectionRequest`,
      `RankedBanRequest`, `RankedHoverClickRequest`) — belong in `DraftController`.
-   **Stage 1 is substantially complete. Proceeding to Stage 3 (de-static the managers)
-   unlocks the blocked group and makes the remaining small extractions straightforward.**
+   **Stage 1 is fully complete. All handlers that could move in Stage 1 have been extracted.
+   Proceeding to Stage 3 (de-static the managers) unlocks the blocked group and makes the
+   remaining small extractions straightforward.**
 
 ### Stage 2 — Introduce an outbound notification port
 
