@@ -148,7 +148,7 @@ namespace CentralServer.LobbyServer.Friend
             return client.Status.ToString();
         }
 
-        public static PlayerUpdateStatusResponse OnPlayerUpdateStatusRequest(LobbyServerProtocol client, PlayerUpdateStatusRequest request)
+        public static PlayerUpdateStatusResponse OnPlayerUpdateStatusRequest(IClientConnection client, PlayerUpdateStatusRequest request)
         {
             bool success = StatusMap.TryGetValue(request.StatusString, out PlayerOnlineStatus status);
             PlayerUpdateStatusResponse response = new PlayerUpdateStatusResponse()
@@ -158,11 +158,11 @@ namespace CentralServer.LobbyServer.Friend
                 ResponseId = request.RequestId,
                 Success = success
             };
-            
+
             if (success)
             {
                 client.Status = status;
-                MarkForUpdate(client);
+                MarkForUpdate(client.AccountId);
             }
 
             return response;
@@ -185,11 +185,6 @@ namespace CentralServer.LobbyServer.Friend
                 default:
                     return null;
             }
-        }
-
-        public static void MarkForUpdate(LobbyServerProtocol client)
-        {
-            MarkForUpdate(client.AccountId);
         }
 
         public static void MarkForUpdate(long accountId)
