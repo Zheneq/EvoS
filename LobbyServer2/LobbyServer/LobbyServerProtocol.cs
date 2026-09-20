@@ -364,7 +364,6 @@ namespace CentralServer.LobbyServer
             RegisterHandler<ChatNotification>(HandleChatNotification);
 
             RegisterHandler<GroupChatRequest>(HandleGroupChatRequest);
-            RegisterHandler<RejoinGameRequest>(HandleRejoinGameRequest);
 
             RegisterHandler<SubscribeToCustomGamesRequest>(HandleSubscribeToCustomGamesRequest);
             RegisterHandler<UnsubscribeFromCustomGamesRequest>(HandleUnsubscribeFromCustomGamesRequest);
@@ -877,41 +876,6 @@ namespace CentralServer.LobbyServer
         public void HandleGroupChatRequest(GroupChatRequest request)
         {
             OnGroupChatRequest(this, request);
-        }
-
-        public void HandleRejoinGameRequest(RejoinGameRequest request)
-        {
-            if (request.PreviousGameInfo == null || request.Accept == false)
-            {
-                Send(new RejoinGameResponse() { ResponseId = request.RequestId, Success = false });
-                return;
-            }
-
-            log.Info($"{UserName} wants to reconnect to game {request.PreviousGameInfo.GameServerProcessCode}");
-
-            Game game = GameManager.GetGameWithPlayer(AccountId);
-
-            if (game == null || game.Server == null || !game.Server.IsConnected)
-            {
-                // no longer in a game
-                Send(new RejoinGameResponse() { ResponseId = request.RequestId, Success = false });
-                log.Info($"Game {request.PreviousGameInfo.GameServerProcessCode} not found");
-                return;
-            }
-
-            LobbyServerPlayerInfo playerInfo = game.GetPlayerInfo(AccountId);
-            if (playerInfo == null)
-            {
-                // no longer in a game
-                Send(new RejoinGameResponse { ResponseId = request.RequestId, Success = false });
-                log.Info($"{UserName} was not in game {request.PreviousGameInfo.GameServerProcessCode}");
-                return;
-            }
-
-            Send(new RejoinGameResponse { ResponseId = request.RequestId, Success = true });
-            log.Info($"Reconnecting {UserName} to game {game.GameInfo.GameServerProcessCode} ({game.ProcessCode})");
-            ResetReadyState();
-            game.ReconnectPlayer(this);
         }
 
         public void OnLeaveGroup()
