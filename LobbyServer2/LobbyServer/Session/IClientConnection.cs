@@ -22,4 +22,7 @@ public interface IClientConnection
     void JoinGame(Game game);
     void OnStartGame(Game game);
     bool IsConnected { get; }
+    void Initialize(long accountId, string userName, long sessionToken);
+    void CloseConnection();
+    string? ProxyName { get; }
 }
