@@ -1,4 +1,5 @@
 using CentralServer.BridgeServer;
+using CentralServer.LobbyServer.Friend;
 using EvoS.Framework.Network.Static;
 using EvoS.Framework.Network.WebSocket;
 
@@ -17,4 +18,5 @@ public interface IClientConnection
     void OnAccountVisualsUpdated();
     void ResetReadyState();
     void SendGameUnassignmentNotification();
+    PlayerOnlineStatus Status { get; set; }
 }

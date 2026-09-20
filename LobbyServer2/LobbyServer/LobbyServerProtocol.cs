@@ -315,7 +315,7 @@ namespace CentralServer.LobbyServer
 
         public ushort GetSubTypeMask() => _matchmaking.GetSubTypeMask();
 
-        public PlayerOnlineStatus Status = PlayerOnlineStatus.Online;
+        public PlayerOnlineStatus Status { get; set; } = PlayerOnlineStatus.Online;
 
         public Game CurrentGame => _gameLifecycle.CurrentGame;
 
