@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using CentralServer.BridgeServer;
+using CentralServer.LobbyServer.Friend;
 using CentralServer.LobbyServer.Session;
 using EvoS.Framework.Network.Static;
 using EvoS.Framework.Network.WebSocket;
@@ -24,6 +25,7 @@ public class RecordingClientConnection : IClientConnection
     public int ResetReadyStateCalls;
     public int GameUnassignmentCalls;
 
+    public PlayerOnlineStatus Status { get; set; } = PlayerOnlineStatus.Online;
     public void Send(WebSocketMessage message) => Sent.Add(message);
     public void SendSystemMessage(LocalizationPayload message) => SystemMessages.Add(message);
     public void BroadcastRefreshFriendList() => FriendListRefreshes++;
