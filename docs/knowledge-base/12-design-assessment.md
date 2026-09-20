@@ -207,22 +207,22 @@ per-connection module instances; each module registers its own handlers into the
    `SetContextualReadyState` deleted from `LobbyServerProtocol` (their only caller,
    `HandlePlayerInfoUpdateRequest`, moved with the module). `SetGameType` kept (public —
    `GroupModule` calls it cross-connection).
-   `FriendModule` (1 handler: `FriendUpdateRequest`; 1 private helper: `Unblock`) extracted and
-   tested (`FriendModuleTest`, 5 cases) — **eighth module; stateless (no state migration)**.
-   `HandlePlayerUpdateStatusRequest` and `Status` (`PlayerOnlineStatus`) deliberately left on the
-   connection: `FriendManager.OnPlayerUpdateStatusRequest(this, request)` takes a concrete
-   `LobbyServerProtocol` and writes `client.Status` — moving them without growing
-   `IClientConnection` with `Status` requires Stage 3 manager refactoring.
-   `IClientConnection` unchanged (no new members added for this module).
+   `FriendModule` (2 handlers: `FriendUpdateRequest`, `PlayerUpdateStatusRequest`; 1 private
+   helper: `Unblock`) extracted and tested (`FriendModuleTest`, 5 cases) — **eighth module;
+   fully extracted; stateless (no state migration)**. `Status` (`PlayerOnlineStatus`) added to
+   `IClientConnection`; `FriendManager.OnPlayerUpdateStatusRequest` widened to
+   `IClientConnection`; `HandlePlayerUpdateStatusRequest` moved from `LobbyServerProtocol` to
+   `FriendModule`; `FriendManager.MarkForUpdate(LobbyServerProtocol)` overload deleted.
+   `IClientConnection` grown with `Status { get; set; }` (Step 5, see §C Stage 3).
    **What remains on the connection — categorized:**
    - *Could still move in Stage 1 (deferred, not blocked)*: `UseOverconRequest` /
      `UseGGPackRequest` (iterate `CurrentGame.GetClients()` — natural fit in
      `GameLifecycleModule`); `DEBUG_AdminSlashCommandNotification` (self-contained, ~30
      lines, could be an `AdminModule`).
-   - *Blocked on Stage 3* (`FriendManager`, `SessionManager`, `CustomGameManager`,
+   - *Blocked on Stage 3* (`SessionManager`, `CustomGameManager`,
      `Game.ReconnectPlayer` take concrete `LobbyServerProtocol`): `HandleRegisterGame`,
-     `HandlePlayerUpdateStatusRequest` + `Status`, chat handlers (`ChatNotification`,
-     `GroupChatRequest`), `SubscribeToCustomGamesRequest`, `UnsubscribeFromCustomGamesRequest`,
+     chat handlers (`ChatNotification`, `GroupChatRequest`),
+     `SubscribeToCustomGamesRequest`, `UnsubscribeFromCustomGamesRequest`,
      `HandleRejoinGameRequest`.
    - *Stage 4*: ranked draft handlers (`RankedTradeRequest`, `RankedSelectionRequest`,
      `RankedBanRequest`, `RankedHoverClickRequest`) — belong in `DraftController`.
@@ -397,6 +397,25 @@ Convert one manager at a time to an instance class with an interface
   `DiscordManager`, `StatsApi`) are future work.
 - Priority order: `SessionManager` ✓ → `GroupManager` ✓ → `ServerManager`/`GameManager` ✓
   → `MatchmakingManager` ✓.
+
+**Step 5 complete (branch `refactor`):**
+- `PlayerOnlineStatus Status { get; set; }` added to `IClientConnection`
+  (initialised to `PlayerOnlineStatus.Online` in both `LobbyServerProtocol` and
+  `RecordingClientConnection`). `using CentralServer.LobbyServer.Friend` added to both
+  `IClientConnection.cs` and `RecordingClientConnection.cs`.
+- `FriendManager.OnPlayerUpdateStatusRequest` parameter widened from
+  `LobbyServerProtocol` to `IClientConnection`; internal call `MarkForUpdate(client)` replaced
+  with `MarkForUpdate(client.AccountId)`.
+- `FriendManager.MarkForUpdate(LobbyServerProtocol)` overload deleted (it only forwarded to
+  `MarkForUpdate(long)`); `LobbyServerProtocol.BroadcastRefreshFriendList` updated to call
+  `FriendManager.MarkForUpdate(AccountId)` directly.
+- `HandlePlayerUpdateStatusRequest` moved from `LobbyServerProtocol` to `FriendModule`;
+  `FriendModule` now fully extracted — owns both `FriendUpdateRequest` and
+  `PlayerUpdateStatusRequest`.
+- Deferred: `FriendManager.GetStatusString(LobbyServerProtocol)` still takes the concrete
+  type (reads `IsInGame`, `IsInCharacterSelect`, `IsInQueue`, `IsInGroup` which are not on
+  `IClientConnection`); all its call sites already have a concrete `LobbyServerProtocol` from
+  `SessionManager.GetClientConnection` and are unaffected.
 
 ### Stage 4 — Split `Game`
 
