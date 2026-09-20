@@ -20,6 +20,7 @@ using CentralServer.LobbyServer.Matchmaking;
 using CentralServer.LobbyServer.Quest;
 using CentralServer.LobbyServer.Session;
 using CentralServer.LobbyServer.Account;
+using CentralServer.LobbyServer.Admin;
 using CentralServer.LobbyServer.Store;
 using CentralServer.LobbyServer.TrustWar;
 using CentralServer.LobbyServer.Utils;
@@ -364,7 +365,6 @@ namespace CentralServer.LobbyServer
 
             RegisterHandler<GroupChatRequest>(HandleGroupChatRequest);
             RegisterHandler<RejoinGameRequest>(HandleRejoinGameRequest);
-            RegisterHandler<DEBUG_AdminSlashCommandNotification>(HandleDEBUG_AdminSlashCommandNotification);
 
             RegisterHandler<SubscribeToCustomGamesRequest>(HandleSubscribeToCustomGamesRequest);
             RegisterHandler<UnsubscribeFromCustomGamesRequest>(HandleUnsubscribeFromCustomGamesRequest);
@@ -379,6 +379,7 @@ namespace CentralServer.LobbyServer
             {
                 module.Register(this);
             }
+            new AdminModule(this).Register(this);
         }
 
         private void HandleRankedTradeRequest(RankedTradeRequest request)
@@ -702,48 +703,6 @@ namespace CentralServer.LobbyServer
                     Success = false,
                 });
                 // TODO: error message?
-            }
-        }
-
-        private void HandleDEBUG_AdminSlashCommandNotification(DEBUG_AdminSlashCommandNotification notification)
-        {
-            log.Info($"DEBUG_AdminSlashCommandNotification: {notification.Command}");
-            PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
-            if (account == null)
-            {
-                return;
-            }
-            log.Info($"DEBUG_AdminSlashCommandNotification: dev={account.AccountComponent.IsDev()} devMode={EvosConfiguration.GetDevMode()}");
-            if (account.AccountComponent.IsDev() || EvosConfiguration.GetDevMode())
-            {
-                Game game = GameManager.GetGameWithPlayer(AccountId);
-                if (game != null)
-                {
-                    Team team = game.TeamInfo.TeamPlayerInfo.Find(x => x.AccountId == AccountId).TeamId;
-                    switch (notification.Command)
-                    {
-                        case "End Game (Win)":
-
-                            game.Server.AdminShutdown(team == Team.TeamA ? GameResult.TeamAWon : GameResult.TeamBWon);
-                            break;
-                        case "End Game (Loss)":
-                            game.Server.AdminShutdown(team == Team.TeamA ? GameResult.TeamBWon : GameResult.TeamAWon);
-                            break;
-                        case "End Game (No Result)":
-                        case "End Game (With Parameters)":
-                        case "End Game (Tie)":
-                            // End the game with a tie result for other specified commands
-                            game.Server.AdminShutdown(GameResult.TieGame);
-                            break;
-                        case "Cooldowns":
-                            game.Server.AdminClearCooldown();
-                            break;
-                    }
-                }
-                else
-                {
-                    log.Info("DEBUG_AdminSlashCommandNotification: game not found");
-                }
             }
         }
 
