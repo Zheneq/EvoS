@@ -61,6 +61,8 @@ public class GameLifecycleModule : ILobbyModule
         registry.Register<RankedLeaderboardOverviewRequest>(HandleRankedLeaderboardOverviewRequest);
         registry.Register<CalculateFreelancerStatsRequest>(HandleCalculateFreelancerStatsRequest);
         registry.Register<PlayerPanelUpdatedNotification>(HandlePlayerPanelUpdatedNotification);
+        registry.Register<UseOverconRequest>(HandleUseOverconRequest);
+        registry.Register<UseGGPackRequest>(HandleUseGGPackRequest);
     }
 
     public void JoinGame(Game game)
@@ -288,5 +290,64 @@ public class GameLifecycleModule : ILobbyModule
 
     private void HandlePlayerPanelUpdatedNotification(PlayerPanelUpdatedNotification msg)
     {
+    }
+
+    private void HandleUseOverconRequest(UseOverconRequest request)
+    {
+        UseOverconResponse response = new UseOverconResponse()
+        {
+            ActorId = request.ActorId,
+            OverconId = request.OverconId,
+            ResponseId = request.RequestId
+        };
+        _conn.Send(response);
+        if (CurrentGame != null)
+        {
+            response.ResponseId = 0;
+            foreach (IClientConnection client in CurrentGame.GetClients())
+            {
+                if (client.AccountId != _conn.AccountId)
+                {
+                    client.Send(response);
+                }
+            }
+        }
+    }
+
+    private void HandleUseGGPackRequest(UseGGPackRequest request)
+    {
+        PersistedAccountData account = DB.Get().AccountDao.GetAccount(_conn.AccountId);
+        UseGGPackResponse response = new UseGGPackResponse()
+        {
+            GGPackUserName = account.Handle,
+            GGPackUserBannerBackground = account.AccountComponent.SelectedBackgroundBannerID,
+            GGPackUserBannerForeground = account.AccountComponent.SelectedForegroundBannerID,
+            GGPackUserRibbon = account.AccountComponent.SelectedRibbonID,
+            GGPackUserTitle = account.AccountComponent.SelectedTitleID,
+            GGPackUserTitleLevel = 1,
+            ResponseId = request.RequestId
+        };
+        _conn.Send(response);
+        if (CurrentGame != null)
+        {
+            CurrentGame.OnPlayerUsedGGPack(_conn.AccountId);
+            foreach (IClientConnection client in CurrentGame.GetClients())
+            {
+                if (client.AccountId != _conn.AccountId)
+                {
+                    UseGGPackNotification useGGPackNotification = new UseGGPackNotification()
+                    {
+                        GGPackUserName = account.Handle,
+                        GGPackUserBannerBackground = account.AccountComponent.SelectedBackgroundBannerID,
+                        GGPackUserBannerForeground = account.AccountComponent.SelectedForegroundBannerID,
+                        GGPackUserRibbon = account.AccountComponent.SelectedRibbonID,
+                        GGPackUserTitle = account.AccountComponent.SelectedTitleID,
+                        GGPackUserTitleLevel = 1,
+                        NumGGPacksUsed = CurrentGame.GameInfo.ggPackUsedAccountIDs[_conn.AccountId]
+                    };
+                    client.Send(useGGPackNotification);
+                }
+            }
+        }
     }
 }

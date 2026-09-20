@@ -362,8 +362,6 @@ namespace CentralServer.LobbyServer
             RegisterHandler<RegisterGameClientRequest>(HandleRegisterGame);
             RegisterHandler<ChatNotification>(HandleChatNotification);
 
-            RegisterHandler<UseOverconRequest>(HandleUseOverconRequest);
-            RegisterHandler<UseGGPackRequest>(HandleUseGGPackRequest);
             RegisterHandler<GroupChatRequest>(HandleGroupChatRequest);
             RegisterHandler<RejoinGameRequest>(HandleRejoinGameRequest);
             RegisterHandler<DEBUG_AdminSlashCommandNotification>(HandleDEBUG_AdminSlashCommandNotification);
@@ -905,69 +903,6 @@ namespace CentralServer.LobbyServer
             BroadcastRefreshFriendList();
             BroadcastRefreshGroup();
             CurrentGame?.OnAccountVisualsUpdated(AccountId);
-        }
-
-        public void HandleUseOverconRequest(UseOverconRequest request)
-        {
-            UseOverconResponse response = new UseOverconResponse()
-            {
-                ActorId = request.ActorId,
-                OverconId = request.OverconId,
-                ResponseId = request.RequestId
-            };
-
-            Send(response);
-
-            if (CurrentGame != null)
-            {
-                response.ResponseId = 0;
-                foreach (LobbyServerProtocol client in CurrentGame.GetClients())
-                {
-                    if (client.AccountId != AccountId)
-                    {
-                        client.Send(response);
-                    }
-                }
-            }
-        }
-
-        public void HandleUseGGPackRequest(UseGGPackRequest request)
-        {
-            PersistedAccountData account = DB.Get().AccountDao.GetAccount(AccountId);
-            UseGGPackResponse response = new UseGGPackResponse()
-            {
-                GGPackUserName = account.Handle,
-                GGPackUserBannerBackground = account.AccountComponent.SelectedBackgroundBannerID,
-                GGPackUserBannerForeground = account.AccountComponent.SelectedForegroundBannerID,
-                GGPackUserRibbon = account.AccountComponent.SelectedRibbonID,
-                GGPackUserTitle = account.AccountComponent.SelectedTitleID,
-                GGPackUserTitleLevel = 1,
-                ResponseId = request.RequestId
-            };
-            Send(response);
-
-            if (CurrentGame != null)
-            {
-                CurrentGame.OnPlayerUsedGGPack(AccountId);
-                foreach (LobbyServerProtocol client in CurrentGame.GetClients())
-                {
-                    if (client.AccountId != AccountId)
-                    {
-                        UseGGPackNotification useGGPackNotification = new UseGGPackNotification()
-                        {
-                            GGPackUserName = account.Handle,
-                            GGPackUserBannerBackground = account.AccountComponent.SelectedBackgroundBannerID,
-                            GGPackUserBannerForeground = account.AccountComponent.SelectedForegroundBannerID,
-                            GGPackUserRibbon = account.AccountComponent.SelectedRibbonID,
-                            GGPackUserTitle = account.AccountComponent.SelectedTitleID,
-                            GGPackUserTitleLevel = 1,
-                            NumGGPacksUsed = CurrentGame.GameInfo.ggPackUsedAccountIDs[AccountId]
-                        };
-                        client.Send(useGGPackNotification);
-                    }
-
-                }
-            }
         }
 
         private void HandleSubscribeToCustomGamesRequest(SubscribeToCustomGamesRequest request)
