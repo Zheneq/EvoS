@@ -775,7 +775,7 @@ namespace CentralServer.LobbyServer
 
         public void BroadcastRefreshFriendList()
         {
-            FriendManager.MarkForUpdate(this);
+            FriendManager.MarkForUpdate(AccountId);
         }
 
         public void RefreshFriendList()
