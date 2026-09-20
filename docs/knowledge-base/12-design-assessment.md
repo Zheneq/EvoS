@@ -224,15 +224,30 @@ per-connection module instances; each module registers its own handlers into the
    `CentralServer.LobbyServer.Admin`, 1 handler; registered in `LobbyServerProtocol`
    constructor after the module `foreach` loop.
    **What remains on the connection — categorized:**
-   - *Blocked on Stage 3* (`SessionManager`, `CustomGameManager` take concrete
-     `LobbyServerProtocol`): `HandleRegisterGame`,
-     chat handlers (`ChatNotification`, `GroupChatRequest`),
-     `SubscribeToCustomGamesRequest`, `UnsubscribeFromCustomGamesRequest`.
+   - *Blocked on Stage 3* (`SessionManager` takes concrete `LobbyServerProtocol`):
+     `HandleRegisterGame`, chat handlers (`ChatNotification`, `GroupChatRequest`).
    - *Stage 4*: ranked draft handlers (`RankedTradeRequest`, `RankedSelectionRequest`,
      `RankedBanRequest`, `RankedHoverClickRequest`) — belong in `DraftController`.
    **Stage 1 is fully complete. All handlers that could move in Stage 1 have been extracted.
    Proceeding to Stage 3 (de-static the managers) unlocks the blocked group and makes the
    remaining small extractions straightforward.**
+
+**Step 7 complete (branch `refactor`):**
+- `bool IsConnected { get; }` added to `IClientConnection`; stub implementation
+  `public bool IsConnected { get; set; } = true` added to `RecordingClientConnection`.
+- `CustomGameManager.Subscribers` dict widened from `Dictionary<long, LobbyServerProtocol>`
+  to `Dictionary<long, IClientConnection>`; `Subscribe` and `Unsubscribe` parameters widened
+  from `LobbyServerProtocol` to `IClientConnection`; `NotifyUpdate` foreach variable widened
+  to `IClientConnection`. `using CentralServer.LobbyServer.Session` added to
+  `CustomGameManager.cs`.
+- `HandleSubscribeToCustomGamesRequest` and `HandleUnsubscribeFromCustomGamesRequest` moved
+  from `LobbyServerProtocol` to `GameLifecycleModule`: two `registry.Register` calls added in
+  `Register`; two private handler methods added that delegate to `CustomGameManager.Subscribe(_conn)`
+  and `CustomGameManager.Unsubscribe(_conn)`. Registration lines and method bodies removed from
+  `LobbyServerProtocol`.
+- Remaining blocked on Stage 3: `HandleRegisterGame` (blocked on
+  `SessionManager.OnPlayerConnect` field-mutation pattern) and chat handlers
+  (`ChatNotification`, `GroupChatRequest`, blocked on `ChatManager` event redesign).
 
 ### Stage 2 — Introduce an outbound notification port
 
@@ -437,8 +452,6 @@ Convert one manager at a time to an instance class with an interface
   Registration line and method body removed from `LobbyServerProtocol`.
 
 **Deferred (still blocked after step 6):**
-- `SubscribeToCustomGamesRequest` / `UnsubscribeFromCustomGamesRequest` — blocked on
-  `CustomGameManager.Subscribers` dict analysis (takes concrete `LobbyServerProtocol`).
 - `HandleRegisterGame` — blocked on `SessionManager.OnPlayerConnect` field-mutation
   pattern (sets concrete `LobbyServerProtocol` fields directly).
 - Chat handlers (`ChatNotification`, `GroupChatRequest`) — blocked on `ChatManager`
