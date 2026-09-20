@@ -26,7 +26,7 @@ namespace CentralServer.LobbyServer.Session
 
         private class SessionInfo
         {
-            public LobbyServerProtocol conn;
+            public IClientConnection conn;
             public LobbySessionInfo session;
         }
 
@@ -103,7 +103,7 @@ namespace CentralServer.LobbyServer.Session
         // Static lifecycle methods — not on the interface; access state via Instance
         // -----------------------------------------------------------------------
 
-        public static void OnPlayerConnect(LobbyServerProtocol client, RegisterGameClientRequest registerRequest)
+        public static void OnPlayerConnect(IClientConnection client, RegisterGameClientRequest registerRequest)
         {
             lock (Instance.SessionInfos)
             {
@@ -129,11 +129,7 @@ namespace CentralServer.LobbyServer.Session
                     throw new RegisterGameException("This account is temporarily banned. Please, try again later.");
                 }
 
-                client.AccountId = account.AccountId;
-                client.UserName = account.UserName;
-                client.SelectedGameType = GameType.PvP;
-                client.SelectedSubTypeMask = 0;
-                client.SessionToken = sessionInfo.SessionToken;
+                client.Initialize(account.AccountId, account.UserName, sessionInfo.SessionToken);
 
                 GroupManager.CreateGroup(client.AccountId);
 
@@ -146,7 +142,7 @@ namespace CentralServer.LobbyServer.Session
                 Instance.ConnectingSessions.TryRemove(client.AccountId, out _);
             }
 
-            OnPlayerConnected(client);
+            OnPlayerConnected((LobbyServerProtocol)client);
         }
 
         public static void OnPlayerDisconnect(LobbyServerProtocol client)
@@ -200,7 +196,7 @@ namespace CentralServer.LobbyServer.Session
         // -----------------------------------------------------------------------
 
         public static LobbyServerProtocol? GetClientConnection(long accountId)
-            => Instance.GetClientConnectionCore(accountId);
+            => Instance.GetClientConnectionCore(accountId) as LobbyServerProtocol;
 
         public static LobbySessionInfo GetSessionInfo(long accountId)
             => Instance.GetSessionInfoCore(accountId);
@@ -268,7 +264,7 @@ namespace CentralServer.LobbyServer.Session
         // Private core methods — contain the original logic
         // -----------------------------------------------------------------------
 
-        private LobbyServerProtocol? GetClientConnectionCore(long accountId)
+        private IClientConnection? GetClientConnectionCore(long accountId)
         {
             SessionInfos.TryGetValue(accountId, out SessionInfo sessionInfo);
             return sessionInfo?.conn;
@@ -397,7 +393,7 @@ namespace CentralServer.LobbyServer.Session
 
         private void BroadcastCore(WebSocketMessage message)
         {
-            SessionInfos.Values.FirstOrDefault()?.conn.Broadcast(message);
+            (SessionInfos.Values.FirstOrDefault()?.conn as LobbyServerProtocol)?.Broadcast(message);
         }
     }
 }

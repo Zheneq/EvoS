@@ -16,7 +16,7 @@ public class MatchmakingModule : ILobbyModule
     private readonly IClientConnection _conn;
     private readonly IMatchmakingManager _matchmakingManager;
 
-    public GameType SelectedGameType { get; set; }
+    public GameType SelectedGameType { get; set; } = GameType.PvP;
     public ushort SelectedSubTypeMask { get; set; }
     public BotDifficulty AllyDifficulty { get; set; }
     public BotDifficulty EnemyDifficulty { get; set; }
