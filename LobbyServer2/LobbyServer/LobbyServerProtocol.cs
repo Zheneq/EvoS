@@ -360,7 +360,6 @@ namespace CentralServer.LobbyServer
             _gameLifecycle = new GameLifecycleModule(this, gameRegistry);
 
             RegisterHandler<RegisterGameClientRequest>(HandleRegisterGame);
-            RegisterHandler<PlayerUpdateStatusRequest>(HandlePlayerUpdateStatusRequest);
             RegisterHandler<ChatNotification>(HandleChatNotification);
 
             RegisterHandler<UseOverconRequest>(HandleUseOverconRequest);
@@ -882,14 +881,6 @@ namespace CentralServer.LobbyServer
                 return;
             }
             BroadcastRefreshFriendList();
-        }
-
-        public void HandlePlayerUpdateStatusRequest(PlayerUpdateStatusRequest request)
-        {
-            log.Info($"{this.UserName} is now {request.StatusString}");
-            PlayerUpdateStatusResponse response = FriendManager.OnPlayerUpdateStatusRequest(this, request);
-
-            Send(response);
         }
 
         public void SendGameUnassignmentNotification()
