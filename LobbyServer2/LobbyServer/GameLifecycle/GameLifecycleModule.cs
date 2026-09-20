@@ -63,6 +63,7 @@ public class GameLifecycleModule : ILobbyModule
         registry.Register<PlayerPanelUpdatedNotification>(HandlePlayerPanelUpdatedNotification);
         registry.Register<UseOverconRequest>(HandleUseOverconRequest);
         registry.Register<UseGGPackRequest>(HandleUseGGPackRequest);
+        registry.Register<RejoinGameRequest>(HandleRejoinGameRequest);
     }
 
     public void JoinGame(Game game)
@@ -349,5 +350,38 @@ public class GameLifecycleModule : ILobbyModule
                 }
             }
         }
+    }
+
+    private void HandleRejoinGameRequest(RejoinGameRequest request)
+    {
+        if (request.PreviousGameInfo == null || request.Accept == false)
+        {
+            _conn.Send(new RejoinGameResponse() { ResponseId = request.RequestId, Success = false });
+            return;
+        }
+
+        log.Info($"{_conn.UserName} wants to reconnect to game {request.PreviousGameInfo.GameServerProcessCode}");
+
+        Game game = GameManager.GetGameWithPlayer(_conn.AccountId);
+
+        if (game == null || game.Server == null || !game.Server.IsConnected)
+        {
+            _conn.Send(new RejoinGameResponse() { ResponseId = request.RequestId, Success = false });
+            log.Info($"Game {request.PreviousGameInfo.GameServerProcessCode} not found");
+            return;
+        }
+
+        LobbyServerPlayerInfo playerInfo = game.GetPlayerInfo(_conn.AccountId);
+        if (playerInfo == null)
+        {
+            _conn.Send(new RejoinGameResponse { ResponseId = request.RequestId, Success = false });
+            log.Info($"{_conn.UserName} was not in game {request.PreviousGameInfo.GameServerProcessCode}");
+            return;
+        }
+
+        _conn.Send(new RejoinGameResponse { ResponseId = request.RequestId, Success = true });
+        log.Info($"Reconnecting {_conn.UserName} to game {game.GameInfo.GameServerProcessCode} ({game.ProcessCode})");
+        _conn.ResetReadyState();
+        game.ReconnectPlayer(_conn);
     }
 }
