@@ -351,12 +351,12 @@ namespace CentralServer.LobbyServer
             RegisterHandler<T>(handler);
         }
 
-        public LobbyServerProtocol(ISessionRegistry sessionRegistry, IGroupRegistry groupRegistry, IGameRegistry gameRegistry)
+        public LobbyServerProtocol(ISessionRegistry sessionRegistry, IGroupRegistry groupRegistry, IGameRegistry gameRegistry, IMatchmakingManager matchmakingManager)
         {
             _sessionRegistry = sessionRegistry;
             _groupRegistry = groupRegistry;
             _gameRegistry = gameRegistry;
-            _matchmaking = new MatchmakingModule(this);
+            _matchmaking = new MatchmakingModule(this, matchmakingManager);
             _gameLifecycle = new GameLifecycleModule(this, gameRegistry);
 
             RegisterHandler<RegisterGameClientRequest>(HandleRegisterGame);

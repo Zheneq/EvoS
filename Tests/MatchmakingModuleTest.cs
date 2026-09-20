@@ -54,7 +54,7 @@ public class MatchmakingModuleTest : EvosTest
         MakeModuleWithRegistry(long accountId)
     {
         var conn = new RecordingClientConnection { AccountId = accountId };
-        var module = new MatchmakingModule(conn);
+        var module = new MatchmakingModule(conn, MatchmakingManager.Instance);
         var registry = new CapturingRegistry();
         module.Register(registry);
         return (module, conn, registry);
@@ -64,7 +64,7 @@ public class MatchmakingModuleTest : EvosTest
         MakeModule(long accountId)
     {
         var conn = new RecordingClientConnection { AccountId = accountId };
-        var module = new MatchmakingModule(conn);
+        var module = new MatchmakingModule(conn, MatchmakingManager.Instance);
         return (module, conn);
     }
 

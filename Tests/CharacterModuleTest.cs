@@ -57,7 +57,7 @@ public class CharacterModuleTest : EvosTest
         MakeModuleWithRegistry(long accountId)
     {
         var conn = new RecordingClientConnection { AccountId = accountId };
-        var matchmaking = new MatchmakingModule(conn);
+        var matchmaking = new MatchmakingModule(conn, MatchmakingManager.Instance);
         var gameLifecycle = new GameLifecycleModule(conn, GameManager.Instance);
         var module = new CharacterModule(conn, matchmaking, gameLifecycle);
         var registry = new CapturingRegistry();
