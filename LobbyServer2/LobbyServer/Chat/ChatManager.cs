@@ -54,32 +54,7 @@ namespace CentralServer.LobbyServer.Chat
             return _instance ??= new ChatManager();
         }
 
-        private ChatManager()
-        {
-            SessionManager.OnPlayerConnected += Register;
-            SessionManager.OnPlayerDisconnected += Unregister;
-        }
-
-        ~ChatManager()
-        {
-            SessionManager.OnPlayerConnected -= Register;
-            SessionManager.OnPlayerDisconnected -= Unregister;
-        }
-
-        private void Register(LobbyServerProtocol conn)
-        {
-            conn.OnChatNotification += HandleChatNotification;
-            conn.OnGroupChatRequest += HandleGroupChatRequest;
-        }
-
-        private void Unregister(LobbyServerProtocol conn)
-        {
-            // TODO unregister from every client on shutdown?
-            conn.OnChatNotification -= HandleChatNotification;
-            conn.OnGroupChatRequest -= HandleGroupChatRequest;
-        }
-
-        public void HandleChatNotification(LobbyServerProtocol conn, ChatNotification notification)
+        public void HandleChatNotification(IClientConnection conn, ChatNotification notification)
         {
             PersistedAccountData account = DB.Get().AccountDao.GetAccount(conn.AccountId);
             bool isMuted = account.AdminComponent.Muted
@@ -90,7 +65,7 @@ namespace CentralServer.LobbyServer.Chat
                 SenderAccountId = conn.AccountId,
                 SenderHandle = account.Handle,
                 ResponseId = notification.RequestId,
-                CharacterType = conn.PlayerInfo?.CharacterType ?? account.AccountComponent.LastCharacter,
+                CharacterType = conn.ActiveCharacterType ?? account.AccountComponent.LastCharacter,
                 ConsoleMessageType = notification.ConsoleMessageType,
                 Text = notification.Text,
                 EmojisAllowed = InventoryManager.GetUnlockedEmojiIDs(conn.AccountId),
@@ -279,7 +254,7 @@ namespace CentralServer.LobbyServer.Chat
             OnChatMessage(message, isMuted);
         }
 
-        public void HandleGroupChatRequest(LobbyServerProtocol conn, GroupChatRequest request)
+        public void HandleGroupChatRequest(IClientConnection conn, GroupChatRequest request)
         {
             conn.Send(new GroupChatResponse
             {
@@ -294,7 +269,7 @@ namespace CentralServer.LobbyServer.Chat
             {
                 SenderAccountId = conn.AccountId,
                 EmojisAllowed = request.RequestedEmojis,
-                CharacterType = conn.PlayerInfo?.CharacterType ?? account.AccountComponent.LastCharacter,
+                CharacterType = conn.ActiveCharacterType ?? account.AccountComponent.LastCharacter,
                 ConsoleMessageType = ConsoleMessageType.GroupChat,
                 SenderHandle = account.Handle,
                 Text = request.Text
