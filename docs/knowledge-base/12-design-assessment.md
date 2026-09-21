@@ -224,8 +224,6 @@ per-connection module instances; each module registers its own handlers into the
    `CentralServer.LobbyServer.Admin`, 1 handler; registered in `LobbyServerProtocol`
    constructor after the module `foreach` loop.
    **What remains on the connection — categorized:**
-   - *Blocked on Stage 3* (`ChatManager` event redesign):
-     chat handlers (`ChatNotification`, `GroupChatRequest`).
    - *Stage 4*: ranked draft handlers (`RankedTradeRequest`, `RankedSelectionRequest`,
      `RankedBanRequest`, `RankedHoverClickRequest`) — belong in `DraftController`.
    **Stage 1 is fully complete. All handlers that could move in Stage 1 have been extracted.
@@ -486,6 +484,32 @@ Convert one manager at a time to an instance class with an interface
   pattern (sets concrete `LobbyServerProtocol` fields directly).
 - Chat handlers (`ChatNotification`, `GroupChatRequest`) — blocked on `ChatManager`
   event redesign (`LobbyServerProtocol`-typed event signatures).
+
+**Step 9 complete (branch `refactor`):**
+- `CharacterType? ActiveCharacterType { get; }` added to `IClientConnection`
+  (`using EvoS.Framework.Constants.Enums` added); implemented in `LobbyServerProtocol`
+  as `_gameLifecycle.PlayerInfo?.CharacterType`; stub (`{ get; set; }`) added to
+  `RecordingClientConnection`.
+- `ChatManager.HandleChatNotification` and `HandleGroupChatRequest` widened from
+  `LobbyServerProtocol` to `IClientConnection`; `conn.PlayerInfo?.CharacterType`
+  replaced with `conn.ActiveCharacterType` in both methods.
+- `ChatManager.Register` and `Unregister` removed (they subscribed/unsubscribed
+  `OnChatNotification`/`OnGroupChatRequest` events per connection); constructor and
+  destructor became empty and were removed.
+- Per-connection events `OnChatNotification` (`Action<LobbyServerProtocol, ChatNotification>`)
+  and `OnGroupChatRequest` (`Action<LobbyServerProtocol, GroupChatRequest>`) removed from
+  `LobbyServerProtocol`; one-liner handler methods `HandleChatNotification` and
+  `HandleGroupChatRequest` removed; their `RegisterHandler` lines removed from the constructor.
+- `ChatModule` created in `LobbyServer2/LobbyServer/Chat/ChatModule.cs`, namespace
+  `CentralServer.LobbyServer.Chat`. Owns `ChatNotification` and `GroupChatRequest` handlers;
+  delegates directly to `ChatManager.Get().HandleChatNotification/HandleGroupChatRequest(_conn, ...)`.
+  Registered second in the `ILobbyModule[]` array (after `LoginModule`, before `StoreModule`).
+- `SessionManager.OnPlayerConnected` and `OnPlayerDisconnected` events widened from
+  `Action<LobbyServerProtocol>` to `Action<IClientConnection>`; explicit cast removed from
+  the `OnPlayerConnected(client)` raise site.
+- **Stage 3 is fully complete.** Remaining on `LobbyServerProtocol`: only the four ranked
+  draft handlers (`RankedTradeRequest`, `RankedSelectionRequest`, `RankedBanRequest`,
+  `RankedHoverClickRequest`) — these belong in `DraftController` and are Stage 4 work.
 
 ### Stage 4 — Split `Game`
 
