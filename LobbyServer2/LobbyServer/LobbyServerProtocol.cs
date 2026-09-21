@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using CentralServer.BridgeServer;
 using CentralServer.LobbyServer.Character;
+using CentralServer.LobbyServer.Chat;
 using CentralServer.LobbyServer.Config;
 using CentralServer.LobbyServer.CustomGames;
 using CentralServer.LobbyServer.Discord;
@@ -186,9 +187,6 @@ namespace CentralServer.LobbyServer
 
         public string Handle => LobbyServerUtils.GetHandle(AccountId);
 
-        public event Action<LobbyServerProtocol, ChatNotification> OnChatNotification = delegate { };
-        public event Action<LobbyServerProtocol, GroupChatRequest> OnGroupChatRequest = delegate { };
-
         private static readonly Summary ConnectionEndStatus = Metrics
             .CreateSummary(
                 "evos_connection_player_statuses",
@@ -212,16 +210,12 @@ namespace CentralServer.LobbyServer
             _matchmaking = new MatchmakingModule(this, matchmakingManager);
             _gameLifecycle = new GameLifecycleModule(this, gameRegistry);
 
-            RegisterHandler<ChatNotification>(HandleChatNotification);
-
-            RegisterHandler<GroupChatRequest>(HandleGroupChatRequest);
-
             RegisterHandler<RankedHoverClickRequest>(HandlePlayerRankedHoverClickRequest);
             RegisterHandler<RankedBanRequest>(HandlePlayerRankedBanRequest);
             RegisterHandler<RankedSelectionRequest>(HandleRankedSelectionRequest);
             RegisterHandler<RankedTradeRequest>(HandleRankedTradeRequest);
 
-            ILobbyModule[] modules = { new LoginModule(this), new StoreModule(this), new TelemetryModule(this), new AccountModule(this), new GroupModule(this, _groupRegistry), new FriendModule(this), _matchmaking, _gameLifecycle, new CharacterModule(this, _matchmaking, _gameLifecycle) };
+            ILobbyModule[] modules = { new LoginModule(this), new ChatModule(this), new StoreModule(this), new TelemetryModule(this), new AccountModule(this), new GroupModule(this, _groupRegistry), new FriendModule(this), _matchmaking, _gameLifecycle, new CharacterModule(this, _matchmaking, _gameLifecycle) };
             foreach (ILobbyModule module in modules)
             {
                 module.Register(this);
@@ -635,21 +629,11 @@ namespace CentralServer.LobbyServer
 
         public void ResetReadyState() => _matchmaking.ResetReadyState();
 
-        public void HandleChatNotification(ChatNotification notification)
-        {
-            OnChatNotification(this, notification);
-        }
-
         public void OnAccountVisualsUpdated()
         {
             BroadcastRefreshFriendList();
             BroadcastRefreshGroup();
             CurrentGame?.OnAccountVisualsUpdated(AccountId);
-        }
-
-        public void HandleGroupChatRequest(GroupChatRequest request)
-        {
-            OnGroupChatRequest(this, request);
         }
 
         public void OnLeaveGroup()
