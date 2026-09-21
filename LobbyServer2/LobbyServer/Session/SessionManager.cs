@@ -59,8 +59,8 @@ namespace CentralServer.LobbyServer.Session
         private readonly ConcurrentDictionary<long, DisconnectedSessionInfo> DisconnectedSessionInfos =
             new ConcurrentDictionary<long, DisconnectedSessionInfo>();
 
-        public static event Action<LobbyServerProtocol> OnPlayerConnected = delegate {};
-        public static event Action<LobbyServerProtocol> OnPlayerDisconnected = delegate {};
+        public static event Action<IClientConnection> OnPlayerConnected = delegate {};
+        public static event Action<IClientConnection> OnPlayerDisconnected = delegate {};
 
         private static readonly Gauge LobbySize = Metrics
             .CreateGauge(
@@ -142,7 +142,7 @@ namespace CentralServer.LobbyServer.Session
                 Instance.ConnectingSessions.TryRemove(client.AccountId, out _);
             }
 
-            OnPlayerConnected((LobbyServerProtocol)client);
+            OnPlayerConnected(client);
         }
 
         public static void OnPlayerDisconnect(LobbyServerProtocol client)
