@@ -224,8 +224,8 @@ per-connection module instances; each module registers its own handlers into the
    `CentralServer.LobbyServer.Admin`, 1 handler; registered in `LobbyServerProtocol`
    constructor after the module `foreach` loop.
    **What remains on the connection — categorized:**
-   - *Blocked on Stage 3* (`SessionManager` takes concrete `LobbyServerProtocol`):
-     `HandleRegisterGame`, chat handlers (`ChatNotification`, `GroupChatRequest`).
+   - *Blocked on Stage 3* (`ChatManager` event redesign):
+     chat handlers (`ChatNotification`, `GroupChatRequest`).
    - *Stage 4*: ranked draft handlers (`RankedTradeRequest`, `RankedSelectionRequest`,
      `RankedBanRequest`, `RankedHoverClickRequest`) — belong in `DraftController`.
    **Stage 1 is fully complete. All handlers that could move in Stage 1 have been extracted.
@@ -245,9 +245,39 @@ per-connection module instances; each module registers its own handlers into the
   `Register`; two private handler methods added that delegate to `CustomGameManager.Subscribe(_conn)`
   and `CustomGameManager.Unsubscribe(_conn)`. Registration lines and method bodies removed from
   `LobbyServerProtocol`.
-- Remaining blocked on Stage 3: `HandleRegisterGame` (blocked on
-  `SessionManager.OnPlayerConnect` field-mutation pattern) and chat handlers
+- Remaining blocked on Stage 3: chat handlers
   (`ChatNotification`, `GroupChatRequest`, blocked on `ChatManager` event redesign).
+
+**Step 8 complete (branch `refactor`):**
+- `Initialize(accountId, userName, sessionToken)`, `CloseConnection()`, and
+  `string? ProxyName { get; }` added to `IClientConnection`; stub implementations added to
+  `RecordingClientConnection`; `Initialize` and `ProxyName` added to `LobbyServerProtocol`
+  (`CloseConnection` inherited from `WebSocketBehaviorBase`, no new body needed).
+- `MatchmakingModule.SelectedGameType` initializer fixed to `= GameType.PvP` (was
+  missing; `SessionManager.OnPlayerConnect` previously set it explicitly on the concrete
+  connection).
+- `SessionInfo.conn` type widened from `LobbyServerProtocol` to `IClientConnection`;
+  `SessionManager.OnPlayerConnect` parameter widened from `LobbyServerProtocol` to
+  `IClientConnection`; five field-mutation lines replaced with `client.Initialize(...)`.
+  `GetClientConnectionCore` return type changed to `IClientConnection?`; static forwarder
+  `GetClientConnection` keeps `LobbyServerProtocol?` return via `as LobbyServerProtocol`
+  downcast — fan-out loop in `LoginModule` still needs the concrete type for `IsInGame()`.
+  `OnPlayerConnected(client)` raise site gained explicit cast `(LobbyServerProtocol)client`
+  (event type stays `Action<LobbyServerProtocol>` because `ChatManager` subscribes with
+  that signature — widening the event is a separate blocker).
+  `BroadcastCore` adapted: `FirstOrDefault()?.conn` cast to `LobbyServerProtocol` for the
+  `Broadcast` call (that method is not on `IClientConnection`).
+- `LoginModule` created in `LobbyServer2/LobbyServer/Login/LoginModule.cs`, namespace
+  `CentralServer.LobbyServer.Login`. Owns `HandleRegisterGame` and all login helpers:
+  `SendLobbyServerReadyNotification`, `GetServerQueueConfigurationUpdateNotification`,
+  `GetLobbyStatusNotification`, `GetServerMessageOverrides`, `GetMotdText`,
+  `GetMotdPopUpText`, `FetchGithubPatchNotes`, `CachedPatchNotes`. Registered first in
+  the `ILobbyModule[]` array in `LobbyServerProtocol`.
+- All moved members removed from `LobbyServerProtocol`; newly unused usings removed
+  (`System.Net.Http`, `System.Text`, `System.Text.RegularExpressions`, `System.Net`,
+  `CentralServer.LobbyServer.Chat`, `CentralServer.LobbyServer.Quest`,
+  `CentralServer.LobbyServer.TrustWar`, `Newtonsoft.Json`, `Newtonsoft.Json.Linq`,
+  `EvoS.Framework.Exceptions`, `static EvoS.Framework.DataAccess.Daos.MiscDao`).
 
 ### Stage 2 — Introduce an outbound notification port
 
