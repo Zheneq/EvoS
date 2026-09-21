@@ -51,7 +51,7 @@ public static class QueuePenaltyManager
             }
             else if (game.StopTime > DateTime.UtcNow)
             {
-                SetQueuePenalty(accountId, GameType.PvP, DateTime.UtcNow.Subtract(game.StopTime).Add(TimeSpan.FromSeconds(30)), escalate: true);
+                SetQueuePenalty(accountId, GameType.PvP, DateTime.UtcNow.Subtract(game.StopTime).Add(TimeSpan.FromSeconds(30)), escalate: false);
             }
         }
     }
