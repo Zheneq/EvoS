@@ -1327,7 +1327,7 @@ namespace CentralServer.LobbyServer
 
             if (game != null && game.Server != null && game.Server.IsConnected)
             {
-                if (!game.GetPlayerInfo(AccountId).ReplacedWithBots)
+                if (game.GameStatus != GameStatus.Stopped && !game.GetPlayerInfo(AccountId).ReplacedWithBots)
                 {
                     game.DisconnectPlayer(AccountId);
                     log.Info($"{LobbyServerUtils.GetHandle(AccountId)} was in game {game.ProcessCode}, requesting disconnect");
