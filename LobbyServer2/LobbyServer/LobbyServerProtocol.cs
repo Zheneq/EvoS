@@ -182,6 +182,8 @@ namespace CentralServer.LobbyServer
 
         public LobbyServerPlayerInfo PlayerInfo => _gameLifecycle.PlayerInfo;
 
+        public CharacterType? ActiveCharacterType => _gameLifecycle.PlayerInfo?.CharacterType;
+
         public string Handle => LobbyServerUtils.GetHandle(AccountId);
 
         public event Action<LobbyServerProtocol, ChatNotification> OnChatNotification = delegate { };
