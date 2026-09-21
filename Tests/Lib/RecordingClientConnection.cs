@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using CentralServer.BridgeServer;
 using CentralServer.LobbyServer.Friend;
 using CentralServer.LobbyServer.Session;
+using EvoS.Framework.Constants.Enums;
 using EvoS.Framework.Network.Static;
 using EvoS.Framework.Network.WebSocket;
 
@@ -46,4 +47,5 @@ public class RecordingClientConnection : IClientConnection
     }
     public void CloseConnection() => CloseConnectionCalls++;
     public string? ProxyName => null;
+    public CharacterType? ActiveCharacterType { get; set; }
 }

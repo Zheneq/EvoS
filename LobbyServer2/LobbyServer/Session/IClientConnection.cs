@@ -1,5 +1,6 @@
 using CentralServer.BridgeServer;
 using CentralServer.LobbyServer.Friend;
+using EvoS.Framework.Constants.Enums;
 using EvoS.Framework.Network.Static;
 using EvoS.Framework.Network.WebSocket;
 
@@ -25,4 +26,5 @@ public interface IClientConnection
     void Initialize(long accountId, string userName, long sessionToken);
     void CloseConnection();
     string? ProxyName { get; }
+    CharacterType? ActiveCharacterType { get; }
 }
