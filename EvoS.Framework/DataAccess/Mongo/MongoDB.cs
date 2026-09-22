@@ -118,7 +118,7 @@ namespace EvoS.Framework.DataAccess.Mongo
             Serializers = Assembly.GetExecutingAssembly()
                 .GetTypes()
                 .Where(t => t.IsValueType &&
-                            (t.Attributes & TypeAttributes.Serializable) == TypeAttributes.Serializable)
+                            t.GetCustomAttribute<SerializableAttribute>() != null)
                 .ToDictionary(
                     t => t,
                     t => (IBsonSerializer) Activator.CreateInstance(typeof(StructSerializer<>).MakeGenericType(t)));
