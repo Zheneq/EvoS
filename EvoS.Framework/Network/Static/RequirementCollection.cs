@@ -25,7 +25,7 @@ public class RequirementCollection : IEnumerable<QueueRequirement>, IEnumerable
 
 	private IEnumerator<QueueRequirement> InternalEnumerator()
 	{
-		bool flag = false;
+		// bool flag = false;
 		if (RequirementsAsBinaryData.IsNullOrEmpty())
 		{
 			yield break;
@@ -38,7 +38,7 @@ public class RequirementCollection : IEnumerable<QueueRequirement>, IEnumerable
 			if (arg != null && arg is QueueRequirement req)
 			{
 				yield return req;
-				flag = true;
+				// flag = true;
 			}
 		}
 	}

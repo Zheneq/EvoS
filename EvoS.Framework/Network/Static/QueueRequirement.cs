@@ -92,10 +92,10 @@ public abstract class QueueRequirement
 			reader.Read();
 			return queueRequirement;
 		}
-		catch (Exception ex)
+		catch (Exception)
 		{
 			log.Error($"Failure reading QueueRequirement at {reader.Path}: {reader.TokenType}={reader.Value}");
-			throw ex;
+			throw;
 		}
 	}
 	

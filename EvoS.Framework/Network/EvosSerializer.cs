@@ -132,7 +132,7 @@ namespace EvoS.Framework.Network
                 foreach (var field in type.GetFields(BindingFlags.NonPublic | BindingFlags.Public |
                                                      BindingFlags.Instance))
                 {
-                    if (field.IsNotSerialized || _idsByType.ContainsKey(field.FieldType))
+                    if (field.GetCustomAttribute<NonSerializedAttribute>() != null || _idsByType.ContainsKey(field.FieldType))
                     {
                         continue;
                     }
@@ -214,7 +214,7 @@ namespace EvoS.Framework.Network
                 if (memberAttribute == null)
                     continue;
                 Type memberType = null;
-                if (member.MemberType == MemberTypes.Field && !((FieldInfo) member).IsNotSerialized)
+                if (member.MemberType == MemberTypes.Field && ((FieldInfo) member).GetCustomAttribute<NonSerializedAttribute>() == null)
                 {
                     memberType = ((FieldInfo) member).FieldType;
                 }
