@@ -4,7 +4,7 @@
 An emulator for the Atlas Reactor game.
 
 ### Requirements
- * Visual Studio 2019 (.NET Core 2.2 and C# 7.3 support required)
+ * .NET 9 SDK ([download](https://dotnet.microsoft.com/download/dotnet/9.0))
  
 ### Links
  * [Discord](https://discord.gg/RVnCQ7U)
