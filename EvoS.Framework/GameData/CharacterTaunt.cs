@@ -1,6 +1,6 @@
 using System;
+using EvoS.Framework.Constants.Enums;
 using EvoS.Framework.Misc;
-using EvoS.Framework.Network.NetworkBehaviours;
 
 namespace EvoS.Framework.GameData;
 
@@ -12,7 +12,7 @@ public class CharacterTaunt
     public string m_obtainedText;
     public bool m_isHidden;
     public int m_uniqueID;
-    public AbilityData.ActionType m_actionForTaunt;
+    public ActionType m_actionForTaunt;
     // [AssetFileSelector("Assets/StreamingAssets/Video/taunts/", "", ".ogv")]
     public string m_tauntVideoPath;
     public GameBalanceVars.TauntUnlockData m_tauntUnlockData;

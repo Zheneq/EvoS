@@ -1,6 +1,4 @@
-namespace EvoS.Framework.Network.NetworkBehaviours;
-
-public static class AbilityData 
+namespace EvoS.Framework.Constants.Enums
 {
     public enum ActionType
     {
@@ -19,6 +17,6 @@ public static class AbilityData
         CHAIN_1 = 11,
         CHAIN_2 = 12,
         CHAIN_3 = 13,
-        NUM_ACTIONS = 14
+        NUM_ACTIONS = 14,
     }
 }
