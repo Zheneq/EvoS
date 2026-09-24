@@ -248,7 +248,7 @@ namespace EvoS.Framework.Network
         {
             foreach (var (type, typeId) in this._serializer.GetTypeMap().OrderBy(x => x.Value))
             {
-                Console.WriteLine($"{typeId} - {type}");
+                log.Info($"{typeId} - {type}");
             }
         }
 

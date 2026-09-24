@@ -215,12 +215,23 @@ namespace CentralServer.LobbyServer
             RegisterHandler<RankedSelectionRequest>(HandleRankedSelectionRequest);
             RegisterHandler<RankedTradeRequest>(HandleRankedTradeRequest);
 
-            ILobbyModule[] modules = { new LoginModule(this), new ChatModule(this), new StoreModule(this), new TelemetryModule(this), new AccountModule(this), new GroupModule(this, _groupRegistry), new FriendModule(this), _matchmaking, _gameLifecycle, new CharacterModule(this, _matchmaking, _gameLifecycle) };
+            ILobbyModule[] modules = [
+                new LoginModule(this),
+                new ChatModule(this),
+                new StoreModule(this),
+                new TelemetryModule(this),
+                new AccountModule(this),
+                new GroupModule(this, _groupRegistry),
+                new FriendModule(this),
+                _matchmaking,
+                _gameLifecycle,
+                new CharacterModule(this, _matchmaking, _gameLifecycle),
+                new AdminModule(this)
+            ];
             foreach (ILobbyModule module in modules)
             {
                 module.Register(this);
             }
-            new AdminModule(this).Register(this);
         }
 
         private void HandleRankedTradeRequest(RankedTradeRequest request)

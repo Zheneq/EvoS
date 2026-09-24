@@ -368,6 +368,7 @@ public class GameLifecycleModule : ILobbyModule
 
         if (game == null || game.Server == null || !game.Server.IsConnected)
         {
+            // the game is over
             _conn.Send(new RejoinGameResponse() { ResponseId = request.RequestId, Success = false });
             log.Info($"Game {request.PreviousGameInfo.GameServerProcessCode} not found");
             return;
@@ -376,6 +377,7 @@ public class GameLifecycleModule : ILobbyModule
         LobbyServerPlayerInfo playerInfo = game.GetPlayerInfo(_conn.AccountId);
         if (playerInfo == null)
         {
+            // no longer in the game
             _conn.Send(new RejoinGameResponse { ResponseId = request.RequestId, Success = false });
             log.Info($"{_conn.UserName} was not in game {request.PreviousGameInfo.GameServerProcessCode}");
             return;
