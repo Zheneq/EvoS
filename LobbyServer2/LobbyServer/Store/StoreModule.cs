@@ -48,9 +48,13 @@ public class StoreModule : ILobbyModule
 
     private void HandlePurchaseTintRequest(PurchaseTintRequest request)
     {
-        Console.WriteLine("PurchaseTintRequest " + JsonConvert.SerializeObject(request));
+        log.Info("PurchaseTintRequest " + JsonConvert.SerializeObject(request));
 
-        PurchaseTintResponse response = new PurchaseTintResponse()
+        SkinHelper sk = new SkinHelper();
+        sk.AddSkin(request.CharacterType, request.SkinId, request.TextureId, request.TintId);
+        sk.Save();
+
+        PurchaseTintResponse response = new PurchaseTintResponse
         {
             Result = PurchaseResult.Success,
             CurrencyType = request.CurrencyType,
@@ -61,10 +65,6 @@ public class StoreModule : ILobbyModule
             ResponseId = request.RequestId
         };
         _conn.Send(response);
-
-        SkinHelper sk = new SkinHelper();
-        sk.AddSkin(request.CharacterType, request.SkinId, request.TextureId, request.TintId);
-        sk.Save();
     }
 
     private void HandlePurchaseEmblemRequest(PurchaseBannerForegroundRequest request)
