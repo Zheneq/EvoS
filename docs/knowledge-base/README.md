@@ -1,9 +1,10 @@
 # EvoS Knowledge Base
 
 EvoS is a server emulator for **Atlas Reactor** (a discontinued 4v4 turn-based PvP game).
-The original game client and the original game-server binary are unmodified; EvoS re-implements
-the *backend* services they talked to: login, lobby, matchmaking, social features, store, and
-orchestration of game-server processes.
+EvoS re-implements the *backend* services: login, lobby, matchmaking, social features, store, and
+orchestration of game-server processes. It supports both the vanilla (unmodified) game client and
+patched client builds. The game-server processes are custom implementations, not the original
+binaries. Client and game-server source live in a sibling repository.
 
 This knowledge base is organized by **subsystem** (which mostly, but not exactly, follows the
 folder structure). Each document describes responsibilities, key classes with file references,
@@ -34,6 +35,6 @@ endpoint the game client hits first to authenticate and learn the lobby address)
 **CentralServer** (assembly name for the `LobbyServer2` project), which serves two websocket
 endpoints — `/LobbyGameClientSessionManager` for game clients and `/BridgeServer` for game-server
 processes — plus two REST APIs (admin, user) and Prometheus metrics. State lives in MongoDB (or
-in-memory mocks when no DB is configured). Actual gameplay runs in separate, unmodified
-Atlas Reactor server processes that connect back over the bridge websocket; the lobby assigns
-players to them, relays lifecycle events, and persists results.
+in-memory mocks when no DB is configured). Actual gameplay runs in separate custom game-server 
+processes (source in the sibling repo) that connect back over the bridge websocket; the lobby 
+assigns players to them, relays lifecycle events, and persists results.

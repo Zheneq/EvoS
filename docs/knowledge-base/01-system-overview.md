@@ -32,10 +32,12 @@ namespace `CentralServer`, but the subsystem folder inside is again `LobbyServer
                                         MongoDB (or in-memory mocks)
 ```
 
-Game-server processes are *external* unmodified `AtlasReactor.exe` instances (configured via
+Game-server processes are *external* `AtlasReactor.exe` instances (configured via
 `GameServerExecutable` in settings.yaml, or self-registering over `/BridgeServer` with
 key-based auth). `AtlasReactorConfig.json` in the repo root is the config for the *game
-client/server*, pointing it at `DirectoryServerAddress 127.0.0.1:6050`.
+client*, pointing it at `DirectoryServerAddress 127.0.0.1:6050`.
+
+The source code for both client and server is available in a sibling repo `hc`.
 
 ## Startup sequence (`EvoS.Sandbox/Program.cs`)
 

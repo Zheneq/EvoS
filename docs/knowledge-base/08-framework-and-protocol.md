@@ -13,7 +13,6 @@ small fraction (auth, data access, config, a few utilities).
 | `EvosSerializer.cs` | Reflection-based binary serializer replicating the game's wire format; discovers `[EvosMessage]` types at startup (this is why Docker publish must not trim) |
 | `WebSocket/` | `WebSocketMessage` base + response base for the lobby protocol |
 | `Unity/` (10 files) | Minimal ports of Unity networking primitives (`NetworkReader/Writer`, hlapi bits) needed by the wire format |
-| `NetworkBehaviours/` | Ported game networking behaviours (barely used server-side) |
 | `ProtocolVersion.cs` | Supported client protocol versions |
 
 Bridge (lobby↔game server) messages are separate:
@@ -29,7 +28,7 @@ Accessed via `X.Get()` everywhere (character validation, store pricing, map sele
 
 ## Constants (`EvoS.Framework/Constants/Enums/`, 65 files)
 
-Game enums: `CharacterType`, `GameType`, `GameStatus`, `GameResult`, `Team`, currency, etc.
+Game enums: `CharacterType`, `GameType`, `GameStatus`, `GameResult`, `Team`, `ActionType`, currency, etc.
 `GameStatus` ordering is load-bearing (`game.GameStatus is >= GameStatus.Launched and < GameStatus.Stopped`).
 
 ## Misc (`EvoS.Framework/Misc/`)

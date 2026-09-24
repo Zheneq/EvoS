@@ -106,8 +106,7 @@ Five formats/loaders, only one hot-reloadable, all static, all CWD-relative (doc
 ### A9. Dead code & stubs
 
 Commented-out `MatchmakingManager.StartPractice`, `QuestManager` stub, disabled queue
-types, `.idea/shelf` archives checked into the repo, `README.md` describing VS2019/.NET
-Core 2.2 while the code targets modern .NET (9 in Docker).
+types, disabled queue modes with no removal timeline.
 
 ## B. What already points the right way (build on these)
 
@@ -288,8 +287,8 @@ testable (assert on a recording notifier).
 
 Convert one manager at a time to an instance class with an interface
 (`ISessionRegistry`, `IGroupRegistry`, `IServerPool`, `IGameRegistry`), keeping a static
-`Instance` shim so call sites migrate gradually. Compose them in `CentralServer.Init`
-(or Microsoft DI, which ASP.NET already provides). Priority order:
+`Instance` shim so call sites migrate gradually. Compose them with Microsoft DI, 
+which ASP.NET already provides. Priority order:
 `SessionManager` → `GroupManager` → `ServerManager`/`GameManager` → `MatchmakingManager`.
 
 **Step 1 complete (branch `refactor`):**

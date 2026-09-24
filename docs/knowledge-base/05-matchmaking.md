@@ -7,17 +7,17 @@ Elo, and apply queue penalties (dodging, leaving) and priorities.
 
 ## Key classes
 
-| Class | Location | Notes |
-|-------|----------|-------|
-| `MatchmakingManager` | `Matchmaking/MatchmakingManager.cs` | Static facade: queue map (`Coop`, `PvP` active; Practice/Ranked/Custom commented out), add/remove group, `StartGameAsync`, global `Enabled` flag |
-| `MatchmakingTask` | `Matchmaking/MatchmakingTask.cs` | `PeriodicRunner` calling `MatchmakingManager.Update()` |
-| `MatchmakingQueue` | `Matchmaking/MatchmakingQueue.cs` | 788 lines. Per-game-type queue: queued groups w/ timestamps, sub-type mask handling, asymmetric sub-types (e.g. fourlancer), config hot-reload, match scoring across sub-types, queue-status notifications to clients |
-| `Matchmaker` (abstract) | `Matchmaking/Matchmaker.cs` | Contract: `GetMatchesRanked(queuedGroups)` → scored matches; defines `MatchmakingGroup`, `Match`, `ScoredMatch` |
-| `MatchmakerBase` / `MatchmakerRanked` / `MatchmakerFifo` / `MatchmakerSingleGroup` | `Matchmaking/` | Strategies. `MatchmakerRanked` is Elo-balance-scored with many weighted criteria from `MatchmakingConfiguration`; **takes `AccountDao` + config `Func` via constructor** (the testable pattern), with a convenience ctor defaulting to `DB.Get()` |
-| `Elo` | `Matchmaking/Elo.cs` | Static, but parameterized with `IAccountProvider`/`IMatchHistoryProvider`/`IAccountUpdater` delegates (`EvoS.Framework/DataAccess/EvosDelegates.cs`) — testable |
-| `QueuePenaltyManager` | `Matchmaking/QueuePenaltyManager.cs` | Dodge/leave penalties, escalating durations, persisted in account admin component |
-| `QueuePriorityManager` | `Matchmaking/QueuePriorityManager.cs` | Priority windows (e.g. compensating players whose match was dodged) |
-| `MatchmakingConfiguration` / `MatchmakingConfigBundle` | `Matchmaking/` | Per-sub-type tunables loaded from `LobbyServer2/Config/Matchmaking/PvP.json` (hot-reloadable) |
+| Class | Location | Notes                                                                                                                                                                                                                                                                        |
+|-------|----------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `MatchmakingManager` | `Matchmaking/MatchmakingManager.cs` | Static facade: queue map (`Coop`, `PvP` active; Practice/Ranked/Custom commented out), add/remove group, `StartGameAsync`, global `Enabled` flag                                                                                                                             |
+| `MatchmakingTask` | `Matchmaking/MatchmakingTask.cs` | `PeriodicRunner` calling `MatchmakingManager.Update()`                                                                                                                                                                                                                       |
+| `MatchmakingQueue` | `Matchmaking/MatchmakingQueue.cs` | 788 lines. Per-game-type queue: queued groups w/ timestamps, sub-type mask handling, asymmetric sub-types (e.g. one player controlling 3 characters while others control one each), config hot-reload, match scoring across sub-types, queue-status notifications to clients |
+| `Matchmaker` (abstract) | `Matchmaking/Matchmaker.cs` | Contract: `GetMatchesRanked(queuedGroups)` → scored matches; defines `MatchmakingGroup`, `Match`, `ScoredMatch`                                                                                                                                                              |
+| `MatchmakerBase` / `MatchmakerRanked` / `MatchmakerFifo` / `MatchmakerSingleGroup` | `Matchmaking/` | Strategies. `MatchmakerRanked` is Elo-balance-scored with many weighted criteria from `MatchmakingConfiguration`; **takes `AccountDao` + config `Func` via constructor** (the testable pattern), with a convenience ctor defaulting to `DB.Get()`                            |
+| `Elo` | `Matchmaking/Elo.cs` | Static, but parameterized with `IAccountProvider`/`IMatchHistoryProvider`/`IAccountUpdater` delegates (`EvoS.Framework/DataAccess/EvosDelegates.cs`) — testable                                                                                                              |
+| `QueuePenaltyManager` | `Matchmaking/QueuePenaltyManager.cs` | Dodge/leave penalties, escalating durations, persisted in account admin component                                                                                                                                                                                            |
+| `QueuePriorityManager` | `Matchmaking/QueuePriorityManager.cs` | Priority windows (e.g. compensating players whose match was dodged)                                                                                                                                                                                                          |
+| `MatchmakingConfiguration` / `MatchmakingConfigBundle` | `Matchmaking/` | Per-sub-type tunables loaded from `LobbyServer2/Config/Matchmaking/PvP.json` (hot-reloadable)                                                                                                                                                                                |
 
 ## Flow
 
