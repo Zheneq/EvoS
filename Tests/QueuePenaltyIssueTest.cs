@@ -399,6 +399,35 @@ public class QueuePenaltyIssueTest : EvosTest
     }
 
     [Fact]
+    public void LobbyShutdown_PardonsLeaversOfRunningMatch()
+    {
+        using ClientNotifierScope _ = new();
+        TestGame game = new(draft: false, GameStatus.Started, MakeAccounts(PlayerCount));
+        Leave(game, 0);
+        IGameRegistry registry = new GameManager();
+        registry.RegisterGame(game.ProcessCode, game);
+
+        registry.StopAllGames();
+
+        Assert.Equal(0, OffenseCount(game.Player(0).AccountId));
+    }
+
+    [Fact]
+    public void LobbyShutdown_KeepsPenaltiesOfFinishedMatch()
+    {
+        using ClientNotifierScope _ = new();
+        TestGame game = new(draft: false, GameStatus.Started, MakeAccounts(PlayerCount));
+        Leave(game, 0);
+        game.End(GameResult.TeamAWon);
+        IGameRegistry registry = new GameManager();
+        registry.RegisterGame(game.ProcessCode, game);
+
+        registry.StopAllGames();
+
+        Assert.Equal(1, OffenseCount(game.Player(0).AccountId));
+    }
+
+    [Fact]
     public void CancelledDraftEndingWithoutResult_KeepsDodgerPenalized()
     {
         using ClientNotifierScope _ = new();

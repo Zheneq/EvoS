@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using CentralServer.LobbyServer;
+using CentralServer.LobbyServer.Matchmaking;
 using CentralServer.Utils;
 using EvoS.Framework.Constants.Enums;
 using log4net;
@@ -175,7 +176,13 @@ public class GameManager : IGameRegistry
         {
             if (game.GameInfo is not null)
             {
+                bool wasRunning = game.GameStatus != GameStatus.Stopped;
                 game.GameInfo.GameStatus = GameStatus.Stopped;
+                if (wasRunning)
+                {
+                    // Stopped before the game server could send the summary, so the game has no result
+                    QueuePenaltyManager.OnGameEnded(game);
+                }
                 game.SendGameInfoNotifications();
                 foreach (LobbyServerProtocol conn in game.GetClients())
                 {
