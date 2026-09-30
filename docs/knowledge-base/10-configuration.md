@@ -5,7 +5,7 @@
 | Source | Loaded by | Contents | Reloadable |
 |--------|-----------|----------|------------|
 | `Config/settings.yaml` | `EvosConfiguration` (`EvoS.Framework/EvosConfiguration.cs`) | Ports, addresses, DB, auth keys, registration policy, game-server executable/pick order | No (static `Lazy`, read once from CWD) |
-| `Config/lobby.yaml` | `LobbyConfiguration` (`LobbyServer2/LobbyServer/Config/LobbyConfiguration.cs`) | Motd/messages, group sizes, GG/shutdown timings, Trust War toggle, server reserve size | No |
+| `Config/lobby.yaml` | `LobbyConfiguration` (`LobbyServer2/LobbyServer/Config/LobbyConfiguration.cs`) | Motd/messages, group sizes, GG/shutdown timings, Trust War toggle, server reserve size, queue penalty tunables (`MatchAbandoningPenalty`, `QueuePenalty*` — doc 05) | No |
 | `Config/discordBot.yaml` | `DiscordBotConfiguration` (`LobbyServer2/LobbyServer/Discord/DiscordBotConfiguration.cs`) | Bot token, channel IDs, admin user IDs, welcome message | **Yes** (file-watch + debounce via `ReloadableConfig`) |
 | `Config/proxy.yaml` | `ProxyConfiguration` (`LobbyServer2/Proxy/`) | Known proxies → alternate lobby addresses | **Yes** (via `POST /api/admin/proxy/reload`) |
 | `Config/storeSettings.yaml` | `EvosStoreConfiguration` (Framework) | What's free/unlocked by default | No |

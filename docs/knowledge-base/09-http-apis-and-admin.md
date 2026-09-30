@@ -16,7 +16,8 @@ Endpoints are defined as static minimal-API style controller classes:
 
 - `StatusController` — lobby status, online players, queues, servers, games (also the
   public status feed used by community sites).
-- `AdminController` — pause queue, scheduled shutdown (`PendingShutdownType`), broadcast,
+- `AdminController` — pause queue, scheduled shutdown (`PendingShutdownType`), stop game (ends
+  it with no result via `Game.AdminEndGame`), clear queue penalty, broadcast,
   penalties (ban/mute), VIP, whispers, admin messages, registration codes, username-change
   approvals, map pick/ban, per-user detail batch queries.
 - `ModerationController` — reported chat history, user feedback browsing.

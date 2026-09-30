@@ -17,6 +17,7 @@
 | `EloTest` | `Elo` | delegate-based providers (`EvosDelegates`) |
 | `MatchmakerTest` | `MatchmakerRanked` | ctor-injected `AccountDao` + config `Func` |
 | `QueuePenaltyManagerTest`, `QueuePriorityManagerTest` | penalty/priority logic | mock DAO mode |
+| `QueuePenaltyIssueTest` | when leavers are penalized and pardoned | `TestGame : Game` driven through protected members (`OnStatusUpdate`, `CancelMatch`, setters), mock DAO mode, `ClientNotifierScope` |
 | `LoginManagerTest` | registration/login rules | mock DAO mode |
 | `EvosAuthTest`, `AuthTicketTest`, `GameServerAuthTest`, `GameServerKeyManagerTest` | JWT/ticket/game-server auth | mostly pure crypto/logic |
 | `EvosConfigurationTest` | startup validation | internal overloads taking values |
@@ -25,9 +26,9 @@
 
 ## What is not covered (and why)
 
-The entire connection-facing core: `LobbyServerProtocol` handlers, `Game` lifecycle,
-`SessionManager`, `GroupManager`, `MatchmakingQueue` orchestration, `ChatManager`,
-`CustomGameManager`. Root causes:
+The entire connection-facing core: `LobbyServerProtocol` handlers, `Game` lifecycle (apart
+from the leave penalty rules), `SessionManager`, `GroupManager`, `MatchmakingQueue`
+orchestration, `ChatManager`, `CustomGameManager`. Root causes:
 
 1. Logic lives on live websocket connection objects (`LobbyServerProtocol : WebSocketBehaviorBase`)
    — you can't construct one meaningfully without a socket.

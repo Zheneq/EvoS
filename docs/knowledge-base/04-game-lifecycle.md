@@ -41,13 +41,21 @@ state, handle disconnect/reconnect/dodge, and finalize results (stats, Elo, Disc
 3. `BuildGameInfo` + `AssignServer`: subscribes `Game` methods to the server connection's
    events. `SendGameAssignmentNotification` to clients; when all load,
    `BridgeServerProtocol.LaunchGame` sends `LaunchGameRequest` with team/session info.
-4. During play: status notifications (`OnStatusUpdate` → `SetGameStatus`), metrics, player
-   disconnect notifications (dodge penalties via `QueuePenaltyManager`, queue-priority
-   grants to innocents when a match is cancelled).
+4. During play: status notifications (`OnStatusUpdate` → `SetGameStatus`; the server's
+   `Started` sets `MatchStarted`), metrics, player disconnect notifications (leave penalties
+   via `QueuePenaltyManager` — see doc 05, queue-priority grants to innocents when a match is
+   cancelled).
 5. End: `ServerGameSummaryNotification` → `OnGameEnded` → `FinalizeGame`: persists match
-   history, updates Elo (`MatchmakingManager.OnGameEnded` → queue → `Elo`), Trust War
+   history, updates Elo (`MatchmakingManager.OnGameEnded` → queue → `Elo`), pardons leavers
+   when there's no result or they came back (`QueuePenaltyManager.OnGameEnded`), Trust War
    contributions, accolades/badges, Discord game log; clients get unassigned;
    `ServerManager.DisconnectServer` shuts the server down after configured delays.
+   - If the game server disconnects and doesn't come back within `ServerReconnectionTimeout`,
+     `OnServerDisconnect` ends the game with no summary: recorded as a tie, but
+     `HasResult` is false.
+   - Admins end games through `Game.AdminEndGame(GameResult)` (in-game dev commands, admin
+     API stop game). `NoResult` is sent to the game server as a tie; a game that isn't
+     running is shut down instead.
 
 ## Reconnection
 
