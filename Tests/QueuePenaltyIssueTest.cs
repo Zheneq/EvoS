@@ -46,11 +46,29 @@ public class QueuePenaltyIssueTest : EvosTest
             };
             if (status >= GameStatus.Launched)
             {
-                OnStatusUpdate(null, status);
+                ReportStatus(status);
             }
         }
 
         public LobbyServerPlayerInfo Player(int index) => TeamInfo.TeamPlayerInfo[index];
+
+        // Mirrors the game server reporting a status change
+        public void ReportStatus(GameStatus status) => OnStatusUpdate(null, status);
+
+        // Mirrors Game.AddBot: characters a player controls besides their own (ControlAllBots, asymmetric games)
+        public void AddProxies(int index, int count)
+        {
+            for (int i = 0; i < count; i++)
+            {
+                TeamInfo.TeamPlayerInfo.Add(new LobbyServerPlayerInfo
+                {
+                    AccountId = Player(index).AccountId,
+                    ControllingPlayerInfo = Player(index),
+                });
+            }
+        }
+
+        public void AddNpcBot() => TeamInfo.TeamPlayerInfo.Add(new LobbyServerPlayerInfo { IsNPCBot = true });
 
         // Mirrors PvpGame.StartGameAsync, which sets Started itself right after launching the game.
         public void SetLobbyStatus(GameStatus status) => GameInfo.GameStatus = status;
@@ -211,6 +229,62 @@ public class QueuePenaltyIssueTest : EvosTest
 
         bool expectPenalty = alreadyReplaced < LobbyConfiguration.GetQueuePenaltyCollapseThreshold();
         Assert.Equal(expectPenalty ? 1 : 0, OffenseCount(game.Player(alreadyReplaced).AccountId));
+    }
+
+    // --- Everyone left: the game broke down, so earlier leavers are pardoned ---
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void EveryoneLeft_PardonsEarlierLeavers(bool draft)
+    {
+        using ClientNotifierScope _ = new();
+        TestGame game = new(draft, GameStatus.Started, MakeAccounts(PlayerCount));
+        for (int i = 0; i < PlayerCount - 1; i++)
+        {
+            Leave(game, i);
+        }
+        Assert.Equal(1, OffenseCount(game.Player(0).AccountId)); // still penalized while someone stays
+
+        Leave(game, PlayerCount - 1);
+
+        for (int i = 0; i < PlayerCount; i++)
+        {
+            Assert.Equal(0, OffenseCount(game.Player(i).AccountId));
+        }
+    }
+
+    [Fact]
+    public void EveryoneLeft_IgnoresBotsAndProxies()
+    {
+        using ClientNotifierScope _ = new();
+        TestGame game = new(draft: false, GameStatus.Started, MakeAccounts(2));
+        game.AddProxies(0, 3);
+        game.AddProxies(1, 3);
+        game.AddNpcBot();
+        Leave(game, 0);
+        Assert.Equal(1, OffenseCount(game.Player(0).AccountId));
+
+        Leave(game, 1);
+
+        Assert.Equal(0, OffenseCount(game.Player(0).AccountId));
+        Assert.Equal(0, OffenseCount(game.Player(1).AccountId));
+    }
+
+    [Fact]
+    public void EveryoneLeavingAfterGameEnded_DoesNotPardonLeavers()
+    {
+        using ClientNotifierScope _ = new();
+        TestGame game = new(draft: false, GameStatus.Started, MakeAccounts(PlayerCount));
+        Leave(game, 0);
+        game.ReportStatus(GameStatus.Stopped);
+
+        for (int i = 1; i < PlayerCount; i++)
+        {
+            Leave(game, i);
+        }
+
+        Assert.Equal(1, OffenseCount(game.Player(0).AccountId));
     }
 
     // --- Pardons ---

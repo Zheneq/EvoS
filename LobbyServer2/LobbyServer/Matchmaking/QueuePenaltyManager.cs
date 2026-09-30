@@ -36,12 +36,15 @@ public static class QueuePenaltyManager
                 return;
             }
             bool draftInProgress = game.IsDraft && game.GameStatus <= GameStatus.Started;
-            int replacedWithBotsNum = game.TeamInfo.TeamPlayerInfo.Count(i => i.ReplacedWithBots);
-            if (!draftInProgress && replacedWithBotsNum == game.TeamInfo.TeamPlayerInfo.Count)
+            
+            // Everyone leaving a running match, suggesting the game has broken rather than been abandoned
+            if (game.GameStatus != GameStatus.Stopped
+                && game.TeamInfo.TeamPlayerInfo.Where(IsHumanPlayer).All(p => p.ReplacedWithBots))
             {
                 PardonQueuePenalties(game, presentPlayersOnly: false);
                 return;
             }
+            
             // Once enough players have left, the game has collapsed and further leavers are not to blame
             int alreadyReplacedNum = game.TeamInfo.TeamPlayerInfo.Count(p => p.ReplacedWithBots && p.AccountId != accountId);
             if (alreadyReplacedNum >= LobbyConfiguration.GetQueuePenaltyCollapseThreshold())
@@ -65,6 +68,13 @@ public static class QueuePenaltyManager
                 SetQueuePenalty(accountId, GameType.PvP, DateTime.UtcNow.Subtract(game.StopTime).Add(TimeSpan.FromSeconds(30)), escalate: false);
             }
         }
+    }
+
+    // A human player's own slot: not a bot, and not a character remote-controlled by another player.
+    // IsAIControlled/IsHumanControlled can't be used, as they also account for ReplacedWithBots.
+    private static bool IsHumanPlayer(LobbyServerPlayerInfo player)
+    {
+        return !player.IsNPCBot && !player.IsLoadTestBot && !player.IsRemoteControlled && !player.IsSpectator;
     }
 
     // Forgives players penalized for leaving this game: the offense no longer counts towards escalation,
