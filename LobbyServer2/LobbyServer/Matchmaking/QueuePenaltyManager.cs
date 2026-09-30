@@ -29,20 +29,23 @@ public static class QueuePenaltyManager
 
         lock (game)
         {
-            if (game.IsDraft && game.GameStatus <= GameStatus.Started)
-            {
-                //Left in Draft, punish harder, no leaving Draft cause they dont like the map or the Draft
-                SetQueuePenalty(accountId, GameType.PvP, LobbyConfiguration.GetQueuePenaltyDraftBaseDuration(), escalate: true);
-                return;
-            }
+            bool draftInProgress = game.IsDraft && game.GameStatus <= GameStatus.Started;
             int replacedWithBotsNum = game.TeamInfo.TeamPlayerInfo.Count(i => i.ReplacedWithBots);
-            if (replacedWithBotsNum == game.TeamInfo.TeamPlayerInfo.Count)
+            if (!draftInProgress && replacedWithBotsNum == game.TeamInfo.TeamPlayerInfo.Count)
             {
                 CapQueuePenalties(game, presentPlayersOnly: false);
                 return;
             }
-            if (replacedWithBotsNum * 2 > game.TeamInfo.TeamPlayerInfo.Count)
+            // Once enough players have left, the game has collapsed and further leavers are not to blame
+            int alreadyReplacedNum = game.TeamInfo.TeamPlayerInfo.Count(p => p.ReplacedWithBots && p.AccountId != accountId);
+            if (alreadyReplacedNum >= LobbyConfiguration.GetQueuePenaltyCollapseThreshold())
             {
+                return;
+            }
+            if (draftInProgress)
+            {
+                //Left in Draft, punish harder, no leaving Draft cause they dont like the map or the Draft
+                SetQueuePenalty(accountId, GameType.PvP, LobbyConfiguration.GetQueuePenaltyDraftBaseDuration(), escalate: true);
                 return;
             }
             if (game.GameStatus != GameStatus.Stopped)
