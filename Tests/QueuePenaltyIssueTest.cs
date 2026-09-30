@@ -91,6 +91,19 @@ public class QueuePenaltyIssueTest : EvosTest
         return Penalties(accountId)?.QueueDodgeCount ?? 0;
     }
 
+    // Offenses from earlier games, still on parole
+    private static void SetPriorOffenses(long accountId, int count)
+    {
+        DB.Get().AccountDao.GetAccount(accountId).AdminComponent.ActiveQueuePenalties = new()
+        {
+            [GameType.PvP] = new QueuePenalties
+            {
+                QueueDodgeCount = count,
+                QueueDodgeParoleTimeout = DateTime.UtcNow.AddDays(1),
+            }
+        };
+    }
+
     // Mirrors Game.OnPlayerDisconnect: the leaver is replaced with a bot before penalties are issued.
     private static void Leave(TestGame game, int index)
     {
@@ -198,5 +211,83 @@ public class QueuePenaltyIssueTest : EvosTest
 
         bool expectPenalty = alreadyReplaced < LobbyConfiguration.GetQueuePenaltyCollapseThreshold();
         Assert.Equal(expectPenalty ? 1 : 0, OffenseCount(game.Player(alreadyReplaced).AccountId));
+    }
+
+    // --- Pardons ---
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Pardon_ForgivesLeaverAndCutsBlock(bool draft)
+    {
+        using ClientNotifierScope scope = new();
+        TestGame game = new(draft, GameStatus.Started, MakeAccounts(PlayerCount));
+        long leaver = game.Player(0).AccountId;
+        Leave(game, 0);
+
+        QueuePenaltyManager.PardonQueuePenalties(game, presentPlayersOnly: false);
+
+        Assert.Equal(0, OffenseCount(leaver));
+        Assert.True(Penalties(leaver)!.QueueDodgeBlockTimeout <= DateTime.UtcNow.AddSeconds(15));
+        Assert.Contains(scope.Notifier.SystemMessages, m => m.AccountId == leaver);
+    }
+
+    [Fact]
+    public void Pardon_ForgivesLeaverWhoseBlockRanOut()
+    {
+        using ClientNotifierScope scope = new();
+        TestGame game = new(draft: false, GameStatus.Started, MakeAccounts(PlayerCount));
+        long leaver = game.Player(0).AccountId;
+        Leave(game, 0);
+        Penalties(leaver)!.QueueDodgeBlockTimeout = DateTime.UtcNow.AddSeconds(-1);
+
+        QueuePenaltyManager.PardonQueuePenalties(game, presentPlayersOnly: false);
+
+        Assert.Equal(0, OffenseCount(leaver));
+        Assert.DoesNotContain(scope.Notifier.SystemMessages, m => m.AccountId == leaver); // no block left to cut
+    }
+
+    [Fact]
+    public void Pardon_OnlyForgivesPenaltiesFromThisGame()
+    {
+        using ClientNotifierScope _ = new();
+        TestGame game = new(draft: false, GameStatus.Started, MakeAccounts(PlayerCount));
+        long stayer = game.Player(1).AccountId;
+        SetPriorOffenses(stayer, 2);
+        Leave(game, 0);
+
+        QueuePenaltyManager.PardonQueuePenalties(game, presentPlayersOnly: false);
+
+        Assert.Equal(2, OffenseCount(stayer));
+    }
+
+    [Fact]
+    public void Pardon_ForgivesEachPenaltyOnce()
+    {
+        using ClientNotifierScope _ = new();
+        TestGame game = new(draft: false, GameStatus.Started, MakeAccounts(PlayerCount));
+        long leaver = game.Player(0).AccountId;
+        SetPriorOffenses(leaver, 1);
+        Leave(game, 0);
+
+        QueuePenaltyManager.PardonQueuePenalties(game, presentPlayersOnly: false);
+        QueuePenaltyManager.PardonQueuePenalties(game, presentPlayersOnly: false);
+
+        Assert.Equal(1, OffenseCount(leaver));
+    }
+
+    [Fact]
+    public void Pardon_PresentPlayersOnly_SkipsLeaversWhoDidNotReturn()
+    {
+        using ClientNotifierScope _ = new();
+        TestGame game = new(draft: false, GameStatus.Started, MakeAccounts(PlayerCount));
+        Leave(game, 0);
+        Leave(game, 1);
+        game.Player(1).ReplacedWithBots = false; // reconnected (Game.ReconnectPlayer)
+
+        QueuePenaltyManager.PardonQueuePenalties(game, presentPlayersOnly: true);
+
+        Assert.Equal(1, OffenseCount(game.Player(0).AccountId));
+        Assert.Equal(0, OffenseCount(game.Player(1).AccountId));
     }
 }

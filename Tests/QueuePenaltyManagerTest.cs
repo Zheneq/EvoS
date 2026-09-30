@@ -207,7 +207,7 @@ public class QueuePenaltyManagerTest
         Assert.Equal(Now.Add(Base), eval.BlockTimeout);
     }
 
-    // --- Cap / pardon (lowers only, decrements streak) ---
+    // --- Cap / pardon (lowers only, always decrements streak) ---
 
     [Fact]
     public void CapMode_LowersBlock_AndDecrementsCount()
@@ -223,15 +223,31 @@ public class QueuePenaltyManagerTest
     }
 
     [Fact]
-    public void CapMode_DoesNotRaiseShorterBlock()
+    public void CapMode_DoesNotRaiseShorterBlock_ButDecrementsCount()
     {
-        QueuePenalties current = Penalties(count: 1, block: Now.Add(TimeSpan.FromSeconds(5)));
+        DateTime block = Now.Add(TimeSpan.FromSeconds(5));
+        QueuePenalties current = Penalties(count: 1, block: block);
 
         QueuePenaltyManager.PenaltyEvaluation eval = QueuePenaltyManager.EvaluatePenalty(
             current, TimeSpan.FromSeconds(15), Now, overridePenalty: false, capPenalty: true, escalate: false, Ratio, Cap, Parole);
 
-        Assert.False(eval.Apply);
-        Assert.Equal(1, eval.Count);                                // untouched when not applied
+        Assert.True(eval.Apply);
+        Assert.Equal(0, eval.Count);                                // pardon forgives the offense regardless
+        Assert.Equal(block, eval.BlockTimeout);                     // not raised
+    }
+
+    [Fact]
+    public void CapMode_ExpiredBlock_StillDecrementsCount()
+    {
+        DateTime block = Now.Subtract(TimeSpan.FromMinutes(10));
+        QueuePenalties current = Penalties(count: 2, block: block);
+
+        QueuePenaltyManager.PenaltyEvaluation eval = QueuePenaltyManager.EvaluatePenalty(
+            current, TimeSpan.FromSeconds(15), Now, overridePenalty: false, capPenalty: true, escalate: false, Ratio, Cap, Parole);
+
+        Assert.True(eval.Apply);
+        Assert.Equal(1, eval.Count);
+        Assert.Equal(block, eval.BlockTimeout);
     }
 
     [Fact]

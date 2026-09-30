@@ -48,6 +48,9 @@ public abstract class Game
     // GameStatus can't tell this reliably because the lobby sets Started itself right after launching the game.
     // TODO fix GameStatus?
     public bool MatchStarted { private set; get; }
+
+    // Players penalized for leaving this game, so that the penalty can be pardoned later
+    public HashSet<long> PenalizedPlayers { get; } = new();
     
     public BridgeServerProtocol Server { private set; get; } // TODO check it is set when needed
 
@@ -231,11 +234,11 @@ public abstract class Game
     {
         if (GameStatus == GameStatus.Stopped)
         {
-            QueuePenaltyManager.CapQueuePenalties(this, presentPlayersOnly: true);
+            QueuePenaltyManager.PardonQueuePenalties(this, presentPlayersOnly: true);
         }
         else if (!IsDraft)
         {
-            QueuePenaltyManager.CapQueuePenalties(this, presentPlayersOnly: false);
+            QueuePenaltyManager.PardonQueuePenalties(this, presentPlayersOnly: false);
         }
         // Draft still in progress: no cap — dodge penalties stick.
 

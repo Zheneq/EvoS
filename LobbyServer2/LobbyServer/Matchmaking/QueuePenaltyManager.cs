@@ -39,7 +39,7 @@ public static class QueuePenaltyManager
             int replacedWithBotsNum = game.TeamInfo.TeamPlayerInfo.Count(i => i.ReplacedWithBots);
             if (!draftInProgress && replacedWithBotsNum == game.TeamInfo.TeamPlayerInfo.Count)
             {
-                CapQueuePenalties(game, presentPlayersOnly: false);
+                PardonQueuePenalties(game, presentPlayersOnly: false);
                 return;
             }
             // Once enough players have left, the game has collapsed and further leavers are not to blame
@@ -52,11 +52,13 @@ public static class QueuePenaltyManager
             {
                 //Left in Draft, punish harder, no leaving Draft cause they dont like the map or the Draft
                 SetQueuePenalty(accountId, GameType.PvP, LobbyConfiguration.GetQueuePenaltyDraftBaseDuration(), escalate: true);
+                game.PenalizedPlayers.Add(accountId);
                 return;
             }
             if (game.GameStatus != GameStatus.Stopped)
             {
                 SetQueuePenalty(accountId, GameType.PvP, LobbyConfiguration.GetQueuePenaltyPvPBaseDuration(), escalate: true);
+                game.PenalizedPlayers.Add(accountId);
             }
             else if (game.StopTime > DateTime.UtcNow)
             {
@@ -65,23 +67,28 @@ public static class QueuePenaltyManager
         }
     }
 
-    public static void CapQueuePenalties(Game game, bool presentPlayersOnly = true)
+    // Forgives players penalized for leaving this game: the offense no longer counts towards escalation,
+    // and the block is cut down to a few seconds. Each penalty is pardoned at most once.
+    public static void PardonQueuePenalties(Game game, bool presentPlayersOnly = true)
     {
-        IEnumerable<long> players = game.TeamInfo.TeamPlayerInfo
-            .Where(p => !p.IsAIControlled && (!presentPlayersOnly || !p.ReplacedWithBots))
-            .Select(p => p.AccountId)
-            .Distinct();
-
-        foreach (long accountId in players)
+        lock (game)
         {
-            TimeSpan duration = TimeSpan.FromSeconds(15);
-            LocalizationArg argDuration = LocalizationArg_TimeSpan.Create(duration);
-            LocalizationPayload msg =
-                LocalizationPayload.Create("QueueDodgerPenaltyAppliedToSelf", "Matchmaking", argDuration);
-            if (SetQueuePenalty(accountId, GameType.PvP, duration, capPenalty: true))
+            List<long> players = game.PenalizedPlayers
+                .Where(accountId => !presentPlayersOnly || game.GetPlayerInfo(accountId)?.ReplacedWithBots == false)
+                .ToList();
+
+            foreach (long accountId in players)
             {
-                log.Info($"{LobbyServerUtils.GetHandle(accountId)}'s queue penalty is pardoned (reset to {duration})");
-                ClientNotifier.Get().SendSystemMessage(accountId, msg);
+                game.PenalizedPlayers.Remove(accountId);
+                log.Info($"{LobbyServerUtils.GetHandle(accountId)}'s queue penalty for leaving {game.ProcessCode} is pardoned");
+                TimeSpan duration = TimeSpan.FromSeconds(15);
+                if (SetQueuePenalty(accountId, GameType.PvP, duration, capPenalty: true))
+                {
+                    LocalizationArg argDuration = LocalizationArg_TimeSpan.Create(duration);
+                    LocalizationPayload msg =
+                        LocalizationPayload.Create("QueueDodgerPenaltyAppliedToSelf", "Matchmaking", argDuration);
+                    ClientNotifier.Get().SendSystemMessage(accountId, msg);
+                }
             }
         }
     }
@@ -157,7 +164,8 @@ public static class QueuePenaltyManager
 
         // An escalating offense is recorded (count + parole) even when it cannot extend the block,
         // otherwise a repeat offense during a longer active block would not count towards the streak.
-        if (!moveTimeout && !escalate)
+        // Likewise, a pardon forgives the offense even when the block has already run out.
+        if (!moveTimeout && !escalate && !capPenalty)
         {
             return new PenaltyEvaluation(false, current.QueueDodgeCount, oldTimeout, current.QueueDodgeParoleTimeout, span);
         }
@@ -185,6 +193,7 @@ public static class QueuePenaltyManager
                && penalties.QueueDodgeBlockTimeout > now.Add(TimeSpan.FromSeconds(1));
     }
 
+    // Returns whether the block timeout has changed
     private static bool SetQueuePenalty(
         long accountId,
         GameType gameType,
@@ -230,20 +239,26 @@ public static class QueuePenaltyManager
         log.Info($"{gameType} queue penalty for {account.Handle}: "
                  + (blockChanged
                      ? $"{eval.AppliedSpan}"
-                     : $"block unchanged ({oldTimeout.Subtract(referenceDateTime)} remaining)")
+                     : oldTimeout > referenceDateTime
+                         ? $"block unchanged ({oldTimeout.Subtract(referenceDateTime)} remaining)"
+                         : "not blocked")
                  + (escalate ? $" (offense #{eval.Count})" : "")
+                 + (capPenalty ? $" (pardoned, {eval.Count} offenses left)" : "")
                  + (blockChanged && oldTimeout > referenceDateTime ? $" (was {oldTimeout.Subtract(referenceDateTime)})" : ""));
 
         account.AdminComponent.ActiveQueuePenalties[gameType] = penalties;
         DB.Get().AccountDao.UpdateAdminComponent(account);
 
-        GroupInfo playerGroup = GroupManager.GetPlayerGroup(accountId);
-        if (playerGroup is not null)
+        if (!capPenalty)
         {
-            MatchmakingManager.RemoveGroupFromQueue(playerGroup, true);
+            GroupInfo playerGroup = GroupManager.GetPlayerGroup(accountId);
+            if (playerGroup is not null)
+            {
+                MatchmakingManager.RemoveGroupFromQueue(playerGroup, true);
+            }
         }
 
-        return true;
+        return blockChanged;
     }
 
     public static LocalizationPayload CheckQueuePenalties(long accountId, GameType selectedGameType, long requestedBy = 0)
