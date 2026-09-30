@@ -25,10 +25,10 @@ namespace EvoS.Framework
         public bool GameTypeRankedAvailable = false;
         public bool GameTypeCustomAvailable = true;
         public bool MatchAbandoningPenalty = true;
-        public TimeSpan QueuePenaltyPvPBaseDuration = TimeSpan.FromSeconds(200);
+        public TimeSpan QueuePenaltyPvPBaseDuration = TimeSpan.FromMinutes(5); // covers the reconnection period set by the game server
         public TimeSpan QueuePenaltyDraftBaseDuration = TimeSpan.FromMinutes(5);
-        public double QueuePenaltyEscalationRatio = 4;
-        public TimeSpan QueuePenaltyEscalationCap = TimeSpan.FromHours(24);
+        public double QueuePenaltyEscalationRatio = 1.2;
+        public TimeSpan QueuePenaltyEscalationCap = TimeSpan.FromMinutes(30);
         public TimeSpan QueuePenaltyParoleWindow = TimeSpan.FromDays(7);
         public int QueuePenaltyCollapseThreshold = 2;
         public TimeSpan QueuePriorityMatchAgeWindow = TimeSpan.FromMinutes(7);
