@@ -21,14 +21,20 @@ public static class QueuePenaltyManager
     {
         if (!LobbyConfiguration.GetMatchAbandoningPenalty() ||
             game.GameInfo?.GameConfig is null ||
-            game.GameInfo.GameConfig.GameType != GameType.PvP ||
-            (!game.IsDraft && game.GameInfo.GameResult == GameResult.NoResult))
+            game.GameInfo.GameConfig.GameType != GameType.PvP)
         {
             return;
         }
 
         lock (game)
         {
+            // Only leaving a started match is penalized, plus leaving the draft itself in Draft.
+            // Dropping while loading is way more likely to be a technical issue than malice.
+            bool leftDraft = game.IsDraft && game.GameStatus is >= GameStatus.FreelancerSelecting and <= GameStatus.Launching;
+            if (!game.MatchStarted && !leftDraft)
+            {
+                return;
+            }
             bool draftInProgress = game.IsDraft && game.GameStatus <= GameStatus.Started;
             int replacedWithBotsNum = game.TeamInfo.TeamPlayerInfo.Count(i => i.ReplacedWithBots);
             if (!draftInProgress && replacedWithBotsNum == game.TeamInfo.TeamPlayerInfo.Count)

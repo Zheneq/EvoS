@@ -43,6 +43,12 @@ public abstract class Game
     private List<MatchPlayerData> TeamB;
     protected IEnumerable<MatchPlayerData> Players => (TeamA ?? []).Concat(TeamB ?? []);
     public DateTime StopTime { private set; get; }
+    
+    // Set when the game server reports Started, i.e. once every player has loaded (or timed out loading).
+    // GameStatus can't tell this reliably because the lobby sets Started itself right after launching the game.
+    // TODO fix GameStatus?
+    public bool MatchStarted { private set; get; }
+    
     public BridgeServerProtocol Server { private set; get; } // TODO check it is set when needed
 
     public GameSubType GameSubType { protected set; get; } // can be null
@@ -161,6 +167,11 @@ public abstract class Game
         log.Info($"Game {GameInfo?.Name} {newStatus}");
 
         GameInfo.GameStatus = newStatus;
+
+        if (newStatus == GameStatus.Started)
+        {
+            MatchStarted = true;
+        }
 
         if (GameInfo.GameStatus == GameStatus.Stopped)
         {
