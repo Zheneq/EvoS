@@ -49,8 +49,9 @@ public abstract class Game
     // TODO fix GameStatus?
     public bool MatchStarted { private set; get; }
 
-    // Players penalized for leaving this game, so that the penalty can be pardoned later
-    public HashSet<long> PenalizedPlayers { get; } = new();
+    // Players penalized for leaving this game, with the block they got,
+    // so that it can be re-applied if they leave again, or pardoned later
+    public Dictionary<long, TimeSpan> PenalizedPlayers { get; } = new();
 
     // Set when an admin ends the game with no result. The game server can't do that, so it ends the game as a tie.
     private bool EndedByAdminWithNoResult;

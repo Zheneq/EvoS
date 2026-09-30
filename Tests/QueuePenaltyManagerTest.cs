@@ -220,6 +220,7 @@ public class QueuePenaltyManagerTest
         Assert.True(eval.Apply);
         Assert.Equal(2, eval.Count);                                // pardon forgives one offense
         Assert.Equal(Now.Add(TimeSpan.FromSeconds(15)), eval.BlockTimeout);
+        Assert.True(eval.BlockChanged);
     }
 
     [Fact]
@@ -234,6 +235,7 @@ public class QueuePenaltyManagerTest
         Assert.True(eval.Apply);
         Assert.Equal(0, eval.Count);                                // pardon forgives the offense regardless
         Assert.Equal(block, eval.BlockTimeout);                     // not raised
+        Assert.False(eval.BlockChanged);
     }
 
     [Fact]

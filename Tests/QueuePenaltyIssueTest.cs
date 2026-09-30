@@ -215,6 +215,45 @@ public class QueuePenaltyIssueTest : EvosTest
         Assert.InRange(blockTimeout, before.Add(baseDuration), DateTime.UtcNow.Add(baseDuration));
     }
 
+    // --- Leaving the same game again: the block is re-applied, but it's still one offense ---
+
+    [Fact]
+    public void LeavingAgain_ReappliesSameBlockWithoutNewOffense()
+    {
+        using ClientNotifierScope _ = new();
+        TestGame game = new(draft: false, GameStatus.Started, MakeAccounts(PlayerCount));
+        long leaver = game.Player(0).AccountId;
+        SetPriorOffenses(leaver, 1);
+        Leave(game, 0); // second offense, escalated once
+        game.Player(0).ReplacedWithBots = false; // reconnected (Game.ReconnectPlayer)
+        Penalties(leaver)!.QueueDodgeBlockTimeout = DateTime.UtcNow.AddSeconds(-1); // ran out while back in the game
+        TimeSpan escalatedSpan = TimeSpan.FromTicks((long)Math.Min(
+            LobbyConfiguration.GetQueuePenaltyPvPBaseDuration().Ticks * LobbyConfiguration.GetQueuePenaltyEscalationRatio(),
+            LobbyConfiguration.GetQueuePenaltyEscalationCap().Ticks));
+        DateTime before = DateTime.UtcNow;
+
+        Leave(game, 0);
+
+        Assert.Equal(2, OffenseCount(leaver));
+        Assert.InRange(Penalties(leaver)!.QueueDodgeBlockTimeout, before.Add(escalatedSpan), DateTime.UtcNow.Add(escalatedSpan));
+    }
+
+    [Fact]
+    public void LeavingAgain_PardonedAsOneOffense()
+    {
+        using ClientNotifierScope _ = new();
+        TestGame game = new(draft: false, GameStatus.Started, MakeAccounts(PlayerCount));
+        long leaver = game.Player(0).AccountId;
+        SetPriorOffenses(leaver, 1);
+        Leave(game, 0);
+        game.Player(0).ReplacedWithBots = false; // reconnected (Game.ReconnectPlayer)
+        Leave(game, 0);
+
+        game.End(null);
+
+        Assert.Equal(1, OffenseCount(leaver));
+    }
+
     // --- Collapse: once enough players have left, further leavers are not penalized ---
 
     [Theory]
