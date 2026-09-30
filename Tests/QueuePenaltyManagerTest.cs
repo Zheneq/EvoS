@@ -7,6 +7,7 @@ public class QueuePenaltyManagerTest
 {
     private static readonly DateTime Now = new(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
     private static readonly TimeSpan Base = TimeSpan.FromSeconds(200);
+    private const double Ratio = 4;
     private static readonly TimeSpan Cap = TimeSpan.FromHours(48);
     private static readonly TimeSpan Parole = TimeSpan.FromHours(72);
 
@@ -23,7 +24,7 @@ public class QueuePenaltyManagerTest
     private static QueuePenaltyManager.PenaltyEvaluation Escalate(QueuePenalties current, TimeSpan span)
     {
         return QueuePenaltyManager.EvaluatePenalty(
-            current, span, Now, overridePenalty: false, capPenalty: false, escalate: true, Cap, Parole);
+            current, span, Now, overridePenalty: false, capPenalty: false, escalate: true, Ratio, Cap, Parole);
     }
 
     // --- Escalation (#3) ---
@@ -57,6 +58,22 @@ public class QueuePenaltyManagerTest
         Assert.Equal(startingCount + 1, eval.Count);
         Assert.Equal(TimeSpan.FromSeconds(expectedSeconds), eval.AppliedSpan);
         Assert.Equal(Now.Add(TimeSpan.FromSeconds(expectedSeconds)), eval.BlockTimeout);
+    }
+
+    [Theory]
+    [InlineData(2, 0, 200)]     // 200 * 2^0
+    [InlineData(2, 2, 800)]     // 200 * 2^2
+    [InlineData(1.5, 2, 450)]   // 200 * 1.5^2
+    [InlineData(1, 4, 200)]     // ratio 1: flat penalty, no escalation
+    public void Escalation_UsesConfiguredRatio(double ratio, int startingCount, int expectedSeconds)
+    {
+        QueuePenalties current = Penalties(count: startingCount, parole: Now.Add(TimeSpan.FromHours(1)));
+
+        QueuePenaltyManager.PenaltyEvaluation eval = QueuePenaltyManager.EvaluatePenalty(
+            current, Base, Now, overridePenalty: false, capPenalty: false, escalate: true, ratio, Cap, Parole);
+
+        Assert.Equal(startingCount + 1, eval.Count);
+        Assert.Equal(TimeSpan.FromSeconds(expectedSeconds), eval.AppliedSpan);
     }
 
     [Fact]
@@ -147,7 +164,7 @@ public class QueuePenaltyManagerTest
         QueuePenalties current = Penalties(count: 2, block: Now.Add(TimeSpan.FromHours(2)));
 
         QueuePenaltyManager.PenaltyEvaluation eval = QueuePenaltyManager.EvaluatePenalty(
-            current, Base, Now, overridePenalty: false, capPenalty: false, escalate: false, Cap, Parole);
+            current, Base, Now, overridePenalty: false, capPenalty: false, escalate: false, Ratio, Cap, Parole);
 
         Assert.False(eval.Apply);
         Assert.Equal(2, eval.Count);                                // untouched
@@ -160,7 +177,7 @@ public class QueuePenaltyManagerTest
         QueuePenalties current = Penalties(count: 0, block: Now.Add(TimeSpan.FromSeconds(100)));
 
         QueuePenaltyManager.PenaltyEvaluation eval = QueuePenaltyManager.EvaluatePenalty(
-            current, Base, Now, overridePenalty: false, capPenalty: false, escalate: false, Cap, Parole);
+            current, Base, Now, overridePenalty: false, capPenalty: false, escalate: false, Ratio, Cap, Parole);
 
         Assert.True(eval.Apply);
         Assert.Equal(0, eval.Count);                                // non-escalate leaves count alone
@@ -173,7 +190,7 @@ public class QueuePenaltyManagerTest
         QueuePenalties current = Penalties(block: Now.Add(Base));
 
         QueuePenaltyManager.PenaltyEvaluation eval = QueuePenaltyManager.EvaluatePenalty(
-            current, Base, Now, overridePenalty: false, capPenalty: false, escalate: false, Cap, Parole);
+            current, Base, Now, overridePenalty: false, capPenalty: false, escalate: false, Ratio, Cap, Parole);
 
         Assert.False(eval.Apply);
     }
@@ -184,7 +201,7 @@ public class QueuePenaltyManagerTest
         QueuePenalties current = Penalties(count: 0, block: Now.Add(TimeSpan.FromHours(2)));
 
         QueuePenaltyManager.PenaltyEvaluation eval = QueuePenaltyManager.EvaluatePenalty(
-            current, Base, Now, overridePenalty: true, capPenalty: false, escalate: false, Cap, Parole);
+            current, Base, Now, overridePenalty: true, capPenalty: false, escalate: false, Ratio, Cap, Parole);
 
         Assert.True(eval.Apply);
         Assert.Equal(Now.Add(Base), eval.BlockTimeout);
@@ -198,7 +215,7 @@ public class QueuePenaltyManagerTest
         QueuePenalties current = Penalties(count: 3, block: Now.Add(TimeSpan.FromHours(1)));
 
         QueuePenaltyManager.PenaltyEvaluation eval = QueuePenaltyManager.EvaluatePenalty(
-            current, TimeSpan.FromSeconds(15), Now, overridePenalty: false, capPenalty: true, escalate: false, Cap, Parole);
+            current, TimeSpan.FromSeconds(15), Now, overridePenalty: false, capPenalty: true, escalate: false, Ratio, Cap, Parole);
 
         Assert.True(eval.Apply);
         Assert.Equal(2, eval.Count);                                // pardon forgives one offense
@@ -211,7 +228,7 @@ public class QueuePenaltyManagerTest
         QueuePenalties current = Penalties(count: 1, block: Now.Add(TimeSpan.FromSeconds(5)));
 
         QueuePenaltyManager.PenaltyEvaluation eval = QueuePenaltyManager.EvaluatePenalty(
-            current, TimeSpan.FromSeconds(15), Now, overridePenalty: false, capPenalty: true, escalate: false, Cap, Parole);
+            current, TimeSpan.FromSeconds(15), Now, overridePenalty: false, capPenalty: true, escalate: false, Ratio, Cap, Parole);
 
         Assert.False(eval.Apply);
         Assert.Equal(1, eval.Count);                                // untouched when not applied
@@ -223,7 +240,7 @@ public class QueuePenaltyManagerTest
         QueuePenalties current = Penalties(count: 0, block: Now.Add(TimeSpan.FromHours(1)));
 
         QueuePenaltyManager.PenaltyEvaluation eval = QueuePenaltyManager.EvaluatePenalty(
-            current, TimeSpan.FromSeconds(15), Now, overridePenalty: false, capPenalty: true, escalate: false, Cap, Parole);
+            current, TimeSpan.FromSeconds(15), Now, overridePenalty: false, capPenalty: true, escalate: false, Ratio, Cap, Parole);
 
         Assert.True(eval.Apply);
         Assert.Equal(0, eval.Count);

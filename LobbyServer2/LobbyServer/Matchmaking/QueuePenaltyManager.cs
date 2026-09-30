@@ -32,7 +32,7 @@ public static class QueuePenaltyManager
             if (game.IsDraft && game.GameStatus <= GameStatus.Started)
             {
                 //Left in Draft, punish harder, no leaving Draft cause they dont like the map or the Draft
-                SetQueuePenalty(accountId, GameType.PvP, TimeSpan.FromMinutes(5), escalate: true);
+                SetQueuePenalty(accountId, GameType.PvP, LobbyConfiguration.GetQueuePenaltyDraftBaseDuration(), escalate: true);
                 return;
             }
             int replacedWithBotsNum = game.TeamInfo.TeamPlayerInfo.Count(i => i.ReplacedWithBots);
@@ -47,7 +47,7 @@ public static class QueuePenaltyManager
             }
             if (game.GameStatus != GameStatus.Stopped)
             {
-                SetQueuePenalty(accountId, GameType.PvP, TimeSpan.FromSeconds(200), escalate: true);
+                SetQueuePenalty(accountId, GameType.PvP, LobbyConfiguration.GetQueuePenaltyPvPBaseDuration(), escalate: true);
             }
             else if (game.StopTime > DateTime.UtcNow)
             {
@@ -117,13 +117,14 @@ public static class QueuePenaltyManager
         bool overridePenalty,
         bool capPenalty,
         bool escalate,
+        double escalationRatio,
         TimeSpan escalationCap,
         TimeSpan paroleWindow)
     {
         int count = current.QueueDodgeCount;
         TimeSpan span = requestedSpan;
 
-        // Repeat-offender escalation: scale the penalty by 4^(count-1), clamped to the cap.
+        // Repeat-offender escalation: scale the penalty by ratio^(count-1), clamped to the cap.
         // The count decays whenever the parole window has lapsed without a new offense.
         if (escalate)
         {
@@ -133,7 +134,7 @@ public static class QueuePenaltyManager
                 count = 0;
             }
             count += 1;
-            double multiplier = Math.Pow(4, count - 1);
+            double multiplier = Math.Pow(escalationRatio, count - 1);
             span = TimeSpan.FromTicks((long)Math.Min(requestedSpan.Ticks * multiplier, escalationCap.Ticks));
         }
 
@@ -204,6 +205,7 @@ public static class QueuePenaltyManager
             overridePenalty,
             capPenalty,
             escalate,
+            LobbyConfiguration.GetQueuePenaltyEscalationRatio(),
             LobbyConfiguration.GetQueuePenaltyEscalationCap(),
             LobbyConfiguration.GetQueuePenaltyParoleWindow());
         if (!eval.Apply)
