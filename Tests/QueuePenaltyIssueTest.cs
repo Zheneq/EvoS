@@ -318,6 +318,23 @@ public class QueuePenaltyIssueTest : EvosTest
         Assert.Equal(expectPardon ? 0 : 1, OffenseCount(game.Player(0).AccountId));
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void GameEndedWithResult_PardonsLeaversWhoCameBack(bool draft)
+    {
+        using ClientNotifierScope _ = new();
+        TestGame game = new(draft, GameStatus.Started, MakeAccounts(PlayerCount));
+        Leave(game, 0);
+        Leave(game, 1);
+        game.Player(1).ReplacedWithBots = false; // reconnected (Game.ReconnectPlayer)
+
+        game.End(GameResult.TeamAWon);
+
+        Assert.Equal(1, OffenseCount(game.Player(0).AccountId));
+        Assert.Equal(0, OffenseCount(game.Player(1).AccountId));
+    }
+
     [Fact]
     public void GameEndedByAdminWithNoResult_PardonsLeavers()
     {

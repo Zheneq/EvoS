@@ -70,13 +70,24 @@ public static class QueuePenaltyManager
         }
     }
 
-    // Leaving a game that ended without a result is not penalized. A canceled match has no result either,
-    // but whoever caused the cancellation is to blame for that, so only started matches count.
     public static void OnGameEnded(Game game)
     {
-        if (game.MatchStarted && !game.HasResult)
+        // A canceled match has no result, but whoever caused the cancellation is to blame for that,
+        // so only started matches count
+        if (!game.MatchStarted)
         {
+            return;
+        }
+
+        if (!game.HasResult)
+        {
+            // Leaving a game that ended without a result is not penalized
             PardonQueuePenalties(game, presentPlayersOnly: false);
+        }
+        else
+        {
+            // Leavers who came back and stayed until the end are forgiven
+            PardonQueuePenalties(game, presentPlayersOnly: true);
         }
     }
 

@@ -267,11 +267,6 @@ public abstract class Game
 
     protected async void OnServerDisconnect(BridgeServerProtocol server)
     {
-        if (GameStatus == GameStatus.Stopped)
-        {
-            QueuePenaltyManager.PardonQueuePenalties(this, presentPlayersOnly: true);
-        }
-
         // If the server doesn't come back, the game ends with no result
         await Task.Delay(LobbyConfiguration.GetServerReconnectionTimeout());
         if (Server == server && GameStatus != GameStatus.Stopped)
