@@ -36,6 +36,7 @@ public class QueuePenaltyIssueTest : EvosTest
             GameInfo = new LobbyGameInfo
             {
                 GameConfig = new LobbyGameConfig { GameType = GameType.PvP },
+                GameServerProcessCode = $"test-{Guid.NewGuid()}",
                 GameStatus = status,
                 GameResult = GameResult.NoResult,
             };
@@ -53,6 +54,9 @@ public class QueuePenaltyIssueTest : EvosTest
 
         // Mirrors PvpGame.StartGameAsync, which sets Started itself right after launching the game.
         public void SetLobbyStatus(GameStatus status) => GameInfo.GameStatus = status;
+
+        // Mirrors a player disconnecting from the lobby before the game is launched (AFK in draft, left character select).
+        public void CancelBecauseOf(int index) => CancelMatch(Player(index).Handle, Player(index).AccountId);
     }
 
     private static long[] MakeAccounts(int count)
@@ -131,6 +135,23 @@ public class QueuePenaltyIssueTest : EvosTest
         Leave(game, 0);
 
         Assert.Equal(0, OffenseCount(game.Player(0).AccountId));
+    }
+
+    [Theory]
+    [InlineData(true, GameStatus.FreelancerSelecting, true)]
+    [InlineData(true, GameStatus.LoadoutSelecting, true)]
+    [InlineData(true, GameStatus.Launching, true)]
+    [InlineData(false, GameStatus.FreelancerSelecting, false)]
+    [InlineData(false, GameStatus.LoadoutSelecting, false)]
+    [InlineData(false, GameStatus.Launching, false)]
+    public void Dodger_PenalizedForCancellingDraftOnly(bool draft, GameStatus status, bool expectPenalty)
+    {
+        using ClientNotifierScope _ = new();
+        TestGame game = new(draft, status, MakeAccounts(PlayerCount));
+
+        game.CancelBecauseOf(0);
+
+        Assert.Equal(expectPenalty ? 1 : 0, OffenseCount(game.Player(0).AccountId));
     }
 
     // --- Leaving a running game ---

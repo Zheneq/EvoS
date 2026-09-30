@@ -540,6 +540,10 @@ public abstract class Game
         dodgerAccountId ??= dodgerHandle != null
             ? SessionManager.GetOnlinePlayerByHandleOrUsername(dodgerHandle)
             : null;
+        if (dodgerAccountId.HasValue)
+        {
+            QueuePenaltyManager.IssueQueuePenalties(dodgerAccountId.Value, this);
+        }
         GrantQueuePriorityToInnocents(dodgerAccountId);
 
         UpdateFriendStatuses();
@@ -1322,7 +1326,6 @@ public abstract class Game
                 {
                     // Cancel Match AFK Player
                     CancelMatch(player.Handle, player.AccountId);
-                    QueuePenaltyManager.IssueQueuePenalties(player.AccountId, this);
                     return;
                 }
                 // Selected is when did not lock in or clicked ban button
