@@ -38,11 +38,11 @@ public abstract class Game
     public string Map { protected set; get; } // TODO check it is set when needed
 
     public ServerGameMetrics GameMetrics { get; private set; } = new ServerGameMetrics();
-    public LobbyGameSummary GameSummary { get; private set; }
+    public LobbyGameSummary GameSummary { get; protected set; }
     private List<MatchPlayerData> TeamA;
     private List<MatchPlayerData> TeamB;
     protected IEnumerable<MatchPlayerData> Players => (TeamA ?? []).Concat(TeamB ?? []);
-    public DateTime StopTime { private set; get; }
+    public DateTime StopTime { protected set; get; }
     
     // Set when the game server reports Started, i.e. once every player has loaded (or timed out loading).
     // GameStatus can't tell this reliably because the lobby sets Started itself right after launching the game.
@@ -51,6 +51,14 @@ public abstract class Game
 
     // Players penalized for leaving this game, so that the penalty can be pardoned later
     public HashSet<long> PenalizedPlayers { get; } = new();
+
+    // Set when an admin ends the game with no result. The game server can't do that, so it ends the game as a tie.
+    private bool EndedByAdminWithNoResult;
+
+    // Whether the game has ended with a win or a tie. Losing the game server and an admin ending the game
+    // with no result are recorded as a tie, but they are not a result.
+    public bool HasResult => !EndedByAdminWithNoResult
+                             && GameSummary?.GameResult is GameResult.TieGame or GameResult.TeamAWon or GameResult.TeamBWon;
     
     public BridgeServerProtocol Server { private set; get; } // TODO check it is set when needed
 
@@ -162,7 +170,34 @@ public abstract class Game
         }
         StopTime = DateTime.UtcNow.Add(TimeSpan.FromSeconds(8));
 
+        QueuePenaltyManager.OnGameEnded(this);
+
         _ = FinalizeGame();
+    }
+
+    // The game server only ends a running match on an admin's request, so a game that isn't running is shut down.
+    // It can't end a match with no result either, so that is sent as a tie, while the lobby still treats it
+    // as having no result.
+    public void AdminEndGame(GameResult gameResult)
+    {
+        if (GameStatus == GameStatus.Started)
+        {
+            if (gameResult == GameResult.NoResult)
+            {
+                EndedByAdminWithNoResult = true;
+                gameResult = GameResult.TieGame;
+            }
+            Server?.AdminShutdown(gameResult);
+        }
+        else
+        {
+            Server?.Shutdown();
+        }
+    }
+
+    public void AdminClearCooldowns()
+    {
+        Server?.AdminClearCooldown();
     }
 
     protected void OnStatusUpdate(BridgeServerProtocol server, GameStatus newStatus)
@@ -236,12 +271,8 @@ public abstract class Game
         {
             QueuePenaltyManager.PardonQueuePenalties(this, presentPlayersOnly: true);
         }
-        else if (!IsDraft)
-        {
-            QueuePenaltyManager.PardonQueuePenalties(this, presentPlayersOnly: false);
-        }
-        // Draft still in progress: no cap — dodge penalties stick.
 
+        // If the server doesn't come back, the game ends with no result
         await Task.Delay(LobbyConfiguration.GetServerReconnectionTimeout());
         if (Server == server && GameStatus != GameStatus.Stopped)
         {

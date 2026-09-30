@@ -55,6 +55,16 @@ public class QueuePenaltyIssueTest : EvosTest
         // Mirrors the game server reporting a status change
         public void ReportStatus(GameStatus status) => OnStatusUpdate(null, status);
 
+        // Mirrors Game.OnGameEnded; a null result means the game server was lost and sent no summary
+        public void End(GameResult? result)
+        {
+            GameSummary = result is null ? null : new LobbyGameSummary { GameResult = result.Value };
+            GameInfo.GameResult = result ?? GameResult.TieGame;
+            GameInfo.GameStatus = GameStatus.Stopped;
+            StopTime = DateTime.UtcNow.AddSeconds(8);
+            QueuePenaltyManager.OnGameEnded(this);
+        }
+
         // Mirrors Game.AddBot: characters a player controls besides their own (ControlAllBots, asymmetric games)
         public void AddProxies(int index, int count)
         {
@@ -285,6 +295,80 @@ public class QueuePenaltyIssueTest : EvosTest
         }
 
         Assert.Equal(1, OffenseCount(game.Player(0).AccountId));
+    }
+
+    // --- Game result: leaving a game that ended without a result is not penalized ---
+
+    [Theory]
+    [InlineData(true, null, true)]                      // game server lost
+    [InlineData(false, null, true)]
+    [InlineData(false, GameResult.NoResult, true)]
+    [InlineData(false, GameResult.ServerCrashed, true)]
+    [InlineData(true, GameResult.TeamAWon, false)]
+    [InlineData(false, GameResult.TeamBWon, false)]
+    [InlineData(false, GameResult.TieGame, false)]
+    public void GameEnded_PardonsLeaversOnlyWithoutResult(bool draft, GameResult? result, bool expectPardon)
+    {
+        using ClientNotifierScope _ = new();
+        TestGame game = new(draft, GameStatus.Started, MakeAccounts(PlayerCount));
+        Leave(game, 0);
+
+        game.End(result);
+
+        Assert.Equal(expectPardon ? 0 : 1, OffenseCount(game.Player(0).AccountId));
+    }
+
+    [Fact]
+    public void GameEndedByAdminWithNoResult_PardonsLeavers()
+    {
+        using ClientNotifierScope _ = new();
+        TestGame game = new(draft: false, GameStatus.Started, MakeAccounts(PlayerCount));
+        Leave(game, 0);
+
+        game.AdminEndGame(GameResult.NoResult);
+        game.End(GameResult.TieGame); // the game server can only end the game as a tie
+
+        Assert.Equal(0, OffenseCount(game.Player(0).AccountId));
+    }
+
+    [Fact]
+    public void AdminEndingFinishedGameWithNoResult_KeepsItsResult()
+    {
+        TestGame game = new(draft: false, GameStatus.Started, MakeAccounts(PlayerCount));
+        game.End(GameResult.TeamAWon);
+
+        game.AdminEndGame(GameResult.NoResult);
+
+        Assert.True(game.HasResult);
+    }
+
+    [Fact]
+    public void CancelledDraftEndingWithoutResult_KeepsDodgerPenalized()
+    {
+        using ClientNotifierScope _ = new();
+        TestGame game = new(draft: true, GameStatus.LoadoutSelecting, MakeAccounts(PlayerCount));
+        game.CancelBecauseOf(0);
+
+        game.End(null); // Game.OnServerDisconnect ends the game once the shut-down server is gone
+
+        Assert.Equal(1, OffenseCount(game.Player(0).AccountId));
+    }
+
+    [Theory]
+    [InlineData(GameResult.TeamAWon, true)]
+    [InlineData(GameResult.NoResult, false)]
+    [InlineData(null, false)]
+    public void LeavingRightAfterGameEnded_BlockedOnlyAfterResult(GameResult? result, bool expectBlock)
+    {
+        using ClientNotifierScope _ = new();
+        TestGame game = new(draft: false, GameStatus.Started, MakeAccounts(PlayerCount));
+        game.End(result);
+
+        Leave(game, 0);
+
+        DateTime blockTimeout = Penalties(game.Player(0).AccountId)?.QueueDodgeBlockTimeout ?? DateTime.MinValue;
+        Assert.Equal(expectBlock, blockTimeout > DateTime.UtcNow);
+        Assert.Equal(0, OffenseCount(game.Player(0).AccountId)); // not an offense
     }
 
     // --- Pardons ---

@@ -63,10 +63,20 @@ public static class QueuePenaltyManager
                 SetQueuePenalty(accountId, GameType.PvP, LobbyConfiguration.GetQueuePenaltyPvPBaseDuration(), escalate: true);
                 game.PenalizedPlayers.Add(accountId);
             }
-            else if (game.StopTime > DateTime.UtcNow)
+            else if (game.HasResult && game.StopTime > DateTime.UtcNow)
             {
                 SetQueuePenalty(accountId, GameType.PvP, DateTime.UtcNow.Subtract(game.StopTime).Add(TimeSpan.FromSeconds(30)), escalate: false);
             }
+        }
+    }
+
+    // Leaving a game that ended without a result is not penalized. A canceled match has no result either,
+    // but whoever caused the cancellation is to blame for that, so only started matches count.
+    public static void OnGameEnded(Game game)
+    {
+        if (game.MatchStarted && !game.HasResult)
+        {
+            PardonQueuePenalties(game, presentPlayersOnly: false);
         }
     }
 

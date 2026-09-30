@@ -43,18 +43,21 @@ public class AdminModule : ILobbyModule
                 switch (notification.Command)
                 {
                     case "End Game (Win)":
-                        game.Server.AdminShutdown(team == Team.TeamA ? GameResult.TeamAWon : GameResult.TeamBWon);
+                        game.AdminEndGame(team == Team.TeamA ? GameResult.TeamAWon : GameResult.TeamBWon);
                         break;
                     case "End Game (Loss)":
-                        game.Server.AdminShutdown(team == Team.TeamA ? GameResult.TeamBWon : GameResult.TeamAWon);
+                        game.AdminEndGame(team == Team.TeamA ? GameResult.TeamBWon : GameResult.TeamAWon);
                         break;
                     case "End Game (No Result)":
+                        // aka game broken - pardons queue penalties
+                        game.AdminEndGame(GameResult.NoResult);
+                        break;
                     case "End Game (With Parameters)":
                     case "End Game (Tie)":
-                        game.Server.AdminShutdown(GameResult.TieGame);
+                        game.AdminEndGame(GameResult.TieGame);
                         break;
                     case "Cooldowns":
-                        game.Server.AdminClearCooldown();
+                        game.AdminClearCooldowns();
                         break;
                 }
             }

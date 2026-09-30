@@ -783,14 +783,7 @@ namespace CentralServer.ApiServer
                 {
                     if (game.ProcessCode == data.processCode)
                     {
-                        if (game.GameStatus == GameStatus.Started)
-                        {
-                            game.Server.AdminShutdown(GameResult.TieGame);
-                        }
-                        else
-                        {
-                            game.Server.Shutdown();
-                        }
+                        game.AdminEndGame(GameResult.NoResult);
                         return Results.Ok();
                     }
                 }
