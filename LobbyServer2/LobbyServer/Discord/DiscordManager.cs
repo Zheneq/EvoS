@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using CentralServer.ApiServer;
 using CentralServer.LobbyServer.Chat;
+using CentralServer.LobbyServer.Matchmaking;
 using CentralServer.LobbyServer.Session;
 using CentralServer.LobbyServer.Utils;
 using Discord;
@@ -118,12 +119,15 @@ namespace CentralServer.LobbyServer.Discord
                 AdminManager.Get().OnAdminAction += SendAdminActionAudit;
                 AdminManager.Get().OnAdminMessage += SendAdminMessageAudit;
                 AdminController.OnAdminPauseQueue += SendAdminPauseQueueAudit;
+                AdminController.OnAdminClearQueuePenalty += SendAdminClearQueuePenaltyAudit;
                 ChatManager.Get().OnBroadcastMessage += SendBroadcastMessageAudit;
             }
 
             if (adminSystemReportChannel is not null)
             {
                 AdminController.OnAdminScheduleShutdown += SendAdminScheduleShutdownAudit;
+                QueuePenaltyManager.OnPenalty += SendQueuePenaltyAudit;
+                QueuePenaltyManager.OnPardon += SendQueuePardonAudit;
             }
 
             if (adminClientReportChannel is not null)
@@ -180,12 +184,15 @@ namespace CentralServer.LobbyServer.Discord
                 AdminManager.Get().OnAdminAction -= SendAdminActionAudit;
                 AdminManager.Get().OnAdminMessage -= SendAdminMessageAudit;
                 AdminController.OnAdminPauseQueue -= SendAdminPauseQueueAudit;
+                AdminController.OnAdminClearQueuePenalty -= SendAdminClearQueuePenaltyAudit;
                 ChatManager.Get().OnBroadcastMessage -= SendBroadcastMessageAudit;
             }
 
             if (adminSystemReportChannel is not null)
             {
                 AdminController.OnAdminScheduleShutdown -= SendAdminScheduleShutdownAudit;
+                QueuePenaltyManager.OnPenalty -= SendQueuePenaltyAudit;
+                QueuePenaltyManager.OnPardon -= SendQueuePardonAudit;
             }
 
             if (adminClientReportChannel is not null)
@@ -457,6 +464,32 @@ namespace CentralServer.LobbyServer.Discord
             }
         }
 
+        private async void SendAdminClearQueuePenaltyAudit(long adminAccountId, long accountId)
+        {
+            if (adminActionLogChannel == null || !conf.AdminEnableAdminAudit)
+            {
+                return;
+            }
+
+            try
+            {
+                await adminActionLogChannel.SendMessageAsync(
+                    username: LobbyServerUtils.GetHandle(adminAccountId),
+                    embeds:
+                    [
+                        new EmbedBuilder
+                        {
+                            Title = $"Clear queue penalty {LobbyServerUtils.GetHandle(accountId)}",
+                            Color = DiscordUtils.GetLogColor(Level.Warn),
+                        }.Build()
+                    ]);
+            }
+            catch (Exception e)
+            {
+                log.Error("Failed to send admin clear queue penalty audit message to discord webhook", e);
+            }
+        }
+
         private async void SendBroadcastMessageAudit(ChatNotification notification)
         {
             if (adminActionLogChannel == null || !conf.AdminEnableAdminAudit)
@@ -513,6 +546,76 @@ namespace CentralServer.LobbyServer.Discord
             {
                 log.Error("Failed to send admin schedule shutdown audit message to discord webhook", e);
             }
+        }
+
+        private async void SendQueuePenaltyAudit(QueuePenaltyManager.PenaltyReport report)
+        {
+            if (adminSystemReportChannel == null || !conf.AdminEnableAdminAudit)
+            {
+                return;
+            }
+
+            try
+            {
+                string game = FormatGameForQueuePenalty(report.Game);
+                await adminSystemReportChannel.SendMessageAsync(
+                    username: "Atlas Reactor",
+                    embeds:
+                    [
+                        new EmbedBuilder
+                        {
+                            Title = $"Queue penalty: {LobbyServerUtils.GetHandle(report.AccountId)} for {report.Duration}",
+                            Description = report.LeftAgain
+                                ? $"Left {game} again (still offense #{report.OffenseCount})"
+                                : $"Left {game} (offense #{report.OffenseCount})",
+                            Color = DiscordUtils.GetLogColor(Level.Warn),
+                        }.Build()
+                    ]);
+            }
+            catch (Exception e)
+            {
+                log.Error("Failed to send queue penalty audit message to discord webhook", e);
+            }
+        }
+
+        private async void SendQueuePardonAudit(QueuePenaltyManager.PardonReport report)
+        {
+            if (adminSystemReportChannel == null || !conf.AdminEnableAdminAudit)
+            {
+                return;
+            }
+
+            try
+            {
+                string game = FormatGameForQueuePenalty(report.Game);
+                string reason = report.Reason switch
+                {
+                    QueuePenaltyManager.PardonReason.EveryoneLeft => $"Everyone left {game}",
+                    QueuePenaltyManager.PardonReason.NoResult => $"{game} ended without a result",
+                    QueuePenaltyManager.PardonReason.CameBack => $"Came back to {game} and stayed until the end",
+                    _ => report.Reason.ToString()
+                };
+                await adminSystemReportChannel.SendMessageAsync(
+                    username: "Atlas Reactor",
+                    embeds:
+                    [
+                        new EmbedBuilder
+                        {
+                            Title = $"Queue penalty pardoned: {LobbyServerUtils.GetHandle(report.AccountId)}",
+                            Description = $"{reason} ({report.OffenseCount} offenses left)",
+                            Color = DiscordUtils.GetLogColor(Level.Info),
+                        }.Build()
+                    ]);
+            }
+            catch (Exception e)
+            {
+                log.Error("Failed to send queue pardon audit message to discord webhook", e);
+            }
+        }
+
+        private static string FormatGameForQueuePenalty(Game game)
+        {
+            return $"{(game.IsDraft ? "Draft" : "PvP")} game {game.ProcessCode}";
         }
 
         public async void SendAdminGameReport(

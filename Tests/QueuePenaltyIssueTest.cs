@@ -468,7 +468,7 @@ public class QueuePenaltyIssueTest : EvosTest
         long leaver = game.Player(0).AccountId;
         Leave(game, 0);
 
-        QueuePenaltyManager.PardonQueuePenalties(game, presentPlayersOnly: false);
+        QueuePenaltyManager.PardonQueuePenalties(game, QueuePenaltyManager.PardonReason.NoResult);
 
         Assert.Equal(0, OffenseCount(leaver));
         Assert.True(Penalties(leaver)!.QueueDodgeBlockTimeout <= DateTime.UtcNow.AddSeconds(15));
@@ -484,7 +484,7 @@ public class QueuePenaltyIssueTest : EvosTest
         Leave(game, 0);
         Penalties(leaver)!.QueueDodgeBlockTimeout = DateTime.UtcNow.AddSeconds(-1);
 
-        QueuePenaltyManager.PardonQueuePenalties(game, presentPlayersOnly: false);
+        QueuePenaltyManager.PardonQueuePenalties(game, QueuePenaltyManager.PardonReason.NoResult);
 
         Assert.Equal(0, OffenseCount(leaver));
         Assert.DoesNotContain(scope.Notifier.SystemMessages, m => m.AccountId == leaver); // no block left to cut
@@ -499,7 +499,7 @@ public class QueuePenaltyIssueTest : EvosTest
         SetPriorOffenses(stayer, 2);
         Leave(game, 0);
 
-        QueuePenaltyManager.PardonQueuePenalties(game, presentPlayersOnly: false);
+        QueuePenaltyManager.PardonQueuePenalties(game, QueuePenaltyManager.PardonReason.NoResult);
 
         Assert.Equal(2, OffenseCount(stayer));
     }
@@ -513,14 +513,14 @@ public class QueuePenaltyIssueTest : EvosTest
         SetPriorOffenses(leaver, 1);
         Leave(game, 0);
 
-        QueuePenaltyManager.PardonQueuePenalties(game, presentPlayersOnly: false);
-        QueuePenaltyManager.PardonQueuePenalties(game, presentPlayersOnly: false);
+        QueuePenaltyManager.PardonQueuePenalties(game, QueuePenaltyManager.PardonReason.NoResult);
+        QueuePenaltyManager.PardonQueuePenalties(game, QueuePenaltyManager.PardonReason.NoResult);
 
         Assert.Equal(1, OffenseCount(leaver));
     }
 
     [Fact]
-    public void Pardon_PresentPlayersOnly_SkipsLeaversWhoDidNotReturn()
+    public void Pardon_CameBack_SkipsLeaversWhoDidNotReturn()
     {
         using ClientNotifierScope _ = new();
         TestGame game = new(draft: false, GameStatus.Started, MakeAccounts(PlayerCount));
@@ -528,9 +528,79 @@ public class QueuePenaltyIssueTest : EvosTest
         Leave(game, 1);
         game.Player(1).ReplacedWithBots = false; // reconnected (Game.ReconnectPlayer)
 
-        QueuePenaltyManager.PardonQueuePenalties(game, presentPlayersOnly: true);
+        QueuePenaltyManager.PardonQueuePenalties(game, QueuePenaltyManager.PardonReason.CameBack);
 
         Assert.Equal(1, OffenseCount(game.Player(0).AccountId));
         Assert.Equal(0, OffenseCount(game.Player(1).AccountId));
+    }
+
+    // --- Reports for auditing ---
+
+    [Fact]
+    public void Penalty_Reported()
+    {
+        using ClientNotifierScope _ = new();
+        TestGame game = new(draft: true, GameStatus.Started, MakeAccounts(PlayerCount));
+        long leaver = game.Player(0).AccountId;
+        List<QueuePenaltyManager.PenaltyReport> reports = [];
+        Action<QueuePenaltyManager.PenaltyReport> handler = r =>
+        {
+            if (r.Game == game) reports.Add(r);
+        };
+        QueuePenaltyManager.OnPenalty += handler;
+        try
+        {
+            Leave(game, 0);
+            game.Player(0).ReplacedWithBots = false; // reconnected (Game.ReconnectPlayer)
+            Penalties(leaver)!.QueueDodgeBlockTimeout = DateTime.UtcNow.AddSeconds(-1);
+            Leave(game, 0);
+        }
+        finally
+        {
+            QueuePenaltyManager.OnPenalty -= handler;
+        }
+
+        TimeSpan draftBase = LobbyConfiguration.GetQueuePenaltyDraftBaseDuration();
+        Assert.Equal(
+            [
+                new QueuePenaltyManager.PenaltyReport(leaver, game, draftBase, 1, LeftAgain: false),
+                new QueuePenaltyManager.PenaltyReport(leaver, game, draftBase, 1, LeftAgain: true),
+            ],
+            reports);
+    }
+
+    [Theory]
+    [InlineData(GameResult.TeamAWon)]
+    [InlineData(GameResult.NoResult)]
+    public void Pardon_ReportedWithReason(GameResult result)
+    {
+        using ClientNotifierScope _ = new();
+        TestGame game = new(draft: false, GameStatus.Started, MakeAccounts(PlayerCount));
+        Leave(game, 0);
+        Leave(game, 1);
+        game.Player(1).ReplacedWithBots = false; // reconnected (Game.ReconnectPlayer)
+        List<QueuePenaltyManager.PardonReport> reports = [];
+        Action<QueuePenaltyManager.PardonReport> handler = r =>
+        {
+            if (r.Game == game) reports.Add(r);
+        };
+        QueuePenaltyManager.OnPardon += handler;
+        try
+        {
+            game.End(result);
+        }
+        finally
+        {
+            QueuePenaltyManager.OnPardon -= handler;
+        }
+
+        QueuePenaltyManager.PardonReport[] expected = result == GameResult.NoResult
+            ?
+            [
+                new(game.Player(0).AccountId, game, QueuePenaltyManager.PardonReason.NoResult, 0),
+                new(game.Player(1).AccountId, game, QueuePenaltyManager.PardonReason.NoResult, 0),
+            ]
+            : [new(game.Player(1).AccountId, game, QueuePenaltyManager.PardonReason.CameBack, 0)];
+        Assert.Equal(expected.OrderBy(r => r.AccountId), reports.OrderBy(r => r.AccountId));
     }
 }

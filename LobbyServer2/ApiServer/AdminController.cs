@@ -30,6 +30,7 @@ namespace CentralServer.ApiServer
 
         public static event Action<long, PauseQueueModel> OnAdminPauseQueue = delegate { };
         public static event Action<long, PendingShutdownModel> OnAdminScheduleShutdown = delegate { };
+        public static event Action<long, long> OnAdminClearQueuePenalty = delegate { }; // admin, player
 
         public class PauseQueueModel
         {
@@ -317,6 +318,10 @@ namespace CentralServer.ApiServer
             }
             log.Info($"API CLEAR QUEUE PENALTY {account.Handle} by {adminHandle} ({adminAccountId})");
             bool success = QueuePenaltyManager.ClearQueuePenalties(data.accountId);
+            if (success)
+            {
+                OnAdminClearQueuePenalty(adminAccountId, data.accountId);
+            }
             return success ? Results.Ok() : Results.Problem();
         }
 

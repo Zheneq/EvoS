@@ -16,7 +16,21 @@ namespace CentralServer.LobbyServer.Matchmaking;
 public static class QueuePenaltyManager
 {
     private static readonly ILog log = LogManager.GetLogger(typeof(QueuePenaltyManager));
-    
+
+    public enum PardonReason
+    {
+        EveryoneLeft, // everyone left the match, so it must have broken
+        NoResult, // the game ended without a result
+        CameBack, // the leaver came back and stayed until the end
+    }
+
+    // LeftAgain: the player has left the same game again, so the block is re-applied, but it is the same offense
+    public record PenaltyReport(long AccountId, Game Game, TimeSpan Duration, int OffenseCount, bool LeftAgain);
+    public record PardonReport(long AccountId, Game Game, PardonReason Reason, int OffenseCount);
+
+    public static event Action<PenaltyReport> OnPenalty = delegate { };
+    public static event Action<PardonReport> OnPardon = delegate { };
+
     public static void IssueQueuePenalties(long accountId, Game game)
     {
         if (!LobbyConfiguration.GetMatchAbandoningPenalty() ||
@@ -39,10 +53,10 @@ public static class QueuePenaltyManager
             if (game.GameStatus != GameStatus.Stopped
                 && game.TeamInfo.TeamPlayerInfo.Where(IsHumanPlayer).All(p => p.ReplacedWithBots))
             {
-                PardonQueuePenalties(game, presentPlayersOnly: false);
+                PardonQueuePenalties(game, PardonReason.EveryoneLeft);
                 return;
             }
-            
+
             // Once enough players have left, the game has collapsed and further leavers are not to blame
             int alreadyReplacedNum = game.TeamInfo.TeamPlayerInfo.Count(p => p.ReplacedWithBots && p.AccountId != accountId);
             if (alreadyReplacedNum >= LobbyConfiguration.GetQueuePenaltyCollapseThreshold())
@@ -67,17 +81,17 @@ public static class QueuePenaltyManager
     // Leaving the same game again re-applies the block, but it's still one offense
     private static void PenalizeLeaver(long accountId, Game game, TimeSpan baseDuration)
     {
-        if (game.PenalizedPlayers.TryGetValue(accountId, out TimeSpan appliedSpan))
+        bool leftAgain = game.PenalizedPlayers.TryGetValue(accountId, out TimeSpan appliedSpan);
+        PenaltyEvaluation? eval = leftAgain
+            ? SetQueuePenalty(accountId, GameType.PvP, appliedSpan)
+            : SetQueuePenalty(accountId, GameType.PvP, baseDuration, escalate: true);
+        if (eval is null)
         {
-            SetQueuePenalty(accountId, GameType.PvP, appliedSpan);
             return;
         }
 
-        PenaltyEvaluation? eval = SetQueuePenalty(accountId, GameType.PvP, baseDuration, escalate: true);
-        if (eval is not null)
-        {
-            game.PenalizedPlayers[accountId] = eval.Value.AppliedSpan;
-        }
+        game.PenalizedPlayers[accountId] = eval.Value.AppliedSpan;
+        OnPenalty(new PenaltyReport(accountId, game, eval.Value.AppliedSpan, eval.Value.Count, leftAgain));
     }
 
     public static void OnGameEnded(Game game)
@@ -92,12 +106,12 @@ public static class QueuePenaltyManager
         if (!game.HasResult)
         {
             // Leaving a game that ended without a result is not penalized
-            PardonQueuePenalties(game, presentPlayersOnly: false);
+            PardonQueuePenalties(game, PardonReason.NoResult);
         }
         else
         {
             // Leavers who came back and stayed until the end are forgiven
-            PardonQueuePenalties(game, presentPlayersOnly: true);
+            PardonQueuePenalties(game, PardonReason.CameBack);
         }
     }
 
@@ -110,26 +124,33 @@ public static class QueuePenaltyManager
 
     // Forgives players penalized for leaving this game: the offense no longer counts towards escalation,
     // and the block is cut down to a few seconds. Each penalty is pardoned at most once.
-    public static void PardonQueuePenalties(Game game, bool presentPlayersOnly = true)
+    public static void PardonQueuePenalties(Game game, PardonReason reason)
     {
         lock (game)
         {
             List<long> players = game.PenalizedPlayers.Keys
-                .Where(accountId => !presentPlayersOnly || game.GetPlayerInfo(accountId)?.ReplacedWithBots == false)
+                .Where(accountId => reason != PardonReason.CameBack
+                                    || game.GetPlayerInfo(accountId)?.ReplacedWithBots == false)
                 .ToList();
 
             foreach (long accountId in players)
             {
                 game.PenalizedPlayers.Remove(accountId);
-                log.Info($"{LobbyServerUtils.GetHandle(accountId)}'s queue penalty for leaving {game.ProcessCode} is pardoned");
+                log.Info($"{LobbyServerUtils.GetHandle(accountId)}'s queue penalty for leaving {game.ProcessCode} is pardoned ({reason})");
                 TimeSpan duration = TimeSpan.FromSeconds(15);
-                if (SetQueuePenalty(accountId, GameType.PvP, duration, capPenalty: true)?.BlockChanged == true)
+                PenaltyEvaluation? eval = SetQueuePenalty(accountId, GameType.PvP, duration, capPenalty: true);
+                if (eval is null)
+                {
+                    continue;
+                }
+                if (eval.Value.BlockChanged)
                 {
                     LocalizationArg argDuration = LocalizationArg_TimeSpan.Create(duration);
                     LocalizationPayload msg =
                         LocalizationPayload.Create("QueueDodgerPenaltyAppliedToSelf", "Matchmaking", argDuration);
                     ClientNotifier.Get().SendSystemMessage(accountId, msg);
                 }
+                OnPardon(new PardonReport(accountId, game, reason, eval.Value.Count));
             }
         }
     }
