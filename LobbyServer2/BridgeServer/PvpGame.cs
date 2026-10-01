@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using CentralServer.LobbyServer;
 using CentralServer.LobbyServer.Matchmaking;
+using CentralServer.LobbyServer.Utils;
 using EvoS.Framework.Constants.Enums;
 using EvoS.Framework.Network.Static;
 using log4net;
@@ -19,7 +20,28 @@ public class PvpGame: Game
     {
         AssignServer(server);
     }
-    
+
+    public override void DisconnectPlayer(long accountId)
+    {
+        base.DisconnectPlayer(accountId);
+        OnPlayerLeft(accountId);
+    }
+
+    public override void OnPlayerDisconnectedFromLobby(long accountId)
+    {
+        OnPlayerLeft(accountId);
+    }
+
+    // Nobody can rejoin a game that hasn't been launched yet, so it can't go on without the player.
+    // Canceling right away also means a dodger is penalized before they can queue for another game.
+    private void OnPlayerLeft(long accountId)
+    {
+        if (GameStatus is >= GameStatus.FreelancerSelecting and <= GameStatus.Launching)
+        {
+            CancelMatch(GetPlayerInfo(accountId)?.Handle ?? LobbyServerUtils.GetHandle(accountId), accountId);
+        }
+    }
+
     public async Task StartGameAsync(
         List<MatchPlayerData> teamA,
         List<MatchPlayerData> teamB,
@@ -64,7 +86,7 @@ public class PvpGame: Game
 
             log.Info($"Waiting for {timeout} to let players pick new characters");
 
-            while (!allReady && timePassed <= timeout)
+            while (!allReady && timePassed <= timeout && !IsCancelled)
             {
                 allReady = GetPlayers().All(player => GetPlayerInfo(player).ReadyState == ReadyState.Ready);
 
@@ -74,6 +96,10 @@ public class PvpGame: Game
                     await Task.Delay(1000);
                 }
             }
+        }
+        if (IsCancelled)
+        {
+            return;
         }
 
         // Enter loadout selection
@@ -92,6 +118,10 @@ public class PvpGame: Game
         // Wait Loadout Selection time
         log.Info($"Waiting for {GameInfo.LoadoutSelectTimeout} to let players update their loadouts");
         await Task.Delay(GameInfo.LoadoutSelectTimeout);
+        if (IsCancelled)
+        {
+            return;
+        }
 
         log.Info("Launching...");
         SetGameStatus(GameStatus.Launching);

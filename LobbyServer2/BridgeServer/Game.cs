@@ -1348,6 +1348,10 @@ public abstract class Game
 
             await HandleRankedResolutionSubPhase(PhaseSubType, player1, sendGameInfoNotify);
             sendGameInfoNotify = false;
+            if (IsCancelled)
+            {
+                return;
+            }
 
             // TODO: There can be a race condition if a client request comes at this point
 
@@ -1602,7 +1606,7 @@ public abstract class Game
 
         while (stopwatch.Elapsed <= timeLeftInSubPhase)
         {
-            if (isCancellationRequested)
+            if (isCancellationRequested || IsCancelled)
             {
 #if DEBUG
                 log.Info($"Cancellation requested. Exiting sub-phase monitoring for player {player.PlayerId}.");

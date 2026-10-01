@@ -24,10 +24,10 @@ public class QueuePenaltyIssueTest : EvosTest
     {
     }
 
-    private sealed class TestGame : Game
+    private sealed class TestGame : PvpGame
     {
         // Statuses from Launched on come from the game server, earlier ones are set by the lobby.
-        public TestGame(bool draft, GameStatus status, IEnumerable<long> accountIds)
+        public TestGame(bool draft, GameStatus status, IEnumerable<long> accountIds) : base(null)
         {
             GameSubType = new GameSubType
             {
@@ -385,6 +385,49 @@ public class QueuePenaltyIssueTest : EvosTest
         game.End(GameResult.TieGame); // the game server can only end the game as a tie
 
         Assert.Equal(0, OffenseCount(game.Player(0).AccountId));
+    }
+
+    [Theory]
+    [InlineData(true, GameStatus.FreelancerSelecting, true)]
+    [InlineData(true, GameStatus.LoadoutSelecting, true)]
+    [InlineData(true, GameStatus.Launching, true)]
+    [InlineData(false, GameStatus.FreelancerSelecting, false)]
+    [InlineData(false, GameStatus.LoadoutSelecting, false)]
+    public void LeavingBeforeLaunch_CancelsMatchRightAway(bool draft, GameStatus status, bool expectPenalty)
+    {
+        using ClientNotifierScope _ = new();
+        TestGame game = new(draft, status, MakeAccounts(PlayerCount));
+
+        game.DisconnectPlayer(game.Player(0).AccountId); // GameLifecycleModule.HandleLeaveGameRequest
+
+        Assert.True(game.IsCancelled);
+        Assert.Equal(expectPenalty ? 1 : 0, OffenseCount(game.Player(0).AccountId));
+    }
+
+    [Fact]
+    public void DisconnectingFromLobbyBeforeLaunch_CancelsMatchRightAway()
+    {
+        using ClientNotifierScope _ = new();
+        TestGame game = new(draft: true, GameStatus.FreelancerSelecting, MakeAccounts(PlayerCount));
+
+        game.OnPlayerDisconnectedFromLobby(game.Player(0).AccountId);
+
+        Assert.True(game.IsCancelled);
+        Assert.Equal(1, OffenseCount(game.Player(0).AccountId));
+    }
+
+    [Theory]
+    [InlineData(GameStatus.Loading)]
+    [InlineData(GameStatus.Started)]
+    public void LeavingLaunchedGame_DoesNotCancelMatch(GameStatus status)
+    {
+        using ClientNotifierScope _ = new();
+        TestGame game = new(draft: true, status, MakeAccounts(PlayerCount));
+
+        game.DisconnectPlayer(game.Player(0).AccountId);
+        game.OnPlayerDisconnectedFromLobby(game.Player(0).AccountId);
+
+        Assert.False(game.IsCancelled);
     }
 
     [Fact]
