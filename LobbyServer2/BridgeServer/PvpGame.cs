@@ -49,6 +49,10 @@ public class PvpGame: Game
         GetClients().ForEach(client => client.OnGameAssigned(this));
 
         await HandleRankedResolutionPhase();
+        if (IsCancelled)
+        {
+            return;
+        }
 
         // Check for duplicated and WillFill characters
         if (CheckDuplicatedAndFill())

@@ -388,6 +388,21 @@ public class QueuePenaltyIssueTest : EvosTest
     }
 
     [Fact]
+    public void CancelledMatch_CancellingAgain_DoesNotPenalizeAnyoneElse()
+    {
+        using ClientNotifierScope _ = new();
+        TestGame game = new(draft: true, GameStatus.FreelancerSelecting, MakeAccounts(PlayerCount));
+        game.CancelBecauseOf(3);
+
+        // PvpGame.StartGameAsync's next connectivity check: everyone has left the canceled game
+        game.CancelBecauseOf(0);
+
+        Assert.True(game.IsCancelled);
+        Assert.Equal(1, OffenseCount(game.Player(3).AccountId));
+        Assert.Equal(0, OffenseCount(game.Player(0).AccountId));
+    }
+
+    [Fact]
     public void AdminEndingFinishedGameWithNoResult_KeepsItsResult()
     {
         TestGame game = new(draft: false, GameStatus.Started, MakeAccounts(PlayerCount));

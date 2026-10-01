@@ -63,6 +63,8 @@ public abstract class Game
     
     public BridgeServerProtocol Server { private set; get; } // TODO check it is set when needed
 
+    public bool IsCancelled { private set; get; }
+
     public GameSubType GameSubType { protected set; get; } // can be null
 
     protected IReadOnlyDictionary<long, DateTime> QueueEntryTimes { get; set; } = new Dictionary<long, DateTime>();
@@ -541,6 +543,17 @@ public abstract class Game
 
     protected void CancelMatch(string dodgerHandle = null, long? dodgerAccountId = null)
     {
+        // Once canceled, every player has left the game, so any later connectivity check would cancel it again,
+        // blaming whoever it happens to check first
+        lock (this)
+        {
+            if (IsCancelled)
+            {
+                return;
+            }
+            IsCancelled = true;
+        }
+
         foreach (LobbyServerProtocol client in GetClients())
         {
             client.LeaveGame(this);
