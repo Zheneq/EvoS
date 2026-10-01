@@ -556,26 +556,31 @@ public abstract class Game
 
         foreach (LobbyServerProtocol client in GetClients())
         {
-            client.LeaveGame(this);
-
-            client.Send(new GameAssignmentNotification
-            {
-                GameInfo = null,
-                GameResult = GameResult.NoResult,
-                Reconnection = false
-            });
-
             if (dodgerHandle != null)
             {
                 client.SendSystemMessage(LocalizationPayload.Create(
                     "PlayerDisconnected", "Disconnect", LocalizationArg_Handle.Create(dodgerHandle)));
-
-                LogDodge(dodgerHandle);
             }
             else
             {
                 client.SendSystemMessage(LocalizationPayload.Create("FailedStartGameServer", "Frontend"));
             }
+
+            if (client.LeaveGame(this))
+            {
+                // Players who have already left (and maybe joined another game) must not be unassigned again
+                client.Send(new GameAssignmentNotification 
+                {
+                    GameInfo = null,
+                    GameResult = GameResult.NoResult,
+                    Reconnection = false
+                });
+            }
+        }
+
+        if (dodgerHandle != null)
+        {
+            LogDodge(dodgerHandle);
         }
 
         // Fallback for callers that only know the handle; the dodger has usually already dropped
