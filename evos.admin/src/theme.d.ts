@@ -4,7 +4,7 @@ import React from "react";
 declare module '@mui/material/styles' {
     interface Theme {
         size: {
-            basicWidth: string;
+            basicWidth: number | string | React.CSSProperties['width'];
         };
         transform: {
             skewA: string;
@@ -13,12 +13,12 @@ declare module '@mui/material/styles' {
     }
 
     interface ThemeOptions {
-        size: {
-            basicWidth: React.CSSProperties['width'];
+        size?: {
+            basicWidth?: React.CSSProperties['width'];
         };
-        transform: {
-            skewA: React.CSSProperties['transform'];
-            skewB: React.CSSProperties['transform'];
+        transform?: {
+            skewA?: React.CSSProperties['transform'];
+            skewB?: React.CSSProperties['transform'];
         };
     }
 
