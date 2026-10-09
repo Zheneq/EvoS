@@ -805,7 +805,7 @@ namespace CentralServer.ApiServer
 
             bool result = ProxyConfiguration.Invalidate();
             
-            return result ? Results.Ok() : Results.NotFound();
+            return result ? Results.Ok() : Results.InternalServerError();
         }
     }
 }

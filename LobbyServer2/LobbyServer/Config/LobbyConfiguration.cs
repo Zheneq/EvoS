@@ -27,6 +27,7 @@ namespace EvoS.Framework
         public bool MatchAbandoningPenalty = true;
         public TimeSpan QueuePenaltyPvPBaseDuration = TimeSpan.FromMinutes(5); // covers the reconnection period set by the game server
         public TimeSpan QueuePenaltyDraftBaseDuration = TimeSpan.FromMinutes(5);
+        public TimeSpan QueuePenaltyCharacterSelectDuration = TimeSpan.FromSeconds(40); // flat, doesn't escalate
         public double QueuePenaltyEscalationRatio = 1.2;
         public TimeSpan QueuePenaltyEscalationCap = TimeSpan.FromMinutes(30);
         public TimeSpan QueuePenaltyParoleWindow = TimeSpan.FromDays(7);
@@ -161,6 +162,11 @@ namespace EvoS.Framework
         public static TimeSpan GetQueuePenaltyDraftBaseDuration()
         {
             return GetInstance().QueuePenaltyDraftBaseDuration;
+        }
+
+        public static TimeSpan GetQueuePenaltyCharacterSelectDuration()
+        {
+            return GetInstance().QueuePenaltyCharacterSelectDuration;
         }
 
         public static double GetQueuePenaltyEscalationRatio()
