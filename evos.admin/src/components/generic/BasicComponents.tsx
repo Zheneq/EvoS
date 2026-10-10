@@ -23,12 +23,12 @@ export const FlexBox = styled(Box)(({ theme }) => ({
 export const EvosCard = styled(Card)(({ theme }) => ({
     margin: 4,
     padding: 8,
-    maxWidth: theme.size.basicWidth,
+    maxWidth: (theme as any).size?.basicWidth ?? 700,
 }));
 
 export const StackWrapper = styled(Stack)(({theme}) => ({
     margin: 'auto',
-    maxWidth: theme.size.basicWidth,
+    maxWidth: (theme as any).size?.basicWidth ?? 700,
 }));
 
 export const StyledLink = styled(Link)(({ theme }) => ({
