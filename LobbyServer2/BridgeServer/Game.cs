@@ -442,7 +442,7 @@ public abstract class Game
         foreach (long player in GetPlayersDistinct())
         {
             LobbyServerProtocol playerConnection = SessionManager.GetClientConnection(player);
-            if (playerConnection != null)
+            if (playerConnection != null && playerConnection.CurrentGame == this)
             {
                 SendGameInfo(playerConnection);
             }
