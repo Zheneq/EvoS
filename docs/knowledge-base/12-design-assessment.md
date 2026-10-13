@@ -78,7 +78,7 @@ Discord classes (4, `DiscordManager` 1 + `DiscordBotWrapper` 1 + `DiscordLobbyUt
   lock objects sometimes shared across classes (`Game.characterSelectionLock` is a
   `public static object` also taken by `LobbyServerProtocol`).
 - Sync-over-async (`Send` → `.GetAwaiter().GetResult()`), `async void` methods
-  (`Game.OnServerDisconnect`, `Sandbox Program.OnExecute`), fire-and-forget `Task.Run`
+  (`Game.OnServerDisconnect`), fire-and-forget `Task.Run`
   for the periodic tasks with `CancellationToken.None` (no orderly shutdown).
 - Time and delays hard-coded (`DateTime.Now` vs `DateTime.UtcNow` inconsistently;
   `Task.Delay` in `ServerManager.DisconnectServer`, draft timers).

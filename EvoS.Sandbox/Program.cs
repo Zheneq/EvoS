@@ -18,28 +18,39 @@ namespace EvoS.Sandbox
         public static int Main(string[] args)
         {
             XmlConfigurator.Configure(new FileInfo("log4net.xml"));
-            CommandLineApplication.Execute<Program>(args);
-            return 0;
+            // Last resort for exceptions that escape on other threads (e.g. the directory server thread)
+            AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+                log.Fatal("Unhandled exception", e.ExceptionObject as Exception);
+            return CommandLineApplication.Execute<Program>(args);
         }
-        
-        private async void OnExecute()
+
+        private async Task<int> OnExecute()
         {
-            Banner.PrintBanner();
-            EvoS.Framework.EvosConfiguration.ValidateConfiguration();
-            EvoS.DirectoryServer.Account.LoginManager.ValidateConfiguration();
-            DB.Get();
+            try
+            {
+                Banner.PrintBanner();
+                EvoS.Framework.EvosConfiguration.ValidateConfiguration();
+                EvoS.DirectoryServer.Account.LoginManager.ValidateConfiguration();
+                DB.Get();
 
-            // Start Central Server
-            await CentralServer.CentralServer.Init(new string[] { }, StopDirServer);
+                // Start Central Server
+                await CentralServer.CentralServer.Init(new string[] { }, StopDirServer);
 
-            // Start Directory Server
-            Thread thread = new Thread(StartDirServer);
-            thread.Start();
+                // Start Directory Server
+                Thread thread = new Thread(StartDirServer);
+                thread.Start();
 
-            CentralServer.CentralServer.MainLoop();
-            
-            thread.Interrupt();
-            log.Info("Shutting down");
+                CentralServer.CentralServer.MainLoop();
+
+                thread.Interrupt();
+                log.Info("Shutting down");
+                return 0;
+            }
+            catch (Exception e)
+            {
+                log.Fatal("Fatal error", e);
+                return 1;
+            }
         }
 
         /// <summary>
