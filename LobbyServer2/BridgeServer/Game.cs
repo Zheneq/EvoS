@@ -123,6 +123,7 @@ public abstract class Game
 
     protected void OnGameEnded(BridgeServerProtocol server, LobbyGameSummary summary, LobbyGameSummaryOverrides overrides)
     {
+        DateTime matchEndTime = DateTime.UtcNow;
         if (GameInfo is not null) // we can end up here before the game started assembling
         {
             GameInfo.GameResult = summary?.GameResult ?? GameResult.TieGame;
@@ -154,7 +155,7 @@ public abstract class Game
                         log.Error("Failed to process game summary", ex);
                     }
                 }
-                DB.Get().MatchHistoryDao.Save(MatchHistoryDao.MatchEntry.Cons(GameInfo, GameSummary));
+                DB.Get().MatchHistoryDao.Save(MatchHistoryDao.MatchEntry.Cons(GameInfo, GameSummary, matchEndTime));
             }
         }
         else

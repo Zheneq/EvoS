@@ -758,6 +758,7 @@ export function getMatch(abort: AbortController, authHeader: string, accountId: 
 
 export interface MatchHistoryEntry {
     matchId: string;
+    createDate: string;
     matchTime: string;
     character: CharacterType;
     gameType: string;

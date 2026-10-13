@@ -57,7 +57,7 @@ export const MatchHistory: React.FC<MatchHistoryProps> = ({accountId}: MatchHist
     function renderNavigation(withDatePicker: boolean) {
         return <HistoryNavButtons
             items={matches}
-            dateFunction={(m: MatchHistoryEntry) => m.matchTime}
+            dateFunction={(m: MatchHistoryEntry) => m.createDate}
             date={date}
             setDate={setDate}
             isBefore={isBefore}
