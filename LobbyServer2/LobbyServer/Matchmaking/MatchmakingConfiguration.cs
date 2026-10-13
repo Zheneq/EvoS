@@ -23,6 +23,9 @@ public class MatchmakingConfiguration
     
     public TimeSpan WaitingTimeWeightCap = TimeSpan.FromMinutes(15);
     public int TeammateEloDifferenceWeightCap = 250;
+    // How much each group member beyond the first adds to the group's weight in waiting time factors:
+    // 0 - a group counts once, same as a solo, 1 - each member counts as a separate waiter
+    public float WaitingTimeGroupMemberFactor = 0;
     
     
     public float EloBasePot = 64.0f;

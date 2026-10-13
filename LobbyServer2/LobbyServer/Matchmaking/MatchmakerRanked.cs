@@ -92,7 +92,8 @@ public class MatchmakerRanked : MatchmakerBase
         float teammateEloDifferenceAFactor = 1 - Cap((match.TeamA.MaxElo - match.TeamA.MinElo) / Conf.TeammateEloDifferenceWeightCap);
         float teammateEloDifferenceBFactor = 1 - Cap((match.TeamB.MaxElo - match.TeamB.MinElo) / Conf.TeammateEloDifferenceWeightCap);
         float teammateEloDifferenceFactor = (teammateEloDifferenceAFactor + teammateEloDifferenceBFactor) * 0.5f;
-        double waitTime = Math.Sqrt(match.Groups.Select(g => Math.Pow((now - g.QueueTime).TotalSeconds, 2)).Average());
+        List<(double Weight, double Seconds)> waitTimes = GetWaitTimes(match, now);
+        double waitTime = Math.Sqrt(waitTimes.Sum(w => w.Weight * Math.Pow(w.Seconds, 2)) / waitTimes.Sum(w => w.Weight));
         float waitTimeFactor = Cap((float)(waitTime / Conf.WaitingTimeWeightCap.TotalSeconds));
         // TODO team composition does not matter for ranked
         float teamCompositionFactor = (GetTeamCompositionFactor(match.TeamA) + GetTeamCompositionFactor(match.TeamB)) * 0.5f;
@@ -146,6 +147,15 @@ public class MatchmakerRanked : MatchmakerBase
     private static float Cap(float factor)
     {
         return Math.Clamp(factor, 0, 1);
+    }
+
+    private List<(double Weight, double Seconds)> GetWaitTimes(Match match, DateTime now)
+    {
+        return match.Groups
+            .Select(g => (
+                Weight: 1.0 + Conf.WaitingTimeGroupMemberFactor * (g.Players - 1),
+                Seconds: (now - g.QueueTime).TotalSeconds))
+            .ToList();
     }
 
     private static float GetTeamCompositionFactor(Match.Team team)
