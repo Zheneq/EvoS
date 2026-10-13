@@ -6,8 +6,8 @@ using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using CentralServer.ApiServer;
+using CentralServer.LobbyServer.Character;
 using CentralServer.LobbyServer.Session;
-using CentralServer.LobbyServer.Stats;
 using CentralServer.LobbyServer.Utils;
 using CentralServer.Proxy;
 using EvoS.DirectoryServer.Account;
@@ -39,7 +39,7 @@ namespace EvoS.DirectoryServer
         public static void Main(string[] args = null)
         {
             EvosConfiguration.ValidateConfiguration();
-            Account.LoginManager.ValidateConfiguration();
+            LoginManager.ValidateConfiguration();
             host = WebHost.CreateDefaultBuilder()
                 .SuppressStatusMessages(true)
                 .UseKestrel(koptions => koptions.Listen(IPAddress.Parse("0.0.0.0"), EvosConfiguration.GetDirectoryServerPort()))
@@ -358,15 +358,6 @@ namespace EvoS.DirectoryServer
             };
         }
 
-        // Placeholder freelancers used by Draft for random fill (and random fill for subcategory);
-        // every account must have them with a default loadout.
-        private static readonly CharacterType[] RequiredPlaceholderCharacters =
-        {
-            CharacterType.PendingWillFill,
-            CharacterType.TestFreelancer1,
-            CharacterType.TestFreelancer2,
-        };
-
         // Someday we'll make a db migration tool but not today
         internal static bool PatchAccountData(PersistedAccountData account)
         {
@@ -430,7 +421,7 @@ namespace EvoS.DirectoryServer
             }
 #endif
 
-            foreach (CharacterType characterType in RequiredPlaceholderCharacters)
+            foreach (CharacterType characterType in CharacterConfigs.Characters.Keys)
             {
                 EnsureCharacterWithDefaultLoadout(account, characterType);
             }
