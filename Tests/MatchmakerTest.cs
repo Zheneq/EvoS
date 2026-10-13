@@ -183,6 +183,62 @@ public class MatchmakerTest : EvosTest
         Assert.Equal(expectedScore, matchesRanked[0].Score, 3);
     }
 
+    [Theory]
+    [InlineData(0f, 0.083)] // 10/15 / 8 seats
+    [InlineData(0.5f, 0.208)] // 2.5 * 10/15 / 8 seats
+    [InlineData(1f, 0.333)] // 4 * 10/15 / 8 seats
+    public void TestSeatedWaitingTimeGroupMemberFactor(float groupMemberFactor, double expectedScore)
+    {
+        MatchmakingConfiguration conf = WaitingTimeOnlyConfiguration();
+        conf.SeatedWaitingTimeWeight = 1;
+        conf.SeatedWaitingTimeWeightCap = TimeSpan.FromMinutes(15);
+        conf.WaitingTimeGroupMemberFactor = groupMemberFactor;
+        Matchmaker matchmaker = MakeMatchmaker(conf);
+
+        DateTime now = DateTime.UtcNow;
+        int i = 0;
+        List<Matchmaker.MatchmakingGroup> queuedGroups =
+        [
+            new(i++, Players([3, 4, 5, 6]), now - TimeSpan.FromMinutes(10)),
+            new(i++, Players([7]), now),
+            new(i++, Players([8]), now),
+            new(i++, Players([9]), now),
+            new(i++, Players([10]), now)
+        ];
+
+        List<Matchmaker.ScoredMatch> matchesRanked = matchmaker.GetMatchesRanked(queuedGroups, now);
+        Assert.Single(matchesRanked);
+        Assert.Equal(expectedScore, matchesRanked[0].Score, 3);
+    }
+
+    [Fact]
+    public void TestSeatedWaitingTimeSeatsEveryLongWaiter()
+    {
+        // 3 long waiters and 7 fresh solos: every match seats at least one long waiter.
+        // Root mean square is capped for matches with 2 and 3 long waiters alike, the seated sum is not.
+        MatchmakingConfiguration conf = WaitingTimeOnlyConfiguration();
+        conf.SeatedWaitingTimeWeight = 1;
+        conf.SeatedWaitingTimeWeightCap = TimeSpan.FromMinutes(15);
+        Matchmaker matchmaker = MakeMatchmaker(conf);
+
+        DateTime now = DateTime.UtcNow;
+        List<Matchmaker.MatchmakingGroup> queuedGroups = [];
+        for (int i = 1; i <= 10; i++)
+        {
+            queuedGroups.Add(new(i, Players([i]), i <= 3 ? now - TimeSpan.FromMinutes(40) : now));
+        }
+
+        List<Matchmaker.ScoredMatch> matchesRanked = matchmaker.GetMatchesRanked(queuedGroups, now);
+        const int matchesWithAllLongWaiters = 735; // = 7!/(5!*2!) * 8!/(4!*4!) / 2
+        Assert.Equal(0.375, matchesRanked[0].Score, 3); // 3 capped waiters / 8 seats
+        Assert.All(
+            matchesRanked.Take(matchesWithAllLongWaiters),
+            m => Assert.Superset(
+                new HashSet<long> { 1, 2, 3 },
+                m.Match.TeamA.AccountIds.Concat(m.Match.TeamB.AccountIds).ToHashSet()));
+        Assert.Equal(0.25, matchesRanked[matchesWithAllLongWaiters].Score, 3); // 2 capped waiters / 8 seats
+    }
+
     [Fact]
     public void TestFifo()
     {

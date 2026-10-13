@@ -32,6 +32,20 @@ Elo, and apply queue penalties (dodging, leaving) and priorities.
 3. Post-game: `MatchmakingQueue.OnGameEnded` → `Elo.OnGameEnded` updates per-character and
    composite Elo values (`ELOKeyComponent` / `EloValues` in Framework).
 
+## Waiting time in ranked scoring
+
+`MatchmakerRanked.RankMatch` has two waiting time factors, tunable side by side in `PvP.json`:
+
+- `WaitingTimeWeight` — root mean square of seated waiters' times, capped as a whole at
+  `WaitingTimeWeightCap`. Rewards seating *some* long waiter, with diminishing returns for each
+  additional one; once the cap is reached, it stops telling candidates apart.
+- `SeatedWaitingTimeWeight` — sum of seated waiters' times, each capped at
+  `SeatedWaitingTimeWeightCap`, divided by seat count. Ranks exactly like a penalty for every
+  waiter left out, so each long waiter's claim is independent of who else is seated.
+
+`WaitingTimeGroupMemberFactor` sets a group's weight in both factors to
+`1 + factor × (members − 1)`: 0 counts a group once like a solo, 1 counts every member.
+
 ## Queue penalties
 
 `QueuePenaltyManager` penalizes wasting other players' time by leaving a PvP game (Draft is a
