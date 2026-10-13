@@ -674,7 +674,7 @@ namespace CentralServer.LobbyServer
         {
             var serverName = CompilerExtensions.IsNullOrEmpty(game.Server.Name) ? "an unknown server" : game.Server.Name;
             var serverVersion = CompilerExtensions.IsNullOrEmpty(game.Server.BuildVersion) ? "" : $" v{game.Server.BuildVersion}";
-            SendSystemMessage($"You are about to join {serverName}{serverVersion} for game {GameIdString(game.GameInfo)}.");
+            SendSystemMessage($"You are about to join {serverName}{serverVersion} for game {Maps.GetMapName.GetValueOrDefault(game.Map, "")} {GameIdString(game.GameInfo)}.");
         }
 
         public void SendSystemMessage(string text)
