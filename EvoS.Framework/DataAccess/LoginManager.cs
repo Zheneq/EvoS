@@ -534,6 +534,10 @@ namespace EvoS.DirectoryServer.Account
             {
                 log.Warn($"INSECURE CONFIGURATION: {msg} Continuing because DevMode is enabled.");
             }
+            else if (EvosConfiguration.GetDBConfig().Type == EvosConfiguration.DBType.None)
+            {
+                log.Warn($"INSECURE CONFIGURATION: {msg} Continuing because data persistence is disabled.");
+            }
             else
             {
                 throw new EvosException(msg);

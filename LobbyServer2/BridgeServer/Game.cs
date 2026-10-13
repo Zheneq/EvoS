@@ -143,13 +143,16 @@ public abstract class Game
 
             if (GameSummary.GameResult is >= GameResult.TieGame and <= GameResult.TeamBWon)
             {
-                try
+                if (ShouldProcessAccolades())
                 {
-                    GameSummary.BadgeAndParticipantsInfo = AccoladeUtils.ProcessGameSummary(GameSummary);
-                }
-                catch (Exception ex)
-                {
-                    log.Error("Failed to process game summary", ex);
+                    try
+                    {
+                        GameSummary.BadgeAndParticipantsInfo = AccoladeUtils.ProcessGameSummary(GameSummary);
+                    }
+                    catch (Exception ex)
+                    {
+                        log.Error("Failed to process game summary", ex);
+                    }
                 }
                 DB.Get().MatchHistoryDao.Save(MatchHistoryDao.MatchEntry.Cons(GameInfo, GameSummary));
             }
@@ -666,6 +669,16 @@ public abstract class Game
         return LobbyConfiguration.GetServerGGTime();
     }
 
+    protected virtual bool ShouldProcessAccolades()
+    {
+        return true;
+    }
+
+    protected virtual bool ShouldSendStats()
+    {
+        return true;
+    }
+
     public async Task FinalizeGame()
     {
         if (GameSummary != null)
@@ -690,7 +703,10 @@ public abstract class Game
             TrustWarManager.CalculateTrustWar(this, GameSummary);
 
             // Send stats to api, no longer rely on discord
-            await StatsApi.Get().ParseStats(GameInfo, Server?.Name, Server?.BuildVersion, GameSummary);
+            if (ShouldSendStats())
+            {
+                await StatsApi.Get().ParseStats(GameInfo, Server?.Name, Server?.BuildVersion, GameSummary);
+            }
 
             DiscordManager.Get().SendGameReport(GameInfo, Server?.Name, Server?.BuildVersion, GameSummary);
             DiscordManager.Get().SendAdminGameReport(GameInfo, Server?.Name, Server?.BuildVersion, GameSummary);

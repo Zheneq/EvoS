@@ -1,4 +1,5 @@
 ﻿using CentralServer.LobbyServer.Matchmaking;
+using CentralServer.LobbyServer.Tutorial;
 using EvoS.Framework;
 using EvoS.Framework.Constants.Enums;
 using EvoS.Framework.Misc;
@@ -43,6 +44,7 @@ namespace CentralServer.LobbyServer.Gamemode
         {
             Dictionary<GameType, GameTypeAvailability> gameTypes = new Dictionary<GameType, GameTypeAvailability>();
 
+            gameTypes.Add(GameType.Tutorial, GetTutorialGameTypeAvailability());
             gameTypes.Add(GameType.Practice, GetPracticeGameTypeAvailability());
             gameTypes.Add(GameType.Coop, GetCoopGameTypeAvailability());
             gameTypes.Add(GameType.PvP, GetPvPGameTypeAvailability());
@@ -102,6 +104,16 @@ namespace CentralServer.LobbyServer.Gamemode
             };
 
             return type;
+        }
+
+        private static GameTypeAvailability GetTutorialGameTypeAvailability()
+        {
+            return new GameTypeAvailability
+            {
+                IsActive = true,
+                MaxWillFillPerTeam = 0,
+                SubTypes = TutorialGame.SubTypes
+            };
         }
 
         private static GameTypeAvailability GetCoopGameTypeAvailability()

@@ -149,7 +149,7 @@ namespace CentralServer.LobbyServer.Stats
                         bool MostDecorated = false;
 
                         BadgeAndParticipantInfo badges = gameSummary.BadgeAndParticipantsInfo
-                            .FirstOrDefault(p => p.ActorIndex == player.ActorIndex);
+                            ?.FirstOrDefault(p => p.ActorIndex == player.ActorIndex);
 
                         if (badges != null && badges.TopParticipationEarned != null)
                         {
