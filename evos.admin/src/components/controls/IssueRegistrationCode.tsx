@@ -61,6 +61,7 @@ export default function IssueRegistrationCode() {
     const [processing, setProcessing] = useState<boolean>(false);
     const [codes, setCodes] = useState<RegistrationCodeEntry[]>();
     const [codesBefore, setCodesBefore] = useState<Date>(new Date());
+    const [now, setNow] = useState<Date>(new Date());
     const [error, setError] = useState<EvosError>();
     const [requests, setRequests] = useState<UsernameRequestEntry[]>();
     const [requestsError, setRequestsError] = useState<EvosError>();
@@ -78,6 +79,7 @@ export default function IssueRegistrationCode() {
     const refresh = useCallback(() => {
         setRequestsRefresh(x => x + 1);
         setCodesBefore(new Date(new Date().getTime() + 60000));
+        setNow(new Date());
     }, []);
 
     const handleCopy = (text: string) => {
@@ -166,7 +168,6 @@ export default function IssueRegistrationCode() {
 
     // Calculate metrics
     const totalCodes = codes?.length ?? 0;
-    const now = useMemo(() => new Date(), []);
     const claimedCodes = codes?.filter(c => c.issuedTo !== 0).length ?? 0;
     const activeCodes = codes?.filter(c => c.issuedTo === 0 && new Date(c.expiresAt) >= now).length ?? 0;
     const expiredCodes = codes?.filter(c => c.issuedTo === 0 && new Date(c.expiresAt) < now).length ?? 0;
