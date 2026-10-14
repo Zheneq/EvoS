@@ -13,6 +13,8 @@ public abstract class QueueRequirement
 	public abstract RequirementType Requirement { get; }
 	public abstract bool AnyGroupMember { get; }
 
+	// NetSerializer assigns type IDs walking this list from the end, and they must match the vanilla client.
+	// Add new types to the start: appending one would renumber all existing requirements.
 	public static IEnumerable<Type> MessageTypes =>
 	[
 		typeof(QueueRequirement_AccessLevel),

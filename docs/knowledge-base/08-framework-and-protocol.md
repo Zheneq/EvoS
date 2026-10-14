@@ -19,6 +19,34 @@ Bridge (lobby↔game server) messages are separate:
 `LobbyServer2/BridgeServer/Messages/` + `BridgeMessageSerializer`, sharing
 `AllianceMessageBase` conventions with the game.
 
+## Queue requirements & protocol versions
+
+`QueueRequirement` subclasses (`Network/Static/QueueRequirement_*.cs`) gate game types and
+subtypes on the client. `RequirementCollection` stores each requirement as NetSerializer bytes
+using the type list in `QueueRequirement.MessageTypes`. A client whose list differs cannot
+deserialize the collection.
+
+- `QueueRequirement_ProtocolDependent` is the abstract base for requirements only some clients
+  understand. Each subclass declares `SupportedProtocolVersions` (per class, not serialized).
+- `RequirementCollection.ForProtocolVersion(pv)` replaces unsupported ones with
+  `QueueRequirement_Never` (AdminDisabled) and returns the same collection when nothing changes.
+  A null protocol version is logged as an error with a stack trace.
+- `ProtocolPatcher` (`LobbyServer2/LobbyServer/`) applies this to every client-bound message that
+  can carry requirements: from `LobbyServerProtocol.SendImpl` with the client's session protocol
+  version, and from `BroadcastImpl` with null (one payload must be safe for every client).
+  Copy-on-write: shared subtypes are never modified. `ProtocolPatcherTest` fails if a message
+  type that can carry a `RequirementCollection` is missing from `ProtocolPatcher.Mapping`.
+
+Adding a concrete protocol-dependent requirement:
+1. Add it to the **start** of `QueueRequirement.MessageTypes`. Each serialized requirement begins
+   with a NetSerializer type ID (e.g. `QueueRequirement_Never` is `05-12`: type 5, AdminDisabled).
+   These IDs are not the `[EvosMessage]` ones: NetSerializer assigns them at runtime, walking the
+   list from the end and numbering each type along with the field types it pulls in. Appending a
+   type renumbers every existing requirement and breaks vanilla clients; prepending leaves their
+   IDs unchanged. The supporting clients must have the same list as the server.
+2. Give it an `[EvosMessage]` ID.
+3. Handle it in `QueueRequirement.ExtractRequirementFromReader` if it should be loadable from JSON.
+
 ## Game data (`EvoS.Framework/GameData/`)
 
 Static singletons loading JSON snapshots of game content:

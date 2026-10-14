@@ -13,5 +13,10 @@ namespace EvoS.Framework.Network.NetworkMessages
         public LobbyTeamInfo TeamInfo;
 
         public LocalizationPayload LocalizedFailure;
+
+        public GameInfoUpdateResponse Clone()
+        {
+            return (GameInfoUpdateResponse)MemberwiseClone();
+        }
     }
 }

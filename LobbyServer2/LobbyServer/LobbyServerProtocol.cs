@@ -122,6 +122,11 @@ namespace CentralServer.LobbyServer
                 message = patcher(message, Proxy);
             }
 
+            if (ProtocolPatcher.Mapping.TryGetValue(message.GetType(), out var protocolPatcher))
+            {
+                message = protocolPatcher(message, SessionManager.GetSessionInfo(AccountId)?.ProtocolVersion);
+            }
+
             LogMessage(">", message);
             MemoryStream stream = new MemoryStream();
             EvosSerializer.Instance.Serialize(stream, message);
@@ -130,6 +135,12 @@ namespace CentralServer.LobbyServer
 
         private void BroadcastImpl(WebSocketMessage message)
         {
+            // The same payload goes to every client, so it must be safe for all of them
+            if (ProtocolPatcher.Mapping.TryGetValue(message.GetType(), out var protocolPatcher))
+            {
+                message = protocolPatcher(message, null);
+            }
+
             MemoryStream stream = new MemoryStream();
             EvosSerializer.Instance.Serialize(stream, message);
             BroadcastRaw(stream.ToArray());

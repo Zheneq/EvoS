@@ -16,5 +16,10 @@ namespace EvoS.Framework.Network.NetworkMessages
             RequestId = 0;
             ResponseId = 0;
         }
+
+        public MatchmakingQueueAssignmentNotification Clone()
+        {
+            return (MatchmakingQueueAssignmentNotification)MemberwiseClone();
+        }
     }
 }

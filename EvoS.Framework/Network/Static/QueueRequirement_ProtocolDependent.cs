@@ -9,8 +9,9 @@ namespace EvoS.Framework.Network.Static;
 /// (see <see cref="RequirementCollection.ForProtocolVersion"/>).
 /// </summary>
 /// <remarks>
-/// A concrete subclass must be added to <see cref="QueueRequirement.MessageTypes"/> without shifting the
-/// NetSerializer type IDs vanilla clients rely on, and needs an <see cref="EvosMessageAttribute"/> ID.
+/// A concrete subclass must be added to the start of <see cref="QueueRequirement.MessageTypes"/>:
+/// NetSerializer numbers that list from the end, so appending would change the type IDs vanilla clients rely on.
+/// It also needs an <see cref="EvosMessageAttribute"/> ID.
 /// </remarks>
 [Serializable]
 public abstract class QueueRequirement_ProtocolDependent : QueueRequirement
