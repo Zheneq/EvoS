@@ -28,7 +28,6 @@ export default function Header() {
         borderBottom: '1px solid',
         borderColor: 'divider',
         backgroundColor: 'background.paper',
-        position: 'sticky',
         top: 0,
         zIndex: 10,
       }}
@@ -37,7 +36,6 @@ export default function Header() {
       <Box sx={{ minWidth: 0, flexShrink: 1 }}>
         <NavbarBreadcrumbs />
       </Box>
-
       {/* Header Actions */}
       <Stack direction="row" spacing={1.5} alignItems="center">
         <Search />

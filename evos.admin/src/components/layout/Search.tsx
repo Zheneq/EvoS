@@ -26,7 +26,7 @@ export default function Search({ onSearchSubmit, fullWidth = false }: SearchProp
   };
 
   return (
-    <FormControl sx={{ width: fullWidth ? '100%' : { xs: '100%', md: '28ch' } }} variant="outlined">
+    <FormControl sx={{ width: fullWidth ? '100%' : { xs: '28ch', md: '28ch' } }} variant="outlined">
       <OutlinedInput
         size="small"
         id="player-search"

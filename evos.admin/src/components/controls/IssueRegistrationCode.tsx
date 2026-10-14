@@ -261,10 +261,10 @@ export default function IssueRegistrationCode() {
                 </Alert>
             )}
 
-            {/* Section 1: Issue Code Card & Metric Cards */}
+            {/* Section 1: Issue Code Card */}
             <Grid container spacing={3}>
                 {/* Issue Code Form Card */}
-                <Grid size={{ xs: 12, md: 5 }}>
+                <Grid size={{ xs: 12 }}>
                     <Card variant="outlined" sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
                         <Box sx={{ p: 2.5, pb: 1.5 }}>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mb: 0.5 }}>
@@ -344,64 +344,6 @@ export default function IssueRegistrationCode() {
 
                         {processing && <LinearProgress sx={{ borderRadius: 1 }} />}
                     </Card>
-                </Grid>
-
-                {/* Metrics Summary Grid */}
-                <Grid size={{ xs: 12, md: 7 }}>
-                    <Grid container spacing={2} sx={{ height: '100%' }}>
-                        <Grid size={{ xs: 6, sm: 6 }}>
-                            <Card variant="outlined" sx={{ p: 2.5, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, letterSpacing: '0.05em' }}>
-                                    TOTAL ISSUED CODES
-                                </Typography>
-                                <Typography variant="h4" sx={{ fontWeight: 700, mt: 0.5 }}>
-                                    {totalCodes}
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
-                                    Cumulative registration codes created
-                                </Typography>
-                            </Card>
-                        </Grid>
-                        <Grid size={{ xs: 6, sm: 6 }}>
-                            <Card variant="outlined" sx={{ p: 2.5, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                                <Typography variant="caption" color="primary" sx={{ fontWeight: 700, letterSpacing: '0.05em' }}>
-                                    ACTIVE / UNCLAIMED
-                                </Typography>
-                                <Typography variant="h4" sx={{ fontWeight: 700, mt: 0.5, color: 'primary.main' }}>
-                                    {activeCodes}
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
-                                    Ready to be redeemed by new users
-                                </Typography>
-                            </Card>
-                        </Grid>
-                        <Grid size={{ xs: 6, sm: 6 }}>
-                            <Card variant="outlined" sx={{ p: 2.5, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                                <Typography variant="caption" color="success.main" sx={{ fontWeight: 700, letterSpacing: '0.05em' }}>
-                                    CLAIMED CODES
-                                </Typography>
-                                <Typography variant="h4" sx={{ fontWeight: 700, mt: 0.5, color: 'success.main' }}>
-                                    {claimedCodes}
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
-                                    Successfully redeemed for an account
-                                </Typography>
-                            </Card>
-                        </Grid>
-                        <Grid size={{ xs: 6, sm: 6 }}>
-                            <Card variant="outlined" sx={{ p: 2.5, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                                <Typography variant="caption" color={pendingRequestsCount > 0 ? "warning.main" : "text.secondary"} sx={{ fontWeight: 700, letterSpacing: '0.05em' }}>
-                                    PENDING REQUESTS
-                                </Typography>
-                                <Typography variant="h4" sx={{ fontWeight: 700, mt: 0.5, color: pendingRequestsCount > 0 ? "warning.main" : "text.primary" }}>
-                                    {pendingRequestsCount}
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
-                                    Discord username requests waiting
-                                </Typography>
-                            </Card>
-                        </Grid>
-                    </Grid>
                 </Grid>
             </Grid>
 

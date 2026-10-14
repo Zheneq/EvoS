@@ -13,10 +13,8 @@ import {
     Button,
     Card,
     Chip,
-    IconButton,
     LinearProgress,
     Stack,
-    Tooltip,
     Typography
 } from "@mui/material";
 import ErrorDialog from "../generic/ErrorDialog";
@@ -34,7 +32,6 @@ import StarRoundedIcon from "@mui/icons-material/StarRounded";
 import VolumeOffRoundedIcon from "@mui/icons-material/VolumeOffRounded";
 import GavelRoundedIcon from "@mui/icons-material/GavelRounded";
 import BlockRoundedIcon from "@mui/icons-material/BlockRounded";
-import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
 
 const UPDATE_PERIOD_MS = 20000;
 
@@ -44,16 +41,12 @@ export default function MatchHistoryPage() {
 
     const [playerDetails, setPlayerDetails] = useState<PlayerDetails>();
     const [status, setStatus] = useState<Status>();
-    const [lastAction, setLastAction] = useState<Date>();
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<EvosError>();
 
     const authHeader = useAuthHeader()();
     const navigate = useNavigate();
 
-    const handleCommit = () => {
-        setLastAction(new Date());
-    };
 
     const [updateInBackground] = useLocalStorage(Settings.get(SettingsKey.updateInBackground)!);
     const hasFocus = useHasFocus();
@@ -85,7 +78,7 @@ export default function MatchHistoryPage() {
             .catch((error) => processError(error, setError, navigate));
 
         return () => abort.abort();
-    }, [accountIdNumber, authHeader, navigate, lastAction]);
+    }, [accountIdNumber, authHeader, navigate]);
 
     const handle = playerDetails?.player.handle ?? "Nobody";
     const isVip = playerDetails?.isVip ?? false;
@@ -214,16 +207,6 @@ export default function MatchHistoryPage() {
                     >
                         Feedback
                     </Button>
-                    <Tooltip title="Refresh match history">
-                        <IconButton
-                            size="small"
-                            onClick={handleCommit}
-                            disabled={loading}
-                            sx={{ border: '1px solid', borderColor: 'divider' }}
-                        >
-                            <RefreshRoundedIcon fontSize="small" />
-                        </IconButton>
-                    </Tooltip>
                 </Stack>
             </Box>
 

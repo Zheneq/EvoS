@@ -89,21 +89,20 @@ export default function SideMenuMobile({ open, toggleDrawer }: SideMenuMobilePro
         <Box sx={{ flexGrow: 1, overflowY: 'auto' }}>
           <MenuContent onItemClick={toggleDrawer(false)} />
         </Box>
-
         <Divider />
 
         {/* Footer Actions */}
         <Box sx={{ p: 2 }}>
           {isAuthenticated() ? (
-            <Button
-              variant="outlined"
-              color="error"
-              fullWidth
-              startIcon={<LogoutRoundedIcon />}
-              onClick={handleLogout}
-            >
-              Log out
-            </Button>
+              <Button
+                variant="outlined"
+                color="error"
+                fullWidth
+                startIcon={<LogoutRoundedIcon />}
+                onClick={handleLogout}
+              >
+                Log out
+              </Button>
           ) : (
             <Button
               variant="contained"

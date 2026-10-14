@@ -11,7 +11,6 @@ import {
 } from "@mui/material";
 import {generateTempPassword} from "../../lib/Evos";
 import {useAuthHeader} from "react-auth-kit";
-import BaseDialog from "../generic/BaseDialog";
 import React, {useState} from "react";
 import {processError} from "../../lib/Error";
 import {useNavigate} from "react-router-dom";
@@ -52,8 +51,6 @@ export default function TempPassword({accountId}: Props) {
 
     return (
         <Card variant="outlined">
-            <BaseDialog title={msg} onDismiss={() => setMsg(undefined)} copyTitle />
-
             <Stack spacing={2} sx={{ width: '100%' }}>
                 <Box>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -118,4 +115,4 @@ export default function TempPassword({accountId}: Props) {
             </Stack>
         </Card>
     );
-}
+}

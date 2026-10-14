@@ -1,4 +1,4 @@
-import React, {useCallback, useEffect, useMemo, useState} from 'react';
+import React, {useEffect, useMemo, useState} from 'react';
 import {
     alpha,
     Box,
@@ -48,7 +48,6 @@ import WarningAmberRoundedIcon from "@mui/icons-material/WarningAmberRounded";
 import SportsEsportsRoundedIcon from "@mui/icons-material/SportsEsportsRounded";
 import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
 import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
-import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
 
 interface ReportHistoryProps {
     accountId: number;
@@ -112,7 +111,6 @@ export const ReportHistory: React.FC<ReportHistoryProps> = ({accountId, setError
     const [sentFeedback, setSentFeedback] = useState<UserFeedback[]>([]);
     const [loading, setLoading] = useState(true);
     const [players, setPlayers] = useState<Map<number, PlayerData>>(new Map());
-    const [refreshTrigger, setRefreshTrigger] = useState(0);
 
     // Filters and pagination
     const [filterTab, setFilterTab] = useState<FilterTab>('all');
@@ -123,10 +121,6 @@ export const ReportHistory: React.FC<ReportHistoryProps> = ({accountId, setError
 
     const authHeader = useAuthHeader()();
     const navigate = useNavigate();
-
-    const handleRefresh = useCallback(() => {
-        setRefreshTrigger(x => x + 1);
-    }, []);
 
     useEffect(() => {
         if (!accountId || accountId === 0) {
@@ -179,7 +173,7 @@ export const ReportHistory: React.FC<ReportHistoryProps> = ({accountId, setError
             });
 
         return () => abort.abort();
-    }, [accountId, authHeader, navigate, setError, refreshTrigger]);
+    }, [accountId, authHeader, navigate, setError]);
 
     const allFeedback = useMemo(() => {
         return [...receivedFeedback, ...sentFeedback].sort(
@@ -298,22 +292,6 @@ export const ReportHistory: React.FC<ReportHistoryProps> = ({accountId, setError
                         sx={{ textTransform: 'none', fontWeight: 600, minHeight: 40 }}
                     />
                 </Tabs>
-
-                {/* Right toolbar controls */}
-                <Stack direction="row" spacing={1} alignItems="center">
-                    <Tooltip title="Refresh feedback data">
-                        <span>
-                            <IconButton
-                                size="small"
-                                onClick={handleRefresh}
-                                disabled={loading}
-                                sx={{ border: '1px solid', borderColor: 'divider' }}
-                            >
-                                <RefreshRoundedIcon fontSize="small" />
-                            </IconButton>
-                        </span>
-                    </Tooltip>
-                </Stack>
             </Stack>
 
             {/* Filter Bar: Search & Reason Dropdown */}

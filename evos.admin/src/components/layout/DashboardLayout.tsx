@@ -69,7 +69,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           overflow: 'hidden',
         }}
       >
-        {/* Desktop Sticky Header */}
+        {/* Desktop Header */}
         <Header />
 
         {/* Scrollable Page Body */}

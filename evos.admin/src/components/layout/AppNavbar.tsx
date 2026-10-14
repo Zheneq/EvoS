@@ -9,6 +9,7 @@ import SideMenuMobile from './SideMenuMobile';
 import MenuButton from './MenuButton';
 import ColorModeIconDropdown from '../../theme/ColorModeIconDropdown';
 import { logoSmall } from '../../lib/Resources';
+import Search from './Search';
 
 export default function AppNavbar() {
   const [open, setOpen] = React.useState(false);
@@ -60,6 +61,7 @@ export default function AppNavbar() {
         </Stack>
 
         <Stack direction="row" spacing={1} alignItems="center">
+          <Search />
           <ColorModeIconDropdown />
           <MenuButton aria-label="Open menu" onClick={toggleDrawer(true)}>
             <MenuRoundedIcon fontSize="small" />

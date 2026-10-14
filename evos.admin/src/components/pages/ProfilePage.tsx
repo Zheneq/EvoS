@@ -23,10 +23,8 @@ import {
     Chip,
     Divider,
     Grid,
-    IconButton,
     LinearProgress,
     Stack,
-    Tooltip,
     Typography
 } from "@mui/material";
 import ErrorDialog from "../generic/ErrorDialog";
@@ -50,7 +48,6 @@ import BlockRoundedIcon from "@mui/icons-material/BlockRounded";
 import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
 import WarningRoundedIcon from "@mui/icons-material/WarningRounded";
 import RestartAltRoundedIcon from "@mui/icons-material/RestartAltRounded";
-import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
 import AccessTimeFilledRoundedIcon from "@mui/icons-material/AccessTimeFilledRounded";
 
 const UPDATE_PERIOD_MS = 20000;
@@ -283,16 +280,6 @@ export default function ProfilePage() {
                     >
                         {isVip ? 'Revoke VIP' : 'Grant VIP'}
                     </Button>
-                    <Tooltip title="Refresh profile">
-                        <IconButton
-                            size="small"
-                            onClick={handleCommit}
-                            disabled={loading}
-                            sx={{ border: '1px solid', borderColor: 'divider' }}
-                        >
-                            <RefreshRoundedIcon fontSize="small" />
-                        </IconButton>
-                    </Tooltip>
                 </Stack>
             </Box>
 
