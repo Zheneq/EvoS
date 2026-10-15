@@ -97,17 +97,28 @@ public class LoginManagerTest
         WithPepper("pepper-A", () => Assert.True(LoginManager.VerifyPassword(hash, "", "same-password", out _)));
     }
 
-    [Fact]
-    public void ValidateConfiguration_ThrowsOnDefaultOrEmptyPepper()
+    [Theory]
+    [InlineData("salt")] // insecure default
+    [InlineData("")]
+    [InlineData(null)]
+    public void ValidateConfiguration_ThrowsOnDefaultOrEmptyPepper_WithPersistentDb(string pepper)
     {
-        WithPepper("salt", () => Assert.Throws<EvosException>(LoginManager.ValidateConfiguration));
-        WithPepper("", () => Assert.Throws<EvosException>(LoginManager.ValidateConfiguration));
+        Assert.Throws<EvosException>(() =>
+            LoginManager.ValidateConfiguration(pepper, devMode: false, dbType: EvosConfiguration.DBType.Mongo));
+    }
+
+    [Theory]
+    [InlineData(true, EvosConfiguration.DBType.None)]
+    [InlineData(false, EvosConfiguration.DBType.None)] // no persistence - nothing to protect
+    public void ValidateConfiguration_OnlyWarnsOnDefaultPepper_WithoutPersistentDb(bool devMode, EvosConfiguration.DBType dbType)
+    {
+        LoginManager.ValidateConfiguration("salt", devMode, dbType);
     }
 
     [Fact]
     public void ValidateConfiguration_PassesOnStrongPepper()
     {
-        WithPepper(TestPepper, LoginManager.ValidateConfiguration);
+        LoginManager.ValidateConfiguration(TestPepper, devMode: false, dbType: EvosConfiguration.DBType.Mongo);
     }
 
     [Fact]

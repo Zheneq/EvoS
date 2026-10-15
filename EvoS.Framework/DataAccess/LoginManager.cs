@@ -518,11 +518,18 @@ namespace EvoS.DirectoryServer.Account
 
         /// <summary>
         /// Fails fast at startup if the password pepper (Database.Salt) is unset or left at the insecure
-        /// default. Logs a warning instead of throwing when DevMode is enabled.
+        /// default. Logs a warning instead of throwing when DevMode is enabled or data persistence is disabled.
         /// </summary>
         public static void ValidateConfiguration()
         {
-            string pepper = EvosConfiguration.GetDBConfig().Salt;
+            ValidateConfiguration(
+                EvosConfiguration.GetDBConfig().Salt,
+                EvosConfiguration.GetDevMode(),
+                EvosConfiguration.GetDBConfig().Type);
+        }
+
+        internal static void ValidateConfiguration(string pepper, bool devMode, EvosConfiguration.DBType dbType)
+        {
             if (!pepper.IsNullOrEmpty() && pepper != DefaultPepper)
             {
                 return;
@@ -530,11 +537,11 @@ namespace EvoS.DirectoryServer.Account
 
             const string msg = "Database.Salt (password pepper) is unset or left at the insecure default. " +
                                "Set it to a strong, unique secret stored separately from the database.";
-            if (EvosConfiguration.GetDevMode())
+            if (devMode)
             {
                 log.Warn($"INSECURE CONFIGURATION: {msg} Continuing because DevMode is enabled.");
             }
-            else if (EvosConfiguration.GetDBConfig().Type == EvosConfiguration.DBType.None)
+            else if (dbType == EvosConfiguration.DBType.None)
             {
                 log.Warn($"INSECURE CONFIGURATION: {msg} Continuing because data persistence is disabled.");
             }
