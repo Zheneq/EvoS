@@ -73,6 +73,7 @@ namespace EvoS.DirectoryServer
 
         private static readonly ILog log = LogManager.GetLogger(typeof(DirectoryServer));
         private static long _nextTmpAccountId = 1;
+        private static readonly TimeSpan PreviousSessionPollInterval = TimeSpan.FromMilliseconds(250);
 
         public void Configure(IApplicationBuilder app)
         {
@@ -100,7 +101,7 @@ namespace EvoS.DirectoryServer
                 {
                     try
                     {
-                        response = ProcessRequest(request, context);
+                        response = await ProcessRequest(request, context);
                     }
                     catch (Exception e)
                     {
@@ -113,7 +114,7 @@ namespace EvoS.DirectoryServer
             });
         }
 
-        private static AssignGameClientResponse ProcessRequest(AssignGameClientRequest request, HttpContext context)
+        private static async Task<AssignGameClientResponse> ProcessRequest(AssignGameClientRequest request, HttpContext context)
         {
             if (!ProtocolVersion.SUPPORTED_PROTO_VERSIONS.Contains(request.SessionInfo.ProtocolVersion))
             {
@@ -144,17 +145,17 @@ namespace EvoS.DirectoryServer
                     AuthTicket authTicket = AuthTicket.TryParse(ticket);
                     if (authTicket != null)
                     {
-                        return HandleConnectionWithToken(authTicket.AccountId, authTicket.Token, request, context);
+                        return await HandleConnectionWithToken(authTicket.AccountId, authTicket.Token, request, context);
                     }
                 }
             }
 
             string username = request.AuthInfo.UserName;
             string password = request.AuthInfo._Password;
-            return HandleConnectionWithPassword(username, password, request, context);
+            return await HandleConnectionWithPassword(username, password, request, context);
         }
 
-        private static AssignGameClientResponse HandleConnectionWithToken(long accountId, string token, AssignGameClientRequest request, HttpContext context)
+        private static async Task<AssignGameClientResponse> HandleConnectionWithToken(long accountId, string token, AssignGameClientRequest request, HttpContext context)
         {
             if (token == null)
             {
@@ -204,10 +205,10 @@ namespace EvoS.DirectoryServer
                 return Fail(request, AuthTicket.INVALID_IP_ADDRESS);
             }
 
-            return HandleConnection(tokenData.AccountId, request, context);
+            return await HandleConnection(tokenData.AccountId, request, context);
         }
 
-        private static AssignGameClientResponse HandleConnectionWithPassword(string username, string password, AssignGameClientRequest request, HttpContext context)
+        private static async Task<AssignGameClientResponse> HandleConnectionWithPassword(string username, string password, AssignGameClientRequest request, HttpContext context)
         {
             if (username == null || password == null)
             {
@@ -230,10 +231,10 @@ namespace EvoS.DirectoryServer
                 return Fail(request, e.Message);
             }
 
-            return HandleConnection(accountId, request, context);
+            return await HandleConnection(accountId, request, context);
         }
 
-        private static AssignGameClientResponse HandleConnection(long accountId, AssignGameClientRequest request, HttpContext context)
+        private static async Task<AssignGameClientResponse> HandleConnection(long accountId, AssignGameClientRequest request, HttpContext context)
         {
             AssignGameClientResponse response = new AssignGameClientResponse
             {
@@ -242,11 +243,10 @@ namespace EvoS.DirectoryServer
                 ErrorMessage = ""
             };
 
-            // Fast path: reject an obvious concurrent login before doing any account work. The authoritative,
-            // race-free check happens atomically inside CreateSession below (rejectIfActive).
-            if (SessionManager.GetSessionInfo(accountId) != null)
+            // Done before any account work. The authoritative, race-free check happens atomically inside
+            // CreateSession below (rejectIfActive).
+            if (!await WaitForPreviousSessionToEnd(accountId, context.RequestAborted))
             {
-                log.Info($"Concurrent login: {accountId}");
                 return Fail(request, "This account is already logged in");
             }
 
@@ -285,6 +285,7 @@ namespace EvoS.DirectoryServer
             }
             catch (ConflictException)
             {
+                // e.g. two instances waited out the same dead session, and the other one got in first
                 log.Info($"Concurrent login (race): {accountId}");
                 return Fail(request, "This account is already logged in");
             }
@@ -301,6 +302,45 @@ namespace EvoS.DirectoryServer
 
             response.ProxyInfo = proxyInfo;
             return response;
+        }
+
+        /// <summary>
+        /// If the account is still online, the previous client may have crashed: its connection gets dropped once it
+        /// stops answering keep-alive pings, so wait for that (up to ConcurrentLoginWaitPeriod) before rejecting this
+        /// login as a second instance of the game. Gives up if the client abandons the request.
+        /// Returns whether the account is free.
+        /// </summary>
+        private static async Task<bool> WaitForPreviousSessionToEnd(long accountId, CancellationToken cancellationToken)
+        {
+            if (!SessionManager.HasActiveSession(accountId))
+            {
+                return true;
+            }
+
+            TimeSpan waitPeriod = EvosConfiguration.GetConcurrentLoginWaitPeriod();
+            log.Info($"Concurrent login: {accountId}, waiting up to {waitPeriod} for the previous session to end");
+            DateTime deadline = DateTime.UtcNow + waitPeriod;
+            try
+            {
+                while (SessionManager.HasActiveSession(accountId))
+                {
+                    TimeSpan remaining = deadline - DateTime.UtcNow;
+                    if (remaining <= TimeSpan.Zero)
+                    {
+                        log.Info($"Concurrent login: {accountId}, the previous session is still active");
+                        return false;
+                    }
+                    await Task.Delay(remaining < PreviousSessionPollInterval ? remaining : PreviousSessionPollInterval, cancellationToken);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                log.Info($"Concurrent login: {accountId}, abandoned while waiting for the previous session to end");
+                return false;
+            }
+
+            log.Info($"Concurrent login: {accountId}, the previous session has ended");
+            return true;
         }
 
         private static string GetLobbyServerAddress(long accountId, HttpContext context)

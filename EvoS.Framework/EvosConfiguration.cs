@@ -14,7 +14,15 @@ namespace EvoS.Framework
         public int DirectoryServerPort = 6050;
         public string LobbyServerAddress = "127.0.0.1";
         public int LobbyServerPort = 6060;
-        public TimeSpan LobbyServerTimeOut = TimeSpan.FromSeconds(20);
+        // Websocket keep-alive interval (lobby and bridge)
+        public TimeSpan LobbyServerTimeOut = TimeSpan.FromSeconds(10);
+        // Game clients that do not answer a keep-alive ping within this time are disconnected (zero disables)
+        public TimeSpan LobbyServerKeepAliveTimeout = TimeSpan.FromSeconds(10);
+        // How long a login for an account that is already online waits for the old connection to drop (e.g. after
+        // a client crash) before rejecting it as a second instance. To catch every dead connection it would have to
+        // cover LobbyServerTimeOut + LobbyServerKeepAliveTimeout, but the client allows 30s in total for this request
+        // plus connecting to the lobby, so keep it well below that.
+        public TimeSpan ConcurrentLoginWaitPeriod = TimeSpan.FromSeconds(20);
         public string GameServerExecutable = "";
         public string GameServerExecutableArgs = "";
         public GameServerPickOrder GameServerPickOrder = GameServerPickOrder.RANDOM;
@@ -56,6 +64,10 @@ namespace EvoS.Framework
         public static int GetLobbyServerPort() => Instance.LobbyServerPort;
 
         public static TimeSpan GetLobbyServerTimeOut() => Instance.LobbyServerTimeOut;
+
+        public static TimeSpan GetLobbyServerKeepAliveTimeout() => Instance.LobbyServerKeepAliveTimeout;
+
+        public static TimeSpan GetConcurrentLoginWaitPeriod() => Instance.ConcurrentLoginWaitPeriod;
 
         /// <summary>
         /// Full path to server's "AtlasReactor.exe"

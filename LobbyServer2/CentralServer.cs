@@ -98,7 +98,10 @@ namespace CentralServer
             });
             _app.Map("/LobbyGameClientSessionManager",
                 sub => sub.Run(context => AcceptConnection(context,
-                    context.RequestServices.GetRequiredService<LobbyServerProtocol>())));
+                    context.RequestServices.GetRequiredService<LobbyServerProtocol>(),
+                    // Ping game clients and drop those that stop answering, so that a crashed client does not stay
+                    // online until TCP gives up. Game servers keep the one-way keep-alive.
+                    new WebSocketAcceptContext { KeepAliveTimeout = EvosConfiguration.GetLobbyServerKeepAliveTimeout() })));
             _app.Map("/BridgeServer",
                 sub => sub.Run(context => AcceptConnection(context, new BridgeServerProtocol())));
 
@@ -156,7 +159,10 @@ namespace CentralServer
             log.Info("Lobby server is not listening, exiting...");
         }
 
-        private static async Task AcceptConnection<TMessage>(HttpContext context, WebSocketBehaviorBase<TMessage> behavior)
+        private static async Task AcceptConnection<TMessage>(
+            HttpContext context,
+            WebSocketBehaviorBase<TMessage> behavior,
+            WebSocketAcceptContext acceptContext = null)
         {
             if (!context.WebSockets.IsWebSocketRequest)
             {
@@ -164,7 +170,7 @@ namespace CentralServer
                 return;
             }
 
-            using WebSocket socket = await context.WebSockets.AcceptWebSocketAsync();
+            using WebSocket socket = await context.WebSockets.AcceptWebSocketAsync(acceptContext ?? new WebSocketAcceptContext());
             await behavior.RunConnection(socket, context);
         }
 

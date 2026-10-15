@@ -220,6 +220,13 @@ namespace CentralServer.LobbyServer.Session
         public static LobbySessionInfo CreateSession(long accountId, LobbySessionInfo connectingSessionInfo, IPAddress ipAddress, bool rejectIfActive = false)
             => Instance.CreateSessionCore(accountId, connectingSessionInfo, ipAddress, rejectIfActive);
 
+        /// <summary>
+        /// Whether the account has an established session or a login still waiting for its websocket connect,
+        /// i.e. whether <see cref="CreateSession"/> with rejectIfActive would reject a fresh login right now.
+        /// </summary>
+        public static bool HasActiveSession(long accountId)
+            => Instance.HasActiveSessionCore(accountId);
+
         public static LobbySessionInfo GetDisconnectedSessionInfo(long accountId)
             => Instance.GetDisconnectedSessionInfoCore(accountId);
 
@@ -304,8 +311,7 @@ namespace CentralServer.LobbyServer.Session
                     {
                         throw new ConflictException("This account is already logged in");
                     }
-                    if (ConnectingSessions.TryGetValue(accountId, out ConnectingSessionInfo connecting)
-                        && DateTime.UtcNow - connecting.createdAt < ConnectingSessionExpiry)
+                    if (IsLoggingIn(accountId))
                     {
                         throw new ConflictException("This account is already logging in");
                     }
@@ -353,6 +359,17 @@ namespace CentralServer.LobbyServer.Session
             account.AdminComponent.RecordLogin(ipAddress);
             DB.Get().AccountDao.UpdateAdminComponent(account);
             return sessionInfo;
+        }
+
+        internal bool HasActiveSessionCore(long accountId)
+        {
+            return SessionInfos.ContainsKey(accountId) || IsLoggingIn(accountId);
+        }
+
+        private bool IsLoggingIn(long accountId)
+        {
+            return ConnectingSessions.TryGetValue(accountId, out ConnectingSessionInfo connecting)
+                   && DateTime.UtcNow - connecting.createdAt < ConnectingSessionExpiry;
         }
 
         private LobbySessionInfo GetDisconnectedSessionInfoCore(long accountId)

@@ -19,6 +19,11 @@ draft interactions, error/feedback reporting.
 
 ## Session lifecycle
 
+0. **Concurrent login wait**: a fresh login for an account that is still online first waits in
+   `DirectoryServer.WaitForPreviousSessionToEnd`, polling `SessionManager.HasActiveSession` (up to
+   `ConcurrentLoginWaitPeriod`, 20s). The lobby endpoint pings
+   clients (`LobbyServerKeepAliveTimeout`) and aborts ones that stop answering, so a crashed client's
+   session ends and the relaunched client gets in; a live second instance is rejected once the wait expires.
 1. **CreateSession** (called by DirectoryServer): under `lock (SessionInfos)`; enforces
    single-session-per-account when `rejectIfActive` (fresh logins). Preserves the old
    `SessionToken` when the player has a running game (so the game server still recognizes
