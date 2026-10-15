@@ -367,10 +367,11 @@ public class GameLifecycleModule : ILobbyModule
             ResponseId = request.RequestId
         };
         _conn.Send(response);
-        if (CurrentGame != null)
+        Game game = CurrentGame;
+        if (game != null)
         {
-            CurrentGame.OnPlayerUsedGGPack(_conn.AccountId);
-            foreach (IClientConnection client in CurrentGame.GetClients())
+            int numGGPacksUsed = game.OnPlayerUsedGGPack(_conn.AccountId);
+            foreach (IClientConnection client in game.GetClients())
             {
                 if (client.AccountId != _conn.AccountId)
                 {
@@ -382,7 +383,7 @@ public class GameLifecycleModule : ILobbyModule
                         GGPackUserRibbon = account.AccountComponent.SelectedRibbonID,
                         GGPackUserTitle = account.AccountComponent.SelectedTitleID,
                         GGPackUserTitleLevel = 1,
-                        NumGGPacksUsed = CurrentGame.GameInfo.ggPackUsedAccountIDs[_conn.AccountId]
+                        NumGGPacksUsed = numGGPacksUsed
                     };
                     client.Send(useGGPackNotification);
                 }

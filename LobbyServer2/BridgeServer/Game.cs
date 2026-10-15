@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using CentralServer.LobbyServer;
 using CentralServer.LobbyServer.Character;
@@ -31,6 +32,7 @@ public abstract class Game
     private static readonly ILog log = LogManager.GetLogger(typeof(Game));
     public static readonly object characterSelectionLock = new object();
     protected static readonly Random rand = new Random();
+    private readonly Lock ggPackLock = new();
     public bool IsControlAllBots => GameSubType?.Mods.Contains(GameSubType.SubTypeMods.ControlAllBots) ?? false;
 
     public LobbyGameInfo GameInfo { protected set; get; } // TODO check it is set when needed
@@ -411,12 +413,15 @@ public abstract class Game
         }
     }
 
-    public void OnPlayerUsedGGPack(long accountId)
+    public int OnPlayerUsedGGPack(long accountId)
     {
-        lock (GameInfo.ggPackUsedAccountIDs)
+        lock (ggPackLock)
         {
-            GameInfo.ggPackUsedAccountIDs.TryGetValue(accountId, out int ggPackUsedAccountIDs);
-            GameInfo.ggPackUsedAccountIDs[accountId] = ggPackUsedAccountIDs + 1;
+            Dictionary<long, int> ggPackUsedAccountIDs = new Dictionary<long, int>(GameInfo.ggPackUsedAccountIDs);
+            int count = ggPackUsedAccountIDs.GetValueOrDefault(accountId) + 1;
+            ggPackUsedAccountIDs[accountId] = count;
+            GameInfo.ggPackUsedAccountIDs = ggPackUsedAccountIDs;
+            return count;
         }
     }
 
