@@ -341,12 +341,18 @@ public abstract class Game
     {
         return from p in TeamInfo.TeamInfo(team) select p.AccountId;
     }
+    
+    public IEnumerable<long> GetPlayersDistinct(Team team)
+    {
+        return GetPlayers(team).Distinct();
+    }
 
     // TODO distinct?
     public IEnumerable<long> GetPlayers()
     {
         return from p in TeamInfo.TeamPlayerInfo select p.AccountId;
     }
+    
     public IEnumerable<long> GetPlayersDistinct()
     {
         return GetPlayers().Distinct();
