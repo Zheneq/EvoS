@@ -25,7 +25,14 @@ public class RequirementCollection : IEnumerable<QueueRequirement>, IEnumerable
 	private bool m_dirty = true;
 	[EvosMessage(148)]
 	private List<QueueRequirement> m_queueRequirementAsList = new List<QueueRequirement>();
-	private static Serializer s_serializer;
+	
+	// custom: Lazy so that concurrent first uses can't get the serializer before its types are added
+	private static readonly Lazy<Serializer> s_serializer = new(() =>
+	{
+		Serializer serializer = new Serializer(Enumerable.Empty<Type>());
+		serializer.AddTypes(QueueRequirement.MessageTypes);
+		return serializer;
+	});
 
 	private IEnumerator<QueueRequirement> InternalEnumerator()
 	{
@@ -195,18 +202,7 @@ public class RequirementCollection : IEnumerable<QueueRequirement>, IEnumerable
 		return m_queueRequirementAsList;
 	}
 
-	private static Serializer InternalSerializer
-	{
-		get
-		{
-			if (s_serializer == null)
-			{
-				s_serializer = new Serializer(Enumerable.Empty<Type>());
-				s_serializer.AddTypes(QueueRequirement.MessageTypes);
-			}
-			return s_serializer;
-		}
-	}
+	private static Serializer InternalSerializer => s_serializer.Value;
 
 	private class JsonConverter : Newtonsoft.Json.JsonConverter
 	{
