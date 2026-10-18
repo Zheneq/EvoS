@@ -166,7 +166,7 @@ public abstract class Game
         }
         try
         {
-            MatchmakingManager.OnGameEnded(GameInfo, GameSummary, GameSubType, TeamA.Concat(TeamB).ToList());
+            MatchmakingManager.OnGameEnded(GameInfo, GameSummary, GameSubType, Players.ToList());
         }
         catch (Exception e)
         {
