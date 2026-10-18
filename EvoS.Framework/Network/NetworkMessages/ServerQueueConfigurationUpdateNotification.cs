@@ -17,5 +17,10 @@ namespace EvoS.Framework.Network.NetworkMessages
         public List<LocalizationPayload> TierInstanceNames;
         public bool AllowBadges;
         public int NewPlayerPvPQueueDuration;
+
+        public ServerQueueConfigurationUpdateNotification Clone()
+        {
+            return (ServerQueueConfigurationUpdateNotification)MemberwiseClone();
+        }
     }
 }

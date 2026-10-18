@@ -1,9 +1,11 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using EvoS.Framework.Misc;
+using log4net;
 using NetSerializer;
 using Newtonsoft.Json;
 
@@ -14,6 +16,8 @@ namespace EvoS.Framework.Network.Static;
 [EvosMessage(147)]
 public class RequirementCollection : IEnumerable<QueueRequirement>, IEnumerable
 {
+	private static readonly ILog log = LogManager.GetLogger(typeof(RequirementCollection));
+
 	[EvosMessage(150)]
 	public List<byte[]> RequirementsAsBinaryData;
 
@@ -21,7 +25,14 @@ public class RequirementCollection : IEnumerable<QueueRequirement>, IEnumerable
 	private bool m_dirty = true;
 	[EvosMessage(148)]
 	private List<QueueRequirement> m_queueRequirementAsList = new List<QueueRequirement>();
-	private static Serializer s_serializer;
+	
+	// custom: Lazy so that concurrent first uses can't get the serializer before its types are added
+	private static readonly Lazy<Serializer> s_serializer = new(() =>
+	{
+		Serializer serializer = new Serializer(Enumerable.Empty<Type>());
+		serializer.AddTypes(QueueRequirement.MessageTypes);
+		return serializer;
+	});
 
 	private IEnumerator<QueueRequirement> InternalEnumerator()
 	{
@@ -92,6 +103,31 @@ public class RequirementCollection : IEnumerable<QueueRequirement>, IEnumerable
 		return requirementCollection;
 	}
 
+	/// <summary>
+	/// Returns this collection, or a copy in which requirements the client cannot deserialize
+	/// are replaced with <see cref="QueueRequirement_Never"/>.
+	/// </summary>
+	/// custom
+	public RequirementCollection ForProtocolVersion(string protocolVersion)
+	{
+		if (protocolVersion is null)
+		{
+			log.Error($"Checking queue requirement against null protocol version\n{new StackTrace(true)}");
+		}
+		List<QueueRequirement> requirements = new List<QueueRequirement>();
+		bool replaced = false;
+		foreach (QueueRequirement queueRequirement in this)
+		{
+			QueueRequirement requirement = queueRequirement is QueueRequirement_ProtocolDependent protocolDependent
+				? protocolDependent.ForProtocolVersion(protocolVersion)
+				: queueRequirement;
+			replaced |= requirement != queueRequirement;
+			requirements.Add(requirement);
+		}
+		return replaced ? Create(requirements) : this;
+	}
+
+	// TODO check protocol version on server
 	// public bool DoesApplicantPass(
 	// 	IQueueRequirementSystemInfo systemInfo,
 	// 	IQueueRequirementApplicant applicant,
@@ -166,18 +202,7 @@ public class RequirementCollection : IEnumerable<QueueRequirement>, IEnumerable
 		return m_queueRequirementAsList;
 	}
 
-	private static Serializer InternalSerializer
-	{
-		get
-		{
-			if (s_serializer == null)
-			{
-				s_serializer = new Serializer(Enumerable.Empty<Type>());
-				s_serializer.AddTypes(QueueRequirement.MessageTypes);
-			}
-			return s_serializer;
-		}
-	}
+	private static Serializer InternalSerializer => s_serializer.Value;
 
 	private class JsonConverter : Newtonsoft.Json.JsonConverter
 	{

@@ -213,7 +213,7 @@ namespace CentralServer.LobbyServer.Chat
                             break;
                         }
 
-                        List<long> teammateAccountIds = conn.CurrentGame.GetPlayers(lobbyServerPlayerInfo.TeamId).ToList();
+                        List<long> teammateAccountIds = conn.CurrentGame.GetPlayersDistinct(lobbyServerPlayerInfo.TeamId).ToList();
                         if (!isMuted)
                         {
                             foreach (long teammateAccountId in teammateAccountIds)

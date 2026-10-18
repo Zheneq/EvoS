@@ -42,7 +42,19 @@ public static class QueuePenaltyManager
 
         lock (game)
         {
-            // Only leaving a started match is penalized, plus leaving the draft itself in Draft.
+            // Leaving character select (duplicate freelancer resolution or loadout selection) outside of Draft
+            // cancels the match before anyone has started loading, so it only gets a short block that doesn't escalate.
+            if (!game.IsDraft && game.GameStatus is GameStatus.FreelancerSelecting or GameStatus.LoadoutSelecting)
+            {
+                SetQueuePenalty(
+                    accountId,
+                    GameType.PvP,
+                    LobbyConfiguration.GetQueuePenaltyCharacterSelectDuration(),
+                    escalate: false);
+                return;
+            }
+
+            // Otherwise, only leaving a started match is penalized, plus leaving the draft itself in Draft.
             // Dropping while loading is way more likely to be a technical issue than malice.
             bool leftDraft = game.IsDraft && game.GameStatus is >= GameStatus.FreelancerSelecting and <= GameStatus.Launching;
             if (!game.MatchStarted && !leftDraft)

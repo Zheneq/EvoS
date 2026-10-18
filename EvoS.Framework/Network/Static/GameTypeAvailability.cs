@@ -29,5 +29,10 @@ namespace EvoS.Framework.Network.Static
         public List<GameSubType> SubTypes;
         [EvosMessage(127)]
         public Dictionary<ushort, DateTime> XPPenaltyTimeout;
+
+        public GameTypeAvailability Clone()
+        {
+            return (GameTypeAvailability)MemberwiseClone();
+        }
     }
 }

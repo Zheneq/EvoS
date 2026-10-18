@@ -589,6 +589,10 @@ public class CustomGame : Game
         GetClients().ForEach(client => client.OnGameAssigned(this));
 
         await HandleRankedResolutionPhase();
+        if (IsCancelled)
+        {
+            return;
+        }
 
         SetGameStatus(GameStatus.LoadoutSelecting);
 

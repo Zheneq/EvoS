@@ -78,7 +78,7 @@ Discord classes (4, `DiscordManager` 1 + `DiscordBotWrapper` 1 + `DiscordLobbyUt
   lock objects sometimes shared across classes (`Game.characterSelectionLock` is a
   `public static object` also taken by `LobbyServerProtocol`).
 - Sync-over-async (`Send` → `.GetAwaiter().GetResult()`), `async void` methods
-  (`Game.OnServerDisconnect`, `Sandbox Program.OnExecute`), fire-and-forget `Task.Run`
+  (`Game.OnServerDisconnect`), fire-and-forget `Task.Run`
   for the periodic tasks with `CancellationToken.None` (no orderly shutdown).
 - Time and delays hard-coded (`DateTime.Now` vs `DateTime.UtcNow` inconsistently;
   `Task.Delay` in `ServerManager.DisconnectServer`, draft timers).
@@ -96,8 +96,10 @@ account concurrently.
   a 3× copy-pasted loadout-patch block.~~ **Fixed:** now change-detected via JSON snapshot
   comparison, deduplicated, and tested (`PatchAccountDataTest`); versioned migrations remain
   future work.
-- DB failure during login silently creates `temp_user#N` accounts (state divergence that
-  later persists partial data).
+- ~~DB failure during login silently creates `temp_user#N` accounts (state divergence that
+  later persists partial data).~~ **Removed:** the fallback had been dead since session
+  creation started re-reading the account by the real id; it only wrote junk `temp_user`
+  documents. DB failures now fail the login.
 
 ### A8. Config sprawl
 
@@ -105,8 +107,7 @@ Five formats/loaders, only one hot-reloadable, all static, all CWD-relative (doc
 
 ### A9. Dead code & stubs
 
-Commented-out `MatchmakingManager.StartPractice`, `QuestManager` stub, disabled queue
-types, disabled queue modes with no removal timeline.
+`QuestManager` stub, disabled queue types, disabled queue modes with no removal timeline.
 
 ## B. What already points the right way (build on these)
 
@@ -408,7 +409,8 @@ which ASP.NET already provides. Priority order:
 - `IMatchmakingManager` introduced in
   `LobbyServer2/LobbyServer/Matchmaking/IMatchmakingManager.cs` with 10 members: `Enabled`,
   `GetQueues`, `GetQueue`, `Update`, `AddGroupToQueue`, `RemoveGroupFromQueue`, `IsQueued`,
-  `StartPractice`, `StartGameAsync`, `OnGameEnded`.
+  `StartPractice`, `StartGameAsync`, `OnGameEnded`. (`StartPractice` was a commented-out stub;
+  it was removed when Practice became a `SoloGame`, leaving 9 members.)
 - `MatchmakingManager` converted from `public static class` to
   `public class MatchmakingManager : IMatchmakingManager` with a
   `public static MatchmakingManager Instance { get; internal set; }` shim pre-initialized

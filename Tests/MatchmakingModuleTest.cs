@@ -198,4 +198,13 @@ public class MatchmakingModuleTest : EvosTest
         var response = Assert.IsType<SetGameSubTypeResponse>(conn.Sent[0]);
         Assert.Equal(7, response.ResponseId);
     }
+
+    // Case 8: game types that aren't queued have no queue. GroupManager.UpdateSelectedSubTypes relies on
+    // GetQueue returning null for them (selecting Practice used to throw KeyNotFoundException).
+    [Fact]
+    public void GetQueue_NotQueuedGameType_ReturnsNull()
+    {
+        Assert.Null(MatchmakingManager.GetQueue(GameType.Practice));
+        Assert.NotNull(MatchmakingManager.GetQueue(GameType.PvP));
+    }
 }

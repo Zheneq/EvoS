@@ -415,7 +415,7 @@ export const MatchHistory: React.FC<MatchHistoryProps> = ({accountId}: MatchHist
             <Paper variant="outlined" sx={{ mb: 2, p: 1, overflow: 'hidden' }}>
                 <HistoryNavButtons
                     items={matches}
-                    dateFunction={(m: MatchHistoryEntry) => m.matchTime}
+                    dateFunction={(m: MatchHistoryEntry) => m.createDate}
                     date={date}
                     setDate={setDate}
                     isBefore={isBefore}
@@ -625,10 +625,10 @@ export const MatchHistory: React.FC<MatchHistoryProps> = ({accountId}: MatchHist
                                             {/* Time with relative time */}
                                             <TableCell>
                                                 <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                                                    {formatDate(match.matchTime)}
+                                                    {formatDate(match.createDate)}
                                                 </Typography>
                                                 <Typography variant="caption" color="text.secondary">
-                                                    {formatRelativeTime(match.matchTime)}
+                                                    {formatRelativeTime(match.createDate)}
                                                 </Typography>
                                             </TableCell>
 
@@ -766,7 +766,7 @@ export const MatchHistory: React.FC<MatchHistoryProps> = ({accountId}: MatchHist
                 <Box sx={{ mt: 2, display: 'flex', justifyContent: 'center' }}>
                     <HistoryNavButtons
                         items={matches}
-                        dateFunction={(m: MatchHistoryEntry) => m.matchTime}
+                        dateFunction={(m: MatchHistoryEntry) => m.createDate}
                         date={date}
                         setDate={setDate}
                         isBefore={isBefore}

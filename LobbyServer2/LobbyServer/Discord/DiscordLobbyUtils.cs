@@ -53,14 +53,14 @@ namespace CentralServer.LobbyServer.Discord
                         if (notification.ConsoleMessageType == ConsoleMessageType.GameChat)
                         {
                             return conn.CurrentGame
-                                .GetPlayers()
+                                .GetPlayersDistinct()
                                 .Where(id => id != notification.SenderAccountId)
                                 .ToList();
                         }
                         if (playerInfo != null)
                         {
                             return conn.CurrentGame
-                                .GetPlayers(playerInfo.TeamId)
+                                .GetPlayersDistinct(playerInfo.TeamId)
                                 .Where(id => id != notification.SenderAccountId)
                                 .ToList();
                         }

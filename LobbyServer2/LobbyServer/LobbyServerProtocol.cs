@@ -122,6 +122,11 @@ namespace CentralServer.LobbyServer
                 message = patcher(message, Proxy);
             }
 
+            if (ProtocolPatcher.Mapping.TryGetValue(message.GetType(), out var protocolPatcher))
+            {
+                message = protocolPatcher(message, SessionManager.GetSessionInfo(AccountId)?.ProtocolVersion);
+            }
+
             LogMessage(">", message);
             MemoryStream stream = new MemoryStream();
             EvosSerializer.Instance.Serialize(stream, message);
@@ -130,6 +135,12 @@ namespace CentralServer.LobbyServer
 
         private void BroadcastImpl(WebSocketMessage message)
         {
+            // The same payload goes to every client, so it must be safe for all of them
+            if (ProtocolPatcher.Mapping.TryGetValue(message.GetType(), out var protocolPatcher))
+            {
+                message = protocolPatcher(message, null);
+            }
+
             MemoryStream stream = new MemoryStream();
             EvosSerializer.Instance.Serialize(stream, message);
             BroadcastRaw(stream.ToArray());
@@ -674,7 +685,7 @@ namespace CentralServer.LobbyServer
         {
             var serverName = CompilerExtensions.IsNullOrEmpty(game.Server.Name) ? "an unknown server" : game.Server.Name;
             var serverVersion = CompilerExtensions.IsNullOrEmpty(game.Server.BuildVersion) ? "" : $" v{game.Server.BuildVersion}";
-            SendSystemMessage($"You are about to join {serverName}{serverVersion} for game {GameIdString(game.GameInfo)}.");
+            SendSystemMessage($"You are about to join {serverName}{serverVersion} for game {Maps.GetMapName.GetValueOrDefault(game.Map, "")} {GameIdString(game.GameInfo)}.");
         }
 
         public void SendSystemMessage(string text)

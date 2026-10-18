@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using CentralServer.LobbyServer;
 using CentralServer.LobbyServer.Character;
@@ -31,6 +32,7 @@ public abstract class Game
     private static readonly ILog log = LogManager.GetLogger(typeof(Game));
     public static readonly object characterSelectionLock = new object();
     protected static readonly Random rand = new Random();
+    private readonly Lock ggPackLock = new();
     public bool IsControlAllBots => GameSubType?.Mods.Contains(GameSubType.SubTypeMods.ControlAllBots) ?? false;
 
     public LobbyGameInfo GameInfo { protected set; get; } // TODO check it is set when needed
@@ -62,6 +64,8 @@ public abstract class Game
                              && GameSummary?.GameResult is GameResult.TieGame or GameResult.TeamAWon or GameResult.TeamBWon;
     
     public BridgeServerProtocol Server { private set; get; } // TODO check it is set when needed
+
+    public bool IsCancelled { private set; get; }
 
     public GameSubType GameSubType { protected set; get; } // can be null
 
@@ -121,6 +125,7 @@ public abstract class Game
 
     protected void OnGameEnded(BridgeServerProtocol server, LobbyGameSummary summary, LobbyGameSummaryOverrides overrides)
     {
+        DateTime matchEndTime = DateTime.UtcNow;
         if (GameInfo is not null) // we can end up here before the game started assembling
         {
             GameInfo.GameResult = summary?.GameResult ?? GameResult.TieGame;
@@ -141,15 +146,18 @@ public abstract class Game
 
             if (GameSummary.GameResult is >= GameResult.TieGame and <= GameResult.TeamBWon)
             {
-                try
+                if (ShouldProcessAccolades())
                 {
-                    GameSummary.BadgeAndParticipantsInfo = AccoladeUtils.ProcessGameSummary(GameSummary);
+                    try
+                    {
+                        GameSummary.BadgeAndParticipantsInfo = AccoladeUtils.ProcessGameSummary(GameSummary);
+                    }
+                    catch (Exception ex)
+                    {
+                        log.Error("Failed to process game summary", ex);
+                    }
                 }
-                catch (Exception ex)
-                {
-                    log.Error("Failed to process game summary", ex);
-                }
-                DB.Get().MatchHistoryDao.Save(MatchHistoryDao.MatchEntry.Cons(GameInfo, GameSummary));
+                DB.Get().MatchHistoryDao.Save(MatchHistoryDao.MatchEntry.Cons(GameInfo, GameSummary, matchEndTime));
             }
         }
         else
@@ -158,7 +166,7 @@ public abstract class Game
         }
         try
         {
-            MatchmakingManager.OnGameEnded(GameInfo, GameSummary, GameSubType, TeamA.Concat(TeamB).ToList());
+            MatchmakingManager.OnGameEnded(GameInfo, GameSummary, GameSubType, Players.ToList());
         }
         catch (Exception e)
         {
@@ -335,12 +343,18 @@ public abstract class Game
     {
         return from p in TeamInfo.TeamInfo(team) select p.AccountId;
     }
+    
+    public IEnumerable<long> GetPlayersDistinct(Team team)
+    {
+        return GetPlayers(team).Distinct();
+    }
 
     // TODO distinct?
     public IEnumerable<long> GetPlayers()
     {
         return from p in TeamInfo.TeamPlayerInfo select p.AccountId;
     }
+    
     public IEnumerable<long> GetPlayersDistinct()
     {
         return GetPlayers().Distinct();
@@ -399,12 +413,15 @@ public abstract class Game
         }
     }
 
-    public void OnPlayerUsedGGPack(long accountId)
+    public int OnPlayerUsedGGPack(long accountId)
     {
-        lock (GameInfo.ggPackUsedAccountIDs)
+        lock (ggPackLock)
         {
-            GameInfo.ggPackUsedAccountIDs.TryGetValue(accountId, out int ggPackUsedAccountIDs);
-            GameInfo.ggPackUsedAccountIDs[accountId] = ggPackUsedAccountIDs + 1;
+            Dictionary<long, int> ggPackUsedAccountIDs = new Dictionary<long, int>(GameInfo.ggPackUsedAccountIDs);
+            int count = ggPackUsedAccountIDs.GetValueOrDefault(accountId) + 1;
+            ggPackUsedAccountIDs[accountId] = count;
+            GameInfo.ggPackUsedAccountIDs = ggPackUsedAccountIDs;
+            return count;
         }
     }
 
@@ -437,7 +454,7 @@ public abstract class Game
         foreach (long player in GetPlayersDistinct())
         {
             LobbyServerProtocol playerConnection = SessionManager.GetClientConnection(player);
-            if (playerConnection != null)
+            if (playerConnection != null && playerConnection.CurrentGame == this)
             {
                 SendGameInfo(playerConnection);
             }
@@ -541,28 +558,44 @@ public abstract class Game
 
     protected void CancelMatch(string dodgerHandle = null, long? dodgerAccountId = null)
     {
+        // Once canceled, every player has left the game, so any later connectivity check would cancel it again,
+        // blaming whoever it happens to check first
+        lock (this)
+        {
+            if (IsCancelled)
+            {
+                return;
+            }
+            IsCancelled = true;
+        }
+
         foreach (LobbyServerProtocol client in GetClients())
         {
-            client.LeaveGame(this);
-
-            client.Send(new GameAssignmentNotification
-            {
-                GameInfo = null,
-                GameResult = GameResult.NoResult,
-                Reconnection = false
-            });
-
             if (dodgerHandle != null)
             {
                 client.SendSystemMessage(LocalizationPayload.Create(
                     "PlayerDisconnected", "Disconnect", LocalizationArg_Handle.Create(dodgerHandle)));
-
-                LogDodge(dodgerHandle);
             }
             else
             {
                 client.SendSystemMessage(LocalizationPayload.Create("FailedStartGameServer", "Frontend"));
             }
+
+            if (client.LeaveGame(this))
+            {
+                // Players who have already left (and maybe joined another game) must not be unassigned again
+                client.Send(new GameAssignmentNotification 
+                {
+                    GameInfo = null,
+                    GameResult = GameResult.NoResult,
+                    Reconnection = false
+                });
+            }
+        }
+
+        if (dodgerHandle != null)
+        {
+            LogDodge(dodgerHandle);
         }
 
         // Fallback for callers that only know the handle; the dodger has usually already dropped
@@ -648,6 +681,16 @@ public abstract class Game
         return LobbyConfiguration.GetServerGGTime();
     }
 
+    protected virtual bool ShouldProcessAccolades()
+    {
+        return true;
+    }
+
+    protected virtual bool ShouldSendStats()
+    {
+        return true;
+    }
+
     public async Task FinalizeGame()
     {
         if (GameSummary != null)
@@ -672,7 +715,10 @@ public abstract class Game
             TrustWarManager.CalculateTrustWar(this, GameSummary);
 
             // Send stats to api, no longer rely on discord
-            await StatsApi.Get().ParseStats(GameInfo, Server?.Name, Server?.BuildVersion, GameSummary);
+            if (ShouldSendStats())
+            {
+                await StatsApi.Get().ParseStats(GameInfo, Server?.Name, Server?.BuildVersion, GameSummary);
+            }
 
             DiscordManager.Get().SendGameReport(GameInfo, Server?.Name, Server?.BuildVersion, GameSummary);
             DiscordManager.Get().SendAdminGameReport(GameInfo, Server?.Name, Server?.BuildVersion, GameSummary);
@@ -1335,6 +1381,10 @@ public abstract class Game
 
             await HandleRankedResolutionSubPhase(PhaseSubType, player1, sendGameInfoNotify);
             sendGameInfoNotify = false;
+            if (IsCancelled)
+            {
+                return;
+            }
 
             // TODO: There can be a race condition if a client request comes at this point
 
@@ -1589,7 +1639,7 @@ public abstract class Game
 
         while (stopwatch.Elapsed <= timeLeftInSubPhase)
         {
-            if (isCancellationRequested)
+            if (isCancellationRequested || IsCancelled)
             {
 #if DEBUG
                 log.Info($"Cancellation requested. Exiting sub-phase monitoring for player {player.PlayerId}.");

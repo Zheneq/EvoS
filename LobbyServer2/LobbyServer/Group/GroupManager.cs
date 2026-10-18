@@ -546,14 +546,9 @@ namespace CentralServer.LobbyServer.Group
                 return;
             }
 
+            // Game types that aren't queued (e.g. Practice) have nothing to filter the selected sub types against
             MatchmakingQueue queue = MatchmakingManager.GetQueue(leaderConn.SelectedGameType);
-            if (queue is null)
-            {
-                log.Error($"UpdateSelectedSubTypes for group {groupInfo.GroupId} with unavailable queue {leaderConn.SelectedGameType}");
-                return;
-            }
-
-            ushort newMask = queue.FilterSubTypeMask(groupInfo, leaderConn.GetSubTypeMask());
+            ushort newMask = queue?.FilterSubTypeMask(groupInfo, leaderConn.GetSubTypeMask()) ?? leaderConn.GetSubTypeMask();
 
             ushort oldMask = groupInfo.SubTypeMask;
             if (oldMask != newMask)
@@ -562,7 +557,8 @@ namespace CentralServer.LobbyServer.Group
                 if (resetReadyStateIfUpdated)
                 {
                     log.Info($"UpdateSelectedSubTypes resetting group {groupInfo.GroupId} ready state "
-                             + $"(was {queue.DebugFormatSubTypeMask(oldMask)}, now {queue.DebugFormatSubTypeMask(newMask)})");
+                             + $"(was {queue?.DebugFormatSubTypeMask(oldMask) ?? oldMask.ToString()}, "
+                             + $"now {queue?.DebugFormatSubTypeMask(newMask) ?? newMask.ToString()})");
                     leaderConn.BroadcastRefreshGroup(true);
                 }
             }

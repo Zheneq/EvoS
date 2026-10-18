@@ -13,7 +13,7 @@ namespace EvoS.Framework.Network.Static
         {
         }
 
-        public MatchComponent(LobbyGameInfo gameInfo, LobbyGameSummary gameSummary, long accountId)
+        public MatchComponent(LobbyGameInfo gameInfo, LobbyGameSummary gameSummary, long accountId, DateTime matchEndTime)
         {
             List<PlayerGameSummary> playerSummaries = gameSummary.PlayerGameSummaryList
                 .Where(pgs => pgs.AccountId == accountId)
@@ -26,7 +26,7 @@ namespace EvoS.Framework.Network.Static
 
             Team team = (Team)playerSummaries[0].Team;
 
-            MatchTime = new DateTime(gameInfo.CreateTimestamp);
+            MatchTime = matchEndTime;
             Result = gameSummary.GameResult.ToPlayerGameResult(team);
             Kills = playerSummaries.Select(pgs => pgs.NumKills).Sum();
             CharacterUsed = playerSummaries[0].CharacterPlayed;

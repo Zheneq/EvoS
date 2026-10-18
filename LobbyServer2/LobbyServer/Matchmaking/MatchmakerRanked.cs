@@ -92,8 +92,13 @@ public class MatchmakerRanked : MatchmakerBase
         float teammateEloDifferenceAFactor = 1 - Cap((match.TeamA.MaxElo - match.TeamA.MinElo) / Conf.TeammateEloDifferenceWeightCap);
         float teammateEloDifferenceBFactor = 1 - Cap((match.TeamB.MaxElo - match.TeamB.MinElo) / Conf.TeammateEloDifferenceWeightCap);
         float teammateEloDifferenceFactor = (teammateEloDifferenceAFactor + teammateEloDifferenceBFactor) * 0.5f;
-        double waitTime = Math.Sqrt(match.Groups.Select(g => Math.Pow((now - g.QueueTime).TotalSeconds, 2)).Average());
+        List<(double Weight, double Seconds)> waitTimes = GetWaitTimes(match, now);
+        double waitTime = Math.Sqrt(waitTimes.Sum(w => w.Weight * Math.Pow(w.Seconds, 2)) / waitTimes.Sum(w => w.Weight));
+        // heavily favors those who has waited longer, but satisfied if even just one of them is picked
         float waitTimeFactor = Cap((float)(waitTime / Conf.WaitingTimeWeightCap.TotalSeconds));
+        // a plain sum, so leaving a waiter out costs the same no matter who else is seated
+        float seatedWaitTimeFactor = (float)(waitTimes.Sum(w => w.Weight * Cap((float)(w.Seconds / Conf.SeatedWaitingTimeWeightCap.TotalSeconds)))
+                                             / match.Groups.Sum(g => g.Slots));
         // TODO team composition does not matter for ranked
         float teamCompositionFactor = (GetTeamCompositionFactor(match.TeamA) + GetTeamCompositionFactor(match.TeamB)) * 0.5f;
         float teamBlockFactor = (GetBlocksFactor(match.TeamA) + GetBlocksFactor(match.TeamB)) * 0.5f;
@@ -114,6 +119,7 @@ public class MatchmakerRanked : MatchmakerBase
         float teamEloDifferenceFactorWeighted = teamEloDifferenceFactor * Conf.TeamEloDifferenceWeight;
         float teammateEloDifferenceFactorWeighted = teammateEloDifferenceFactor * Conf.TeammateEloDifferenceWeight;
         float waitTimeFactorWeighted = waitTimeFactor * Conf.WaitingTimeWeight;
+        float seatedWaitTimeFactorWeighted = seatedWaitTimeFactor * Conf.SeatedWaitingTimeWeight;
         float teamCompositionFactorWeighted = teamCompositionFactor * Conf.TeamCompositionWeight;
         float teamBlockFactorWeighted = teamBlockFactor * Conf.TeamBlockWeight;
         float teamConfidenceBalanceFactorWeighted = teamConfidenceBalanceFactor * Conf.TeamConfidenceBalanceWeight;
@@ -123,6 +129,7 @@ public class MatchmakerRanked : MatchmakerBase
             teamEloDifferenceFactorWeighted
             + teammateEloDifferenceFactorWeighted
             + waitTimeFactorWeighted
+            + seatedWaitTimeFactorWeighted
             + teamCompositionFactorWeighted
             + teamBlockFactorWeighted
             + teamConfidenceBalanceFactorWeighted
@@ -133,6 +140,7 @@ public class MatchmakerRanked : MatchmakerBase
                   $"(tElo:{teamEloDifferenceFactorWeighted:0.00} [{teamEloDifferenceFactor:0.00}], " +
                   $"tmElo:{teammateEloDifferenceFactorWeighted:0.00} [{teammateEloDifferenceFactor:0.00}], " +
                   $"q:{waitTimeFactorWeighted:0.00} [{waitTimeFactor:0.00}], " +
+                  $"qS:{seatedWaitTimeFactorWeighted:0.00} [{seatedWaitTimeFactor:0.00}], " +
                   $"tComp:{teamCompositionFactorWeighted:0.00} [{teamCompositionFactor:0.00}], " +
                   $"blocks:{teamBlockFactorWeighted:0.00} [{teamBlockFactor:0.00}], " +
                   $"tConf:{teamConfidenceBalanceFactorWeighted:0.00} [{teamConfidenceBalanceFactor:0.00}], " +
@@ -146,6 +154,15 @@ public class MatchmakerRanked : MatchmakerBase
     private static float Cap(float factor)
     {
         return Math.Clamp(factor, 0, 1);
+    }
+
+    private List<(double Weight, double Seconds)> GetWaitTimes(Match match, DateTime now)
+    {
+        return match.Groups
+            .Select(g => (
+                Weight: 1.0 + Conf.WaitingTimeGroupMemberFactor * (g.Players - 1),
+                Seconds: (now - g.QueueTime).TotalSeconds))
+            .ToList();
     }
 
     private static float GetTeamCompositionFactor(Match.Team team)

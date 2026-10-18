@@ -15,7 +15,6 @@ public interface IMatchmakingManager
     bool AddGroupToQueue(GameType gameType, GroupInfo group);
     bool RemoveGroupFromQueue(GroupInfo group, bool suppressWarnings = false);
     bool IsQueued(GroupInfo group);
-    void StartPractice(LobbyServerProtocol client);
     Task StartGameAsync(List<MatchPlayerData> teamA, List<MatchPlayerData> teamB,
         GameType gameType, List<GameSubType> gameSubTypes, int subTypeIndex,
         Dictionary<long, DateTime> queueEntryTimes = null);

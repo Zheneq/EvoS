@@ -31,8 +31,8 @@ and JWT-based auth for the REST APIs and launcher tickets.
 4. `HandleConnection`:
    - Fast-path concurrent-login rejection, then authoritative atomic check inside
      `SessionManager.CreateSession(rejectIfActive: true)` (throws `ConflictException`).
-   - Loads or creates the account; **on any DB exception falls back to creating a temp
-     account** (`temp_user#N`) — questionable resilience-over-correctness choice.
+   - Loads or creates the account. A DB exception propagates to the top-level handler,
+     which fails the login with "Unexpected server error".
    - `PatchAccountData`: in-login data migration (placeholder-character loadouts,
      free-store unlocks, Trust War init). Applies patches then reports whether the account
      actually changed (JSON snapshot comparison), so the DB write is skipped on the common

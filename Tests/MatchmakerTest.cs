@@ -155,6 +155,90 @@ public class MatchmakerTest : EvosTest
         Assert.Equal(combinations, matchesRanked.Count);
     }
 
+    [Theory]
+    [InlineData(0f, 0.298)] // sqrt(10² / 5 groups) / 15
+    [InlineData(0.5f, 0.413)] // sqrt(2.5 * 10² / 6.5 total weight) / 15
+    [InlineData(1f, 0.471)] // sqrt(4 * 10² / 8 players) / 15
+    public void TestWaitingTimeGroupMemberFactor(float groupMemberFactor, double expectedScore)
+    {
+        MatchmakingConfiguration conf = WaitingTimeOnlyConfiguration();
+        conf.WaitingTimeWeight = 1;
+        conf.WaitingTimeWeightCap = TimeSpan.FromMinutes(15);
+        conf.WaitingTimeGroupMemberFactor = groupMemberFactor;
+        Matchmaker matchmaker = MakeMatchmaker(conf);
+
+        DateTime now = DateTime.UtcNow;
+        int i = 0;
+        List<Matchmaker.MatchmakingGroup> queuedGroups =
+        [
+            new(i++, Players([3, 4, 5, 6]), now - TimeSpan.FromMinutes(10)),
+            new(i++, Players([7]), now),
+            new(i++, Players([8]), now),
+            new(i++, Players([9]), now),
+            new(i++, Players([10]), now)
+        ];
+
+        List<Matchmaker.ScoredMatch> matchesRanked = matchmaker.GetMatchesRanked(queuedGroups, now);
+        Assert.Single(matchesRanked);
+        Assert.Equal(expectedScore, matchesRanked[0].Score, 3);
+    }
+
+    [Theory]
+    [InlineData(0f, 0.083)] // 10/15 / 8 seats
+    [InlineData(0.5f, 0.208)] // 2.5 * 10/15 / 8 seats
+    [InlineData(1f, 0.333)] // 4 * 10/15 / 8 seats
+    public void TestSeatedWaitingTimeGroupMemberFactor(float groupMemberFactor, double expectedScore)
+    {
+        MatchmakingConfiguration conf = WaitingTimeOnlyConfiguration();
+        conf.SeatedWaitingTimeWeight = 1;
+        conf.SeatedWaitingTimeWeightCap = TimeSpan.FromMinutes(15);
+        conf.WaitingTimeGroupMemberFactor = groupMemberFactor;
+        Matchmaker matchmaker = MakeMatchmaker(conf);
+
+        DateTime now = DateTime.UtcNow;
+        int i = 0;
+        List<Matchmaker.MatchmakingGroup> queuedGroups =
+        [
+            new(i++, Players([3, 4, 5, 6]), now - TimeSpan.FromMinutes(10)),
+            new(i++, Players([7]), now),
+            new(i++, Players([8]), now),
+            new(i++, Players([9]), now),
+            new(i++, Players([10]), now)
+        ];
+
+        List<Matchmaker.ScoredMatch> matchesRanked = matchmaker.GetMatchesRanked(queuedGroups, now);
+        Assert.Single(matchesRanked);
+        Assert.Equal(expectedScore, matchesRanked[0].Score, 3);
+    }
+
+    [Fact]
+    public void TestSeatedWaitingTimeSeatsEveryLongWaiter()
+    {
+        // 3 long waiters and 7 fresh solos: every match seats at least one long waiter.
+        // Root mean square is capped for matches with 2 and 3 long waiters alike, the seated sum is not.
+        MatchmakingConfiguration conf = WaitingTimeOnlyConfiguration();
+        conf.SeatedWaitingTimeWeight = 1;
+        conf.SeatedWaitingTimeWeightCap = TimeSpan.FromMinutes(15);
+        Matchmaker matchmaker = MakeMatchmaker(conf);
+
+        DateTime now = DateTime.UtcNow;
+        List<Matchmaker.MatchmakingGroup> queuedGroups = [];
+        for (int i = 1; i <= 10; i++)
+        {
+            queuedGroups.Add(new(i, Players([i]), i <= 3 ? now - TimeSpan.FromMinutes(40) : now));
+        }
+
+        List<Matchmaker.ScoredMatch> matchesRanked = matchmaker.GetMatchesRanked(queuedGroups, now);
+        const int matchesWithAllLongWaiters = 735; // = 7!/(5!*2!) * 8!/(4!*4!) / 2
+        Assert.Equal(0.375, matchesRanked[0].Score, 3); // 3 capped waiters / 8 seats
+        Assert.All(
+            matchesRanked.Take(matchesWithAllLongWaiters),
+            m => Assert.Superset(
+                new HashSet<long> { 1, 2, 3 },
+                m.Match.TeamA.AccountIds.Concat(m.Match.TeamB.AccountIds).ToHashSet()));
+        Assert.Equal(0.25, matchesRanked[matchesWithAllLongWaiters].Score, 3); // 2 capped waiters / 8 seats
+    }
+
     [Fact]
     public void TestFifo()
     {
@@ -221,6 +305,24 @@ public class MatchmakerTest : EvosTest
             },
             () => conf);
         return matchmaker;
+    }
+
+    // Lets any match through and zeroes every weight, so the score consists of waiting time factors alone
+    private static MatchmakingConfiguration WaitingTimeOnlyConfiguration()
+    {
+        return new MatchmakingConfiguration
+        {
+            MaxTeamEloDifferenceStart = 2000,
+            MaxTeamEloDifference = 2000,
+            TeamEloDifferenceWeight = 0,
+            TeammateEloDifferenceWeight = 0,
+            TeamCompositionWeight = 0,
+            TeamBlockWeight = 0,
+            WaitingTimeWeight = 0,
+            TeamConfidenceBalanceWeight = 0,
+            AsymmetricWeight = 0,
+            TieBreakerWeight = 0,
+        };
     }
 
     private static AccountDao MockAccountDao(Dictionary<long, PersistedAccountData> accounts)

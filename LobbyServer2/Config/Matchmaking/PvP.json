@@ -11,8 +11,11 @@
       "TeamCompositionWeight": 2,
       "TeamBlockWeight": 2,
       "WaitingTimeWeight": 6,
+      "SeatedWaitingTimeWeight": 0,
       "TeamConfidenceBalanceWeight": 0.2,
       "WaitingTimeWeightCap": "00:15:00",
+      "SeatedWaitingTimeWeightCap": "00:15:00",
+      "WaitingTimeGroupMemberFactor": 0,
       "TeammateEloDifferenceWeightCap": 250
     },
     "AllFourCharacters@SubTypes": {
@@ -26,8 +29,11 @@
       "TeamCompositionWeight": 0,
       "TeamBlockWeight": 0,
       "WaitingTimeWeight": 6,
+      "SeatedWaitingTimeWeight": 0,
       "TeamConfidenceBalanceWeight": 0,
       "WaitingTimeWeightCap": "00:01:00",
+      "SeatedWaitingTimeWeightCap": "00:01:00",
+      "WaitingTimeGroupMemberFactor": 0,
       "TeammateEloDifferenceWeightCap": 9999
     }
   }

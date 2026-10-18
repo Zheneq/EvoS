@@ -53,8 +53,9 @@ The source code for both client and server is available in a sibling repo `hc`.
 5. `CentralServer.MainLoop()` blocks on the app task; shutdown cascades through
    `PendingShutdownType` states (see `CentralServer.PendingShutdown`).
 
-`Program.OnExecute` is `async void` — exceptions escape the sync context and the
-CommandLineUtils lifecycle; see [12 – Design assessment](12-design-assessment.md).
+`Program.OnExecute` returns `Task<int>` and logs any startup/run failure as FATAL (exit code 1);
+an `AppDomain.UnhandledException` handler logs exceptions escaping other threads (e.g. the
+DirectoryServer thread) before the process dies.
 
 ## Client connection flow (happy path)
 

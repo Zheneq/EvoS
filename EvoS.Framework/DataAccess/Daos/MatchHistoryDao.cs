@@ -23,7 +23,7 @@ namespace EvoS.Framework.DataAccess.Daos
             public long AccountId;
             public PersistedCharacterMatchData Data;
 
-            public static List<MatchEntry> Cons(LobbyGameInfo gameInfo, LobbyGameSummary gameSummary)
+            public static List<MatchEntry> Cons(LobbyGameInfo gameInfo, LobbyGameSummary gameSummary, DateTime matchEndTime)
             {
                 List<long> accountIds = gameSummary.PlayerGameSummaryList.Select(pgs => pgs.AccountId).Distinct().ToList();
                 List<MatchEntry> result = new List<MatchEntry>();
@@ -37,7 +37,7 @@ namespace EvoS.Framework.DataAccess.Daos
                         {
                             CreateDate = new DateTime(gameInfo.CreateTimestamp),
                             GameServerProcessCode = gameInfo.GameServerProcessCode,
-                            MatchComponent = new MatchComponent(gameInfo, gameSummary, accountId),
+                            MatchComponent = new MatchComponent(gameInfo, gameSummary, accountId, matchEndTime),
                             MatchDetailsComponent = new MatchDetailsComponent(playerGameSummary),
                             MatchFreelancerStats = new MatchFreelancerStats(playerGameSummary),
                             SchemaVersion = new SchemaVersion<MatchSchemaChange>(),

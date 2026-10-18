@@ -9,7 +9,7 @@ Elo, and apply queue penalties (dodging, leaving) and priorities.
 
 | Class | Location | Notes                                                                                                                                                                                                                                                                        |
 |-------|----------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `MatchmakingManager` | `Matchmaking/MatchmakingManager.cs` | Static facade: queue map (`Coop`, `PvP` active; Practice/Ranked/Custom commented out), add/remove group, `StartGameAsync`, global `Enabled` flag                                                                                                                             |
+| `MatchmakingManager` | `Matchmaking/MatchmakingManager.cs` | Static facade: queue map (`Coop`, `PvP` active; Ranked/Custom commented out; Practice is a solo game, see doc 04), add/remove group, `StartGameAsync`, global `Enabled` flag                                                       |
 | `MatchmakingTask` | `Matchmaking/MatchmakingTask.cs` | `PeriodicRunner` calling `MatchmakingManager.Update()`                                                                                                                                                                                                                       |
 | `MatchmakingQueue` | `Matchmaking/MatchmakingQueue.cs` | 788 lines. Per-game-type queue: queued groups w/ timestamps, sub-type mask handling, asymmetric sub-types (e.g. one player controlling 3 characters while others control one each), config hot-reload, match scoring across sub-types, queue-status notifications to clients |
 | `Matchmaker` (abstract) | `Matchmaking/Matchmaker.cs` | Contract: `GetMatchesRanked(queuedGroups)` → scored matches; defines `MatchmakingGroup`, `Match`, `ScoredMatch`                                                                                                                                                              |
@@ -32,6 +32,20 @@ Elo, and apply queue penalties (dodging, leaving) and priorities.
 3. Post-game: `MatchmakingQueue.OnGameEnded` → `Elo.OnGameEnded` updates per-character and
    composite Elo values (`ELOKeyComponent` / `EloValues` in Framework).
 
+## Waiting time in ranked scoring
+
+`MatchmakerRanked.RankMatch` has two waiting time factors, tunable side by side in `PvP.json`:
+
+- `WaitingTimeWeight` — root mean square of seated waiters' times, capped as a whole at
+  `WaitingTimeWeightCap`. Rewards seating *some* long waiter, with diminishing returns for each
+  additional one; once the cap is reached, it stops telling candidates apart.
+- `SeatedWaitingTimeWeight` — sum of seated waiters' times, each capped at
+  `SeatedWaitingTimeWeightCap`, divided by seat count. Ranks exactly like a penalty for every
+  waiter left out, so each long waiter's claim is independent of who else is seated.
+
+`WaitingTimeGroupMemberFactor` sets a group's weight in both factors to
+`1 + factor × (members − 1)`: 0 counts a group once like a solo, 1 counts every member.
+
 ## Queue penalties
 
 `QueuePenaltyManager` penalizes wasting other players' time by leaving a PvP game (Draft is a
@@ -46,8 +60,13 @@ disconnect/AFK cancels the match):
 
 - Normal PvP: only once the match has started. `Game.MatchStarted` is set when the game server
   reports `Started`, i.e. every player has loaded or timed out loading. `GameStatus` can't be
-  used for this: the lobby sets `Started` itself right after launching. Leaving character
-  select or dropping while loading is free — more likely a technical issue than malice.
+  used for this: the lobby sets `Started` itself right after launching. Dropping while loading
+  (from `Launching` on) is free — more likely a technical issue than malice.
+- Normal PvP character select (`FreelancerSelecting`, i.e. duplicate freelancer resolution, and
+  `LoadoutSelecting`): leaving cancels the match, which gets a flat
+  `QueuePenaltyCharacterSelectDuration` (40 s) block. It isn't an offense: no escalation, the
+  count and parole are untouched, a longer active block is kept, and no `OnPenalty` audit is sent
+  (the cancellation is already logged by `Game.LogDodge`).
 - Draft: also during the draft itself (`FreelancerSelecting`…`Launching`), but not while loading.
 - Collapse: once `QueuePenaltyCollapseThreshold` (default 2) other players are replaced with
   bots, further leavers are not penalized.
@@ -57,10 +76,10 @@ disconnect/AFK cancels the match):
   non-offense block of up to 30 s, only if the game has a result.
 
 **Escalation** — `EvaluatePenalty` (pure, unit-tested): base duration
-(`QueuePenaltyPvPBaseDuration` 200 s, `QueuePenaltyDraftBaseDuration` 5 min) ×
-`QueuePenaltyEscalationRatio` (4) ^ (offense − 1), capped at `QueuePenaltyEscalationCap`
-(24 h). The offense count resets once `QueuePenaltyParoleWindow` (7 days) passes without a
-new offense.
+(`QueuePenaltyPvPBaseDuration` 5 min, covering the game server's reconnection period;
+`QueuePenaltyDraftBaseDuration` 5 min) × `QueuePenaltyEscalationRatio` (1.2) ^ (offense − 1),
+capped at `QueuePenaltyEscalationCap` (30 min). The offense count resets once
+`QueuePenaltyParoleWindow` (7 days) passes without a new offense.
 
 **Pardons** — `PardonQueuePenalties` forgives players penalized in that game (each once): the
 offense no longer counts, and the block is cut to 15 s. Reasons (`PardonReason`):

@@ -24,10 +24,10 @@ public class QueuePenaltyIssueTest : EvosTest
     {
     }
 
-    private sealed class TestGame : Game
+    private sealed class TestGame : PvpGame
     {
         // Statuses from Launched on come from the game server, earlier ones are set by the lobby.
-        public TestGame(bool draft, GameStatus status, IEnumerable<long> accountIds)
+        public TestGame(bool draft, GameStatus status, IEnumerable<long> accountIds) : base(null)
         {
             GameSubType = new GameSubType
             {
@@ -149,12 +149,12 @@ public class QueuePenaltyIssueTest : EvosTest
     [InlineData(true, GameStatus.Loading, false)]
     [InlineData(true, GameStatus.Loaded, false)]
     [InlineData(true, GameStatus.Started, true)]                // match started
-    [InlineData(false, GameStatus.FreelancerSelecting, false)]  // character select
+    [InlineData(false, GameStatus.FreelancerSelecting, false)]  // character select (blocked, but not an offense)
     [InlineData(false, GameStatus.Connecting, false)]           // loading
     [InlineData(false, GameStatus.Loading, false)]
     [InlineData(false, GameStatus.Loaded, false)]
     [InlineData(false, GameStatus.Started, true)]               // match started
-    public void Leaver_PenalizedOnlyInDraftOrStartedMatch(bool draft, GameStatus status, bool expectPenalty)
+    public void Leaver_OffenseOnlyInDraftOrStartedMatch(bool draft, GameStatus status, bool expectPenalty)
     {
         using ClientNotifierScope _ = new();
         TestGame game = new(draft, status, MakeAccounts(PlayerCount));
@@ -185,7 +185,7 @@ public class QueuePenaltyIssueTest : EvosTest
     [InlineData(false, GameStatus.FreelancerSelecting, false)]
     [InlineData(false, GameStatus.LoadoutSelecting, false)]
     [InlineData(false, GameStatus.Launching, false)]
-    public void Dodger_PenalizedForCancellingDraftOnly(bool draft, GameStatus status, bool expectPenalty)
+    public void Dodger_OffenseForCancellingDraftOnly(bool draft, GameStatus status, bool expectPenalty)
     {
         using ClientNotifierScope _ = new();
         TestGame game = new(draft, status, MakeAccounts(PlayerCount));
@@ -193,6 +193,51 @@ public class QueuePenaltyIssueTest : EvosTest
         game.CancelBecauseOf(0);
 
         Assert.Equal(expectPenalty ? 1 : 0, OffenseCount(game.Player(0).AccountId));
+    }
+
+    // --- Leaving character select outside of Draft: a short block that doesn't escalate ---
+
+    [Theory]
+    [InlineData(GameStatus.FreelancerSelecting, true)]  // duplicate freelancer resolution
+    [InlineData(GameStatus.LoadoutSelecting, true)]
+    [InlineData(GameStatus.Launching, false)]           // loading
+    public void CharacterSelectLeaver_BlockedBrieflyWithoutOffense(GameStatus status, bool expectBlock)
+    {
+        using ClientNotifierScope _ = new();
+        TestGame game = new(draft: false, status, MakeAccounts(PlayerCount));
+        long leaver = game.Player(0).AccountId;
+        SetPriorOffenses(leaver, 2);
+        TimeSpan duration = LobbyConfiguration.GetQueuePenaltyCharacterSelectDuration();
+        DateTime before = DateTime.UtcNow;
+
+        game.DisconnectPlayer(leaver); // GameLifecycleModule.HandleLeaveGameRequest
+
+        Assert.True(game.IsCancelled);
+        Assert.Equal(2, OffenseCount(leaver));
+        DateTime blockTimeout = Penalties(leaver)!.QueueDodgeBlockTimeout;
+        if (expectBlock)
+        {
+            Assert.InRange(blockTimeout, before.Add(duration), DateTime.UtcNow.Add(duration));
+        }
+        else
+        {
+            Assert.True(blockTimeout <= DateTime.UtcNow);
+        }
+    }
+
+    [Fact]
+    public void CharacterSelectLeaver_KeepsLongerBlock()
+    {
+        using ClientNotifierScope _ = new();
+        TestGame game = new(draft: false, GameStatus.LoadoutSelecting, MakeAccounts(PlayerCount));
+        long leaver = game.Player(0).AccountId;
+        SetPriorOffenses(leaver, 1);
+        DateTime longerBlock = DateTime.UtcNow.AddMinutes(10);
+        Penalties(leaver)!.QueueDodgeBlockTimeout = longerBlock;
+
+        game.CancelBecauseOf(0);
+
+        Assert.Equal(longerBlock, Penalties(leaver)!.QueueDodgeBlockTimeout);
     }
 
     // --- Leaving a running game ---
@@ -384,6 +429,64 @@ public class QueuePenaltyIssueTest : EvosTest
         game.AdminEndGame(GameResult.NoResult);
         game.End(GameResult.TieGame); // the game server can only end the game as a tie
 
+        Assert.Equal(0, OffenseCount(game.Player(0).AccountId));
+    }
+
+    [Theory]
+    [InlineData(true, GameStatus.FreelancerSelecting, true)]
+    [InlineData(true, GameStatus.LoadoutSelecting, true)]
+    [InlineData(true, GameStatus.Launching, true)]
+    [InlineData(false, GameStatus.FreelancerSelecting, false)]
+    [InlineData(false, GameStatus.LoadoutSelecting, false)]
+    public void LeavingBeforeLaunch_CancelsMatchRightAway(bool draft, GameStatus status, bool expectPenalty)
+    {
+        using ClientNotifierScope _ = new();
+        TestGame game = new(draft, status, MakeAccounts(PlayerCount));
+
+        game.DisconnectPlayer(game.Player(0).AccountId); // GameLifecycleModule.HandleLeaveGameRequest
+
+        Assert.True(game.IsCancelled);
+        Assert.Equal(expectPenalty ? 1 : 0, OffenseCount(game.Player(0).AccountId));
+    }
+
+    [Fact]
+    public void DisconnectingFromLobbyBeforeLaunch_CancelsMatchRightAway()
+    {
+        using ClientNotifierScope _ = new();
+        TestGame game = new(draft: true, GameStatus.FreelancerSelecting, MakeAccounts(PlayerCount));
+
+        game.OnPlayerDisconnectedFromLobby(game.Player(0).AccountId);
+
+        Assert.True(game.IsCancelled);
+        Assert.Equal(1, OffenseCount(game.Player(0).AccountId));
+    }
+
+    [Theory]
+    [InlineData(GameStatus.Loading)]
+    [InlineData(GameStatus.Started)]
+    public void LeavingLaunchedGame_DoesNotCancelMatch(GameStatus status)
+    {
+        using ClientNotifierScope _ = new();
+        TestGame game = new(draft: true, status, MakeAccounts(PlayerCount));
+
+        game.DisconnectPlayer(game.Player(0).AccountId);
+        game.OnPlayerDisconnectedFromLobby(game.Player(0).AccountId);
+
+        Assert.False(game.IsCancelled);
+    }
+
+    [Fact]
+    public void CancelledMatch_CancellingAgain_DoesNotPenalizeAnyoneElse()
+    {
+        using ClientNotifierScope _ = new();
+        TestGame game = new(draft: true, GameStatus.FreelancerSelecting, MakeAccounts(PlayerCount));
+        game.CancelBecauseOf(3);
+
+        // PvpGame.StartGameAsync's next connectivity check: everyone has left the canceled game
+        game.CancelBecauseOf(0);
+
+        Assert.True(game.IsCancelled);
+        Assert.Equal(1, OffenseCount(game.Player(3).AccountId));
         Assert.Equal(0, OffenseCount(game.Player(0).AccountId));
     }
 

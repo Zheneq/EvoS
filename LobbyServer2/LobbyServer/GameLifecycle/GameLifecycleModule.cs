@@ -2,14 +2,14 @@ using System.Collections.Generic;
 using CentralServer.BridgeServer;
 using CentralServer.LobbyServer.CustomGames;
 using CentralServer.LobbyServer.Group;
-using CentralServer.LobbyServer.Matchmaking;
+using CentralServer.LobbyServer.Practice;
 using CentralServer.LobbyServer.Session;
+using CentralServer.LobbyServer.Tutorial;
 using CentralServer.LobbyServer.Utils;
 using EvoS.Framework.Constants.Enums;
 using EvoS.Framework.DataAccess;
 using EvoS.Framework.Network.NetworkMessages;
 using EvoS.Framework.Network.Static;
-using EvoS.Framework.Network.WebSocket;
 using log4net;
 
 namespace CentralServer.LobbyServer.GameLifecycle;
@@ -134,6 +134,23 @@ public class GameLifecycleModule : ILobbyModule
     private void HandleCreateGameRequest(CreateGameRequest createGameRequest)
     {
         _conn.ResetReadyState();
+
+        switch (createGameRequest.GameConfig?.GameType)
+        {
+            case GameType.Tutorial:
+                HandleCreateTutorialGameRequest(createGameRequest);
+                break;
+            case GameType.Practice:
+                HandleCreatePracticeGameRequest(createGameRequest);
+                break;
+            default:
+                HandleCreateCustomGameRequest(createGameRequest);
+                break;
+        }
+    }
+
+    private void HandleCreateCustomGameRequest(CreateGameRequest createGameRequest)
+    {
         Game game = CustomGameManager.CreateGame(_conn.AccountId, createGameRequest.GameConfig, out LocalizationPayload error);
         if (game == null)
         {
@@ -152,6 +169,42 @@ public class GameLifecycleModule : ILobbyModule
         {
             ResponseId = createGameRequest.RequestId,
             AllowRetry = true,
+        });
+    }
+
+    private void HandleCreateTutorialGameRequest(CreateGameRequest request)
+    {
+        TutorialGame game = TutorialManager.StartTutorial(_conn.AccountId, out LocalizationPayload error);
+        if (game is null)
+        {
+            // The client keeps the loading screen up and re-requests in 5 seconds. Without AllowRetry it crashes:
+            // it enters the landing page without reloading the frontend UI that the tutorial loading screen destroyed.
+            _conn.Send(new CreateGameResponse
+            {
+                ResponseId = request.RequestId,
+                LocalizedFailure = error,
+                Success = false,
+                AllowRetry = true,
+            });
+            return;
+        }
+        _conn.Send(new CreateGameResponse
+        {
+            ResponseId = request.RequestId,
+            AllowRetry = true,
+        });
+    }
+
+    // The client requests a practice game once the lobby has acknowledged its ready state
+    private void HandleCreatePracticeGameRequest(CreateGameRequest request)
+    {
+        PracticeGame game = PracticeManager.StartPractice(_conn.AccountId, out LocalizationPayload error, out bool allowRetry);
+        _conn.Send(new CreateGameResponse
+        {
+            ResponseId = request.RequestId,
+            LocalizedFailure = error,
+            Success = game is not null,
+            AllowRetry = allowRetry,
         });
     }
 
@@ -331,10 +384,11 @@ public class GameLifecycleModule : ILobbyModule
             ResponseId = request.RequestId
         };
         _conn.Send(response);
-        if (CurrentGame != null)
+        Game game = CurrentGame;
+        if (game != null)
         {
-            CurrentGame.OnPlayerUsedGGPack(_conn.AccountId);
-            foreach (IClientConnection client in CurrentGame.GetClients())
+            int numGGPacksUsed = game.OnPlayerUsedGGPack(_conn.AccountId);
+            foreach (IClientConnection client in game.GetClients())
             {
                 if (client.AccountId != _conn.AccountId)
                 {
@@ -346,7 +400,7 @@ public class GameLifecycleModule : ILobbyModule
                         GGPackUserRibbon = account.AccountComponent.SelectedRibbonID,
                         GGPackUserTitle = account.AccountComponent.SelectedTitleID,
                         GGPackUserTitleLevel = 1,
-                        NumGGPacksUsed = CurrentGame.GameInfo.ggPackUsedAccountIDs[_conn.AccountId]
+                        NumGGPacksUsed = numGGPacksUsed
                     };
                     client.Send(useGGPackNotification);
                 }

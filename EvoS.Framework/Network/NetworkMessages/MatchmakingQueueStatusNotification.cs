@@ -9,5 +9,10 @@ namespace EvoS.Framework.Network.NetworkMessages
     public class MatchmakingQueueStatusNotification : WebSocketMessage
     {
         public LobbyMatchmakingQueueInfo MatchmakingQueueInfo;
+
+        public MatchmakingQueueStatusNotification Clone()
+        {
+            return (MatchmakingQueueStatusNotification)MemberwiseClone();
+        }
     }
 }

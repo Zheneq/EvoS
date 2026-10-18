@@ -341,6 +341,7 @@ public static class MatchController
     public class MatchHistoryEntryModel
     {
         public string MatchId { get; set; }
+        public DateTime CreateDate { get; set; }
         public DateTime MatchTime { get; set; }
         public string Character { get; set; }
         public string GameType { get; set; }
@@ -357,6 +358,7 @@ public static class MatchController
             return new MatchHistoryEntryModel
             {
                 MatchId = data.GameServerProcessCode,
+                CreateDate = data.CreateDate,
                 MatchTime = data.MatchComponent.MatchTime,
                 Character = data.MatchComponent.CharacterUsed.ToString(),
                 GameType = data.MatchComponent.GameType.ToString(),

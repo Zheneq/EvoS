@@ -23,5 +23,10 @@ namespace EvoS.Framework.Network.NetworkMessages
         public EnvironmentType EnvironmentType;
         public LobbyAlertMissionDataNotification AlertMissionData;
         public LobbySeasonQuestDataNotification SeasonChapterQuests;
+
+        public LobbyServerReadyNotification Clone()
+        {
+            return (LobbyServerReadyNotification)MemberwiseClone();
+        }
     }
 }

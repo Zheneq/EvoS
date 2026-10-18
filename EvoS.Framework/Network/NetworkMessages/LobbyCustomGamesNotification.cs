@@ -12,5 +12,10 @@ namespace EvoS.Framework.Network.NetworkMessages
     {
         [EvosMessage(765)]
         public List<LobbyGameInfo> CustomGameInfos;
+
+        public LobbyCustomGamesNotification Clone()
+        {
+            return (LobbyCustomGamesNotification)MemberwiseClone();
+        }
     }
 }
