@@ -435,11 +435,11 @@ namespace EvoS.DirectoryServer.Account
             SaveLogin(entry.AccountId, entry.Username, newPassword, entry.LinkedAccounts);
         }
 
-        private static long GenerateAccountId()
+        internal const long AccountIdBase = 1_000_000_000_000_000L;
+
+        internal static long GenerateAccountId()
         {
-            byte[] bytes = RandomNumberGenerator.GetBytes(8);
-            long value = BitConverter.ToInt64(bytes, 0) & long.MaxValue;
-            return value % 9_000_000_000_000_000L + 1_000_000_000_000_000L;
+            return AccountIdBase + RandomNumberGenerator.GetInt32(int.MaxValue);
         }
 
         /// <summary>

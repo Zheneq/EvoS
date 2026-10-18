@@ -20,6 +20,16 @@ public class LoginManagerTest
         Assert.Equal(expected, LoginManager.IsValidUsername(username));
     }
 
+    [Fact]
+    public void GenerateAccountId_StaysInOriginalRange()
+    {
+        for (int i = 0; i < 10_000; i++)
+        {
+            long accountId = LoginManager.GenerateAccountId();
+            Assert.InRange(accountId, LoginManager.AccountIdBase, LoginManager.AccountIdBase + int.MaxValue);
+        }
+    }
+
     // Database.Salt is the process-wide password pepper; set it for the duration of a test and restore it.
     private static void WithPepper(string pepper, Action action)
     {
