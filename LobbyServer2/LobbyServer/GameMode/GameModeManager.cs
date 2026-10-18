@@ -1,15 +1,14 @@
-﻿using CentralServer.LobbyServer.Matchmaking;
+﻿using System;
+using System.Collections.Generic;
+using System.IO;
+using CentralServer.LobbyServer.Matchmaking;
+using CentralServer.LobbyServer.Practice;
 using CentralServer.LobbyServer.Tutorial;
 using EvoS.Framework;
-using EvoS.Framework.Constants.Enums;
-using EvoS.Framework.Misc;
 using EvoS.Framework.Network.Static;
 using log4net;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using System;
-using System.Collections.Generic;
-using System.IO;
 
 namespace CentralServer.LobbyServer.Gamemode
 {
@@ -61,48 +60,7 @@ namespace CentralServer.LobbyServer.Gamemode
             type.IsActive = LobbyConfiguration.GetGameTypePracticeAvailable();
             type.QueueableGroupSizes = new Dictionary<int, RequirementCollection> { { 1, null } };
             type.TeamAPlayers = 1;
-            type.TeamBBots = 2;
-
-            type.SubTypes = new List<GameSubType>()
-            {
-                new GameSubType {
-                    LocalizedName = "GenericPractice@SubTypes",
-                    GameMapConfigs = new List<GameMapConfig>{ new GameMapConfig(Maps.Skyway_Deathmatch, true) },
-                    RewardBucket = GameBalanceVars.GameRewardBucketType.NoRewards,
-                    PersistedStatBucket = PersistedStatBucket.DoNotPersist,
-                    TeamAPlayers = 1,
-                    TeamABots = 0,
-                    TeamBPlayers = 0,
-                    TeamBBots = 2,
-                    Mods = new List<GameSubType.SubTypeMods>
-                    {
-                        GameSubType.SubTypeMods.AllowPlayingLockedCharacters,
-                        GameSubType.SubTypeMods.HumansHaveFirstSlots
-                    },
-                    TeamComposition = new TeamCompositionRules
-                    {
-                        Rules = new Dictionary<TeamCompositionRules.SlotTypes, FreelancerSet>
-                        {
-                            {
-                                TeamCompositionRules.SlotTypes.A1, new FreelancerSet
-                                {
-                                    Roles = new List<CharacterRole>
-                                    {
-                                        CharacterRole.Tank,
-                                        CharacterRole.Assassin,
-                                        CharacterRole.Support
-                                    }
-                                }
-                            }, {
-                                TeamCompositionRules.SlotTypes.B1, new FreelancerSet{Types = new List<CharacterType> {CharacterType.PunchingDummy}}
-                            }, {
-                                TeamCompositionRules.SlotTypes.B2, new FreelancerSet{Types = new List<CharacterType> {CharacterType.PunchingDummy}}
-                            }
-                        }
-                    }
-                }
-            };
-
+            type.SubTypes = PracticeGame.SubTypes;
             return type;
         }
 

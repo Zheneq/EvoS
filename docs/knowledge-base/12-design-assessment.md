@@ -105,8 +105,7 @@ Five formats/loaders, only one hot-reloadable, all static, all CWD-relative (doc
 
 ### A9. Dead code & stubs
 
-Commented-out `MatchmakingManager.StartPractice`, `QuestManager` stub, disabled queue
-types, disabled queue modes with no removal timeline.
+`QuestManager` stub, disabled queue types, disabled queue modes with no removal timeline.
 
 ## B. What already points the right way (build on these)
 
@@ -408,7 +407,8 @@ which ASP.NET already provides. Priority order:
 - `IMatchmakingManager` introduced in
   `LobbyServer2/LobbyServer/Matchmaking/IMatchmakingManager.cs` with 10 members: `Enabled`,
   `GetQueues`, `GetQueue`, `Update`, `AddGroupToQueue`, `RemoveGroupFromQueue`, `IsQueued`,
-  `StartPractice`, `StartGameAsync`, `OnGameEnded`.
+  `StartPractice`, `StartGameAsync`, `OnGameEnded`. (`StartPractice` was a commented-out stub;
+  it was removed when Practice became a `SoloGame`, leaving 9 members.)
 - `MatchmakingManager` converted from `public static class` to
   `public class MatchmakingManager : IMatchmakingManager` with a
   `public static MatchmakingManager Instance { get; internal set; }` shim pre-initialized

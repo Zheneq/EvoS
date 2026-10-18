@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using CentralServer.BridgeServer;
 using CentralServer.LobbyServer.CustomGames;
 using CentralServer.LobbyServer.Group;
+using CentralServer.LobbyServer.Practice;
 using CentralServer.LobbyServer.Session;
 using CentralServer.LobbyServer.Tutorial;
 using CentralServer.LobbyServer.Utils;
@@ -134,15 +135,18 @@ public class GameLifecycleModule : ILobbyModule
     {
         _conn.ResetReadyState();
 
-        if (createGameRequest.GameConfig?.GameType == GameType.Tutorial)
+        switch (createGameRequest.GameConfig?.GameType)
         {
-            HandleCreateTutorialGameRequest(createGameRequest);
+            case GameType.Tutorial:
+                HandleCreateTutorialGameRequest(createGameRequest);
+                break;
+            case GameType.Practice:
+                HandleCreatePracticeGameRequest(createGameRequest);
+                break;
+            default:
+                HandleCreateCustomGameRequest(createGameRequest);
+                break;
         }
-        else
-        {
-            HandleCreateCustomGameRequest(createGameRequest);
-        }
-
     }
 
     private void HandleCreateCustomGameRequest(CreateGameRequest createGameRequest)
@@ -188,6 +192,19 @@ public class GameLifecycleModule : ILobbyModule
         {
             ResponseId = request.RequestId,
             AllowRetry = true,
+        });
+    }
+
+    // The client requests a practice game once the lobby has acknowledged its ready state
+    private void HandleCreatePracticeGameRequest(CreateGameRequest request)
+    {
+        PracticeGame game = PracticeManager.StartPractice(_conn.AccountId, out LocalizationPayload error, out bool allowRetry);
+        _conn.Send(new CreateGameResponse
+        {
+            ResponseId = request.RequestId,
+            LocalizedFailure = error,
+            Success = game is not null,
+            AllowRetry = allowRetry,
         });
     }
 

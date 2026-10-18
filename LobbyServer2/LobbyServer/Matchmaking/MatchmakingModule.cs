@@ -3,9 +3,9 @@ using CentralServer.LobbyServer.Group;
 using CentralServer.LobbyServer.Session;
 using CentralServer.LobbyServer.Utils;
 using EvoS.Framework.Constants.Enums;
+using EvoS.Framework.Misc;
 using EvoS.Framework.Network.NetworkMessages;
 using EvoS.Framework.Network.Static;
-using EvoS.Framework.Network.WebSocket;
 using log4net;
 
 namespace CentralServer.LobbyServer.Matchmaking;
@@ -207,6 +207,11 @@ public class MatchmakingModule : ILobbyModule
             if (leader == null)
             {
                 log.Error($"Attempted to update group {group.GroupId} ready state with not connected leader {group.Leader}");
+                return;
+            }
+            if (!leader.SelectedGameType.IsQueueable())
+            {
+                // e.g. Practice: the client sends a CreateGameRequest once its ready state is acknowledged
                 return;
             }
             _matchmakingManager.AddGroupToQueue(leader.SelectedGameType, group);
