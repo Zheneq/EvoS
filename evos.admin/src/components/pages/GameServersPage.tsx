@@ -36,6 +36,7 @@ import {
 import {useAuthHeader} from 'react-auth-kit';
 import {useNavigate} from 'react-router-dom';
 import {EvosError, processError} from '../../lib/Error';
+import {copyToClipboard} from '../../lib/Lib';
 import StorageRoundedIcon from '@mui/icons-material/StorageRounded';
 import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
 import HourglassEmptyRoundedIcon from '@mui/icons-material/HourglassEmptyRounded';
@@ -114,8 +115,8 @@ export default function GameServersPage() {
     };
 
     const handleCopy = (text: string) => {
-        navigator.clipboard.writeText(text).then(() => {
-            setCopiedFingerprint(text);
+        copyToClipboard(text).then(ok => {
+            if (ok) setCopiedFingerprint(text);
         });
     };
 

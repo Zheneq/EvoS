@@ -530,14 +530,14 @@ namespace EvoS.DirectoryServer.Account
 
             const string msg = "Database.Salt (password pepper) is unset or left at the insecure default. " +
                                "Set it to a strong, unique secret stored separately from the database.";
-            //if (EvosConfiguration.GetDevMode())
-            //{
-            //    log.Warn($"INSECURE CONFIGURATION: {msg} Continuing because DevMode is enabled.");
-            //}
-            //else
-            //{
-            //    throw new EvosException(msg);
-            //}
+            if (EvosConfiguration.GetDevMode())
+            {
+                log.Warn($"INSECURE CONFIGURATION: {msg} Continuing because DevMode is enabled.");
+            }
+            else
+            {
+                throw new EvosException(msg);
+            }
         }
 
         private static string GenerateSalt()

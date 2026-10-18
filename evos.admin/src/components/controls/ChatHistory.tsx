@@ -48,7 +48,7 @@ import ErrorDialog from "../generic/ErrorDialog";
 import {plainAccountLink, plainMatchLink} from "../generic/BasicComponents";
 import {CharacterIcon} from "../atlas/CharacterIcon";
 import HistoryNavButtons from "../generic/HistoryNavButtons";
-import {useBeforeParamState, useDateParamState} from "../../lib/Lib";
+import {copyToClipboard, useBeforeParamState, useDateParamState} from "../../lib/Lib";
 import dayjs from "dayjs";
 import ChatRoundedIcon from "@mui/icons-material/ChatRounded";
 import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
@@ -302,7 +302,8 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({accountId}: ChatHistory
     };
 
     const copyMessage = (text: string, index: number) => {
-        navigator.clipboard.writeText(text).then(() => {
+        copyToClipboard(text).then(ok => {
+            if (!ok) return;
             setCopiedIndex(index);
             setTimeout(() => setCopiedIndex(null), 1500);
         });

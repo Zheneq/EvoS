@@ -11,8 +11,9 @@ import {
 } from "@mui/material";
 import {generateTempPassword} from "../../lib/Evos";
 import {useAuthHeader} from "react-auth-kit";
-import React, {useState} from "react";
-import {processError} from "../../lib/Error";
+import React, {useEffect, useRef, useState} from "react";
+import {EvosError, processError} from "../../lib/Error";
+import {copyToClipboard} from "../../lib/Lib";
 import {useNavigate} from "react-router-dom";
 import VpnKeyRoundedIcon from "@mui/icons-material/VpnKeyRounded";
 import ContentCopyRoundedIcon from "@mui/icons-material/ContentCopyRounded";
@@ -24,26 +25,41 @@ interface Props {
 
 export default function TempPassword({accountId}: Props) {
     const [msg, setMsg] = useState<string>();
+    const [error, setError] = useState<EvosError>();
     const [copied, setCopied] = useState(false);
     const [processing, setProcessing] = useState<boolean>();
+    const abortRef = useRef<AbortController>();
     const authHeader = useAuthHeader();
     const navigate = useNavigate();
 
+    useEffect(() => {
+        setMsg(undefined);
+        setError(undefined);
+        setCopied(false);
+        return () => abortRef.current?.abort();
+    }, [accountId]);
+
     const handleClick = () => {
         setProcessing(true);
+        setMsg(undefined);
+        setError(undefined);
         setCopied(false);
         const abort = new AbortController();
+        abortRef.current = abort;
         generateTempPassword(abort, authHeader(), accountId)
             .then((resp) => setMsg(resp.data.code))
-            .catch(e => processError(e, err => setMsg(err.text), navigate))
-            .then(() => setProcessing(false));
-
-        return () => abort.abort();
+            .catch(e => {
+                if (!abort.signal.aborted) {
+                    processError(e, setError, navigate);
+                }
+            })
+            .finally(() => setProcessing(false));
     };
 
     const handleCopy = () => {
         if (!msg) return;
-        navigator.clipboard.writeText(msg).then(() => {
+        copyToClipboard(msg).then(ok => {
+            if (!ok) return;
             setCopied(true);
             setTimeout(() => setCopied(false), 2000);
         });
@@ -63,6 +79,12 @@ export default function TempPassword({accountId}: Props) {
                         Generate a single-use temporary password for player account access or recovery.
                     </Typography>
                 </Box>
+
+                {error && (
+                    <Alert severity="error" onClose={() => setError(undefined)}>
+                        Failed to generate temporary password: {error.text}
+                    </Alert>
+                )}
 
                 {msg && (
                     <Alert

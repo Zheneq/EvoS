@@ -1,6 +1,7 @@
 import {Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, IconButton} from "@mui/material";
 import {DialogProps} from "@mui/material/Dialog/Dialog";
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import {copyToClipboard} from "../../lib/Lib";
 
 interface BaseDialogProps {
     props?: DialogProps;
@@ -28,9 +29,7 @@ export default function BaseDialog(
 
     const handleCopyTitle = () => {
         if (title) {
-            navigator.clipboard
-                .writeText(title)
-                .catch(err => console.error('Failed to copy text:', err));
+            copyToClipboard(title);
         }
     };
 

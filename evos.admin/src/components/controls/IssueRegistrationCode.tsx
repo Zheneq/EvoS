@@ -40,6 +40,7 @@ import {
 import {useAuthHeader} from "react-auth-kit";
 import {useNavigate} from "react-router-dom";
 import {EvosError, processError} from "../../lib/Error";
+import {copyToClipboard} from "../../lib/Lib";
 import {plainAccountLink} from "../generic/BasicComponents";
 import DiscordUser from "../generic/DiscordUser";
 import ConfirmationNumberRoundedIcon from "@mui/icons-material/ConfirmationNumberRounded";
@@ -63,6 +64,7 @@ export default function IssueRegistrationCode() {
     const [codesBefore, setCodesBefore] = useState<Date>(new Date());
     const [now, setNow] = useState<Date>(new Date());
     const [error, setError] = useState<EvosError>();
+    const [issueError, setIssueError] = useState<EvosError>();
     const [requests, setRequests] = useState<UsernameRequestEntry[]>();
     const [requestsError, setRequestsError] = useState<EvosError>();
     const [requestsRefresh, setRequestsRefresh] = useState<number>(0);
@@ -83,9 +85,9 @@ export default function IssueRegistrationCode() {
     }, []);
 
     const handleCopy = (text: string) => {
-        navigator.clipboard.writeText(text).then(() => {
-            setCopiedCode(text);
-            setSnackbarMsg("Registration code copied to clipboard!");
+        copyToClipboard(text).then(ok => {
+            if (ok) setCopiedCode(text);
+            setSnackbarMsg(ok ? "Registration code copied to clipboard!" : "Could not copy to clipboard");
         });
     };
 
@@ -95,6 +97,7 @@ export default function IssueRegistrationCode() {
         if (!trimmed) return;
 
         setProcessing(true);
+        setIssueError(undefined);
         const abort = new AbortController();
         issueRegistrationCode(abort, authHeader, {issueFor: trimmed})
             .then((resp) => {
@@ -103,7 +106,7 @@ export default function IssueRegistrationCode() {
                 handleCopy(resp.data.code);
                 refresh();
             })
-            .catch(e => processError(e, err => setError(err), navigate))
+            .catch(e => processError(e, setIssueError, navigate))
             .finally(() => setProcessing(false));
 
         return () => abort.abort();
@@ -308,6 +311,12 @@ export default function IssueRegistrationCode() {
                             >
                                 Generate Registration Code
                             </Button>
+
+                            {issueError && (
+                                <Alert severity="error" onClose={() => setIssueError(undefined)}>
+                                    Failed to issue registration code: {issueError.text}
+                                </Alert>
+                            )}
 
                             {/* Newly Generated Code Banner */}
                             {generatedCode && (
