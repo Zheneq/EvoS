@@ -72,7 +72,6 @@ namespace EvoS.DirectoryServer
         public const string ERROR_INVALID_PROTOCOL_VERSION = "INVALID_PROTOCOL_VERSION";
 
         private static readonly ILog log = LogManager.GetLogger(typeof(DirectoryServer));
-        private static long _nextTmpAccountId = 1;
         private static readonly TimeSpan PreviousSessionPollInterval = TimeSpan.FromMilliseconds(250);
 
         public void Configure(IApplicationBuilder app)
@@ -250,26 +249,16 @@ namespace EvoS.DirectoryServer
                 return Fail(request, "This account is already logged in");
             }
 
-            PersistedAccountData account;
-            try
+            PersistedAccountData account = DB.Get().AccountDao.GetAccount(accountId);
+            if (account == null)
             {
-                account = DB.Get().AccountDao.GetAccount(accountId);
-                if (account == null)
-                {
-                    log.Error($"Player {accountId} does not exist");
-                    string username = request.AuthInfo.UserName;
-                    account = LoginManager.CreateAccount(accountId, username);
-                }
-                else
-                {
-                    log.Info($"Player {account.Handle}/{account.AccountId} logged in");
-                }
+                log.Error($"Player {accountId} does not exist");
+                string username = request.AuthInfo.UserName;
+                account = LoginManager.CreateAccount(accountId, username);
             }
-            catch (Exception e)
+            else
             {
-                long tmpAccId = Interlocked.Increment(ref _nextTmpAccountId);
-                account = AccountManager.CreateAccount(tmpAccId, "temp_user#" + tmpAccId);
-                log.Error($"Temp user {account.Handle}/{account.AccountId}: {e}");
+                log.Info($"Player {account.Handle}/{account.AccountId} logged in");
             }
 
             // Someday we'll make a db migration tool but not today
