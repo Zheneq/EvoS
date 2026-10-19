@@ -106,9 +106,15 @@ function StatusPage() {
 
     const queuedGroups = useMemo(() => new Set(status?.queues?.flatMap(q => q.groupIds || [])), [status]);
     const notQueuedGroups = useMemo(() => groups ? [...groups.keys()].filter(g => !queuedGroups.has(g)) : [], [groups, queuedGroups]);
+    const onlinePlayersCount = useMemo(
+        () => status?.players.filter(p => p.accountId !== 0 && p.status !== 'Offline').length ?? 0,
+        [status]);
     const inGame = useMemo(() => {
         if (!games) return new Set<number>();
-        return new Set([...games.values()].flatMap(g => [...g.teamA, ...g.teamB]).map(t => t.accountId));
+        return new Set([...games.values()]
+            .flatMap(g => [...g.teamA, ...g.teamB])
+            .map(t => t.accountId)
+            .filter(accountId => accountId !== 0));
     }, [games]);
 
     const activeServers = useMemo(() => {
@@ -257,7 +263,7 @@ function StatusPage() {
                                     Online Players
                                 </Typography>
                                 <Typography variant="h6" fontWeight={700} lineHeight={1.2}>
-                                    {status.players.length}
+                                    {onlinePlayersCount}
                                 </Typography>
                             </Box>
                         </Card>
