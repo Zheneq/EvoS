@@ -82,13 +82,11 @@ namespace CentralServer.LobbyServer.TrustWar
             {
                 TrustWarEntry trustWar = getTrustWarEntry();
 
-                foreach (long accountId in game.GetPlayers())
+                foreach (LobbyServerPlayerInfo player in game.GetHumanPlayerInfos())
                 {
-                    PersistedAccountData account = DB.Get().AccountDao.GetAccount(accountId);
+                    PersistedAccountData account = DB.Get().AccountDao.GetAccount(player.AccountId);
                     if (RibbonToFaction.TryGetValue(account.AccountComponent.SelectedRibbonID, out int factionId))
                     {
-                        LobbyServerPlayerInfo player = game.GetPlayerInfo(accountId);
-
                         bool isTeamAWinner = (gameSummary.GameResult == GameResult.TeamAWon && player.TeamId == Team.TeamA);
                         bool isTeamBWinner = (gameSummary.GameResult == GameResult.TeamBWon && player.TeamId == Team.TeamB);
 

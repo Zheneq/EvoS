@@ -63,7 +63,7 @@ public static class QueuePenaltyManager
             }
             // Everyone leaving a running match, suggesting the game has broken rather than been abandoned
             if (game.GameStatus != GameStatus.Stopped
-                && game.TeamInfo.TeamPlayerInfo.Where(IsHumanPlayer).All(p => p.ReplacedWithBots))
+                && game.GetHumanPlayerInfos().All(p => p.ReplacedWithBots))
             {
                 PardonQueuePenalties(game, PardonReason.EveryoneLeft);
                 return;
@@ -125,13 +125,6 @@ public static class QueuePenaltyManager
             // Leavers who came back and stayed until the end are forgiven
             PardonQueuePenalties(game, PardonReason.CameBack);
         }
-    }
-
-    // A human player's own slot: not a bot, and not a character remote-controlled by another player.
-    // IsAIControlled/IsHumanControlled can't be used, as they also account for ReplacedWithBots.
-    private static bool IsHumanPlayer(LobbyServerPlayerInfo player)
-    {
-        return !player.IsNPCBot && !player.IsLoadTestBot && !player.IsRemoteControlled && !player.IsSpectator;
     }
 
     // Forgives players penalized for leaving this game: the offense no longer counts towards escalation,

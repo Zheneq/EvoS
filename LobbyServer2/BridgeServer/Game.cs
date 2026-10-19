@@ -360,6 +360,14 @@ public abstract class Game
         return GetPlayers().Distinct();
     }
 
+    // No bots, no remote-controlled characters
+    // IsAIControlled/IsHumanControlled can't be used, as they also account for ReplacedWithBots.
+    public IEnumerable<LobbyServerPlayerInfo> GetHumanPlayerInfos()
+    {
+        return TeamInfo.TeamPlayerInfo.Where(p =>
+            !p.IsNPCBot && !p.IsLoadTestBot && !p.IsRemoteControlled && !p.IsSpectator);
+    }
+
     public List<LobbyServerProtocol> GetClients()
     {
         List<LobbyServerProtocol> clients = new List<LobbyServerProtocol>();
