@@ -56,7 +56,7 @@ namespace CentralServer.LobbyServer.Gamemode
         private static GameTypeAvailability GetPracticeGameTypeAvailability()
         {
             GameTypeAvailability type = new GameTypeAvailability();
-            type.MaxWillFillPerTeam = 4;
+            type.MaxWillFillPerTeam = 0;
             type.IsActive = LobbyConfiguration.GetGameTypePracticeAvailable();
             type.QueueableGroupSizes = new Dictionary<int, RequirementCollection> { { 1, null } };
             type.TeamAPlayers = 1;
