@@ -43,14 +43,34 @@ namespace CentralServer.LobbyServer.Gamemode
         {
             Dictionary<GameType, GameTypeAvailability> gameTypes = new Dictionary<GameType, GameTypeAvailability>();
 
-            gameTypes.Add(GameType.Tutorial, GetTutorialGameTypeAvailability());
-            gameTypes.Add(GameType.Practice, GetPracticeGameTypeAvailability());
-            gameTypes.Add(GameType.Coop, GetCoopGameTypeAvailability());
-            gameTypes.Add(GameType.PvP, GetPvPGameTypeAvailability());
-            gameTypes.Add(GameType.Ranked, GetRankedGameTypeAvailability());
-            gameTypes.Add(GameType.Custom, GetCustomGameTypeAvailability());
+            foreach (GameType gameType in new[]
+                     {
+                         GameType.Tutorial,
+                         GameType.Practice,
+                         GameType.Coop,
+                         GameType.PvP,
+                         GameType.Ranked,
+                         GameType.Custom
+                     })
+            {
+                gameTypes.Add(gameType, GetGameTypeAvailability(gameType));
+            }
 
             return gameTypes;
+        }
+
+        public static GameTypeAvailability GetGameTypeAvailability(GameType gameType)
+        {
+            return gameType switch
+            {
+                GameType.Tutorial => GetTutorialGameTypeAvailability(),
+                GameType.Practice => GetPracticeGameTypeAvailability(),
+                GameType.Coop => GetCoopGameTypeAvailability(),
+                GameType.PvP => GetPvPGameTypeAvailability(),
+                GameType.Ranked => GetRankedGameTypeAvailability(),
+                GameType.Custom => GetCustomGameTypeAvailability(),
+                _ => null
+            };
         }
 
         private static GameTypeAvailability GetPracticeGameTypeAvailability()

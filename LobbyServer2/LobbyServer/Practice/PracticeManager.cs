@@ -1,6 +1,8 @@
 using CentralServer.BridgeServer;
+using CentralServer.LobbyServer.Character;
 using CentralServer.LobbyServer.Utils;
 using EvoS.Framework;
+using EvoS.Framework.DataAccess;
 using log4net;
 
 namespace CentralServer.LobbyServer.Practice;
@@ -21,6 +23,15 @@ public static class PracticeManager
 
         // Shown in a popup, after which the client lets the player ready up again
         allowRetry = true;
+
+        CharacterType characterType = DB.Get().AccountDao.GetAccount(accountId).AccountComponent.LastCharacter;
+        error = CharacterRules.CheckCharacter(characterType, GameType.Practice);
+        if (error is not null)
+        {
+            log.Warn($"{LobbyServerUtils.GetHandle(accountId)} attempted to start a practice game as {characterType}");
+            return null;
+        }
+
         return SoloGame.Start(
             accountId,
             server => new PracticeGame(accountId, server),

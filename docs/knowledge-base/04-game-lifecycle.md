@@ -20,7 +20,7 @@ state, handle disconnect/reconnect/dodge, and finalize results (stats, Elo, Disc
 | `CustomGameManager` | `LobbyServer2/LobbyServer/CustomGames/CustomGameManager.cs` | Static registry of custom games + subscriber list for the custom-game browser |
 | `SoloGame` (abstract) | `LobbyServer2/BridgeServer/SoloGame.cs` | Single-human game launched right away on a `CreateGameRequest` (no queue, no character select). `SoloGame.Start` reserves a server before the response so failures go into `CreateGameResponse`; no accolades, stats or finalize delay |
 | `TutorialGame` / `TutorialManager` | `LobbyServer2/LobbyServer/Tutorial/` | `SoloGame` on `CargoShip_Tutorial1` as Lockwood; the game server's script spawns the NPCs |
-| `PracticeGame` / `PracticeManager` | `LobbyServer2/LobbyServer/Practice/` | `SoloGame` on `VR_Practice` with the selected freelancer; the map's NPC spawners add the bots (they aren't in `TeamInfo`); gated by `GameTypePracticeAvailable` |
+| `PracticeGame` / `PracticeManager` | `LobbyServer2/LobbyServer/Practice/` | `SoloGame` on `VR_Practice` with the selected freelancer; the map's NPC spawners add the bots (they aren't in `TeamInfo`); gated by `GameTypePracticeAvailable`, and refuses characters that `CharacterRules.CheckCharacter` rejects (Will Fill, test freelancers, unknown types) |
 
 ## Game-server registration (bridge handshake)
 
