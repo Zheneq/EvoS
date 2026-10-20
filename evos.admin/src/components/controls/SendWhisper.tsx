@@ -1,12 +1,21 @@
-import {Box, Button, LinearProgress, TextField} from "@mui/material";
+import {
+    Alert,
+    Box,
+    Button,
+    Card,
+    LinearProgress,
+    Snackbar,
+    Stack,
+    TextField,
+    Typography
+} from "@mui/material";
 import {sendWhisper} from "../../lib/Evos";
 import React, {useRef, useState} from "react";
 import {useAuthHeader} from "react-auth-kit";
 import {useNavigate} from "react-router-dom";
 import {EvosError, processError} from "../../lib/Error";
-import {EvosCard} from "../generic/BasicComponents";
 import ErrorDialog from "../generic/ErrorDialog";
-
+import SendRoundedIcon from "@mui/icons-material/SendRounded";
 
 interface SendWhisperProps {
     accountId: number;
@@ -16,6 +25,7 @@ interface SendWhisperProps {
 export default function SendWhisper({accountId, handle}: SendWhisperProps) {
     const [processing, setProcessing] = useState<boolean>(false);
     const [error, setError] = useState<EvosError>();
+    const [successOpen, setSuccessOpen] = useState(false);
     const formRef = useRef<HTMLFormElement>(null);
 
     const authHeader = useAuthHeader()();
@@ -36,6 +46,7 @@ export default function SendWhisper({accountId, handle}: SendWhisperProps) {
             .then(() => {
                 setProcessing(false);
                 formRef.current?.reset();
+                setSuccessOpen(true);
             })
             .catch(e => {
                 setProcessing(false);
@@ -45,29 +56,60 @@ export default function SendWhisper({accountId, handle}: SendWhisperProps) {
         return () => abort.abort();
     };
 
-    return <EvosCard variant="outlined">
-        {error && <ErrorDialog error={error} onDismiss={() => setError(undefined)} />}
-        <Box component="form" ref={formRef} onSubmit={handleSubmit} noValidate style={{ padding: 4 }}>
-            <TextField
-                margin="normal"
-                required
-                fullWidth
-                id="whisper"
-                label={`Whisper to ${handle}`}
-                name="whisper"
-                multiline
-                disabled={!accountId || processing}
-            />
-            <Button
-                disabled={!accountId || processing}
-                type="submit"
-                fullWidth
-                variant="contained"
-                sx={{ mt: 3, mb: 2 }}
+    return (
+        <Card variant="outlined">
+            {error && <ErrorDialog error={error} onDismiss={() => setError(undefined)} />}
+            <Snackbar
+                open={successOpen}
+                autoHideDuration={4000}
+                onClose={() => setSuccessOpen(false)}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
             >
-                Send whisper
-            </Button>
-            {processing && <LinearProgress />}
-        </Box>
-    </EvosCard>;
+                <Alert severity="success" onClose={() => setSuccessOpen(false)}>
+                    Whisper sent to {handle}!
+                </Alert>
+            </Snackbar>
+
+            <Stack spacing={2} sx={{ width: '100%' }}>
+                <Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <SendRoundedIcon color="primary" />
+                        <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                            Send In-Game Whisper
+                        </Typography>
+                    </Box>
+                    <Typography variant="body2" color="text.secondary">
+                        Send a direct administrative message to {handle} while they are in-game.
+                    </Typography>
+                </Box>
+
+                <Box component="form" ref={formRef} onSubmit={handleSubmit} noValidate sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <TextField
+                        size="small"
+                        required
+                        fullWidth
+                        id="whisper"
+                        label={`Message for ${handle}`}
+                        name="whisper"
+                        multiline
+                        rows={3}
+                        placeholder="Type whisper message..."
+                        disabled={!accountId || processing}
+                    />
+                    <Button
+                        disabled={!accountId || processing}
+                        type="submit"
+                        fullWidth
+                        variant="contained"
+                        color="primary"
+                        startIcon={<SendRoundedIcon />}
+                    >
+                        Send Whisper
+                    </Button>
+                    {processing && <LinearProgress sx={{ borderRadius: 1 }} />}
+                </Box>
+            </Stack>
+        </Card>
+    );
 }
+

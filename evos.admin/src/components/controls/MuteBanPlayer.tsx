@@ -1,6 +1,10 @@
 import {
+    Alert,
     Box,
     Button,
+    Card,
+    FormControl,
+    InputLabel,
     LinearProgress,
     MenuItem,
     Select,
@@ -16,7 +20,8 @@ import BaseDialog from "../generic/BaseDialog";
 import {useNavigate} from "react-router-dom";
 import {AxiosResponse} from "axios";
 import {cap, PenaltyInfo} from "../../lib/Evos";
-import {EvosCard} from "../generic/BasicComponents";
+import VolumeOffRoundedIcon from "@mui/icons-material/VolumeOffRounded";
+import GavelRoundedIcon from "@mui/icons-material/GavelRounded";
 
 interface MutePlayerProps {
     disabled: boolean;
@@ -39,6 +44,9 @@ export default function MuteBanPlayer({disabled, deadline, accountId, action, ha
 
     const authHeader = useAuthHeader();
     const navigate = useNavigate();
+
+    const isBan = actionText.toLowerCase() === 'ban';
+    const isCurrentlyActive = !!deadline && deadline > new Date();
 
     const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -76,55 +84,90 @@ export default function MuteBanPlayer({disabled, deadline, accountId, action, ha
         setDurationMinutes(parseInt(event.target.value));
     };
 
-    return <EvosCard variant="outlined">
-        <Stack direction={'column'}>
-            {deadline && <Stack direction={'row'}>
-                <Typography variant={'body1'} style={{width: '100%'}}>{`${cap(doneText)} until ${deadline.toLocaleString()}`}</Typography>
-            </Stack>}
-            <Box component="form" onSubmit={handleSubmit} noValidate sx={{mt: 1}}>
-                <BaseDialog title={msg} onDismiss={handleDismiss} />
-                <Typography variant={'h5'} style={{ textTransform: 'capitalize' }}>{actionText}</Typography>
-                <TextField
-                    margin="normal"
-                    required
-                    fullWidth
-                    id="description"
-                    label="Description"
-                    name="description"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                />
-                <Select
-                    id="duration"
-                    value={`${durationMinutes}`}
-                    label={`${actionText} for`}
-                    onChange={handleUpdateDuration}
-                    fullWidth
-                >
-                    {deadline && <MenuItem value={0}>{`Un${actionText}`}</MenuItem>}
-                    <MenuItem value={15}>15 min</MenuItem>
-                    <MenuItem value={30}>30 min</MenuItem>
-                    <MenuItem value={60}>1 hour</MenuItem>
-                    <MenuItem value={180}>3 hours</MenuItem>
-                    <MenuItem value={720}>12 hours</MenuItem>
-                    <MenuItem value={1440}>1 day</MenuItem>
-                    <MenuItem value={4320}>3 days</MenuItem>
-                    <MenuItem value={10080}>A week</MenuItem>
-                    <MenuItem value={43200}>A month</MenuItem>
-                    <MenuItem value={525600}>A year</MenuItem>
-                    <MenuItem value={52596000}>A century</MenuItem>
-                </Select>
-                <Button
-                    type="submit"
-                    fullWidth
-                    variant="contained"
-                    sx={{mt: 3, mb: 2}}
-                    disabled={disabled || processing || !description || !!msg}
-                >
-                    {`${durationMinutes ? "" : "un"}${actionText}`}
-                </Button>
-                {processing && <LinearProgress />}
-            </Box>
-        </Stack>
-    </EvosCard>;
+    return (
+        <Card variant="outlined">
+            <Stack spacing={2} sx={{ width: '100%' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    {isBan ? (
+                        <GavelRoundedIcon color={isCurrentlyActive ? "error" : "primary"} />
+                    ) : (
+                        <VolumeOffRoundedIcon color={isCurrentlyActive ? "warning" : "primary"} />
+                    )}
+                    <Typography variant="h6" sx={{ fontWeight: 600, textTransform: 'capitalize' }}>
+                        {actionText} Player
+                    </Typography>
+                </Box>
+
+                {deadline && (
+                    <Alert
+                        severity={isBan ? "error" : "warning"}
+                        icon={isBan ? <GavelRoundedIcon /> : <VolumeOffRoundedIcon />}
+                        sx={{ py: 0.5 }}
+                    >
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                            {`${cap(doneText)} until ${deadline.toLocaleString()}`}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                            {`Select "Un${actionText}" below to immediately lift this restriction.`}
+                        </Typography>
+                    </Alert>
+                )}
+
+                <Box component="form" onSubmit={handleSubmit} noValidate sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <BaseDialog title={msg} onDismiss={handleDismiss} />
+
+                    <FormControl fullWidth size="small">
+                        <InputLabel id={`${actionText}-duration-label`}>
+                            {`${cap(actionText)} Duration`}
+                        </InputLabel>
+                        <Select
+                            id={`${actionText}-duration`}
+                            labelId={`${actionText}-duration-label`}
+                            value={`${durationMinutes}`}
+                            label={`${cap(actionText)} Duration`}
+                            onChange={handleUpdateDuration}
+                        >
+                            {deadline && <MenuItem value={0}><strong>{`Un${actionText} (Lift penalty)`}</strong></MenuItem>}
+                            <MenuItem value={15}>15 minutes</MenuItem>
+                            <MenuItem value={30}>30 minutes</MenuItem>
+                            <MenuItem value={60}>1 hour</MenuItem>
+                            <MenuItem value={180}>3 hours</MenuItem>
+                            <MenuItem value={720}>12 hours</MenuItem>
+                            <MenuItem value={1440}>1 day</MenuItem>
+                            <MenuItem value={4320}>3 days</MenuItem>
+                            <MenuItem value={10080}>1 week</MenuItem>
+                            <MenuItem value={43200}>1 month</MenuItem>
+                            <MenuItem value={525600}>1 year</MenuItem>
+                            <MenuItem value={52596000}>1 century (Permanent)</MenuItem>
+                        </Select>
+                    </FormControl>
+
+                    <TextField
+                        size="small"
+                        required
+                        fullWidth
+                        id={`description-${actionText}`}
+                        label="Reason / Description"
+                        placeholder={`Reason for ${actionText}...`}
+                        name="description"
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                    />
+
+                    <Button
+                        type="submit"
+                        fullWidth
+                        variant={durationMinutes === 0 ? "outlined" : "contained"}
+                        color={durationMinutes === 0 ? "success" : (isBan ? "error" : "warning")}
+                        startIcon={isBan ? <GavelRoundedIcon /> : <VolumeOffRoundedIcon />}
+                        disabled={disabled || processing || !description || !!msg}
+                    >
+                        {`${durationMinutes ? "" : "Un"}${cap(actionText)} ${handle}`}
+                    </Button>
+
+                    {processing && <LinearProgress sx={{ borderRadius: 1 }} />}
+                </Box>
+            </Stack>
+        </Card>
+    );
 }

@@ -52,79 +52,93 @@ function Player({info, greyOut, bot}: Props) {
         navigate(`/account/${info.accountId}`);
     }
 
-    return <div
-        style={{
-            width: 240,
-            height: 52,
-            fontSize: '8px',
-            position: 'relative',
-            display: 'inline-flex',
-            opacity: greyOut ? 0.5 : 1,
-        }}>
-        <ButtonBase
-            focusRipple
-            key={info?.handle}
-            onClick={handleClick}
+    return (
+        <div
             style={{
                 width: 240,
                 height: 52,
                 fontSize: '8px',
-                transform: theme.transform.skewA,
-                overflow: 'hidden',
-                border: '2px solid black'
+                position: 'relative',
+                display: 'inline-flex',
+                opacity: greyOut ? 0.5 : 1,
             }}
         >
-            <div
+            <ButtonBase
+                focusRipple
+                key={info?.handle}
+                onClick={handleClick}
                 style={{
-                    transform: theme.transform.skewB,
-                    width: '106%',
-                    height: '100%',
-                    flex: 'none',
+                    width: 240,
+                    height: 52,
+                    fontSize: '8px',
+                    transform: theme.transform.skewA,
+                    overflow: 'hidden',
+                    border: '2px solid black',
+                    position: 'relative',
                 }}
             >
-                <BgImage style={{
-                    backgroundImage: info && `url(${playerBanner(BannerType.background, info.bannerBg)})`,
-                }} />
-            </div>
-        </ButtonBase>
-        <div
-            style={{
-                width: 238,
-                height: 49,
-                overflow: 'hidden',
-                position: 'absolute',
-                top: 2,
-                pointerEvents: "none",
-            }}>
-            <BgImage style={{
-                marginTop: '-3%',
-                marginLeft: '-4%',
-                backgroundImage: info && `url(${playerBanner(BannerType.foreground, info.bannerFg)})`,
-                width: '36%',
-                zIndex: 0,
-            }} />
-            <ImageTextWrapper
-                style={{
-                    fontSize: '2.5em',
-                }}>
-                <Typography component={'span'} style={{ fontSize: '1em' }}>{username}</Typography>
-                {discriminator && <Typography component={'span'} style={{ fontSize: '0.8em' }}>#{discriminator}</Typography>}
-            </ImageTextWrapper>
-            {info && <ImageTextWrapper
-                style={{
-                    bottom: '8%',
-                    fontSize: '1.7em',
-                }}>
-                <Typography component={'span'} style={{ fontSize: '1em' }}>{info.status === "" && !bot ? "Online" : info.status}</Typography>
-            </ImageTextWrapper>}
-            {info && info.buildVersion &&
-                <ImageTextWrapper style={{bottom: '2%', width: '69%', textAlign: 'right'}}>
-                    <Typography component={'span'} style={{ fontSize: '1.4em' }}>
-                        {info.buildVersion.replace(/^STABLE-122-100_/, '')}
-                    </Typography>
-                </ImageTextWrapper>}
+                {/* Background Layer */}
+                <div
+                    style={{
+                        transform: theme.transform.skewB,
+                        width: '106%',
+                        height: '100%',
+                        position: 'absolute',
+                        top: 0,
+                    }}
+                >
+                    <BgImage style={{
+                        backgroundImage: info && `url(${playerBanner(BannerType.background, info.bannerBg)})`,
+                    }} />
+                </div>
+
+                {/* Foreground Layer: avatar and text cleanly clipped by skewed ButtonBase, un-skewed internally */}
+                <div
+                    style={{
+                        transform: theme.transform.skewB,
+                        width: '106%',
+                        height: '100%',
+                        position: 'absolute',
+                        top: 0,
+                        pointerEvents: 'none',
+                    }}
+                >
+                    <BgImage style={{
+                        marginTop: '-3%',
+                        marginLeft: '-4%',
+                        backgroundImage: info && `url(${playerBanner(BannerType.foreground, info.bannerFg)})`,
+                        width: '36%',
+                        zIndex: 0,
+                    }} />
+                    <ImageTextWrapper
+                        style={{
+                            fontSize: '2.5em',
+                        }}
+                    >
+                        <Typography component={'span'} style={{ fontSize: '1em' }}>{username}</Typography>
+                        {discriminator && <Typography component={'span'} style={{ fontSize: '0.8em' }}>#{discriminator}</Typography>}
+                    </ImageTextWrapper>
+                    {info && (
+                        <ImageTextWrapper
+                            style={{
+                                bottom: '8%',
+                                fontSize: '1.7em',
+                            }}
+                        >
+                            <Typography component={'span'} style={{ fontSize: '1em' }}>{info.status === "" && !bot ? "Online" : info.status}</Typography>
+                        </ImageTextWrapper>
+                    )}
+                    {info && info.buildVersion && (
+                        <ImageTextWrapper style={{ bottom: '2%', width: '65%', textAlign: 'right' }}>
+                            <Typography component={'span'} style={{ fontSize: '1.4em' }}>
+                                {info.buildVersion.replace(/^STABLE-122-100_/, '')}
+                            </Typography>
+                        </ImageTextWrapper>
+                    )}
+                </div>
+            </ButtonBase>
         </div>
-    </div>;
+    );
 }
 
 export default Player;

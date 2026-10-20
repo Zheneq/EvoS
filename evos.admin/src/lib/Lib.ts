@@ -15,3 +15,18 @@ export function useBeforeParamState(searchParams: URLSearchParams) {
         return beforeParam === null ? true : beforeParam === 'true';
     })
 }
+
+// Resolves to false instead of throwing when the clipboard is unavailable (e.g. served over plain HTTP)
+export function copyToClipboard(text: string): Promise<boolean> {
+    if (!navigator.clipboard) {
+        console.error('Failed to copy text: clipboard is not available');
+        return Promise.resolve(false);
+    }
+    return navigator.clipboard
+        .writeText(text)
+        .then(() => true)
+        .catch(err => {
+            console.error('Failed to copy text:', err);
+            return false;
+        });
+}
