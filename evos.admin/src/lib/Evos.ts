@@ -339,10 +339,10 @@ export function scheduleShutdown(abort: AbortController, authHeader: string, typ
         { headers: { 'Authorization': authHeader }, signal: abort.signal });
 }
 
-export function broadcast(abort: AbortController, authHeader: string, message: string) {
+export function broadcast(abort: AbortController, authHeader: string, message: string, popup: boolean) {
     return axios.post(
         baseUrl + "/api/admin/lobby/broadcast",
-        { Msg: message },
+        { Msg: message, Popup: popup },
         { headers: { 'Authorization': authHeader }, signal: abort.signal });
 }
 

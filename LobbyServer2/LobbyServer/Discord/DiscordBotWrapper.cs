@@ -79,8 +79,9 @@ namespace CentralServer.LobbyServer.Discord
 
             SlashCommandProperties broadcastCommand = new SlashCommandBuilder()
                 .WithName(CMD_BROADCAST)
-                .WithDescription("Send a fullscreen notification to all online players")
+                .WithDescription("Send a notification to all online players")
                 .AddOption("message", ApplicationCommandOptionType.String, "Message to send", true)
+                .AddOption("popup", ApplicationCommandOptionType.Boolean, "Show fullscreen popup (default: true)", false)
                 .WithDefaultMemberPermissions(GuildPermission.ManageGuild)
                 .Build();
 
@@ -196,10 +197,11 @@ namespace CentralServer.LobbyServer.Discord
                 case CMD_BROADCAST:
                 {
                     if (!await VerifyAdmin(command, handle)) break;
-                    string msg = command.Data.Options.First().Value.ToString();
-                    log.Info($"CMD /{command.Data.Name} - {handle}: {msg}");
-                    ChatManager.Get().Broadcast(msg);
-                    await command.RespondAsync($"Broadcast: {msg}", ephemeral: true);
+                    string msg = command.Data.Options.First(o => o.Name == "message").Value.ToString();
+                    bool popup = command.Data.Options.FirstOrDefault(o => o.Name == "popup")?.Value as bool? ?? true;
+                    log.Info($"CMD /{command.Data.Name} - {handle} (popup={popup}): {msg}");
+                    ChatManager.Get().Broadcast(msg, popup);
+                    await command.RespondAsync($"Broadcast{(popup ? "" : " (chat only)")}: {msg}", ephemeral: true);
                     break;
                 }
                 case CMD_QUEUE_DISABLE:

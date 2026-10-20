@@ -4,8 +4,10 @@ import {
     Box,
     Button,
     Card,
+    FormControlLabel,
     LinearProgress,
     Snackbar,
+    Switch,
     TextField,
     Typography
 } from "@mui/material";
@@ -18,6 +20,7 @@ import SendRoundedIcon from "@mui/icons-material/SendRounded";
 
 export default function Broadcast() {
     const [message, setMessage] = useState<string>("");
+    const [popup, setPopup] = useState<boolean>(true);
     const [msg, setMsg] = useState<string>();
     const [severity, setSeverity] = useState<"success" | "info" | "warning" | "error">("info");
     const [processing, setProcessing] = useState<boolean>(false);
@@ -31,10 +34,12 @@ export default function Broadcast() {
 
         setProcessing(true);
         const abort = new AbortController();
-        broadcast(abort, authHeader(), trimmed)
+        broadcast(abort, authHeader(), trimmed, popup)
             .then(() => {
                 setSeverity("success");
-                setMsg("Broadcast message dispatched to all connected players");
+                setMsg(popup
+                    ? "Broadcast message dispatched to all connected players"
+                    : "Broadcast message sent to the chat of all connected players");
                 setMessage("");
             })
             .catch(e => {
@@ -77,10 +82,22 @@ export default function Broadcast() {
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
                     disabled={processing}
-                    helperText="This message will immediately appear on the screens of all connected players."
+                    helperText={popup
+                        ? "This message will immediately appear on the screens of all connected players."
+                        : "This message will immediately appear in the chat of all connected players."}
                 />
 
-                <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 'auto' }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 'auto' }}>
+                    <FormControlLabel
+                        control={
+                            <Switch
+                                checked={popup}
+                                onChange={(e) => setPopup(e.target.checked)}
+                                disabled={processing}
+                            />
+                        }
+                        label="Show fullscreen popup"
+                    />
                     <Button
                         type="submit"
                         variant="contained"

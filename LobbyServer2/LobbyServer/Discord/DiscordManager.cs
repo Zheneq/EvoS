@@ -502,6 +502,10 @@ namespace CentralServer.LobbyServer.Discord
                 string to = notification.RecipientHandle != null
                     ? $"to {notification.RecipientHandle}"
                     : "to all";
+                if (notification.ConsoleMessageType == ConsoleMessageType.SystemMessage)
+                {
+                    to += " (chat only)";
+                }
                 await adminActionLogChannel.SendMessageAsync(
                     username: notification.SenderHandle ?? "Atlas Reactor",
                     embeds:

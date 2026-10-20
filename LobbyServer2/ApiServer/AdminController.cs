@@ -71,6 +71,7 @@ namespace CentralServer.ApiServer
         public class BroadcastModel
         {
             public string Msg { get; set; }
+            public bool Popup { get; set; } = true;
         }
 
         public static IResult Broadcast([FromBody] BroadcastModel data, ClaimsPrincipal user)
@@ -79,12 +80,12 @@ namespace CentralServer.ApiServer
             {
                 return error;
             }
-            log.Info($"Broadcast {adminHandle}: {data.Msg}");
+            log.Info($"Broadcast {adminHandle} (popup={data.Popup}): {data.Msg}");
             if (data.Msg.IsNullOrEmpty())
             {
                 return Results.BadRequest();
             }
-            ChatManager.Get().Broadcast(data.Msg);
+            ChatManager.Get().Broadcast(data.Msg, data.Popup);
             return Results.Ok();
         }
 

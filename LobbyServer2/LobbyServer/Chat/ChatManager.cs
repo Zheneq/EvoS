@@ -305,12 +305,15 @@ namespace CentralServer.LobbyServer.Chat
             }
         }
 
-        public void Broadcast(string msg)
+        // Clients show BroadcastMessage as a fullscreen popup and in chat, SystemMessage only in chat
+        public void Broadcast(string msg, bool popup = true)
         {
             ChatNotification message = new ChatNotification
             {
                 SenderAccountId = 0,
-                ConsoleMessageType = ConsoleMessageType.BroadcastMessage,
+                ConsoleMessageType = popup
+                    ? ConsoleMessageType.BroadcastMessage
+                    : ConsoleMessageType.SystemMessage,
                 Text = msg,
             };
 
