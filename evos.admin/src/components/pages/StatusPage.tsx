@@ -105,7 +105,6 @@ function StatusPage() {
     }, 5000);
 
     const queuedGroups = useMemo(() => new Set(status?.queues?.flatMap(q => q.groupIds || [])), [status]);
-    const notQueuedGroups = useMemo(() => groups ? [...groups.keys()].filter(g => !queuedGroups.has(g)) : [], [groups, queuedGroups]);
     const onlinePlayersCount = useMemo(
         () => status?.players.filter(p => p.accountId !== 0 && p.status !== 'Offline').length ?? 0,
         [status]);
@@ -116,6 +115,13 @@ function StatusPage() {
             .map(t => t.accountId)
             .filter(accountId => accountId !== 0));
     }, [games]);
+    // not queued and not entirely in game
+    const lobbyGroups = useMemo(() => {
+        if (!groups) return [];
+        return [...groups.values()]
+            .filter(g => !queuedGroups.has(g.groupId) && g.accountIds.some(aid => !inGame.has(aid)))
+            .map(g => g.groupId);
+    }, [groups, queuedGroups, inGame]);
 
     const activeServers = useMemo(() => {
         if (!status || !games) return [];
@@ -148,16 +154,16 @@ function StatusPage() {
     }, [status, groups]);
 
     const notQueuedPlayersCount = useMemo(() => {
-        if (!notQueuedGroups || !groups || !inGame) return 0;
+        if (!groups) return 0;
         let count = 0;
-        notQueuedGroups.forEach(gid => {
+        lobbyGroups.forEach(gid => {
             const grp = groups.get(gid);
             grp?.accountIds?.forEach(aid => {
                 if (!inGame.has(aid)) count++;
             });
         });
         return count;
-    }, [notQueuedGroups, groups, inGame]);
+    }, [lobbyGroups, groups, inGame]);
 
     const handleTabChange = (_event: React.SyntheticEvent, newValue: StatusTab) => {
         setActiveTab(newValue);
@@ -355,7 +361,7 @@ function StatusPage() {
                                         {notQueuedPlayersCount}
                                     </Typography>
                                     <Typography variant="caption" color="text.secondary">
-                                        ({notQueuedGroups.length} groups)
+                                        ({lobbyGroups.length} groups)
                                     </Typography>
                                 </Stack>
                             </Box>
@@ -424,7 +430,7 @@ function StatusPage() {
                     value="lobby"
                     icon={<GroupRoundedIcon sx={{ fontSize: 18 }} />}
                     iconPosition="start"
-                    label={`Lobby (${notQueuedGroups.length})`}
+                    label={`Lobby (${lobbyGroups.length})`}
                     sx={{ textTransform: 'none', fontWeight: 600 }}
                 />
                 <Tab
@@ -521,7 +527,7 @@ function StatusPage() {
                         </Box>
                     </Box>
 
-                    {notQueuedGroups.length === 0 ? (
+                    {lobbyGroups.length === 0 ? (
                         <Card variant="outlined" sx={{ p: 4, textAlign: 'center', backgroundColor: (theme) => alpha(theme.palette.action.hover, 0.2) }}>
                             <GroupRoundedIcon sx={{ fontSize: 40, color: 'text.secondary', opacity: 0.5, mb: 1 }} />
                             <Typography variant="body1" fontWeight={600}>
@@ -535,7 +541,7 @@ function StatusPage() {
                         <Card variant="outlined" sx={{ p: 2.5 }}>
                             <Queue
                                 key="not_queued"
-                                info={{ type: "Lobby Groups", subtype: "(Not Queued)", groupIds: notQueuedGroups }}
+                                info={{ type: "Lobby Groups", subtype: "(Not Queued)", groupIds: lobbyGroups }}
                                 groupData={groups!}
                                 playerData={players!}
                                 hidePlayers={inGame}
