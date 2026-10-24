@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using CentralServer.LobbyServer;
+using CentralServer.LobbyServer.Group;
 using CentralServer.LobbyServer.Matchmaking;
 using CentralServer.LobbyServer.Session;
 using CentralServer.LobbyServer.Utils;
@@ -85,6 +86,18 @@ public abstract class SoloGame : Game
         out LocalizationPayload error)
         where T : SoloGame
     {
+        GroupInfo group = GroupManager.GetPlayerGroup(accountId);
+        if (group is not null && !group.IsSolo())
+        {
+            log.Warn($"{LobbyServerUtils.GetHandle(accountId)} attempted to start {typeof(T).Name} "
+                     + $"while in group {group.GroupId} of {group.Members.Count}");
+            error = LocalizationPayload.Create(
+                "BadGroupSizeForQueue",
+                "Matchmaking",
+                LocalizationArg_Int32.Create(group.Members.Count));
+            return null;
+        }
+
         BridgeServerProtocol server = ServerManager.GetServer(true);
         if (server is null)
         {

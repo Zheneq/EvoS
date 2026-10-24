@@ -66,6 +66,8 @@ The client sends `CreateGameRequest` with the game type; `GameLifecycleModule` r
 and Practice to their managers (everything else is a custom game). For Practice the client first
 sends its ready state (`PlayerInfoUpdateRequest`) and only requests the game once that is
 acknowledged; `MatchmakingModule.UpdateGroupReadyState` doesn't queue non-queueable game types.
+`SoloGame.Start` refuses players in a group of more than one (`BadGroupSizeForQueue@Matchmaking`); the
+client already hides both modes from grouped players.
 
 ## Reconnection
 

@@ -2,9 +2,12 @@ using System;
 using System.Collections.Generic;
 using CentralServer.BridgeServer;
 using CentralServer.LobbyServer.GameLifecycle;
+using CentralServer.LobbyServer.Group;
 using CentralServer.LobbyServer.Session;
 using EvoS.Framework.Constants.Enums;
+using EvoS.Framework.DataAccess;
 using EvoS.Framework.Network.NetworkMessages;
+using EvoS.Framework.Network.Static;
 using EvoS.Framework.Network.WebSocket;
 using Tests.Lib;
 using Xunit;
@@ -234,5 +237,78 @@ public class GameLifecycleModuleTest : EvosTest
         var ex = Record.Exception(() => registry.Dispatch(new PlayerPanelUpdatedNotification()));
 
         Assert.Null(ex);
+    }
+
+    // Practice reads the selected character from the account
+    private static long MakeAccount()
+    {
+        long accountId = UniqueId();
+        DB.Get().AccountDao.CreateAccount(new PersistedAccountData
+        {
+            AccountId = accountId,
+            Handle = $"Test#{accountId}",
+            AccountComponent = new AccountComponent
+            {
+                LastCharacter = CharacterType.Archer,
+            },
+            CharacterData = new Dictionary<CharacterType, PersistedCharacterData>
+            {
+                { CharacterType.Archer, new PersistedCharacterData(CharacterType.Archer) }
+            },
+        });
+        return accountId;
+    }
+
+    private static CreateGameResponse CreateGame(RecordingClientConnection conn, CapturingRegistry registry, GameType gameType)
+    {
+        registry.Dispatch(new CreateGameRequest
+        {
+            RequestId = 11,
+            GameConfig = new LobbyGameConfig { GameType = gameType }
+        });
+
+        return Assert.IsType<CreateGameResponse>(Assert.Single(conn.Sent));
+    }
+
+    // Case 9: solo games refuse players in a group.
+    [Theory]
+    [InlineData(GameType.Tutorial)]
+    [InlineData(GameType.Practice)]
+    public void CreateGameRequest_SoloGameInGroup_FailedResponse(GameType gameType)
+    {
+        using var scope = new ClientNotifierScope();
+        long accountId = MakeAccount();
+        GroupManager.CreateGroup(accountId);
+        GroupManager.JoinGroup(GroupManager.GetGroupID(accountId), UniqueId());
+        var (_, conn, registry) = MakeModuleWithRegistry(accountId);
+
+        CreateGameResponse response = CreateGame(conn, registry, gameType);
+
+        Assert.False(response.Success);
+        Assert.Equal("BadGroupSizeForQueue", response.LocalizedFailure.Term);
+        Assert.Equal("Matchmaking", response.LocalizedFailure.Context);
+        LocalizationPayload.Serializer.Deserialize(
+            new MemoryStream(Assert.Single(response.LocalizedFailure.ArgumentsAsBinaryData)),
+            out object groupSize);
+        Assert.Equal(2, Assert.IsType<LocalizationArg_Int32>(groupSize).m_value);
+        Assert.True(response.AllowRetry);
+    }
+
+    // Case 10: a solo group passes the group check. No game servers are registered in tests,
+    // so the request gets as far as picking a server.
+    [Theory]
+    [InlineData(GameType.Tutorial, "WaitingForStatus")]
+    [InlineData(GameType.Practice, "FailedStartGameServer")]
+    public void CreateGameRequest_SoloGameSoloGroup_PassesGroupCheck(GameType gameType, string expectedTerm)
+    {
+        using var scope = new ClientNotifierScope();
+        long accountId = MakeAccount();
+        GroupManager.CreateGroup(accountId);
+        var (_, conn, registry) = MakeModuleWithRegistry(accountId);
+
+        CreateGameResponse response = CreateGame(conn, registry, gameType);
+
+        Assert.False(response.Success);
+        Assert.Equal(expectedTerm, response.LocalizedFailure.Term);
     }
 }
