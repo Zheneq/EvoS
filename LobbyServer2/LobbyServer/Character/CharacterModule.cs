@@ -60,6 +60,17 @@ public class CharacterModule : ILobbyModule
                  $"server={playerInfo.CharacterType} " +
                  $"account={account?.AccountComponent.LastCharacter})");
 
+        if (characterType == CharacterType.None)
+        {
+            log.Warn($"{_conn.AccountId} attempted to update player info for {CharacterType.None}");
+            _conn.Send(new PlayerInfoUpdateResponse
+            {
+                Success = false,
+                ResponseId = request.RequestId
+            });
+            return;
+        }
+
         bool characterDataUpdate = false;
         CharacterComponent characterComponent;
         LobbyCharacterInfo characterInfo;

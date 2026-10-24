@@ -41,6 +41,27 @@ public class PatchAccountDataTest : EvosTest
     }
 
     [Fact]
+    public void NewAccountHasNoneCharacterWithoutPatching()
+    {
+        PersistedAccountData account = AccountManager.CreateAccount(1234, "patchtest");
+
+        Assert.True(account.CharacterData.ContainsKey(CharacterType.None));
+        Assert.Empty(account.CharacterData[CharacterType.None].CharacterComponent.CharacterLoadouts);
+    }
+
+    [Fact]
+    public void PatchingAddsNoneCharacter()
+    {
+        PersistedAccountData account = MakePatchedAccount();
+
+        account.CharacterData.Remove(CharacterType.None);
+
+        Assert.True(EvoS.DirectoryServer.DirectoryServer.PatchAccountData(account));
+        Assert.True(account.CharacterData.ContainsKey(CharacterType.None));
+        Assert.Empty(account.CharacterData[CharacterType.None].CharacterComponent.CharacterLoadouts);
+    }
+
+    [Fact]
     public void PatchingReportsChangeWhenLoadoutsAreMissing()
     {
         PersistedAccountData account = MakePatchedAccount();

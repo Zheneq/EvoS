@@ -207,6 +207,65 @@ public class StoreModuleTest : EvosTest
         Assert.Equal(10, updated.CharacterData[CharacterType.Scoundrel].CharacterComponent.CharacterLoadouts.Count);
     }
 
+    [Fact]
+    public void LoadoutSlotPurchase_NoneCharacter_FailedResponseOnly()
+    {
+        long accountId = UniqueId();
+        MakeAccount(accountId);
+        PersistedAccountData account = GetAccount(accountId);
+        account.CharacterData[CharacterType.None] = new PersistedCharacterData(CharacterType.None);
+        var (_, conn, registry) = MakeModule(accountId);
+
+        registry.Dispatch(new PurchaseLoadoutSlotRequest
+        {
+            Character = CharacterType.None,
+            RequestId = 10
+        });
+
+        // Only 1 message: failed response
+        Assert.Single(conn.Sent);
+        var purchase = Assert.IsType<PurchaseLoadoutSlotResponse>(conn.Sent[0]);
+        Assert.False(purchase.Success);
+
+        // No loadout added
+        PersistedAccountData updated = GetAccount(accountId);
+        Assert.Empty(updated.CharacterData[CharacterType.None].CharacterComponent.CharacterLoadouts);
+    }
+
+    // --- Ability VFX ---
+
+    [Fact]
+    public void AbilityVfxPurchase_NoneCharacter_FailedResponseOnly()
+    {
+        const int vfxId = 200;
+        const int abilityId = 0;
+        long accountId = UniqueId();
+        int funds = InventoryManager.GetVfxCost(vfxId, abilityId) + 100;
+        MakeAccount(accountId, freecurrencyAmount: funds);
+        PersistedAccountData account = GetAccount(accountId);
+        account.CharacterData[CharacterType.None] = new PersistedCharacterData(CharacterType.None);
+        var (_, conn, registry) = MakeModule(accountId);
+
+        registry.Dispatch(new PurchaseAbilityVfxRequest
+        {
+            CharacterType = CharacterType.None,
+            AbilityId = abilityId,
+            VfxId = vfxId,
+            CurrencyType = CurrencyType.FreelancerCurrency,
+            RequestId = 11
+        });
+
+        // Only 1 message: failed response
+        Assert.Single(conn.Sent);
+        var purchase = Assert.IsType<PurchaseAbilityVfxResponse>(conn.Sent[0]);
+        Assert.Equal(PurchaseResult.Failed, purchase.Result);
+
+        // No vfx added, no deduction
+        PersistedAccountData updated = GetAccount(accountId);
+        Assert.Empty(updated.CharacterData[CharacterType.None].CharacterComponent.AbilityVfxSwaps);
+        Assert.Equal(funds, updated.BankComponent.CurrentAmounts.GetCurrentAmount(CurrencyType.FreelancerCurrency));
+    }
+
     // --- Stub purchases ---
 
     [Fact]

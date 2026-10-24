@@ -169,7 +169,8 @@ public class StoreModule : ILobbyModule
 
         log.Info($"Player {_conn.AccountId} trying to purchase vfx {request.VfxId} with {request.CurrencyType} for character {request.CharacterType} and ability {request.AbilityId} for price {cost}");
 
-        if (account.BankComponent.CurrentAmounts.GetCurrentAmount(request.CurrencyType) < cost)
+        if (request.CharacterType == CharacterType.None
+            || account.BankComponent.CurrentAmounts.GetCurrentAmount(request.CurrencyType) < cost)
         {
             PurchaseAbilityVfxResponse failedResponse = new PurchaseAbilityVfxResponse()
             {
@@ -284,6 +285,7 @@ public class StoreModule : ILobbyModule
     {
         PersistedAccountData account = DB.Get().AccountDao.GetAccount(_conn.AccountId);
         if (account == null
+            || request.Character == CharacterType.None
             || !account.CharacterData.TryGetValue(request.Character, out PersistedCharacterData characterData)
             || characterData.CharacterComponent.CharacterLoadouts.Count >= 10) // hardcoded on the client side too
         {

@@ -242,4 +242,43 @@ public class CharacterModuleTest : EvosTest
 
         Assert.True(matchmaking.IsReady);
     }
+
+    // Case 7: HandlePlayerInfoUpdateRequest for CharacterType.None (no game): failed
+    // PlayerInfoUpdateResponse only, neither LastCharacter nor the None character data changes.
+    [Fact]
+    public void PlayerInfoUpdateRequest_NoneCharacter_FailedResponseOnly()
+    {
+        long accountId = UniqueId();
+        PersistedAccountData account = MakeAccount(accountId, CharacterType.Archer);
+        account.CharacterData[CharacterType.None] = new PersistedCharacterData(CharacterType.None);
+        var (_, _, conn, registry) = MakeModuleWithRegistry(accountId);
+
+        registry.Dispatch(new PlayerInfoUpdateRequest
+        {
+            RequestId = 7,
+            PlayerInfoUpdate = new LobbyPlayerInfoUpdate
+            {
+                CharacterType = CharacterType.None,
+                CharacterLoadoutChanges = new CharacterLoadoutUpdate
+                {
+                    CharacterLoadoutChanges = new List<CharacterLoadout>
+                    {
+                        new(new CharacterModInfo(), new CharacterAbilityVfxSwapInfo(), "Loadout 0", ModStrictness.AllModes)
+                    }
+                },
+                LastSelectedLoadout = 0,
+            }
+        });
+
+        Assert.Single(conn.Sent);
+        var response = Assert.IsType<PlayerInfoUpdateResponse>(conn.Sent[0]);
+        Assert.False(response.Success);
+        Assert.Equal(7, response.ResponseId);
+        Assert.Empty(conn.GroupRefreshes);
+
+        PersistedAccountData updated = DB.Get().AccountDao.GetAccount(accountId);
+        Assert.Equal(CharacterType.Archer, updated.AccountComponent.LastCharacter);
+        Assert.Empty(updated.CharacterData[CharacterType.None].CharacterComponent.CharacterLoadouts);
+        Assert.Equal(-1, updated.CharacterData[CharacterType.None].CharacterComponent.LastSelectedLoadout);
+    }
 }

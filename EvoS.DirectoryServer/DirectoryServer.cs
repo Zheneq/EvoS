@@ -455,6 +455,10 @@ namespace EvoS.DirectoryServer
                 EnsureCharacterWithDefaultLoadout(account, characterType);
             }
 
+            // Client looks up character data for CharacterType.None, e.g. the ranked draft loadout panel
+            // gets loadout updates before it is set up for a character
+            account.CharacterData.TryAdd(CharacterType.None, new PersistedCharacterData(CharacterType.None));
+
             foreach (PersistedCharacterData persistedCharacterData in account.CharacterData.Values)
             {
                 persistedCharacterData.CharacterComponent.UnlockSkinsAndTaunts(persistedCharacterData.CharacterType);

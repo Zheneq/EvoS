@@ -31,6 +31,10 @@ namespace EvoS.DirectoryServer.Character
                 characterDatas.Add(characterConfig.CharacterType, persistedCharacterData);
             }
 
+            // Client looks up character data for CharacterType.None, e.g. the ranked draft loadout panel
+            // gets loadout updates before it is set up for a character
+            characterDatas.Add(CharacterType.None, new PersistedCharacterData(CharacterType.None));
+
             return characterDatas;
         }
 
