@@ -125,6 +125,7 @@ public class GameLifecycleModule : ILobbyModule
         }
 
         JoinGame(game);
+        game.SendGameInfoNotifications();
         _conn.Send(new JoinGameResponse
         {
             ResponseId = joinGameRequest.RequestId
@@ -165,6 +166,7 @@ public class GameLifecycleModule : ILobbyModule
         }
         GroupManager.GetPlayerGroup(_conn.AccountId).Members
             .ForEach(groupMember => SessionManager.GetClientConnection(groupMember)?.JoinGame(game));
+        game.SendGameInfoNotifications();
         _conn.Send(new CreateGameResponse
         {
             ResponseId = createGameRequest.RequestId,

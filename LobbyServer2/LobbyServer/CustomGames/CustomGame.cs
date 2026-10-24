@@ -85,7 +85,6 @@ public class CustomGame : Game
                 SendGameAssignmentNotification(groupAccountId);
             }
         }
-        SendGameInfoNotifications();
     }
 
     protected sealed override string GetGameServerProcessCode()
@@ -412,7 +411,6 @@ public class CustomGame : Game
         TeamInfo.TeamPlayerInfo.Add(newPlayerInfo);
 
         SendGameAssignmentNotification(accountId);
-        SendGameInfoNotifications();
 
         return true;
     }
