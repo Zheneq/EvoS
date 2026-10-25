@@ -123,19 +123,20 @@ function StatusPage() {
             .map(g => g.groupId);
     }, [groups, queuedGroups, inGame]);
 
+    const sortedServers = useMemo(() => {
+        if (!status) return [];
+        return [...status.servers].sort((s1, s2) => s1.name.localeCompare(s2.name));
+    }, [status]);
+
     const activeServers = useMemo(() => {
-        if (!status || !games) return [];
-        return status.servers
-            .filter(s => games.get(s.id))
-            .sort((s1, s2) => s1.name.localeCompare(s2.name));
-    }, [status, games]);
+        if (!games) return [];
+        return sortedServers.filter(s => games.get(s.id));
+    }, [sortedServers, games]);
 
     const idleServers = useMemo(() => {
-        if (!status || !games) return [];
-        return status.servers
-            .filter(s => !games.get(s.id))
-            .sort((s1, s2) => s1.name.localeCompare(s2.name));
-    }, [status, games]);
+        if (!games) return [];
+        return sortedServers.filter(s => !games.get(s.id));
+    }, [sortedServers, games]);
 
     const activeQueues = useMemo(() => {
         if (!status) return [];
@@ -571,7 +572,7 @@ function StatusPage() {
                     </Box>
 
                     <Grid container spacing={1.5}>
-                        {status.servers.map((s) => {
+                        {sortedServers.map((s) => {
                             const isRunningGame = !!games?.get(s.id);
                             const game = games?.get(s.id);
                             return (
