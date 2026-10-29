@@ -576,6 +576,8 @@ namespace CentralServer.LobbyServer
             ConnectionEndStatus.WithLabels(e.Code.ToString()).Observe(1);
 
             CurrentGame?.OnPlayerDisconnectedFromLobby(AccountId);
+            // A restarted client has no invite popups
+            CustomGameManager.Invites.RemoveForInvitee(AccountId);
 
             SessionManager.OnPlayerDisconnect(this);
 

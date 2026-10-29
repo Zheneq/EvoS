@@ -74,6 +74,8 @@ public class GameLifecycleModule : ILobbyModule
     {
         Game prevServer = CurrentGame;
         CurrentGame = game;
+        // Players in a game can't accept invites, and the client closes invite popups when a match loads
+        CustomGameManager.Invites.RemoveForInvitee(_conn.AccountId);
         log.Info($"{LobbyServerUtils.GetHandle(_conn.AccountId)} joined {game?.ProcessCode} (was in {prevServer?.ProcessCode ?? "lobby"})");
     }
 
@@ -396,8 +398,9 @@ public class GameLifecycleModule : ILobbyModule
             _conn.AccountId, inviteeAccountId, game.ProcessCode, request.RequestId);
         if (invite is null)
         {
-            log.Info($"{_conn.Handle} attempted to invite {inviteeHandle} to custom game {game.ProcessCode} again too soon");
-            response.LocalizedFailure = CustomGameMessages.AlreadyInvitedPlayerToGame;
+            log.Info($"{_conn.Handle} attempted to invite {inviteeHandle} to custom game {game.ProcessCode} "
+                     + "while they have a pending invite to it");
+            response.LocalizedFailure = CustomGameMessages.AlreadyInvitedPlayer(inviteeAccountId);
             _conn.Send(response);
             return;
         }

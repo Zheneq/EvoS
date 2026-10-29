@@ -5,29 +5,22 @@ using System.Threading;
 
 namespace CentralServer.LobbyServer.CustomGames;
 
-// Pending custom game invites. An invite stays valid until it is answered or its game is removed.
-public class CustomGameInvites(TimeSpan reinviteCooldown)
+// Pending custom game invites. The client shows an invite until it is answered, so an invite stays pending
+// until then, unless its game is removed or the invitee disconnects or joins a game.
+public class CustomGameInvites
 {
     private readonly Dictionary<int, CustomGameInvite> _invites = new();
     private int _lastInviteId;
     private readonly Lock _lock = new();
 
-    // Returns null if the player was invited to this game less than the cooldown ago.
-    // Otherwise, the new invite replaces their previous invite to this game.
+    // Returns null if the player already has a pending invite to this game
     public CustomGameInvite Create(long inviterAccountId, long inviteeAccountId, string processCode, int initialRequestId)
     {
-        DateTime now = DateTime.UtcNow;
         lock (_lock)
         {
-            CustomGameInvite previousInvite = _invites.Values
-                .FirstOrDefault(i => i.ProcessCode == processCode && i.InviteeAccountId == inviteeAccountId);
-            if (previousInvite is not null)
+            if (_invites.Values.Any(i => i.ProcessCode == processCode && i.InviteeAccountId == inviteeAccountId))
             {
-                if (now - previousInvite.Created < reinviteCooldown)
-                {
-                    return null;
-                }
-                _invites.Remove(previousInvite.InviteId);
+                return null;
             }
 
             CustomGameInvite invite = new CustomGameInvite(
@@ -35,8 +28,7 @@ public class CustomGameInvites(TimeSpan reinviteCooldown)
                 inviterAccountId,
                 inviteeAccountId,
                 processCode,
-                initialRequestId,
-                now);
+                initialRequestId);
             _invites.Add(invite.InviteId, invite);
             return invite;
         }
@@ -59,10 +51,21 @@ public class CustomGameInvites(TimeSpan reinviteCooldown)
 
     public void RemoveForGame(string processCode)
     {
+        RemoveWhere(i => i.ProcessCode == processCode);
+    }
+
+    // A restarted client has no invite popups, and loading a match closes them
+    public void RemoveForInvitee(long inviteeAccountId)
+    {
+        RemoveWhere(i => i.InviteeAccountId == inviteeAccountId);
+    }
+
+    private void RemoveWhere(Func<CustomGameInvite, bool> predicate)
+    {
         lock (_lock)
         {
             List<int> inviteIds = _invites.Values
-                .Where(i => i.ProcessCode == processCode)
+                .Where(predicate)
                 .Select(i => i.InviteId)
                 .ToList();
             inviteIds.ForEach(id => _invites.Remove(id));

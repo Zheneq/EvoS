@@ -21,7 +21,7 @@ namespace CentralServer.LobbyServer.CustomGames
 
         public static bool Enabled { get; set; } = true;
 
-        public static CustomGameInvites Invites { get; } = new(TimeSpan.FromMinutes(1));
+        public static CustomGameInvites Invites { get; } = new();
 
         public static Game CreateGame(long accountId, LobbyGameConfig gameConfig, out LocalizationPayload error)
         {

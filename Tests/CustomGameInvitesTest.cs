@@ -11,14 +11,10 @@ public class CustomGameInvitesTest
     private const long Invitee = 2;
     private const string Game = "CustomGame-1";
 
-    private static CustomGameInvites WithCooldown() => new(TimeSpan.FromHours(1));
-
-    private static CustomGameInvites WithoutCooldown() => new(TimeSpan.Zero);
-
     [Fact]
     public void Create_ThenTake_ReturnsInviteOnce()
     {
-        CustomGameInvites invites = WithCooldown();
+        CustomGameInvites invites = new();
 
         CustomGameInvite invite = invites.Create(Inviter, Invitee, Game, 7);
 
@@ -35,7 +31,7 @@ public class CustomGameInvitesTest
     [Fact]
     public void Take_ByAnotherPlayer_KeepsInvite()
     {
-        CustomGameInvites invites = WithCooldown();
+        CustomGameInvites invites = new();
         CustomGameInvite invite = invites.Create(Inviter, Invitee, Game, 7);
 
         Assert.Null(invites.Take(invite.InviteId, 3));
@@ -45,40 +41,40 @@ public class CustomGameInvitesTest
     [Fact]
     public void Take_UnknownInvite_ReturnsNull()
     {
-        CustomGameInvites invites = WithCooldown();
+        CustomGameInvites invites = new();
 
         Assert.Null(invites.Take(12345, Invitee));
     }
 
     [Fact]
-    public void Create_SamePlayerAndGameWithinCooldown_ReturnsNull()
+    public void Create_WhilePending_ReturnsNull()
     {
-        CustomGameInvites invites = WithCooldown();
+        CustomGameInvites invites = new();
         CustomGameInvite invite = invites.Create(Inviter, Invitee, Game, 7);
 
+        Assert.Null(invites.Create(Inviter, Invitee, Game, 8));
         // from another player in the game too
-        Assert.Null(invites.Create(3, Invitee, Game, 8));
+        Assert.Null(invites.Create(3, Invitee, Game, 9));
         Assert.Same(invite, invites.Take(invite.InviteId, Invitee));
     }
 
     [Fact]
-    public void Create_AfterCooldown_ReplacesInvite()
+    public void Create_AfterAnswer_CreatesNewInvite()
     {
-        CustomGameInvites invites = WithoutCooldown();
+        CustomGameInvites invites = new();
         CustomGameInvite oldInvite = invites.Create(Inviter, Invitee, Game, 7);
+        invites.Take(oldInvite.InviteId, Invitee);
 
         CustomGameInvite newInvite = invites.Create(Inviter, Invitee, Game, 8);
 
         Assert.NotNull(newInvite);
         Assert.NotEqual(oldInvite.InviteId, newInvite.InviteId);
-        Assert.Null(invites.Take(oldInvite.InviteId, Invitee));
-        Assert.Same(newInvite, invites.Take(newInvite.InviteId, Invitee));
     }
 
     [Fact]
     public void Create_OtherPlayerOrGame_IsIndependent()
     {
-        CustomGameInvites invites = WithCooldown();
+        CustomGameInvites invites = new();
         CustomGameInvite invite = invites.Create(Inviter, Invitee, Game, 7);
 
         CustomGameInvite otherPlayerInvite = invites.Create(Inviter, 3, Game, 8);
@@ -93,7 +89,7 @@ public class CustomGameInvitesTest
     [Fact]
     public void RemoveForGame_RemovesOnlyThatGame()
     {
-        CustomGameInvites invites = WithCooldown();
+        CustomGameInvites invites = new();
         CustomGameInvite invite = invites.Create(Inviter, Invitee, Game, 7);
         CustomGameInvite otherGameInvite = invites.Create(Inviter, Invitee, "CustomGame-2", 8);
 
@@ -103,5 +99,22 @@ public class CustomGameInvitesTest
         Assert.Same(otherGameInvite, invites.Take(otherGameInvite.InviteId, Invitee));
         // the player can be invited to the game again
         Assert.NotNull(invites.Create(Inviter, Invitee, Game, 9));
+    }
+
+    [Fact]
+    public void RemoveForInvitee_RemovesOnlyTheirInvites()
+    {
+        CustomGameInvites invites = new();
+        CustomGameInvite invite = invites.Create(Inviter, Invitee, Game, 7);
+        CustomGameInvite otherGameInvite = invites.Create(Inviter, Invitee, "CustomGame-2", 8);
+        CustomGameInvite otherPlayerInvite = invites.Create(Inviter, 3, Game, 9);
+
+        invites.RemoveForInvitee(Invitee);
+
+        Assert.Null(invites.Take(invite.InviteId, Invitee));
+        Assert.Null(invites.Take(otherGameInvite.InviteId, Invitee));
+        Assert.Same(otherPlayerInvite, invites.Take(otherPlayerInvite.InviteId, 3));
+        // the player can be invited to the game again
+        Assert.NotNull(invites.Create(Inviter, Invitee, Game, 10));
     }
 }

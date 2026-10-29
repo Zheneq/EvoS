@@ -1,5 +1,3 @@
-using System;
-
 namespace CentralServer.LobbyServer.CustomGames;
 
 public class CustomGameInvite(
@@ -7,13 +5,11 @@ public class CustomGameInvite(
     long inviterAccountId,
     long inviteeAccountId,
     string processCode,
-    int initialRequestId,
-    DateTime created)
+    int initialRequestId)
 {
     public readonly int InviteId = inviteId; // sent to the invitee as GameInviteConfirmationRequest.RequestId
     public readonly long InviterAccountId = inviterAccountId;
     public readonly long InviteeAccountId = inviteeAccountId;
     public readonly string ProcessCode = processCode;
     public readonly int InitialRequestId = initialRequestId; // inviter's GameInvitationRequest.RequestId
-    public readonly DateTime Created = created;
 }

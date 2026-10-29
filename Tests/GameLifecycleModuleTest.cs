@@ -459,8 +459,29 @@ public class GameLifecycleModuleTest : EvosTest
 
             Assert.True(response.Success);
             Assert.Null(response.LocalizedFailure);
-            // no pending invite, otherwise this would hit the re-invite cooldown
+            // no pending invite, otherwise this would fail
             Assert.NotNull(CustomGameManager.Invites.Create(accountId, inviteeAccountId, game.ProcessCode, 0));
+        }
+        finally
+        {
+            CustomGameManager.DeleteGame(accountId);
+        }
+    }
+
+    // Case 12: joining a game drops the player's pending invites
+    [Fact]
+    public void JoinGame_DropsPendingInvites()
+    {
+        using var scope = new ClientNotifierScope();
+        long accountId = MakeAccount();
+        var (module, _) = MakeModule(accountId);
+        CustomGameInvite invite = CustomGameManager.Invites.Create(UniqueId(), accountId, "CustomGame-other", 1);
+        Assert.NotNull(invite);
+
+        JoinNewCustomGame(module, accountId);
+        try
+        {
+            Assert.Null(CustomGameManager.Invites.Take(invite.InviteId, accountId));
         }
         finally
         {

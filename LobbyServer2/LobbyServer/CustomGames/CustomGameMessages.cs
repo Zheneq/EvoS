@@ -13,12 +13,17 @@ public static class CustomGameMessages
     public static LocalizationPayload GameAlreadyLaunched { get; }
         = LocalizationPayload.Create("GameAlreadyLaunched", "Invite"); // Your game has already launched.
 
-    // You've already sent an invite to that player recently, please wait a minute.
-    public static LocalizationPayload AlreadyInvitedPlayerToGame { get; }
-        = LocalizationPayload.Create("AleadyInvitedPlayerToGame", "Invite"); // sic
-
     public static LocalizationPayload GameInvite { get; }
         = LocalizationPayload.Create("GameInvite", "Global"); // Game Invite
+
+    // The group key doesn't mention groups, unlike AleadyInvitedPlayerToGame@Invite which asks to wait a minute
+    public static LocalizationPayload AlreadyInvitedPlayer(long accountId)
+    {
+        return LocalizationPayload.Create(
+            "AleadyInvitedPlayerToGroup", // sic
+            "Invite",
+            LocalizationArg_Handle.Create(LobbyServerUtils.GetHandle(accountId))); // You've already invited {0}, please await their response.
+    }
 
     public static LocalizationPayload OtherPlayerInGame(long accountId)
     {
