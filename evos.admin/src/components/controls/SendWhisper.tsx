@@ -3,9 +3,11 @@ import {
     Box,
     Button,
     Card,
+    FormControlLabel,
     LinearProgress,
     Snackbar,
     Stack,
+    Switch,
     TextField,
     Typography
 } from "@mui/material";
@@ -26,6 +28,7 @@ export default function SendWhisper({accountId, handle}: SendWhisperProps) {
     const [processing, setProcessing] = useState<boolean>(false);
     const [error, setError] = useState<EvosError>();
     const [successOpen, setSuccessOpen] = useState(false);
+    const [popup, setPopup] = useState<boolean>(false);
     const formRef = useRef<HTMLFormElement>(null);
 
     const authHeader = useAuthHeader()();
@@ -42,7 +45,7 @@ export default function SendWhisper({accountId, handle}: SendWhisperProps) {
 
         setProcessing(true);
         const abort = new AbortController();
-        sendWhisper(abort, authHeader, accountId, "Admin", message)
+        sendWhisper(abort, authHeader, accountId, "Admin", message, popup)
             .then(() => {
                 setProcessing(false);
                 formRef.current?.reset();
@@ -95,6 +98,19 @@ export default function SendWhisper({accountId, handle}: SendWhisperProps) {
                         rows={3}
                         placeholder="Type whisper message..."
                         disabled={!accountId || processing}
+                        helperText={popup
+                            ? `This message will appear on ${handle}'s screen and in their chat.`
+                            : `This message will appear as a whisper in ${handle}'s chat.`}
+                    />
+                    <FormControlLabel
+                        control={
+                            <Switch
+                                checked={popup}
+                                onChange={(e) => setPopup(e.target.checked)}
+                                disabled={!accountId || processing}
+                            />
+                        }
+                        label="Show fullscreen popup"
                     />
                     <Button
                         disabled={!accountId || processing}

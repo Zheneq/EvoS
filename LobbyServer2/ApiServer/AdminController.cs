@@ -355,6 +355,7 @@ namespace CentralServer.ApiServer
             public long accountId { get; set; }
             public string sender { get; set; }
             public string message { get; set; }
+            public bool popup { get; set; } = false;
         }
 
         public static IResult SendWhisper([FromBody] WhisperModel data, ClaimsPrincipal user)
@@ -375,8 +376,16 @@ namespace CentralServer.ApiServer
                 return Results.NotFound();
             }
 
-            log.Info($"API WHISPER by {adminHandle} ({adminAccountId}) to {recipient.Handle} ({data.accountId}): {data.sender}: {data.message}");
-            ChatManager.Get().SendSystemWhisper(data.sender, data.accountId, data.message);
+            log.Info($"API WHISPER by {adminHandle} ({adminAccountId}) to {recipient.Handle} ({data.accountId}) " +
+                     $"(popup={data.popup}): {data.sender}: {data.message}");
+            if (data.popup)
+            {
+                ChatManager.Get().BroadcastToPlayer(data.accountId, data.message);
+            }
+            else
+            {
+                ChatManager.Get().SendSystemWhisper(data.sender, data.accountId, data.message);
+            }
             return Results.Ok();
         }
 

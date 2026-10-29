@@ -374,10 +374,10 @@ export function clearQueuePenalty(abort: AbortController, authHeader: string, ac
         { headers: { 'Authorization': authHeader }, signal: abort.signal });
 }
 
-export function sendWhisper(abort: AbortController, authHeader: string, accountId: number, sender: string, message: string) {
+export function sendWhisper(abort: AbortController, authHeader: string, accountId: number, sender: string, message: string, popup: boolean) {
     return axios.post(
         baseUrl + "/api/admin/player/whisper",
-        { accountId, sender, message },
+        { accountId, sender, message, popup },
         { headers: { 'Authorization': authHeader }, signal: abort.signal });
 }
 
