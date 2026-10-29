@@ -1,16 +1,15 @@
-using System;
-using System.Collections.Generic;
 using CentralServer.BridgeServer;
+using CentralServer.LobbyServer.CustomGames;
 using CentralServer.LobbyServer.GameLifecycle;
 using CentralServer.LobbyServer.Group;
 using CentralServer.LobbyServer.Session;
 using EvoS.Framework.Constants.Enums;
 using EvoS.Framework.DataAccess;
+using EvoS.Framework.DataAccess.Daos;
 using EvoS.Framework.Network.NetworkMessages;
 using EvoS.Framework.Network.Static;
 using EvoS.Framework.Network.WebSocket;
 using Tests.Lib;
-using Xunit;
 using Xunit.Abstractions;
 
 namespace Tests;
@@ -69,6 +68,14 @@ public class GameLifecycleModuleTest : EvosTest
         return (module, conn);
     }
 
+    // LocalizationPayload does not override Equals, so we compare fields directly.
+    private static void AssertLocalization(LocalizationPayload payload, string expectedTerm, string expectedContext)
+    {
+        Assert.NotNull(payload);
+        Assert.Equal(expectedTerm, payload.Term);
+        Assert.Equal(expectedContext, payload.Context);
+    }
+
     // Case 1: Fresh module: CurrentGame null, IsInGame() false, PlayerInfo null.
     [Fact]
     public void FreshModule_CurrentGameNull_IsInGameFalse_PlayerInfoNull()
@@ -107,7 +114,7 @@ public class GameLifecycleModuleTest : EvosTest
         registry.Dispatch(new BalancedTeamRequest
         {
             RequestId = 4,
-            Slots = new System.Collections.Generic.List<BalanceTeamSlot>()
+            Slots = new List<BalanceTeamSlot>()
         });
 
         Assert.Single(conn.Sent);
@@ -169,22 +176,18 @@ public class GameLifecycleModuleTest : EvosTest
         Assert.Equal(1, conn.ResetReadyStateCalls);
     }
 
-    // Case 8a: GameInvitationRequest sends exactly one failed response.
+    // Case 8a: GameInvitationRequest while not in a custom game: one failed response, NotInAGame.
     [Fact]
-    public void GameInvitationRequest_SendsOneFailedResponse()
+    public void GameInvitationRequest_NotInCustomGame_NotInAGame()
     {
         long accountId = UniqueId();
         var (_, conn, registry) = MakeModuleWithRegistry(accountId);
 
-        registry.Dispatch(new GameInvitationRequest
-        {
-            RequestId = 8,
-            InviteeHandle = "someone"
-        });
+        GameInvitationResponse response = InviteToGame(conn, registry, "someone");
 
-        Assert.Single(conn.Sent);
-        var response = Assert.IsType<GameInvitationResponse>(conn.Sent[0]);
         Assert.False(response.Success);
+        Assert.Equal("someone", response.InviteeHandle);
+        AssertLocalization(response.LocalizedFailure, "NotInAGame", "Invite");
     }
 
     // Case 8b: RankedLeaderboardOverviewRequest sends exactly one failed response.
@@ -240,7 +243,7 @@ public class GameLifecycleModuleTest : EvosTest
     }
 
     // Practice reads the selected character from the account
-    private static long MakeAccount()
+    private static long MakeAccount(params long[] blockedAccounts)
     {
         long accountId = UniqueId();
         DB.Get().AccountDao.CreateAccount(new PersistedAccountData
@@ -255,8 +258,52 @@ public class GameLifecycleModuleTest : EvosTest
             {
                 { CharacterType.Archer, new PersistedCharacterData(CharacterType.Archer) }
             },
+            SocialComponent = new SocialComponent
+            {
+                BlockedAccounts = new HashSet<long>(blockedAccounts)
+            },
         });
         return accountId;
+    }
+
+    // Registers a login so that the account can be found by the returned handle
+    private static string MakeLogin(long accountId)
+    {
+        DB.Get().LoginDao.Save(new LoginDao.LoginEntry
+        {
+            AccountId = accountId,
+            Username = $"player{accountId}",
+            Salt = "",
+            Hash = "",
+        });
+        return $"Player{accountId}#{accountId}";
+    }
+
+    // Creates a custom game owned by the account and puts the module in it
+    private static Game JoinNewCustomGame(GameLifecycleModule module, long owner)
+    {
+        GroupManager.CreateGroup(owner);
+        Game game = CustomGameManager.CreateGame(
+            owner,
+            new LobbyGameConfig { SubTypes = new List<GameSubType> { new GameSubType() } },
+            out LocalizationPayload error);
+        Assert.True(game is not null, error?.ToString());
+        module.JoinGame(game);
+        return game;
+    }
+
+    private static GameInvitationResponse InviteToGame(
+        RecordingClientConnection conn,
+        CapturingRegistry registry,
+        string inviteeHandle)
+    {
+        registry.Dispatch(new GameInvitationRequest
+        {
+            RequestId = 12,
+            InviteeHandle = inviteeHandle
+        });
+
+        return Assert.IsType<GameInvitationResponse>(Assert.Single(conn.Sent));
     }
 
     private static CreateGameResponse CreateGame(RecordingClientConnection conn, CapturingRegistry registry, GameType gameType)
@@ -310,5 +357,114 @@ public class GameLifecycleModuleTest : EvosTest
 
         Assert.False(response.Success);
         Assert.Equal(expectedTerm, response.LocalizedFailure.Term);
+    }
+
+    // Case 11: GameInvitationRequest from a custom game checks the invitee.
+    [Fact]
+    public void GameInvitationRequest_UnknownHandle_PlayerNotFound()
+    {
+        using var scope = new ClientNotifierScope();
+        long accountId = MakeAccount();
+        var (module, conn, registry) = MakeModuleWithRegistry(accountId);
+        JoinNewCustomGame(module, accountId);
+        try
+        {
+            GameInvitationResponse response = InviteToGame(conn, registry, "NoSuchPlayer#9999");
+
+            Assert.False(response.Success);
+            AssertLocalization(response.LocalizedFailure, "PlayerNotFound", "Invite");
+        }
+        finally
+        {
+            CustomGameManager.DeleteGame(accountId);
+        }
+    }
+
+    [Fact]
+    public void GameInvitationRequest_OwnHandle_CantInviteYourself()
+    {
+        using var scope = new ClientNotifierScope();
+        long accountId = MakeAccount();
+        string handle = MakeLogin(accountId);
+        var (module, conn, registry) = MakeModuleWithRegistry(accountId);
+        JoinNewCustomGame(module, accountId);
+        try
+        {
+            GameInvitationResponse response = InviteToGame(conn, registry, handle);
+
+            Assert.False(response.Success);
+            AssertLocalization(response.LocalizedFailure, "CantInviteYourself", "Invite");
+        }
+        finally
+        {
+            CustomGameManager.DeleteGame(accountId);
+        }
+    }
+
+    [Fact]
+    public void GameInvitationRequest_OfflineInvitee_PlayerNotFound()
+    {
+        using var scope = new ClientNotifierScope();
+        long accountId = MakeAccount();
+        string inviteeHandle = MakeLogin(MakeAccount());
+        var (module, conn, registry) = MakeModuleWithRegistry(accountId);
+        JoinNewCustomGame(module, accountId);
+        try
+        {
+            GameInvitationResponse response = InviteToGame(conn, registry, inviteeHandle + "(Dev)");
+
+            Assert.False(response.Success);
+            Assert.Equal(inviteeHandle, response.InviteeHandle);
+            AssertLocalization(response.LocalizedFailure, "PlayerNotFound", "Invite");
+        }
+        finally
+        {
+            CustomGameManager.DeleteGame(accountId);
+        }
+    }
+
+    [Fact]
+    public void GameInvitationRequest_InviterBlocksInvitee_YouAreBlocking()
+    {
+        using var scope = new ClientNotifierScope();
+        long inviteeAccountId = MakeAccount();
+        long accountId = MakeAccount(inviteeAccountId);
+        var (module, conn, registry) = MakeModuleWithRegistry(accountId);
+        JoinNewCustomGame(module, accountId);
+        try
+        {
+            GameInvitationResponse response = InviteToGame(conn, registry, MakeLogin(inviteeAccountId));
+
+            Assert.False(response.Success);
+            AssertLocalization(response.LocalizedFailure, "YouAreBlocking", "Invite");
+        }
+        finally
+        {
+            CustomGameManager.DeleteGame(accountId);
+        }
+    }
+
+    // A blocked inviter is told that the invite was sent
+    [Fact]
+    public void GameInvitationRequest_InviteeBlocksInviter_ReportsSuccessWithoutInvite()
+    {
+        using var scope = new ClientNotifierScope();
+        long accountId = MakeAccount();
+        long inviteeAccountId = MakeAccount(accountId);
+        var (module, conn, registry) = MakeModuleWithRegistry(accountId);
+        Game game = JoinNewCustomGame(module, accountId);
+        try
+        {
+            GameInvitationResponse response = InviteToGame(conn, registry, MakeLogin(inviteeAccountId));
+
+            Assert.True(response.Success);
+            Assert.Null(response.LocalizedFailure);
+            // no pending invite, otherwise this would hit the re-invite cooldown
+            Assert.NotNull(CustomGameManager.Invites.Create(accountId, inviteeAccountId, game.ProcessCode, 0));
+        }
+        finally
+        {
+            CustomGameManager.DeleteGame(accountId);
+        }
     }
 }

@@ -6,6 +6,7 @@ using CentralServer.LobbyServer.Practice;
 using CentralServer.LobbyServer.Session;
 using CentralServer.LobbyServer.Tutorial;
 using CentralServer.LobbyServer.Utils;
+using EvoS.Framework;
 using EvoS.Framework.Constants.Enums;
 using EvoS.Framework.DataAccess;
 using EvoS.Framework.Network.NetworkMessages;
@@ -17,6 +18,7 @@ namespace CentralServer.LobbyServer.GameLifecycle;
 public class GameLifecycleModule : ILobbyModule
 {
     private static readonly ILog log = LogManager.GetLogger(typeof(GameLifecycleModule));
+    private const string InviteTarget = "a custom game";
     private readonly IClientConnection _conn;
     private readonly IGameRegistry _gameRegistry;
 
@@ -312,12 +314,116 @@ public class GameLifecycleModule : ILobbyModule
 
     private void HandleGameInvitationRequest(GameInvitationRequest request)
     {
-        _conn.Send(new GameInvitationResponse
+        string inviteeHandle = InviteRules.CleanHandle(request.InviteeHandle);
+
+        var response = new GameInvitationResponse
         {
-            Success = false,
-            InviteeHandle = request.InviteeHandle,
-            ResponseId = request.RequestId
+            InviteeHandle = inviteeHandle,
+            ResponseId = request.RequestId,
+            Success = false
+        };
+
+        if (CurrentGame is not CustomGame game)
+        {
+            log.Info($"{_conn.Handle} attempted to invite {inviteeHandle} to a custom game while not being in one");
+            response.LocalizedFailure = CustomGameMessages.NotInAGame;
+            _conn.Send(response);
+            return;
+        }
+
+        if (game.GameStatus != GameStatus.Assembling)
+        {
+            log.Info($"{_conn.Handle} attempted to invite {inviteeHandle} to custom game {game.ProcessCode} that has already launched");
+            response.LocalizedFailure = CustomGameMessages.GameAlreadyLaunched;
+            _conn.Send(response);
+            return;
+        }
+
+        LocalizationPayload failure = InviteRules.ResolveInvitee(
+            _conn, inviteeHandle, InviteTarget, out long inviteeAccountId);
+        if (failure is not null)
+        {
+            response.LocalizedFailure = failure;
+            _conn.Send(response);
+            return;
+        }
+
+        PersistedAccountData account = DB.Get().AccountDao.GetAccount(_conn.AccountId);
+        PersistedAccountData inviteeAccount = DB.Get().AccountDao.GetAccount(inviteeAccountId);
+
+        if (account is null || inviteeAccount is null)
+        {
+            log.Error($"Failed to send game invite request: "
+                      + $"account={account?.Handle} "
+                      + $"inviteeAccount={inviteeAccount?.Handle}.");
+            _conn.Send(response);
+            return;
+        }
+
+        failure = InviteRules.CheckInvitee(
+            account, inviteeAccount, inviteeHandle, InviteTarget, out bool shadowBanned, out LobbyServerProtocol invitee);
+        if (shadowBanned)
+        {
+            response.Success = true;
+            _conn.Send(response);
+            return;
+        }
+
+        if (failure is not null)
+        {
+            response.LocalizedFailure = failure;
+            _conn.Send(response);
+            return;
+        }
+
+        if (invitee.IsInGame())
+        {
+            log.Info($"{_conn.Handle} attempted to invite {inviteeHandle} who is already in a game to a custom game");
+            response.LocalizedFailure = CustomGameMessages.OtherPlayerInGame(inviteeAccountId);
+            _conn.Send(response);
+            return;
+        }
+
+        if (invitee.IsInQueue())
+        {
+            log.Info($"{_conn.Handle} attempted to invite {inviteeHandle} who is in a queue to a custom game");
+            response.LocalizedFailure = CustomGameMessages.OtherPlayerAlreadyQueueing(inviteeAccountId);
+            _conn.Send(response);
+            return;
+        }
+
+        CustomGameInvite invite = CustomGameManager.Invites.Create(
+            _conn.AccountId, inviteeAccountId, game.ProcessCode, request.RequestId);
+        if (invite is null)
+        {
+            log.Info($"{_conn.Handle} attempted to invite {inviteeHandle} to custom game {game.ProcessCode} again too soon");
+            response.LocalizedFailure = CustomGameMessages.AlreadyInvitedPlayerToGame;
+            _conn.Send(response);
+            return;
+        }
+
+        invitee.Send(new GameInviteConfirmationRequest
+        {
+            RequestId = invite.InviteId,
+            GameCreatorHandle = account.Handle,
+            GameCreatorAccountId = account.AccountId,
+            InitialRequestId = request.RequestId
         });
+        if (EvosConfiguration.GetPingOnGroupRequest())
+        {
+            invitee.Send(new ChatNotification
+            {
+                SenderAccountId = _conn.AccountId,
+                SenderHandle = account.Handle,
+                ConsoleMessageType = ConsoleMessageType.WhisperChat,
+                LocalizedText = CustomGameMessages.GameInvite
+            });
+        }
+
+        log.Info($"{_conn.AccountId}/{account.Handle} invited {inviteeAccountId}/{inviteeHandle} "
+                 + $"to custom game {game.ProcessCode} (invite {invite.InviteId})");
+        response.Success = true;
+        _conn.Send(response);
     }
 
     private void HandleGameInviteConfirmationResponse(GameInviteConfirmationResponse response)
