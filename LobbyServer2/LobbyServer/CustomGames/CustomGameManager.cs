@@ -21,6 +21,8 @@ namespace CentralServer.LobbyServer.CustomGames
 
         public static bool Enabled { get; set; } = true;
 
+        public static CustomGameInvites Invites { get; } = new(TimeSpan.FromMinutes(1));
+
         public static Game CreateGame(long accountId, LobbyGameConfig gameConfig, out LocalizationPayload error)
         {
             error = LocalizationPayload.Create("UnknownErrorTryAgain@Frontend");
@@ -63,6 +65,7 @@ namespace CentralServer.LobbyServer.CustomGames
                 if (Games.Remove(accountId, out CustomGame oldGame))
                 {
                     GamesByCode.Remove(oldGame.ProcessCode);
+                    Invites.RemoveForGame(oldGame.ProcessCode);
                     log.Info($"Removing {oldGame.ProcessCode}");
                     oldGame.Terminate();
                 }
@@ -72,6 +75,10 @@ namespace CentralServer.LobbyServer.CustomGames
 
         private static CustomGame GetGame(string processCode)
         {
+            if (processCode is null)
+            {
+                return null;
+            }
             GamesByCode.TryGetValue(processCode, out CustomGame game);
             return game;
         }
@@ -175,20 +182,35 @@ namespace CentralServer.LobbyServer.CustomGames
 
         public static Game JoinGame(long accountId, string processCode, bool asSpectator, out LocalizationPayload localizedFailure)
         {
+            return JoinGame(accountId, processCode, asSpectator, false, out localizedFailure);
+        }
+
+        // Invited players take a player slot, or a spectator slot if the teams are full
+        public static Game JoinGameAsInvitee(long accountId, string processCode, out LocalizationPayload localizedFailure)
+        {
+            return JoinGame(accountId, processCode, false, true, out localizedFailure);
+        }
+
+        private static Game JoinGame(
+            long accountId,
+            string processCode,
+            bool asSpectator,
+            bool spectateIfFull,
+            out LocalizationPayload localizedFailure)
+        {
             CustomGame game = GetGame(processCode);
             if (game == null)
             {
-                localizedFailure = LocalizationPayload.Create("UnknownErrorTryAgain@Frontend");
+                localizedFailure = CustomGameMessages.GameNoLongerAvailable;
                 return null;
             }
-            if (asSpectator && game.GameInfo.GameConfig.Spectators == game.TeamInfo.SpectatorInfo.Count())
+            if (!asSpectator && spectateIfFull && !HasFreeSlot(game, false))
             {
-                localizedFailure = LocalizationPayload.Create("GameCreatorNoLongerHasAGameForYou@Invite");
-                return null;
+                asSpectator = true;
             }
-            if (!asSpectator && game.GameInfo.GameConfig.TotalPlayers == (game.TeamInfo.TeamAPlayerInfo.Count() + game.TeamInfo.TeamBPlayerInfo.Count()))
+            if (!HasFreeSlot(game, asSpectator))
             {
-                localizedFailure = LocalizationPayload.Create("GameCreatorNoLongerHasAGameForYou@Invite");
+                localizedFailure = CustomGameMessages.GameNoLongerAvailable;
                 return null;
             }
 
@@ -203,6 +225,14 @@ namespace CentralServer.LobbyServer.CustomGames
                 localizedFailure = LocalizationPayload.Create("UnknownErrorTryAgain@Frontend");
                 return null;
             }
+        }
+
+        private static bool HasFreeSlot(CustomGame game, bool asSpectator)
+        {
+            LobbyGameConfig gameConfig = game.GameInfo.GameConfig;
+            return asSpectator
+                ? game.TeamInfo.SpectatorInfo.Count() < gameConfig.Spectators
+                : game.TeamInfo.TeamAPlayerInfo.Count() + game.TeamInfo.TeamBPlayerInfo.Count() < gameConfig.TotalPlayers;
         }
     }
 }
