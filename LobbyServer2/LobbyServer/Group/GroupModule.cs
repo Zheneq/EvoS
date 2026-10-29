@@ -1,9 +1,6 @@
 using System;
 using System.Linq;
-using System.Text.RegularExpressions;
 using CentralServer.BridgeServer;
-using CentralServer.LobbyServer.Config;
-using CentralServer.LobbyServer.Matchmaking;
 using CentralServer.LobbyServer.Session;
 using CentralServer.LobbyServer.Utils;
 using EvoS.Framework;
@@ -18,6 +15,7 @@ namespace CentralServer.LobbyServer.Group;
 public class GroupModule : ILobbyModule
 {
     private static readonly ILog log = LogManager.GetLogger(typeof(GroupModule));
+    private const string InviteTarget = "a group";
     private readonly IClientConnection _conn;
     private readonly IGroupRegistry _groupRegistry;
 
@@ -119,8 +117,7 @@ public class GroupModule : ILobbyModule
 
     private void HandleGroupInviteRequest(GroupInviteRequest request)
     {
-        // Clean the recipient handle by removing (mentor icon) and (Dev) tag
-        request.FriendHandle = Regex.Replace(request.FriendHandle, @"\p{C}|\(.*?\)", "");
+        request.FriendHandle = InviteRules.CleanHandle(request.FriendHandle);
 
         var response = new GroupInviteResponse
         {
@@ -129,19 +126,11 @@ public class GroupModule : ILobbyModule
             Success = false
         };
 
-        long friendAccountId = LobbyServerUtils.ResolveAccountId(0, request.FriendHandle);
-        if (friendAccountId == 0)
+        LocalizationPayload failure = InviteRules.ResolveInvitee(
+            _conn, request.FriendHandle, InviteTarget, out long friendAccountId);
+        if (failure is not null)
         {
-            log.Info($"Failed to find player {request.FriendHandle} to invite to a group");
-            response.LocalizedFailure = GroupMessages.PlayerNotFound(request.FriendHandle);
-            _conn.Send(response);
-            return;
-        }
-
-        if (friendAccountId == _conn.AccountId)
-        {
-            log.Info($"{_conn.Handle} attempted to invite themself to a group");
-            response.LocalizedFailure = GroupMessages.CantInviteYourself;
+            response.LocalizedFailure = failure;
             _conn.Send(response);
             return;
         }
@@ -156,9 +145,7 @@ public class GroupModule : ILobbyModule
         }
 
         PersistedAccountData account = DB.Get().AccountDao.GetAccount(_conn.AccountId);
-        SocialComponent socialComponent = account?.SocialComponent;
         PersistedAccountData friendAccount = DB.Get().AccountDao.GetAccount(friendAccountId);
-        SocialComponent friendSocialComponent = friendAccount?.SocialComponent;
         PersistedAccountData leaderAccount = DB.Get().AccountDao.GetAccount(group.Leader);
 
         if (account is null || friendAccount is null || leaderAccount is null)
@@ -170,27 +157,18 @@ public class GroupModule : ILobbyModule
             return;
         }
 
-        if (socialComponent?.IsBlocked(friendAccountId) == true)
+        failure = InviteRules.CheckInvitee(
+            account, friendAccount, request.FriendHandle, InviteTarget, out bool shadowBanned, out LobbyServerProtocol friend);
+        if (shadowBanned)
         {
-            log.Info($"{_conn.Handle} attempted to invite {request.FriendHandle} whom they blocked to a group");
-            response.LocalizedFailure = GroupMessages.YouAreBlocking(friendAccountId);
+            response.Success = true;
             _conn.Send(response);
             return;
         }
 
-        if (friendSocialComponent?.IsBlocked(_conn.AccountId) == true)
+        if (failure is not null)
         {
-            log.Info($"{_conn.Handle} attempted to invite {request.FriendHandle} who blocked them to a group");
-            response.Success = true; // shadow ban
-            _conn.Send(response);
-            return;
-        }
-
-        LobbyServerProtocol friend = SessionManager.GetClientConnection(friendAccountId);
-        if (friend is null) // offline
-        {
-            log.Info($"{_conn.Handle} attempted to invite {request.FriendHandle} who is offline to a group");
-            response.LocalizedFailure = GroupMessages.PlayerNotFound(request.FriendHandle);
+            response.LocalizedFailure = failure;
             _conn.Send(response);
             return;
         }

@@ -126,6 +126,26 @@ public class GroupModuleTest : EvosTest
         AssertLocalization(response.LocalizedFailure, "PlayerNotFound", "Invite");
     }
 
+    // Case 3b: GroupInviteRequest without a handle → Success = false, PlayerNotFound, exactly one response
+    [Fact]
+    public void GroupInvite_NullHandle_PlayerNotFoundFailure()
+    {
+        long accountId = UniqueId();
+        GroupManager.CreateGroup(accountId);
+        var (_, conn, registry) = MakeModule(accountId);
+
+        registry.Dispatch(new GroupInviteRequest
+        {
+            FriendHandle = null,
+            RequestId = 3
+        });
+
+        Assert.Single(conn.Sent);
+        var response = Assert.IsType<GroupInviteResponse>(conn.Sent[0]);
+        Assert.False(response.Success);
+        AssertLocalization(response.LocalizedFailure, "PlayerNotFound", "Invite");
+    }
+
     // Case 4: GroupJoinRequest for unknown handle → PlayerNotFound failure
     [Fact]
     public void GroupJoin_UnknownHandle_PlayerNotFoundFailure()
