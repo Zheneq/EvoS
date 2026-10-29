@@ -1,14 +1,13 @@
 using System;
-using CentralServer.LobbyServer.Group;
 using CentralServer.LobbyServer.GameLifecycle;
+using CentralServer.LobbyServer.Group;
 using CentralServer.LobbyServer.Matchmaking;
 using CentralServer.LobbyServer.Session;
-using CentralServer.LobbyServer.Utils;
 using EvoS.Framework.Constants.Enums;
 using EvoS.Framework.DataAccess;
+using EvoS.Framework.GameData;
 using EvoS.Framework.Network.NetworkMessages;
 using EvoS.Framework.Network.Static;
-using EvoS.Framework.Network.WebSocket;
 using log4net;
 
 namespace CentralServer.LobbyServer.Character;
@@ -77,13 +76,13 @@ public class CharacterModule : ILobbyModule
         if (account is not null)
         {
             characterComponent = (CharacterComponent)account.CharacterData[characterType].CharacterComponent.Clone();
-            characterDataUpdate = ApplyCharacterDataUpdate(characterComponent, update);
+            characterDataUpdate = ApplyCharacterDataUpdate(characterType, characterComponent, update);
             characterInfo = LobbyCharacterInfo.Of(account.CharacterData[characterType], characterComponent);
         }
         else
         {
             characterComponent = EvoS.DirectoryServer.Character.CharacterManager.GetCharacterComponent(0, characterType);
-            ApplyCharacterDataUpdate(characterComponent, update);
+            ApplyCharacterDataUpdate(characterType, characterComponent, update);
             characterInfo = LobbyCharacterInfo.Of(new PersistedCharacterData(characterType), characterComponent);
         }
 
@@ -160,7 +159,8 @@ public class CharacterModule : ILobbyModule
         _conn.BroadcastRefreshGroup();
     }
 
-    private static bool ApplyCharacterDataUpdate(
+    private bool ApplyCharacterDataUpdate(
+        CharacterType characterType,
         CharacterComponent characterComponent,
         LobbyPlayerInfoUpdate update)
     {
@@ -168,8 +168,17 @@ public class CharacterModule : ILobbyModule
 
         if (update.CharacterSkin.HasValue)
         {
-            characterComponent.LastSkin = update.CharacterSkin.Value;
-            characterDataUpdate = true;
+            // Skin updates do not specify the character, so they can arrive for a different one than the client
+            // shows (e.g. a skin of the previous character while Fill is selected)
+            if (GameWideData.Get().IsVisualInfoSelectionValid(characterType, update.CharacterSkin.Value))
+            {
+                characterComponent.LastSkin = update.CharacterSkin.Value;
+                characterDataUpdate = true;
+            }
+            else
+            {
+                log.Warn($"{_conn.AccountId} attempted to select invalid skin {update.CharacterSkin.Value} for {characterType}");
+            }
         }
         if (update.CharacterCards.HasValue)
         {

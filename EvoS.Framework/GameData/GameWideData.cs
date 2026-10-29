@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using EvoS.Framework.Constants.Enums;
 using EvoS.Framework.Misc;
+using EvoS.Framework.Network.Static;
 using log4net;
 
 namespace EvoS.Framework.GameData
@@ -146,6 +147,13 @@ namespace EvoS.Framework.GameData
 			}
 
 			throw new Exception($"Character resource link not found for: {characterType} in GameWideData.");
+		}
+
+		// custom
+		public bool IsVisualInfoSelectionValid(CharacterType characterType, CharacterVisualInfo selection)
+		{
+			return m_characterResourceLinkDictionary.TryGetValue(characterType, out CharacterResourceLink data)
+			       && data.IsVisualInfoSelectionValid(selection);
 		}
 
 		// public string GetCharacterDisplayName(CharacterType characterType)

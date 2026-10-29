@@ -92,6 +92,23 @@ public class PatchAccountDataTest : EvosTest
     }
 
     [Fact]
+    public void PatchingResetsInvalidLastSkin()
+    {
+        PersistedAccountData account = MakePatchedAccount();
+
+        // valid for BattleMonk, but Fill only has one pattern per skin
+        CharacterVisualInfo skin = new CharacterVisualInfo(1, 1, 0);
+        account.CharacterData[CharacterType.PendingWillFill].CharacterComponent.LastSkin = skin;
+        account.CharacterData[CharacterType.BattleMonk].CharacterComponent.LastSkin = skin;
+
+        Assert.True(EvoS.DirectoryServer.DirectoryServer.PatchAccountData(account));
+        Assert.True(account.CharacterData[CharacterType.PendingWillFill].CharacterComponent.LastSkin.IsDefaultSelection());
+        Assert.Equal(skin, account.CharacterData[CharacterType.BattleMonk].CharacterComponent.LastSkin);
+
+        Assert.False(EvoS.DirectoryServer.DirectoryServer.PatchAccountData(account));
+    }
+
+    [Fact]
     public void DeveloperTitleIsNotDuplicated()
     {
         PersistedAccountData account = MakePatchedAccount();

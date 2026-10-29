@@ -16,6 +16,7 @@ using EvoS.Framework;
 using EvoS.Framework.Auth;
 using EvoS.Framework.Constants.Enums;
 using EvoS.Framework.DataAccess;
+using EvoS.Framework.GameData;
 using EvoS.Framework.Misc;
 using EvoS.Framework.Network;
 using EvoS.Framework.Network.NetworkMessages;
@@ -464,6 +465,16 @@ namespace EvoS.DirectoryServer
                 persistedCharacterData.CharacterComponent.UnlockSkinsAndTaunts(persistedCharacterData.CharacterType);
                 if (EvosStoreConfiguration.AreAllCharactersForFree()) persistedCharacterData.ExperienceComponent.Level = EvosStoreConfiguration.GetStartingCharactersLevel();
                 persistedCharacterData.CharacterComponent.UnlockVFX(persistedCharacterData.CharacterType);
+
+                // Older versions accepted skins that do not exist for the character
+                // (e.g. a skin of another character stored for Fill)
+                CharacterVisualInfo lastSkin = persistedCharacterData.CharacterComponent.LastSkin;
+                if (!lastSkin.IsDefaultSelection()
+                    && !GameWideData.Get().IsVisualInfoSelectionValid(persistedCharacterData.CharacterType, lastSkin))
+                {
+                    log.Info($"Resetting invalid skin {lastSkin} for {persistedCharacterData.CharacterType} of {account.Handle}/{account.AccountId}");
+                    persistedCharacterData.CharacterComponent.LastSkin = default;
+                }
             }
 
             if (EvosStoreConfiguration.AreEmojisFree()) account.AccountComponent.UnlockedEmojiIDs = InventoryManager.GetUnlockedEmojiIDs(account.AccountId);

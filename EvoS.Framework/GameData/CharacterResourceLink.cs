@@ -146,6 +146,17 @@ public class CharacterResourceLink
 		return characterUnlockData;
 	}
 
+	// custom
+	public bool IsVisualInfoSelectionValid(CharacterVisualInfo selection)
+	{
+		return selection.skinIndex >= 0
+		       && selection.skinIndex < m_skins.Count
+		       && selection.patternIndex >= 0
+		       && selection.patternIndex < m_skins[selection.skinIndex].m_patterns.Count
+		       && selection.colorIndex >= 0
+		       && selection.colorIndex < m_skins[selection.skinIndex].m_patterns[selection.patternIndex].m_colors.Count;
+	}
+
 	private void GenerateVfxSwapUnlockData(List<CharacterAbilityVfxSwap> input, int abilityIndex, List<GameBalanceVars.AbilityVfxUnlockData> genUnlockDataList)
 	{
 		if (input != null)

@@ -281,4 +281,60 @@ public class CharacterModuleTest : EvosTest
         Assert.Empty(updated.CharacterData[CharacterType.None].CharacterComponent.CharacterLoadouts);
         Assert.Equal(-1, updated.CharacterData[CharacterType.None].CharacterComponent.LastSelectedLoadout);
     }
+
+    // Case 8: HandlePlayerInfoUpdateRequest with a skin only (no game): the skin is applied to the
+    // selected character and persisted.
+    [Fact]
+    public void PlayerInfoUpdateRequest_ValidSkin_Persisted()
+    {
+        long accountId = UniqueId();
+        MakeAccount(accountId, CharacterType.BattleMonk);
+        GroupManager.CreateGroup(accountId);
+        var (_, _, conn, registry) = MakeModuleWithRegistry(accountId);
+        CharacterVisualInfo skin = new CharacterVisualInfo(1, 1, 0);
+
+        registry.Dispatch(new PlayerInfoUpdateRequest
+        {
+            RequestId = 8,
+            PlayerInfoUpdate = new LobbyPlayerInfoUpdate
+            {
+                CharacterSkin = skin,
+            }
+        });
+
+        var response = Assert.IsType<PlayerInfoUpdateResponse>(Assert.Single(conn.Sent));
+        Assert.True(response.Success);
+        Assert.Equal(skin, response.CharacterInfo.CharacterSkin);
+
+        PersistedAccountData updated = DB.Get().AccountDao.GetAccount(accountId);
+        Assert.Equal(skin, updated.CharacterData[CharacterType.BattleMonk].CharacterComponent.LastSkin);
+    }
+
+    // Case 9: HandlePlayerInfoUpdateRequest with a skin that does not exist for the selected character
+    // (a skin of another character while Fill is selected, no game): the skin is ignored and the
+    // response carries the stored one.
+    [Fact]
+    public void PlayerInfoUpdateRequest_InvalidSkin_Ignored()
+    {
+        long accountId = UniqueId();
+        MakeAccount(accountId, CharacterType.PendingWillFill);
+        GroupManager.CreateGroup(accountId);
+        var (_, _, conn, registry) = MakeModuleWithRegistry(accountId);
+
+        registry.Dispatch(new PlayerInfoUpdateRequest
+        {
+            RequestId = 9,
+            PlayerInfoUpdate = new LobbyPlayerInfoUpdate
+            {
+                CharacterSkin = new CharacterVisualInfo(1, 1, 0),
+            }
+        });
+
+        var response = Assert.IsType<PlayerInfoUpdateResponse>(Assert.Single(conn.Sent));
+        Assert.True(response.Success);
+        Assert.True(response.CharacterInfo.CharacterSkin.IsDefaultSelection());
+
+        PersistedAccountData updated = DB.Get().AccountDao.GetAccount(accountId);
+        Assert.True(updated.CharacterData[CharacterType.PendingWillFill].CharacterComponent.LastSkin.IsDefaultSelection());
+    }
 }
