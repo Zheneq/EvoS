@@ -597,6 +597,7 @@ namespace CentralServer.LobbyServer.Discord
                     QueuePenaltyManager.PardonReason.EveryoneLeft => $"Everyone left {game}",
                     QueuePenaltyManager.PardonReason.NoResult => $"{game} ended without a result",
                     QueuePenaltyManager.PardonReason.CameBack => $"Came back to {game} and stayed until the end",
+                    QueuePenaltyManager.PardonReason.LeftNearEnd => $"Left {game} just before it ended",
                     _ => report.Reason.ToString()
                 };
                 await adminSystemReportChannel.SendMessageAsync(

@@ -55,6 +55,9 @@ public abstract class Game
     // so that it can be re-applied if they leave again, or pardoned later
     public Dictionary<long, QueuePenaltyManager.GamePenalty> PenalizedPlayers { get; } = new();
 
+    // Set when an admin ends the game
+    private bool EndedByAdmin;
+
     // Set when an admin ends the game with no result. The game server can't do that, so it ends the game as a tie.
     private bool EndedByAdminWithNoResult;
 
@@ -62,6 +65,10 @@ public abstract class Game
     // with no result are recorded as a tie, but they are not a result.
     public bool HasResult => !EndedByAdminWithNoResult
                              && GameSummary?.GameResult is GameResult.TieGame or GameResult.TeamAWon or GameResult.TeamBWon;
+
+    // Whether a team has won the game by itself. Ties and games ended by an admin don't count.
+    public bool EndedNaturally => !EndedByAdmin
+                                  && GameSummary?.GameResult is GameResult.TeamAWon or GameResult.TeamBWon;
     
     public BridgeServerProtocol Server { private set; get; } // TODO check it is set when needed
 
@@ -191,6 +198,7 @@ public abstract class Game
     {
         if (GameStatus == GameStatus.Started)
         {
+            EndedByAdmin = true;
             if (gameResult == GameResult.NoResult)
             {
                 EndedByAdminWithNoResult = true;

@@ -71,7 +71,8 @@ disconnect/AFK cancels the match):
 - Collapse: once `QueuePenaltyCollapseThreshold` (default 2) other players are replaced with
   bots, further leavers are not penalized.
 - One offense per game: leaving the same game again (after reconnecting) re-applies the block
-  recorded in `Game.PenalizedPlayers`, without escalating.
+  recorded in `Game.PenalizedPlayers`, without escalating. The record also holds when the player
+  last left (`GamePenalty.LeftAt`), for the `LeftNearEnd` pardon.
 - Right after the game ended (until `Game.StopTime`, 8 s after the summary): a short
   non-offense block of up to 30 s, only if the game has a result.
 
@@ -93,6 +94,14 @@ offense no longer counts, and the block is cut to 15 s. Reasons (`PardonReason`)
   penalized.
 - `CameBack`: the game ended with a result, and the leaver had reconnected and stayed until
   the end.
+- `LeftNearEnd`: the game ended naturally (`Game.EndedNaturally`: a team won by itself; ties
+  and games ended by an admin don't count) within `QueuePenaltyLateLeaveWindow` (30 s, zero
+  disables) after the player's latest leave. This covers quitting on the end screen: the game
+  server sends the summary about 5 s after the match ends, and until then the lobby treats the
+  game as running. The window counts from when the lobby learns of the leave. That is instant
+  for explicit leaves (`DisconnectPlayerRequest`), but dropped connections are reported only
+  after the game server's reconnect grace (`GameServerClientReconnectTimeout`, 60 s in the
+  game server config), so for them the window effectively reaches back that much further.
 
 A pardon can't restore the parole window that the pardoned offense refreshed.
 

@@ -139,6 +139,21 @@ public class QueuePenaltyIssueTest : EvosTest
         QueuePenaltyManager.IssueQueuePenalties(game.Player(index).AccountId, game);
     }
 
+    // Leaving long enough before the match is won not to be pardoned for leaving near the end
+    private static void LeaveEarly(TestGame game, int index)
+    {
+        Leave(game, index);
+        Backdate(game, index, LobbyConfiguration.GetQueuePenaltyLateLeaveWindow() + TimeSpan.FromMinutes(1));
+    }
+
+    // Moves the player's last leave back in time
+    private static void Backdate(TestGame game, int index, TimeSpan by)
+    {
+        long accountId = game.Player(index).AccountId;
+        QueuePenaltyManager.GamePenalty penalty = game.PenalizedPlayers[accountId];
+        game.PenalizedPlayers[accountId] = penalty with { LeftAt = penalty.LeftAt - by };
+    }
+
     // --- When leaving is penalized ---
 
     [Theory]
@@ -395,7 +410,7 @@ public class QueuePenaltyIssueTest : EvosTest
     {
         using ClientNotifierScope _ = new();
         TestGame game = new(draft, GameStatus.Started, MakeAccounts(PlayerCount));
-        Leave(game, 0);
+        LeaveEarly(game, 0);
 
         game.End(result);
 
@@ -409,8 +424,8 @@ public class QueuePenaltyIssueTest : EvosTest
     {
         using ClientNotifierScope _ = new();
         TestGame game = new(draft, GameStatus.Started, MakeAccounts(PlayerCount));
-        Leave(game, 0);
-        Leave(game, 1);
+        LeaveEarly(game, 0);
+        LeaveEarly(game, 1);
         game.Player(1).ReplacedWithBots = false; // reconnected (Game.ReconnectPlayer)
 
         game.End(GameResult.TeamAWon);
@@ -430,6 +445,72 @@ public class QueuePenaltyIssueTest : EvosTest
         game.End(GameResult.TieGame); // the game server can only end the game as a tie
 
         Assert.Equal(0, OffenseCount(game.Player(0).AccountId));
+    }
+
+    // --- Leaving right before the match is won (e.g. quitting on the end screen) is not penalized ---
+
+    [Theory]
+    [InlineData(true, GameResult.TeamAWon, true)]
+    [InlineData(false, GameResult.TeamAWon, true)]
+    [InlineData(false, GameResult.TeamBWon, true)]
+    [InlineData(false, GameResult.TieGame, false)]
+    public void GameEndedRightAfterLeaving_PardonsLeaverOnlyIfWon(bool draft, GameResult result, bool expectPardon)
+    {
+        using ClientNotifierScope _ = new();
+        TestGame game = new(draft, GameStatus.Started, MakeAccounts(PlayerCount));
+        Leave(game, 0);
+
+        game.End(result);
+
+        Assert.Equal(expectPardon ? 0 : 1, OffenseCount(game.Player(0).AccountId));
+    }
+
+    [Theory]
+    [InlineData(-5, true)] // just within the window
+    [InlineData(5, false)] // just outside
+    public void GameWonAfterLeaving_PardonsLeaverOnlyWithinWindow(int secondsPastWindow, bool expectPardon)
+    {
+        using ClientNotifierScope _ = new();
+        TestGame game = new(draft: false, GameStatus.Started, MakeAccounts(PlayerCount));
+        Leave(game, 0);
+        Backdate(game, 0, LobbyConfiguration.GetQueuePenaltyLateLeaveWindow().Add(TimeSpan.FromSeconds(secondsPastWindow)));
+
+        game.End(GameResult.TeamAWon);
+
+        Assert.Equal(expectPardon ? 0 : 1, OffenseCount(game.Player(0).AccountId));
+    }
+
+    [Theory]
+    [InlineData(GameResult.TeamAWon)]
+    [InlineData(GameResult.TeamBWon)]
+    [InlineData(GameResult.TieGame)]
+    public void GameEndedByAdminRightAfterLeaving_KeepsLeaverPenalized(GameResult result)
+    {
+        using ClientNotifierScope _ = new();
+        TestGame game = new(draft: false, GameStatus.Started, MakeAccounts(PlayerCount));
+        Leave(game, 0);
+
+        game.AdminEndGame(result); // in-game admin commands
+        game.End(result);
+
+        Assert.Equal(1, OffenseCount(game.Player(0).AccountId));
+    }
+
+    [Fact]
+    public void LeavingAgainRightBeforeWin_PardonedAsOneOffense()
+    {
+        using ClientNotifierScope _ = new();
+        TestGame game = new(draft: false, GameStatus.Started, MakeAccounts(PlayerCount));
+        long leaver = game.Player(0).AccountId;
+        SetPriorOffenses(leaver, 1);
+        LeaveEarly(game, 0);
+        game.Player(0).ReplacedWithBots = false; // reconnected (Game.ReconnectPlayer)
+        Penalties(leaver)!.QueueDodgeBlockTimeout = DateTime.UtcNow.AddSeconds(-1); // ran out while back in the game
+        Leave(game, 0);
+
+        game.End(GameResult.TeamAWon);
+
+        Assert.Equal(1, OffenseCount(leaver));
     }
 
     [Theory]
@@ -520,7 +601,7 @@ public class QueuePenaltyIssueTest : EvosTest
     {
         using ClientNotifierScope _ = new();
         TestGame game = new(draft: false, GameStatus.Started, MakeAccounts(PlayerCount));
-        Leave(game, 0);
+        LeaveEarly(game, 0);
         game.End(GameResult.TeamAWon);
         IGameRegistry registry = new GameManager();
         registry.RegisterGame(game.ProcessCode, game);
@@ -679,9 +760,10 @@ public class QueuePenaltyIssueTest : EvosTest
     {
         using ClientNotifierScope _ = new();
         TestGame game = new(draft: false, GameStatus.Started, MakeAccounts(PlayerCount));
-        Leave(game, 0);
-        Leave(game, 1);
+        LeaveEarly(game, 0);
+        LeaveEarly(game, 1);
         game.Player(1).ReplacedWithBots = false; // reconnected (Game.ReconnectPlayer)
+        Leave(game, 2);
         List<QueuePenaltyManager.PardonReport> reports = [];
         Action<QueuePenaltyManager.PardonReport> handler = r =>
         {
@@ -702,8 +784,13 @@ public class QueuePenaltyIssueTest : EvosTest
             [
                 new(game.Player(0).AccountId, game, QueuePenaltyManager.PardonReason.NoResult, 0),
                 new(game.Player(1).AccountId, game, QueuePenaltyManager.PardonReason.NoResult, 0),
+                new(game.Player(2).AccountId, game, QueuePenaltyManager.PardonReason.NoResult, 0),
             ]
-            : [new(game.Player(1).AccountId, game, QueuePenaltyManager.PardonReason.CameBack, 0)];
+            :
+            [
+                new(game.Player(1).AccountId, game, QueuePenaltyManager.PardonReason.CameBack, 0),
+                new(game.Player(2).AccountId, game, QueuePenaltyManager.PardonReason.LeftNearEnd, 0),
+            ];
         Assert.Equal(expected.OrderBy(r => r.AccountId), reports.OrderBy(r => r.AccountId));
     }
 }

@@ -51,7 +51,8 @@ state, handle disconnect/reconnect/dodge, and finalize results (stats, Elo, Disc
    cancelled).
 5. End: `ServerGameSummaryNotification` → `OnGameEnded` → `FinalizeGame`: persists match
    history, updates Elo (`MatchmakingManager.OnGameEnded` → queue → `Elo`), pardons leavers
-   when there's no result or they came back (`QueuePenaltyManager.OnGameEnded`), Trust War
+   when there's no result, they came back, or the match was won right after they left
+   (`QueuePenaltyManager.OnGameEnded`), Trust War
    contributions, accolades/badges, Discord game log; clients get unassigned;
    `ServerManager.DisconnectServer` shuts the server down after configured delays.
    - If the game server disconnects and doesn't come back within `ServerReconnectionTimeout`,

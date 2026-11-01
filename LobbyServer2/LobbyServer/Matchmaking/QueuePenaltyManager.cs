@@ -22,6 +22,7 @@ public static class QueuePenaltyManager
         EveryoneLeft, // everyone left the match, so it must have broken
         NoResult, // the game ended without a result
         CameBack, // the leaver came back and stayed until the end
+        LeftNearEnd, // the match was won right after they left
     }
 
     // LeftAgain: the player has left the same game again, so the block is re-applied, but it is the same offense
@@ -127,6 +128,12 @@ public static class QueuePenaltyManager
         {
             // Leavers who came back and stayed until the end are forgiven
             PardonQueuePenalties(game, PardonReason.CameBack);
+            // and so are those who left right before the match was won (e.g. quit on the end screen,
+            // as the game server sends the result a few seconds after the match ends)
+            if (game.EndedNaturally)
+            {
+                PardonQueuePenalties(game, PardonReason.LeftNearEnd);
+            }
         }
     }
 
@@ -136,9 +143,17 @@ public static class QueuePenaltyManager
     {
         lock (game)
         {
-            List<long> players = game.PenalizedPlayers.Keys
-                .Where(accountId => reason != PardonReason.CameBack
-                                    || game.GetPlayerInfo(accountId)?.ReplacedWithBots == false)
+            DateTime now = DateTime.UtcNow;
+            TimeSpan lateLeaveWindow = LobbyConfiguration.GetQueuePenaltyLateLeaveWindow();
+            List<long> players = game.PenalizedPlayers
+                .Where(entry => reason switch
+                {
+                    PardonReason.CameBack => game.GetPlayerInfo(entry.Key)?.ReplacedWithBots == false,
+                    PardonReason.LeftNearEnd => lateLeaveWindow > TimeSpan.Zero
+                                                && now - entry.Value.LeftAt <= lateLeaveWindow,
+                    _ => true,
+                })
+                .Select(entry => entry.Key)
                 .ToList();
 
             foreach (long accountId in players)
