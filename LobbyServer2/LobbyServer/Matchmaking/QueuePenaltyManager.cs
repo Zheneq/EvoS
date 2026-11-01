@@ -28,6 +28,9 @@ public static class QueuePenaltyManager
     public record PenaltyReport(long AccountId, Game Game, TimeSpan Duration, int OffenseCount, bool LeftAgain);
     public record PardonReport(long AccountId, Game Game, PardonReason Reason, int OffenseCount);
 
+    // A penalty for leaving a game: the block the player got, and when they last left
+    public record GamePenalty(TimeSpan AppliedSpan, DateTime LeftAt);
+
     public static event Action<PenaltyReport> OnPenalty = delegate { };
     public static event Action<PardonReport> OnPardon = delegate { };
 
@@ -93,16 +96,16 @@ public static class QueuePenaltyManager
     // Leaving the same game again re-applies the block, but it's still one offense
     private static void PenalizeLeaver(long accountId, Game game, TimeSpan baseDuration)
     {
-        bool leftAgain = game.PenalizedPlayers.TryGetValue(accountId, out TimeSpan appliedSpan);
+        bool leftAgain = game.PenalizedPlayers.TryGetValue(accountId, out GamePenalty penalty);
         PenaltyEvaluation? eval = leftAgain
-            ? SetQueuePenalty(accountId, GameType.PvP, appliedSpan)
+            ? SetQueuePenalty(accountId, GameType.PvP, penalty.AppliedSpan)
             : SetQueuePenalty(accountId, GameType.PvP, baseDuration, escalate: true);
         if (eval is null)
         {
             return;
         }
 
-        game.PenalizedPlayers[accountId] = eval.Value.AppliedSpan;
+        game.PenalizedPlayers[accountId] = new GamePenalty(eval.Value.AppliedSpan, DateTime.UtcNow);
         OnPenalty(new PenaltyReport(accountId, game, eval.Value.AppliedSpan, eval.Value.Count, leftAgain));
     }
 
