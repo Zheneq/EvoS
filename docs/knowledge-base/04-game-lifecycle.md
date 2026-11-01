@@ -18,6 +18,7 @@ state, handle disconnect/reconnect/dodge, and finalize results (stats, Elo, Disc
 | `PvpGame` | `LobbyServer2/BridgeServer/PvpGame.cs` | Matchmade game: fill teams, pick map, assign players, launch |
 | `CustomGame` | `LobbyServer2/LobbyServer/CustomGames/CustomGame.cs` | Player-created game: owner, team management via `GameInfoUpdateRequest`, starts when owner launches |
 | `CustomGameManager` | `LobbyServer2/LobbyServer/CustomGames/CustomGameManager.cs` | Static registry of custom games + subscriber list for the custom-game browser |
+| `CustomGameInvites` | `LobbyServer2/LobbyServer/CustomGames/CustomGameInvites.cs` | Pending custom game invites (`CustomGameManager.Invites`), see below |
 | `SoloGame` (abstract) | `LobbyServer2/BridgeServer/SoloGame.cs` | Single-human game launched right away on a `CreateGameRequest` (no queue, no character select). `SoloGame.Start` reserves a server before the response so failures go into `CreateGameResponse`; no accolades, stats or finalize delay |
 | `TutorialGame` / `TutorialManager` | `LobbyServer2/LobbyServer/Tutorial/` | `SoloGame` on `CargoShip_Tutorial1` as Lockwood; the game server's script spawns the NPCs |
 | `PracticeGame` / `PracticeManager` | `LobbyServer2/LobbyServer/Practice/` | `SoloGame` on `VR_Practice` with the selected freelancer; the map's NPC spawners add the bots (they aren't in `TeamInfo`); gated by `GameTypePracticeAvailable`, and refuses characters that `CharacterRules.CheckCharacter` rejects (Will Fill, test freelancers, unknown types) |
@@ -68,6 +69,36 @@ sends its ready state (`PlayerInfoUpdateRequest`) and only requests the game onc
 acknowledged; `MatchmakingModule.UpdateGroupReadyState` doesn't queue non-queueable game types.
 `SoloGame.Start` refuses players in a group of more than one (`BadGroupSizeForQueue@Matchmaking`); the
 client already hides both modes from grouped players.
+
+## Custom game invites
+
+`GameLifecycleModule` handles both messages. Anyone in a custom game lobby can invite with
+`GameInvitationRequest` (client `/invitetogame` or the friend list). The lobby checks:
+- the custom game hasn't launched;
+- the `InviteRules` checks from doc 06;
+- the invitee isn't in a game or a queue;
+- the invitee doesn't already have a pending invite to this game (`AleadyInvitedPlayerToGroup@Invite`,
+  whose text doesn't mention groups).
+
+It then answers the inviter right away and sends the invitee
+`GameInviteConfirmationRequest` (`RequestId` = invite id, `InitialRequestId` = the inviter's
+request id), plus a whisper ping when `PingOnGroupRequest` is on.
+
+The client shows a modal Join/Reject popup with no timer and replies with a fire-and-forget
+`GameInviteConfirmationResponse`. The lobby takes the invite by id (only for its invitee) and
+checks the echoed inviter and initial request ids. The inviter learns about a rejection or a
+failed join through system messages. Join goes through `CustomGameManager.JoinGameAsInvitee`:
+a player slot if one is free, otherwise a spectator slot. The client then enters character
+select on the `GameAssignmentNotification`, but only from the landing page or group screens.
+
+An invite stays pending only while its popup can still be on screen. `CustomGameInvites`
+drops it when:
+- it is answered;
+- its game is deleted (owner left, game empty, or game started);
+- the invitee disconnects (a restarted client has no popups);
+- the invitee joins any game (loading a match closes popups).
+
+A stale popup clicked after that gets "no longer available", or nothing if the player is in a game.
 
 ## Reconnection
 

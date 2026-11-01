@@ -20,6 +20,8 @@ public class RecordingClientConnection : IClientConnection
     public long SessionToken { get; set; }
     public int CloseConnectionCalls;
     public Game CurrentGame { get; set; } = null!;
+    public bool InQueue { get; set; }
+    public bool IsInQueue() => InQueue;
     public readonly List<WebSocketMessage> Sent = new();
     public readonly List<LocalizationPayload> SystemMessages = new();
     public int FriendListRefreshes;

@@ -16,9 +16,12 @@ removal, ready-state resets, and client refreshes — routed back through
 `LobbyServerProtocol.OnJoinGroup/OnLeaveGroup/OnGroupDisbanded` callbacks and broadcasts,
 creating a manager ↔ connection call cycle.
 
-Invite flow is split awkwardly: `LobbyServerProtocol.HandleGroupInviteRequest` (validation,
+Invite flow is split awkwardly: `GroupModule.HandleGroupInviteRequest` (validation,
 blocked users, pings) → `GroupManager.CreateGroupRequest` → recipient's
-`HandleGroupConfirmationResponse` (~175 lines) → `GroupManager.JoinGroup`.
+`GroupModule.HandleGroupConfirmationResponse` (~175 lines) → `GroupManager.JoinGroup`.
+The checks shared with custom game invites (doc 04) live in `Utils/InviteRules`: handle
+cleanup, self-invite, blocks (an inviter blocked by the invitee gets a fake success), and
+the invitee being online.
 
 ## Friends (`LobbyServer2/LobbyServer/Friend/`)
 

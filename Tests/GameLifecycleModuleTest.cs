@@ -218,16 +218,27 @@ public class GameLifecycleModuleTest : EvosTest
         Assert.False(response.Success);
     }
 
-    // Case 8d: GameInviteConfirmationResponse no-throw.
-    [Fact]
-    public void GameInviteConfirmationResponse_NoThrow()
+    // Case 8d: GameInviteConfirmationResponse to an unknown invite: "no longer available" if accepted.
+    [Theory]
+    [InlineData(true, 1)]
+    [InlineData(false, 0)]
+    public void GameInviteConfirmationResponse_UnknownInvite(bool accepted, int expectedSystemMessages)
     {
         long accountId = UniqueId();
-        var (_, _, registry) = MakeModuleWithRegistry(accountId);
+        var (_, conn, registry) = MakeModuleWithRegistry(accountId);
 
-        var ex = Record.Exception(() => registry.Dispatch(new GameInviteConfirmationResponse()));
+        registry.Dispatch(new GameInviteConfirmationResponse
+        {
+            ResponseId = -9999,
+            Accepted = accepted
+        });
 
-        Assert.Null(ex);
+        Assert.Empty(conn.Sent);
+        Assert.Equal(expectedSystemMessages, conn.SystemMessages.Count);
+        if (accepted)
+        {
+            AssertLocalization(conn.SystemMessages[0], "GameCreatorNoLongerHasAGameForYou", "Invite");
+        }
     }
 
     // Case 8e: PlayerPanelUpdatedNotification no-throw.
@@ -279,17 +290,47 @@ public class GameLifecycleModuleTest : EvosTest
         return $"Player{accountId}#{accountId}";
     }
 
-    // Creates a custom game owned by the account and puts the module in it
-    private static Game JoinNewCustomGame(GameLifecycleModule module, long owner)
+    // Creates a custom game owned by the account. The owner takes a player slot.
+    private static Game CreateCustomGame(long owner, int teamPlayers = 4, int spectators = 0)
     {
         GroupManager.CreateGroup(owner);
         Game game = CustomGameManager.CreateGame(
             owner,
-            new LobbyGameConfig { SubTypes = new List<GameSubType> { new GameSubType() } },
+            new LobbyGameConfig
+            {
+                TeamAPlayers = teamPlayers,
+                TeamBPlayers = teamPlayers,
+                Spectators = spectators,
+                SubTypes = new List<GameSubType> { new GameSubType() }
+            },
             out LocalizationPayload error);
         Assert.True(game is not null, error?.ToString());
+        return game;
+    }
+
+    // Creates a custom game owned by the account and puts the module in it
+    private static Game JoinNewCustomGame(GameLifecycleModule module, long owner)
+    {
+        Game game = CreateCustomGame(owner);
         module.JoinGame(game);
         return game;
+    }
+
+    // Responds the way the client does
+    private static void RespondToInvite(CapturingRegistry registry, CustomGameInvite invite, bool accepted)
+    {
+        registry.Dispatch(new GameInviteConfirmationResponse
+        {
+            Accepted = accepted,
+            GameCreatorAccountId = invite.InviterAccountId,
+            InitialRequestId = invite.InitialRequestId,
+            ResponseId = invite.InviteId
+        });
+    }
+
+    private static Team TeamOf(Game game, long accountId)
+    {
+        return game.TeamInfo.TeamPlayerInfo.Single(p => p.AccountId == accountId).TeamId;
     }
 
     private static GameInvitationResponse InviteToGame(
@@ -485,6 +526,196 @@ public class GameLifecycleModuleTest : EvosTest
         }
         finally
         {
+            CustomGameManager.DeleteGame(accountId);
+        }
+    }
+
+    // Case 13: GameInviteConfirmationResponse to a pending invite
+    [Fact]
+    public void GameInviteConfirmationResponse_Accepted_JoinsGame()
+    {
+        using var scope = new ClientNotifierScope();
+        long owner = MakeAccount();
+        long accountId = MakeAccount();
+        var (module, conn, registry) = MakeModuleWithRegistry(accountId);
+        Game game = CreateCustomGame(owner);
+        try
+        {
+            CustomGameInvite invite = CustomGameManager.Invites.Create(owner, accountId, game.ProcessCode, 5);
+
+            RespondToInvite(registry, invite, true);
+
+            Assert.Same(game, module.CurrentGame);
+            Assert.Equal(Team.TeamA, TeamOf(game, accountId));
+            Assert.Equal(1, conn.ResetReadyStateCalls);
+            Assert.Empty(conn.SystemMessages);
+            Assert.Empty(scope.Notifier.SystemMessages);
+        }
+        finally
+        {
+            CustomGameManager.DeleteGame(owner);
+        }
+    }
+
+    [Fact]
+    public void GameInviteConfirmationResponse_AcceptedWithTeamsFull_JoinsAsSpectator()
+    {
+        using var scope = new ClientNotifierScope();
+        long owner = MakeAccount();
+        long accountId = MakeAccount();
+        var (module, _, registry) = MakeModuleWithRegistry(accountId);
+        Game game = CreateCustomGame(owner, teamPlayers: 1, spectators: 1);
+        try
+        {
+            Assert.NotNull(CustomGameManager.JoinGame(MakeAccount(), game.ProcessCode, false, out _));
+            CustomGameInvite invite = CustomGameManager.Invites.Create(owner, accountId, game.ProcessCode, 5);
+
+            RespondToInvite(registry, invite, true);
+
+            Assert.Same(game, module.CurrentGame);
+            Assert.Equal(Team.Spectator, TeamOf(game, accountId));
+        }
+        finally
+        {
+            CustomGameManager.DeleteGame(owner);
+        }
+    }
+
+    [Fact]
+    public void GameInviteConfirmationResponse_AcceptedWithGameFull_TellsBoth()
+    {
+        using var scope = new ClientNotifierScope();
+        long owner = MakeAccount();
+        long accountId = MakeAccount();
+        var (module, conn, registry) = MakeModuleWithRegistry(accountId);
+        Game game = CreateCustomGame(owner, teamPlayers: 1);
+        try
+        {
+            Assert.NotNull(CustomGameManager.JoinGame(MakeAccount(), game.ProcessCode, false, out _));
+            CustomGameInvite invite = CustomGameManager.Invites.Create(owner, accountId, game.ProcessCode, 5);
+
+            RespondToInvite(registry, invite, true);
+
+            Assert.Null(module.CurrentGame);
+            AssertLocalization(Assert.Single(conn.SystemMessages), "GameCreatorNoLongerHasAGameForYou", "Invite");
+            var (inviter, message) = Assert.Single(scope.Notifier.SystemMessages);
+            Assert.Equal(owner, inviter);
+            AssertLocalization(message, "FailedToJoinGame", "Invite");
+        }
+        finally
+        {
+            CustomGameManager.DeleteGame(owner);
+        }
+    }
+
+    [Fact]
+    public void GameInviteConfirmationResponse_Rejected_TellsInviter()
+    {
+        using var scope = new ClientNotifierScope();
+        long owner = MakeAccount();
+        long accountId = MakeAccount();
+        var (module, conn, registry) = MakeModuleWithRegistry(accountId);
+        Game game = CreateCustomGame(owner);
+        try
+        {
+            CustomGameInvite invite = CustomGameManager.Invites.Create(owner, accountId, game.ProcessCode, 5);
+
+            RespondToInvite(registry, invite, false);
+
+            Assert.Null(module.CurrentGame);
+            Assert.Empty(conn.SystemMessages);
+            var (inviter, message) = Assert.Single(scope.Notifier.SystemMessages);
+            Assert.Equal(owner, inviter);
+            AssertLocalization(message, "OtherPlayerRejectedInvite", "Invite");
+            Assert.Null(CustomGameManager.Invites.Take(invite.InviteId, accountId));
+        }
+        finally
+        {
+            CustomGameManager.DeleteGame(owner);
+        }
+    }
+
+    [Fact]
+    public void GameInviteConfirmationResponse_WrongGameCreator_DoesNotJoin()
+    {
+        using var scope = new ClientNotifierScope();
+        long owner = MakeAccount();
+        long accountId = MakeAccount();
+        var (module, conn, registry) = MakeModuleWithRegistry(accountId);
+        Game game = CreateCustomGame(owner);
+        try
+        {
+            CustomGameInvite invite = CustomGameManager.Invites.Create(owner, accountId, game.ProcessCode, 5);
+
+            registry.Dispatch(new GameInviteConfirmationResponse
+            {
+                Accepted = true,
+                GameCreatorAccountId = owner + 1,
+                InitialRequestId = invite.InitialRequestId,
+                ResponseId = invite.InviteId
+            });
+
+            Assert.Null(module.CurrentGame);
+            AssertLocalization(Assert.Single(conn.SystemMessages), "GameCreatorNoLongerHasAGameForYou", "Invite");
+            Assert.Empty(scope.Notifier.SystemMessages);
+        }
+        finally
+        {
+            CustomGameManager.DeleteGame(owner);
+        }
+    }
+
+    [Fact]
+    public void GameInviteConfirmationResponse_AcceptedInQueue_DoesNotJoin()
+    {
+        using var scope = new ClientNotifierScope();
+        long owner = MakeAccount();
+        long accountId = MakeAccount();
+        var (module, conn, registry) = MakeModuleWithRegistry(accountId);
+        conn.InQueue = true;
+        Game game = CreateCustomGame(owner);
+        try
+        {
+            CustomGameInvite invite = CustomGameManager.Invites.Create(owner, accountId, game.ProcessCode, 5);
+
+            RespondToInvite(registry, invite, true);
+
+            Assert.Null(module.CurrentGame);
+            Assert.DoesNotContain(game.TeamInfo.TeamPlayerInfo, p => p.AccountId == accountId);
+            AssertLocalization(Assert.Single(conn.SystemMessages), "OtherPlayerAlreadyQueueing", "Invite");
+            var (inviter, message) = Assert.Single(scope.Notifier.SystemMessages);
+            Assert.Equal(owner, inviter);
+            AssertLocalization(message, "FailedToJoinGame", "Invite");
+        }
+        finally
+        {
+            CustomGameManager.DeleteGame(owner);
+        }
+    }
+
+    // A stale popup clicked after joining a game
+    [Fact]
+    public void GameInviteConfirmationResponse_AcceptedAfterJoiningGame_NoMessages()
+    {
+        using var scope = new ClientNotifierScope();
+        long owner = MakeAccount();
+        long accountId = MakeAccount();
+        var (module, conn, registry) = MakeModuleWithRegistry(accountId);
+        Game game = CreateCustomGame(owner);
+        try
+        {
+            CustomGameInvite invite = CustomGameManager.Invites.Create(owner, accountId, game.ProcessCode, 5);
+            JoinNewCustomGame(module, accountId);
+
+            RespondToInvite(registry, invite, true);
+
+            Assert.NotSame(game, module.CurrentGame);
+            Assert.Empty(conn.SystemMessages);
+            Assert.Empty(scope.Notifier.SystemMessages);
+        }
+        finally
+        {
+            CustomGameManager.DeleteGame(owner);
             CustomGameManager.DeleteGame(accountId);
         }
     }

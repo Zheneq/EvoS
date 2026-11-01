@@ -16,6 +16,7 @@ public interface IClientConnection
     void BroadcastRefreshFriendList();
     void BroadcastRefreshGroup(bool resetReadyState = false);
     Game CurrentGame { get; }
+    bool IsInQueue();
     void OnAccountVisualsUpdated();
     void ResetReadyState();
     void SendGameUnassignmentNotification();

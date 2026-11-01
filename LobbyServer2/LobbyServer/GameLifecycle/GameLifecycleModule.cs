@@ -128,12 +128,17 @@ public class GameLifecycleModule : ILobbyModule
             return;
         }
 
-        JoinGame(game);
-        game.SendGameInfoNotifications();
+        EnterCustomGame(game);
         _conn.Send(new JoinGameResponse
         {
             ResponseId = joinGameRequest.RequestId
         });
+    }
+
+    private void EnterCustomGame(Game game)
+    {
+        JoinGame(game);
+        game.SendGameInfoNotifications();
     }
 
     private void HandleCreateGameRequest(CreateGameRequest createGameRequest)
@@ -431,6 +436,79 @@ public class GameLifecycleModule : ILobbyModule
 
     private void HandleGameInviteConfirmationResponse(GameInviteConfirmationResponse response)
     {
+        CustomGameInvite invite = CustomGameManager.Invites.Take(response.ResponseId, _conn.AccountId);
+        if (invite is null)
+        {
+            log.Info($"{_conn.Handle} responded to unknown game invite {response.ResponseId} "
+                     + $"from {LobbyServerUtils.GetHandle(response.GameCreatorAccountId)}: accepted={response.Accepted}");
+            // The invite is gone if its game was removed, or if the player joined a game (then it's a stale popup)
+            if (response.Accepted && CurrentGame is null)
+            {
+                _conn.SendSystemMessage(CustomGameMessages.GameNoLongerAvailable);
+            }
+            return;
+        }
+
+        string inviterHandle = LobbyServerUtils.GetHandle(invite.InviterAccountId);
+        if (response.GameCreatorAccountId != invite.InviterAccountId
+            || response.InitialRequestId != invite.InitialRequestId)
+        {
+            log.Warn($"{_conn.Handle} responded to game invite {invite.InviteId} from {inviterHandle} with wrong data: "
+                     + $"GameCreatorAccountId={response.GameCreatorAccountId} (expected {invite.InviterAccountId}), "
+                     + $"InitialRequestId={response.InitialRequestId} (expected {invite.InitialRequestId})");
+            if (response.Accepted)
+            {
+                _conn.SendSystemMessage(CustomGameMessages.GameNoLongerAvailable);
+            }
+            return;
+        }
+
+        if (!response.Accepted)
+        {
+            log.Info($"{_conn.Handle} rejected game invite {invite.InviteId} to {invite.ProcessCode} from {inviterHandle}");
+            ClientNotifier.Get().SendSystemMessage(
+                invite.InviterAccountId,
+                CustomGameMessages.OtherPlayerRejectedInvite(_conn.AccountId));
+            return;
+        }
+
+        // Joining a game removes pending invites, so this is a race
+        if (CurrentGame is not null)
+        {
+            log.Info($"{_conn.Handle} accepted game invite {invite.InviteId} to {invite.ProcessCode} from {inviterHandle} "
+                     + $"while in {CurrentGame.ProcessCode}");
+            ClientNotifier.Get().SendSystemMessage(
+                invite.InviterAccountId,
+                CustomGameMessages.FailedToJoinGame(_conn.AccountId));
+            return;
+        }
+
+        if (_conn.IsInQueue())
+        {
+            log.Info($"{_conn.Handle} accepted game invite {invite.InviteId} to {invite.ProcessCode} from {inviterHandle} "
+                     + "while in a queue");
+            _conn.SendSystemMessage(CustomGameMessages.OtherPlayerAlreadyQueueing(_conn.AccountId));
+            ClientNotifier.Get().SendSystemMessage(
+                invite.InviterAccountId,
+                CustomGameMessages.FailedToJoinGame(_conn.AccountId));
+            return;
+        }
+
+        _conn.ResetReadyState();
+        Game game = CustomGameManager.JoinGameAsInvitee(_conn.AccountId, invite.ProcessCode, out LocalizationPayload failure);
+        if (game is null)
+        {
+            log.Info($"{_conn.Handle} accepted game invite {invite.InviteId} to {invite.ProcessCode} from {inviterHandle} "
+                     + "but failed to join");
+            _conn.SendSystemMessage(failure);
+            ClientNotifier.Get().SendSystemMessage(
+                invite.InviterAccountId,
+                CustomGameMessages.FailedToJoinGame(_conn.AccountId));
+            return;
+        }
+
+        log.Info($"{_conn.Handle} accepted game invite {invite.InviteId} to {invite.ProcessCode} from {inviterHandle}");
+        EnterCustomGame(game);
     }
 
     private void HandleRankedLeaderboardOverviewRequest(RankedLeaderboardOverviewRequest request)

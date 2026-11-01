@@ -40,4 +40,20 @@ public static class CustomGameMessages
             "Invite",
             LocalizationArg_Handle.Create(LobbyServerUtils.GetHandle(accountId))); // {0} is already queuing for a game.
     }
+
+    public static LocalizationPayload OtherPlayerRejectedInvite(long accountId)
+    {
+        return LocalizationPayload.Create(
+            "OtherPlayerRejectedInvite",
+            "Invite",
+            LocalizationArg_Handle.Create(LobbyServerUtils.GetHandle(accountId))); // {0} has declined your offer.
+    }
+
+    public static LocalizationPayload FailedToJoinGame(long accountId)
+    {
+        return LocalizationPayload.Create(
+            "FailedToJoinGame",
+            "Invite",
+            LocalizationArg_Handle.Create(LobbyServerUtils.GetHandle(accountId))); // {0} failed to join your game.
+    }
 }
