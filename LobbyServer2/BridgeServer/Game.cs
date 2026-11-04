@@ -294,7 +294,6 @@ public abstract class Game
 
     protected void StartGame()
     {
-        GameInfo.GameStatus = GameStatus.Assembling;
         Dictionary<int, LobbySessionInfo> sessionInfos = TeamInfo.TeamPlayerInfo
             .ToDictionary(
                 playerInfo => playerInfo.PlayerId,
@@ -1079,14 +1078,14 @@ public abstract class Game
         }
     }
 
-    private ILookup<CharacterType, LobbyServerPlayerInfo> GetCharactersByTeam(Team team, long? excludeAccountId = null)
+    protected ILookup<CharacterType, LobbyServerPlayerInfo> GetCharactersByTeam(Team team, long? excludeAccountId = null) // TODO we can have multiple characters with same account id
     {
         return TeamInfo.TeamPlayerInfo
             .Where(p => p.TeamId == team && p.AccountId != excludeAccountId)
             .ToLookup(p => p.CharacterInfo.CharacterType);
     }
 
-    private IEnumerable<LobbyServerPlayerInfo> GetDuplicateCharacters(ILookup<CharacterType, LobbyServerPlayerInfo> characters)
+    protected IEnumerable<LobbyServerPlayerInfo> GetDuplicateCharacters(ILookup<CharacterType, LobbyServerPlayerInfo> characters)
     {
         return characters.Where(c => c.Count() > 1).SelectMany(c => c);
     }
@@ -1094,11 +1093,8 @@ public abstract class Game
     private bool IsCharacterUnavailable(LobbyServerPlayerInfo playerInfo, IEnumerable<LobbyServerPlayerInfo> duplicateCharsA, IEnumerable<LobbyServerPlayerInfo> duplicateCharsB)
     {
         IEnumerable<LobbyServerPlayerInfo> duplicateChars = playerInfo.TeamId == Team.TeamA ? duplicateCharsA : duplicateCharsB;
-        CharacterConfigs.Characters.TryGetValue(playerInfo.CharacterInfo.CharacterType, out CharacterConfig characterConfig);
-        return playerInfo.CharacterType == CharacterType.PendingWillFill
-               || (!GameInfo.GameConfig.HasGameOption(GameOptionFlag.AllowDuplicateCharacters) && duplicateChars.Contains(playerInfo) && duplicateChars.First() != playerInfo)
-               || characterConfig is null
-               || !characterConfig.AllowForPlayers;
+        return !CharacterRules.IsPlayable(playerInfo.CharacterType)
+               || (!GameInfo.GameConfig.HasGameOption(GameOptionFlag.AllowDuplicateCharacters) && duplicateChars.Contains(playerInfo) && duplicateChars.First() != playerInfo);
     }
 
     private Dictionary<CharacterType, string> GetThiefNames(ILookup<CharacterType, LobbyServerPlayerInfo> characters)
@@ -1148,13 +1144,13 @@ public abstract class Game
         }
     }
 
-    private bool ValidateSelectedCharacter(long accountId, CharacterType character)
+    protected bool ValidateSelectedCharacter(long accountId, CharacterType character)
     {
         lock (characterSelectionLock)
         {
             LobbyServerPlayerInfo playerInfo = GetPlayerInfo(accountId);
             ILookup<CharacterType, LobbyServerPlayerInfo> teamCharacters = GetCharactersByTeam(playerInfo.TeamId, accountId);
-            bool isValid = CharacterConfigs.Characters[character].AllowForPlayers
+            bool isValid = CharacterRules.IsPlayable(character)
                            && (!teamCharacters.Contains(character) || GameInfo.GameConfig.HasGameOption(GameOptionFlag.AllowDuplicateCharacters));
             log.Info($"Character validation: {playerInfo.Handle} is {(isValid ? "" : "not ")}allowed to use {character}"
                      + $"(teammates are {string.Join(", ", teamCharacters.Select(x => x.Key))})");
@@ -1162,7 +1158,7 @@ public abstract class Game
         }
     }
 
-    private CharacterType AssignRandomCharacter(
+    protected CharacterType AssignRandomCharacter(
         LobbyServerPlayerInfo playerInfo,
         ILookup<CharacterType, LobbyServerPlayerInfo> teammates,
         HashSet<CharacterType> usedFillCharacters)

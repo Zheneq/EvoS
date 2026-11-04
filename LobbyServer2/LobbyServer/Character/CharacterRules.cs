@@ -16,15 +16,23 @@ public static class CharacterRules
                 : LocalizationPayload.Create("QueueDoesNotAllowWillFill", "Matchmaking", LocalizationArg_GameType.Create(gameType));
         }
 
-        if (!CharacterConfigs.Characters.TryGetValue(characterType, out CharacterConfig config)
-            || !config.AllowForPlayers
-            || config.GameTypesProhibitedFrom?.Contains(gameType) == true
-            // TestFreelancer1/2 only stand for "random tank/support" in ranked draft
-            || config.CharacterRole == CharacterRole.None)
+        if (!IsPlayable(characterType)
+            || CharacterConfigs.Characters[characterType].GameTypesProhibitedFrom?.Contains(gameType) == true)
         {
             return LocalizationPayload.Create("CannotReady@Global");
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Whether the character can be played, as opposed to placeholders like PendingWillFill.
+    /// </summary>
+    public static bool IsPlayable(CharacterType characterType)
+    {
+        return CharacterConfigs.Characters.TryGetValue(characterType, out CharacterConfig config)
+               && config.AllowForPlayers
+               // PendingWillFill, and TestFreelancer1/2 that only stand for "random tank/support" in ranked draft
+               && config.CharacterRole != CharacterRole.None;
     }
 }

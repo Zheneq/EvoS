@@ -203,29 +203,6 @@ public class CustomGame : Game
         }
     }
 
-    // TODO merge with MatchOrchestrator
-    private bool ValidateSelectedCharacter(long accountId, CharacterType character)
-    {
-        lock (characterSelectionLock)
-        {
-            LobbyServerPlayerInfo playerInfo = GetPlayerInfo(accountId);
-            ILookup<CharacterType, LobbyServerPlayerInfo> teamCharacters = GetCharactersByTeam(playerInfo.TeamId, accountId);
-            bool isValid = CharacterConfigs.Characters[character].AllowForPlayers
-                           && (!teamCharacters.Contains(character) || GameInfo.GameConfig.HasGameOption(GameOptionFlag.AllowDuplicateCharacters));
-            log.Info($"Character validation: {playerInfo.Handle} is {(isValid ? "" : "not ")}allowed to use {character}"
-                     + $"(teammates are {string.Join(", ", teamCharacters.Select(x => x.Key))})");
-            return isValid;
-        }
-    }
-
-    // TODO merge with MatchOrchestrator
-    private ILookup<CharacterType, LobbyServerPlayerInfo> GetCharactersByTeam(Team team, long? excludeAccountId = null) // TODO we can have multiple characters with same account id
-    {
-        return TeamInfo.TeamPlayerInfo
-            .Where(p => p.TeamId == team && p.AccountId != excludeAccountId)
-            .ToLookup(p => p.CharacterInfo.CharacterType);
-    }
-
     public void BalanceTeams(List<BalanceTeamSlot> slots)
     {
         TeamInfo = CreateBalancedTeamInfo(slots);
@@ -679,51 +656,16 @@ public class CustomGame : Game
     }
 
     // TODO merge with Game/PvpGame
-    private IEnumerable<LobbyServerPlayerInfo> GetDuplicateCharacters(ILookup<CharacterType, LobbyServerPlayerInfo> characters)
-    {
-        return characters.Where(c => c.Count() > 1).SelectMany(c => c);
-    }
-
-    // TODO merge with Game/PvpGame
     private bool IsCharacterUnavailable(LobbyServerPlayerInfo playerInfo, IEnumerable<LobbyServerPlayerInfo> duplicateCharsA, IEnumerable<LobbyServerPlayerInfo> duplicateCharsB)
     {
         if (!playerInfo.IsRemoteControlled && !playerInfo.IsAIControlled) // for custom games only
         {
             return false;
         }
-        
+
         IEnumerable<LobbyServerPlayerInfo> duplicateChars = playerInfo.TeamId == Team.TeamA ? duplicateCharsA : duplicateCharsB;
-        CharacterConfigs.Characters.TryGetValue(playerInfo.CharacterInfo.CharacterType, out CharacterConfig characterConfig);
-        return playerInfo.CharacterType == CharacterType.PendingWillFill
-               || (!GameInfo.GameConfig.HasGameOption(GameOptionFlag.AllowDuplicateCharacters) && duplicateChars.Contains(playerInfo)) // && duplicateChars.First() != playerInfo) not in custom games
-               || !characterConfig.AllowForPlayers;
-    }
-
-    // TODO merge with Game/PvpGame
-    private CharacterType AssignRandomCharacter(
-        LobbyServerPlayerInfo playerInfo,
-        ILookup<CharacterType, LobbyServerPlayerInfo> teammates,
-        HashSet<CharacterType> usedFillCharacters)
-    {
-        HashSet<CharacterType> usedCharacters = teammates.Select(ct => ct.Key).ToHashSet();
-
-        List<CharacterType> availableTypes = CharacterConfigs.Characters
-            .Where(cc =>
-                cc.Value.AllowForPlayers
-                && cc.Value.CharacterRole != CharacterRole.None
-                && !usedCharacters.Contains(cc.Key)
-                && !usedFillCharacters.Contains(cc.Key))
-            .Select(cc => cc.Key)
-            .ToList();
-
-        Random rand = new Random();
-        CharacterType randomType = availableTypes[rand.Next(availableTypes.Count)];
-
-        log.Info($"Selected random character {randomType} for {playerInfo.Handle} " +
-                 $"(was {playerInfo.CharacterType}), options were {string.Join(", ", availableTypes)}, " +
-                 $"teammates: {string.Join(", ", usedCharacters)}, " +
-                 $"used fill characters: {string.Join(", ", usedFillCharacters)})");
-        return randomType;
+        return !CharacterRules.IsPlayable(playerInfo.CharacterType)
+               || (!GameInfo.GameConfig.HasGameOption(GameOptionFlag.AllowDuplicateCharacters) && duplicateChars.Contains(playerInfo)); // && duplicateChars.First() != playerInfo) not in custom games
     }
 
     public void BuildGameInfoCustomGame(LobbyGameInfo gameinfo)
