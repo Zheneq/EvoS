@@ -17,6 +17,7 @@ public abstract class QueueRequirement
 	// Add new types to the start: appending one would renumber all existing requirements.
 	public static IEnumerable<Type> MessageTypes =>
 	[
+		typeof(QueueRequirement_MinClientVersion),
 		typeof(QueueRequirement_AccessLevel),
 		typeof(QueueRequirement_Character),
 		typeof(QueueRequirement_DateTime),
@@ -88,6 +89,9 @@ public abstract class QueueRequirement
 			case RequirementType.ProhibitEnvironment:
 				queueRequirement = QueueRequirement_Environement.Create(reader);
 				break;
+			case RequirementType.MinClientVersion:
+				queueRequirement = QueueRequirement_MinClientVersion.Create(reader);
+				break;
 			default:
 				throw new Exception($"{text} is not a valid BogusRequirement type");
 			}
@@ -118,6 +122,7 @@ public abstract class QueueRequirement
 		AfterDate,
 		ProhibitEnvironment,
 		AvailableCharacterCount,
-		HasUnlockedCharacter
+		HasUnlockedCharacter,
+		MinClientVersion // custom
 	}
 }

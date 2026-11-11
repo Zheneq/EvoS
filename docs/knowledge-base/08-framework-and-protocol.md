@@ -37,15 +37,32 @@ deserialize the collection.
   Copy-on-write: shared subtypes are never modified. `ProtocolPatcherTest` fails if a message
   type that can carry a `RequirementCollection` is missing from `ProtocolPatcher.Mapping`.
 
+Protocol-dependent requirements:
+- `QueueRequirement_MinClientVersion` (1.8+ clients): passes if the client's version
+  (major.minor.patch of its build) is the given one or newer. JSON:
+  `{"MinClientVersion": {"Version": "1.8.0"}}`. Only the client checks it, against its own version
+  (it cannot know a group member's), and the server does not enforce queue requirements.
+
 Adding a concrete protocol-dependent requirement:
 1. Add it to the **start** of `QueueRequirement.MessageTypes`. Each serialized requirement begins
    with a NetSerializer type ID (e.g. `QueueRequirement_Never` is `05-12`: type 5, AdminDisabled).
    These IDs are not the `[EvosMessage]` ones: NetSerializer assigns them at runtime, walking the
    list from the end and numbering each type along with the field types it pulls in. Appending a
    type renumbers every existing requirement and breaks vanilla clients; prepending leaves their
-   IDs unchanged. The supporting clients must have the same list as the server.
-2. Give it an `[EvosMessage]` ID.
+   IDs unchanged. Field names and types must match the client's class.
+   `QueueRequirementMinClientVersionTest.TypeIdsMatchClient` pins the IDs to the client's.
+2. In the client (hc), guard the class with `#if EVOS` and add it to the **start** of
+   `Factory.EvosMessageTypes`. That gives it the next lobby protocol type ID (800 was the first)
+   without moving existing ones, and `RequirementCollection` picks it up from there. Use that ID
+   for `[EvosMessage]`.
 3. Handle it in `QueueRequirement.ExtractRequirementFromReader` if it should be loadable from JSON.
+4. The new client has a new protocol version (an MD5 over the client's message types and their
+   field names). Add it to `ProtocolVersion` and `SUPPORTED_PROTO_VERSIONS`, and to the
+   requirement's `SupportedProtocolVersions`. Later protocol versions that still understand the
+   requirement must be added there too. The hash can be read from the directory server's
+   `< AssignGameClientRequest` debug log, or computed from the built client DLL. To compute it,
+   replicate `WebSocketMessageFactory.GetMD5Sum` over metadata with Unity's Mono 2.0 mscorlib:
+   .NET's core types have different private fields.
 
 ## Game data (`EvoS.Framework/GameData/`)
 
