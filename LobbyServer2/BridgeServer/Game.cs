@@ -88,7 +88,6 @@ public abstract class Game
     private TimeSpan TimeLeftInSubPhase = new();
     private bool isCancellationRequested = false;
     public FreelancerResolutionPhaseSubType PhaseSubType { get; private set; } = FreelancerResolutionPhaseSubType.UNDEFINED;
-    private Team CurrentTeam = Team.TeamA;
     public int PlayersInDeck { protected set; get; }
     private readonly List<CharacterType> botCharacters = new();
     public bool IsDraft => GameSubType?.Mods.Contains(GameSubType.SubTypeMods.RankedFreelancerSelection) ?? false;
@@ -1476,8 +1475,10 @@ public abstract class Game
 
             HashSet<CharacterType> usedCharacterTypes = GetUsedCharacterTypes();
 
-            foreach (RankedResolutionPlayerState playersInDeck in RankedResolutionPhaseData.PlayersOnDeck)
+            bool isAutoSelected = false;
+            for (int deckIndex = 0; deckIndex < RankedResolutionPhaseData.PlayersOnDeck.Count; deckIndex++)
             {
+                RankedResolutionPlayerState playersInDeck = RankedResolutionPhaseData.PlayersOnDeck[deckIndex];
                 LobbyServerPlayerInfo player = GetPlayerInfo(playersInDeck.PlayerId - 1, TeamInfo.TeamPlayerInfo);
                 CharacterType characterType = playersInDeck.Intention;
                 // Let bans be random if they do not select a freelancer
@@ -1509,14 +1510,27 @@ public abstract class Game
                     if (PhaseSubType == FreelancerResolutionPhaseSubType.PICK_BANS1
                         || PhaseSubType == FreelancerResolutionPhaseSubType.PICK_BANS2)
                     {
-                        AddToTeamBanSelection(characterType);
+                        AddToTeamBanSelection(player, characterType);
                     }
                     else if (PhaseSubType == FreelancerResolutionPhaseSubType.PICK_FREELANCER1
                              || PhaseSubType == FreelancerResolutionPhaseSubType.PICK_FREELANCER2)
                     {
                         AddToTeamSelection(player, characterType);
                     }
+
+                    // Same as a manual lock in
+                    playersInDeck.Intention = characterType;
+                    playersInDeck.OnDeckness = RankedResolutionPlayerState.ReadyState.Unselected;
+                    RankedResolutionPhaseData.PlayersOnDeck[deckIndex] = playersInDeck;
+                    isAutoSelected = true;
                 }
+            }
+
+            // Like after a manual lock in, show the selection before moving on.
+            // Otherwise, clients never see it if it is the last sub phase.
+            if (isAutoSelected)
+            {
+                SendRankedResolutionSubPhase();
             }
 
             // Update any players who have a character selected, but that character is already selected or banned, reset their selection
@@ -1528,8 +1542,6 @@ public abstract class Game
                     player.Intention = CharacterType.None;
                 }
             }
-
-            CurrentTeam = ToggleTeam(CurrentTeam);
         }
 
         // Update TeamInfo with new values from rankedResolutionPhaseData.FriendlyTeamSelections
@@ -1639,16 +1651,16 @@ public abstract class Game
 
     private void AddToTeamSelection(LobbyServerPlayerInfo player, CharacterType characterType)
     {
-        Dictionary<int, CharacterType> selections = CurrentTeam == Team.TeamA
+        Dictionary<int, CharacterType> selections = player.TeamId == Team.TeamA
             ? RankedResolutionPhaseData.FriendlyTeamSelections
             : RankedResolutionPhaseData.EnemyTeamSelections;
 
         selections.Add(player.PlayerId, characterType);
     }
 
-    private void AddToTeamBanSelection(CharacterType characterType)
+    private void AddToTeamBanSelection(LobbyServerPlayerInfo player, CharacterType characterType)
     {
-        List<CharacterType> selections = CurrentTeam == Team.TeamA
+        List<CharacterType> selections = player.TeamId == Team.TeamA
             ? RankedResolutionPhaseData.FriendlyBans
             : RankedResolutionPhaseData.EnemyBans;
 
@@ -1680,15 +1692,10 @@ public abstract class Game
         }
     }
 
-    private static Team ToggleTeam(Team currentTeam)
-    {
-        return currentTeam == Team.TeamA ? Team.TeamB : Team.TeamA;
-    }
-
     private async Task HandleRankedResolutionSubPhase(FreelancerResolutionPhaseSubType subPhase, LobbyServerPlayerInfo player, bool sendGameInfoNotify)
     {
 #if DEBUG
-        log.Info($"Starting ranked resolution sub phase {subPhase} for Team {CurrentTeam}");
+        log.Info($"Starting ranked resolution sub phase {subPhase} for Team {player.TeamId}");
 #endif
         RankedResolutionPhaseData pickPhaseData = new()
         {
