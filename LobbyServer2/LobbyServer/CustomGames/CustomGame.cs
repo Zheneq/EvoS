@@ -156,9 +156,14 @@ public class CustomGame : Game
         long accountId,
         LobbyCharacterInfo characterInfo,
         LobbyPlayerInfoUpdate update,
-        bool characterDataUpdate)
+        bool isCharacterDataUpdate)
     {
         LobbyServerPlayerInfo serverPlayerInfo = update.PlayerId == 0 ? GetPlayerInfo(accountId) : GetPlayerById(update.PlayerId);
+        if (serverPlayerInfo is null)
+        {
+            log.Warn($"{accountId} attempted to update character info for player {update.PlayerId} not in the game");
+            return false;
+        }
         LobbyCharacterInfo serverCharacterInfo = serverPlayerInfo.CharacterInfo;
 
         if (GameInfo.GameStatus >= GameStatus.LoadoutSelecting
@@ -196,9 +201,15 @@ public class CustomGame : Game
             {
                 serverPlayerInfo.CharacterInfo = characterInfo;
             }
-            else if (update.CharacterType.HasValue)
+            // Loadout updates do not specify the character, e.g. when editing another slot controlled by
+            // this account. Only for its own slots, the owner cannot change other players' loadouts.
+            else if (update.CharacterType.HasValue
+                     || (isCharacterDataUpdate && serverPlayerInfo.AccountId == accountId))
             {
-                SetSecondaryCharacter(accountId, update.PlayerId, characterInfo);
+                if (!SetSecondaryCharacter(accountId, update.PlayerId, characterInfo))
+                {
+                    return false;
+                }
             }
 
             CheckIfAllSelected();
@@ -353,18 +364,23 @@ public class CustomGame : Game
         return teamInfo;
     }
 
-    protected override void SetSecondaryCharacter(long accountId, int playerId, LobbyCharacterInfo characterInfo)
+    protected override bool SetSecondaryCharacter(long accountId, int playerId, LobbyCharacterInfo characterInfo)
     {
         LobbyServerPlayerInfo lobbyServerPlayerInfo = TeamInfo.TeamPlayerInfo.Find(p => p.PlayerId == playerId);
         if (lobbyServerPlayerInfo is null)
         {
             log.Error($"Failed to set secondary character: {playerId} not found");
-            return;
+            return false;
         }
-        if (Owner != accountId)
+        // During setup the owner controls all slots. Once the game starts (draft, loadout),
+        // players control only their own slots, like in a regular game.
+        bool isAllowed = GameInfo.GameStatus == GameStatus.Assembling
+            ? Owner == accountId
+            : lobbyServerPlayerInfo.AccountId == accountId;
+        if (!isAllowed)
         {
             log.Error($"Failed to set secondary character: {playerId} does not belong to {LobbyServerUtils.GetHandle(accountId)}");
-            return;
+            return false;
         }
         // TODO validate there is no duplicates/duplicates are allowed
         lobbyServerPlayerInfo.CharacterInfo = characterInfo;
@@ -373,6 +389,7 @@ public class CustomGame : Game
             lobbyServerPlayerInfo.Handle =
                 GameWideData.Get().GetCharacterResourceLink(characterInfo.CharacterType).m_displayName; // TODO localization?
         }
+        return true;
     }
 
     public bool Join(long accountId, bool asSpectator)

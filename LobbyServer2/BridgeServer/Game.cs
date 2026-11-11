@@ -312,20 +312,21 @@ public abstract class Game
         }
     }
 
-    protected virtual void SetSecondaryCharacter(long accountId, int playerId, LobbyCharacterInfo characterInfo)
+    protected virtual bool SetSecondaryCharacter(long accountId, int playerId, LobbyCharacterInfo characterInfo)
     {
         LobbyServerPlayerInfo lobbyServerPlayerInfo = TeamInfo.TeamPlayerInfo.Find(p => p.PlayerId == playerId);
         if (lobbyServerPlayerInfo is null)
         {
             log.Error($"Failed to set secondary character: {playerId} not found");
-            return;
+            return false;
         }
         if (lobbyServerPlayerInfo.AccountId != accountId)
         {
             log.Error($"Failed to set secondary character: {playerId} does not belong to {LobbyServerUtils.GetHandle(accountId)}");
-            return;
+            return false;
         }
         lobbyServerPlayerInfo.CharacterInfo = characterInfo;
+        return true;
     }
 
     // TODO there can be multiple
@@ -1016,7 +1017,10 @@ public abstract class Game
             {
                 // Loadout updates do not specify the character, e.g. when editing
                 // another slot controlled by this account during multilancer draft
-                SetSecondaryCharacter(accountId, update.PlayerId, characterInfo);
+                if (!SetSecondaryCharacter(accountId, update.PlayerId, characterInfo))
+                {
+                    return false;
+                }
             }
 
             SendGameInfoNotifications();
