@@ -284,9 +284,19 @@ public abstract class Game
 
     protected async void OnServerDisconnect(BridgeServerProtocol server)
     {
-        // If the server doesn't come back, the game ends with no result
         await Task.Delay(LobbyConfiguration.GetServerReconnectionTimeout());
-        if (Server == server && GameStatus != GameStatus.Stopped)
+        if (Server != server || GameStatus == GameStatus.Stopped)
+        {
+            return;
+        }
+
+        // If the server doesn't come back, a game that is still being set up can't start,
+        // and a launched one ends with no result
+        if (GameStatus is >= GameStatus.FreelancerSelecting and <= GameStatus.Launching)
+        {
+            CancelMatch();
+        }
+        else
         {
             OnGameEnded(server, null, null);
         }
@@ -1833,6 +1843,11 @@ public abstract class Game
 
         GetClients().ForEach(c =>
         {
+            if (c.CurrentGame != this)
+            {
+                return;
+            }
+
             LobbyServerPlayerInfo player = GetPlayerInfo(c.AccountId);
 
             // Clone the data for each player to prevent data sharing between players

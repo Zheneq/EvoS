@@ -603,6 +603,10 @@ public class CustomGame : Game
         log.Info($"Waiting for {GameInfo.LoadoutSelectTimeout} to let players update their loadouts");
 
         await Task.Delay(GameInfo.LoadoutSelectTimeout);
+        if (IsCancelled)
+        {
+            return;
+        }
 
         log.Info("Launching...");
         SetGameStatus(GameStatus.Launching);
