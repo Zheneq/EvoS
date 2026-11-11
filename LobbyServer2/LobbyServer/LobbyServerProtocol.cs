@@ -412,6 +412,16 @@ namespace CentralServer.LobbyServer
                 if (deckIndex >= 0 && !usedCharacterTypes.Contains(characterType))
                 {
                     RankedResolutionPlayerState existingPlayersOnDeck = playersOnDeck[deckIndex];
+                    if (characterType != request.Selection)
+                    {
+                        // Show the random character as if it was hovered before locking it in,
+                        // clients take the character for the lock in animation from the hover
+                        existingPlayersOnDeck.Intention = characterType;
+                        playersOnDeck[deckIndex] = existingPlayersOnDeck;
+                        CurrentGame.SetRankedResolutionPhaseData(rankedResolutionPhaseData);
+                        CurrentGame.SendRankedResolutionSubPhase();
+                    }
+
                     existingPlayersOnDeck.Intention = characterType;
                     existingPlayersOnDeck.OnDeckness = RankedResolutionPlayerState.ReadyState.Unselected;
                     playersOnDeck[deckIndex] = existingPlayersOnDeck;
@@ -477,6 +487,17 @@ namespace CentralServer.LobbyServer
                     characterType = CurrentGame.AssignRandomCharacterForDraft(player, usedCharacterTypes, characterType);
                 }
 
+                RankedResolutionPlayerState existingPlayersOnDeck = playersOnDeck[deckIndex];
+                if (characterType != request.Selection)
+                {
+                    // Show the random character as if it was hovered before locking it in,
+                    // clients take the character for the lock in animation from the hover
+                    existingPlayersOnDeck.Intention = characterType;
+                    playersOnDeck[deckIndex] = existingPlayersOnDeck;
+                    CurrentGame.SetRankedResolutionPhaseData(rankedResolutionPhaseData);
+                    CurrentGame.SendRankedResolutionSubPhase();
+                }
+
                 if (player.TeamId == Team.TeamA)
                 {
                     rankedResolutionPhaseData.FriendlyBans.Add(characterType);
@@ -486,8 +507,8 @@ namespace CentralServer.LobbyServer
                     rankedResolutionPhaseData.EnemyBans.Add(characterType);
                 }
 
-                RankedResolutionPlayerState existingPlayersOnDeck = playersOnDeck[deckIndex];
-                existingPlayersOnDeck.Intention = characterType;
+                // A locked in ban is not a hover anymore, otherwise clients show it in the next ban slot
+                existingPlayersOnDeck.Intention = CharacterType.None;
                 existingPlayersOnDeck.OnDeckness = RankedResolutionPlayerState.ReadyState.Unselected;
                 playersOnDeck[deckIndex] = existingPlayersOnDeck;
 
