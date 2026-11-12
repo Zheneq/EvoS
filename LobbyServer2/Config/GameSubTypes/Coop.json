@@ -190,7 +190,7 @@
     }
   },
   {
-    "LocalizedName": "Duos@SubTypes",
+    "LocalizedName": "AllFourCharactersDraft@SubTypes",
     "GameMapConfigs": [
       {
         "Map": "CargoShip_Deathmatch",
@@ -227,18 +227,27 @@
     ],
     "RewardBucket": "NoRewards",
     "PersistedStatBucket": "DoNotPersist",
+    "Bans": true,
     "Mods": [
       "AntiSocial",
+      "NotAllowedForGroups",
       "NotCheckedByDefault",
       "ControlAllBots",
-      "ShowWithAITeammates"
+      "RankedFreelancerSelection"
     ],
-    "TeamAPlayers": "2",
-    "TeamABots": "2",
-    "TeamBPlayers": "2",
-    "TeamBBots": "2",
+    "Requirements": [
+      {
+        "MinClientVersion": {
+          "Version": "1.8"
+        }
+      }
+    ],
+    "TeamAPlayers": "4",
+    "TeamABots": "3",
+    "TeamBPlayers": "4",
+    "TeamBBots": "4",
     "GameOverrides": {
-      "TurnTimeSpan": "00:00:25"
+      "TurnTimeSpan": "00:01:00"
     }
   }
 ]

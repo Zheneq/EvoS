@@ -43,6 +43,11 @@ Protocol-dependent requirements:
   `{"MinClientVersion": {"Version": "1.8.0"}}`. Only the client checks it, against its own version
   (it cannot know a group member's), and the server does not enforce queue requirements.
 
+Subtype configs (`Config/GameSubTypes/*.json`) can set requirements in a `"Requirements"` array
+of these JSON objects (e.g. `AllFourCharactersDraft` requires 1.8). `GameSubType.Requirements` is read
+from JSON but never written (`ShouldSerializeRequirements`), so it stays out of the `LobbyGameInfo`
+sent to the game server.
+
 Adding a concrete protocol-dependent requirement:
 1. Add it to the **start** of `QueueRequirement.MessageTypes`. Each serialized requirement begins
    with a NetSerializer type ID (e.g. `QueueRequirement_Never` is `05-12`: type 5, AdminDisabled).

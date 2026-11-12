@@ -39,7 +39,7 @@ namespace EvoS.Framework.Network.Static
         [EvosMessage(154)]
         public List<SubTypeMods> Mods;
         public GameLoadScreenInstructions InstructionsToDisplay;
-        [JsonIgnore] public RequirementCollection Requirements;  // TODO RequirementCollection is broken on lobby server side
+        public RequirementCollection Requirements;  // read from subtype configs, never written (see ShouldSerializeRequirements)
         public Rate MaxMatchesGrantingXP;
         public TeamCompositionRules TeamComposition;
         public GameValueOverrides GameOverrides;
@@ -57,6 +57,10 @@ namespace EvoS.Framework.Network.Static
         public TimeSpan LoadoutSelectionTimeoutOverride;
         [NonSerialized]
         public bool Bans;
+
+        // Keeps requirements out of LobbyGameInfo sent to the game server: serializing them there used to break it
+        // TODO remove?
+        public bool ShouldSerializeRequirements() => false;
 
         [JsonIgnore]
         public int TeamAHumanPlayers => TeamAPlayers - TeamABots;
