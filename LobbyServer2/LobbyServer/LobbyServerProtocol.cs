@@ -262,7 +262,13 @@ namespace CentralServer.LobbyServer
             }
 
             RankedResolutionPhaseData rankedResolutionPhaseData = CurrentGame.GetRankedResolutionPhaseData();
-            LobbyServerPlayerInfo player = CurrentGame.GetPlayerInfo(AccountId);
+            LobbyServerPlayerInfo player = CurrentGame.GetDraftTradingSlot(AccountId, request.Trade.OfferingPlayerId);
+            if (player is null)
+            {
+                log.Warn($"Player {Handle} attempted to trade from slot {request.Trade.OfferingPlayerId} they do not control");
+                Send(response);
+                return;
+            }
 
             Dictionary<int, CharacterType> teamSelections = player.TeamId == Team.TeamA
                 ? rankedResolutionPhaseData.FriendlyTeamSelections
@@ -314,6 +320,15 @@ namespace CentralServer.LobbyServer
                                 .FirstOrDefault();
 
                             LobbyServerPlayerInfo checkIsBot = CurrentGame.GetPlayerById(playerThatHasCharacter);
+
+                            // Trading between slots controlled by the same account is not supported
+                            if (checkIsBot is null || checkIsBot.AccountId == AccountId)
+                            {
+                                log.Warn($"Player {Handle} attempted to trade {player.PlayerId} for {wantedCharacterType} "
+                                         + $"(slot {playerThatHasCharacter})");
+                                Send(response);
+                                return;
+                            }
 
                             if (checkIsBot.IsAIControlled)
                             {

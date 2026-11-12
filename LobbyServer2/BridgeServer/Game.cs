@@ -537,6 +537,21 @@ public abstract class Game
         }
     }
 
+    // During the trade sub-phase, an account controlling multiple slots trades from the one it specifies.
+    // 0 means the account's main slot (that is what clients controlling a single character send).
+    public LobbyServerPlayerInfo GetDraftTradingSlot(long accountId, int playerId)
+    {
+        LobbyServerPlayerInfo slot = playerId == 0 ? GetPlayerInfo(accountId) : GetPlayerById(playerId);
+        if (slot is null
+            || slot.AccountId != accountId
+            || slot.TeamId is not (Team.TeamA or Team.TeamB))
+        {
+            return null;
+        }
+
+        return slot;
+    }
+
     protected virtual void SendGameAssignmentNotification(long accountId, bool reconnection = false)
     {
         var player = Players.FirstOrDefault(p => p.AccountId == accountId);
