@@ -1366,88 +1366,10 @@ public abstract class Game
         };
 
         // Define phase order
-        // Bans can be disabled. If they are disabled, client won't show ban windows
-        // (Due to poll of favoring bans add a setting to Custom to disable bans only there)
-        // -1 for phases where we don't need the player (trade)
-        // Teams NEED to be min 8 and max 8 only
-        List<KeyValuePair<int, FreelancerResolutionPhaseSubType>> phases;
-        string localizedName = GameSubType.LocalizedName;
-        bool hasBans = GameModeManager.GetBans(localizedName);
-        if (IsControlAllBots)
-        {
-            // TODO single select vs double select is controlled by PlayersOnDeck.Count
-            // TODO test with two slots active for one player
-            if (hasBans)
-            {
-                phases = new()
-                {
-                    // Playerid (-1)                           Phase
-                    new(0, FreelancerResolutionPhaseSubType.PICK_BANS1),    // TeamA First Person
-                    new(4, FreelancerResolutionPhaseSubType.PICK_BANS1),    // TeamB First Person
-                    new(0, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamA First Person
-                    new(4, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamB * 2 First and Second Person
-                    new(5, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamB * 2 First and Second Person
-                    new(1, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamA Second Person
-                    new(5, FreelancerResolutionPhaseSubType.PICK_BANS2),    // TeamB Second Person
-                    new(1, FreelancerResolutionPhaseSubType.PICK_BANS2),    // TeamA Second Person
-                    new(6, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamB Third Person
-                    new(2, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamA * 2 Third and Fourth Person
-                    new(3, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamA * 2 Third and Fourth Person
-                    new(7, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamB Fourth Person
-                    // no trade
-                };
-            }
-            else
-            {
-                phases = new()
-                {
-                    // Playerid (-1)                           Phase
-                    new(0, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamA First Person
-                    new(4, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamB * 2 First and Second Person
-                    new(5, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamB * 2 First and Second Person
-                    new(1, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamA Second Person
-                    new(6, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamB Third Person
-                    new(2, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamA * 2 Third and Fourth Person
-                    new(3, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamA * 2 Third and Fourth Person
-                    new(7, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamB Fourth Person
-                };
-            } 
-            
-        }
-        else
-        {
-            if (hasBans)
-            {
-                phases = new()
-                {
-                    // Playerid (-1)                           Phase
-                    new(0, FreelancerResolutionPhaseSubType.PICK_BANS1),    // TeamA First Person
-                    new(4, FreelancerResolutionPhaseSubType.PICK_BANS1),    // TeamB First Person
-                    new(0, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamA First Person
-                    new(4, FreelancerResolutionPhaseSubType.PICK_FREELANCER2),  // TeamB * 2 First and Second Person
-                    new(1, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamA Second Person
-                    new(5, FreelancerResolutionPhaseSubType.PICK_BANS2),    // TeamB Second Person
-                    new(1, FreelancerResolutionPhaseSubType.PICK_BANS2),    // TeamA Second Person
-                    new(6, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamB Third Person
-                    new(2, FreelancerResolutionPhaseSubType.PICK_FREELANCER2),  // TeamA * 2 Third and Fourth Person
-                    new(7, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamB Fourth Person
-                    new(-1, FreelancerResolutionPhaseSubType.FREELANCER_TRADE),
-                };
-            }
-            else
-            {
-                phases = new()
-                {
-                    new(0, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamA First Person
-                    new(4, FreelancerResolutionPhaseSubType.PICK_FREELANCER2),  // TeamB * 2 First and Second Person
-                    new(1, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamA Second Person
-                    new(6, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamB Third Person
-                    new(2, FreelancerResolutionPhaseSubType.PICK_FREELANCER2),  // TeamA * 2 Third and Fourth Person
-                    new(7, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamB Fourth Person
-                    new(-1, FreelancerResolutionPhaseSubType.FREELANCER_TRADE),
-                };
-            } 
-        }
+        bool hasBans = GameModeManager.GetBans(GameSubType.LocalizedName);
+        // A player controlling all characters of their team has no one to trade with
+        List<KeyValuePair<int, FreelancerResolutionPhaseSubType>> phases =
+            GetDraftPhases(TeamInfo.TeamPlayerInfo, hasBans, hasTrade: !IsControlAllBots);
 
         bool sendGameInfoNotify = true;
 
@@ -1609,6 +1531,71 @@ public abstract class Game
 
     }
 
+    // Teams NEED to be min 8 and max 8 only
+    private static readonly List<KeyValuePair<int, FreelancerResolutionPhaseSubType>> DraftPhases = new()
+    {
+        // Playerid (-1)                           Phase
+        new(0, FreelancerResolutionPhaseSubType.PICK_BANS1),    // TeamA First Person
+        new(4, FreelancerResolutionPhaseSubType.PICK_BANS1),    // TeamB First Person
+        new(0, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamA First Person
+        new(4, FreelancerResolutionPhaseSubType.PICK_FREELANCER2),  // TeamB * 2 First and Second Person
+        new(1, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamA Second Person
+        new(5, FreelancerResolutionPhaseSubType.PICK_BANS2),    // TeamB Second Person
+        new(1, FreelancerResolutionPhaseSubType.PICK_BANS2),    // TeamA Second Person
+        new(6, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamB Third Person
+        new(2, FreelancerResolutionPhaseSubType.PICK_FREELANCER2),  // TeamA * 2 Third and Fourth Person
+        new(7, FreelancerResolutionPhaseSubType.PICK_FREELANCER1),  // TeamB Fourth Person
+    };
+
+    // -1 for phases where we don't need the player (trade)
+    internal static List<KeyValuePair<int, FreelancerResolutionPhaseSubType>> GetDraftPhases(
+        List<LobbyServerPlayerInfo> teamPlayerInfo,
+        bool hasBans,
+        bool hasTrade)
+    {
+        List<KeyValuePair<int, FreelancerResolutionPhaseSubType>> phases = new();
+        foreach (KeyValuePair<int, FreelancerResolutionPhaseSubType> phase in DraftPhases)
+        {
+            // Bans can be disabled. If they are disabled, client won't show ban windows
+            // (Due to poll of favoring bans add a setting to Custom to disable bans only there)
+            if (!hasBans
+                && phase.Value is FreelancerResolutionPhaseSubType.PICK_BANS1 or FreelancerResolutionPhaseSubType.PICK_BANS2)
+            {
+                continue;
+            }
+
+            // An account controlling several characters (proxies) acts on one slot at a time (see GetDraftActingSlot),
+            // so it picks for them one by one
+            if (phase.Value == FreelancerResolutionPhaseSubType.PICK_FREELANCER2
+                && IsSameController(
+                    GetPlayerInfo(phase.Key, teamPlayerInfo),
+                    GetPlayerInfo(phase.Key + 1, teamPlayerInfo)))
+            {
+                phases.Add(new(phase.Key, FreelancerResolutionPhaseSubType.PICK_FREELANCER1));
+                phases.Add(new(phase.Key + 1, FreelancerResolutionPhaseSubType.PICK_FREELANCER1));
+                continue;
+            }
+
+            phases.Add(phase);
+        }
+
+        if (hasTrade)
+        {
+            phases.Add(new(-1, FreelancerResolutionPhaseSubType.FREELANCER_TRADE));
+        }
+
+        return phases;
+    }
+
+    private static bool IsSameController(LobbyServerPlayerInfo player1, LobbyServerPlayerInfo player2)
+    {
+        return player1 is not null
+               && player2 is not null
+               && !player1.IsNPCBot
+               && !player2.IsNPCBot
+               && player1.AccountId == player2.AccountId;
+    }
+
     public HashSet<CharacterType> GetUsedCharacterTypes()
     {
         // Build a list of all used character types for use with Fill
@@ -1701,7 +1688,7 @@ public abstract class Game
         PlayersInDeck++;
     }
 
-    private LobbyServerPlayerInfo GetPlayerInfo(int index, List<LobbyServerPlayerInfo> teamPlayerInfo)
+    private static LobbyServerPlayerInfo GetPlayerInfo(int index, List<LobbyServerPlayerInfo> teamPlayerInfo)
     {
         return index >= 0 && index < teamPlayerInfo.Count ? teamPlayerInfo[index] : null;
     }

@@ -41,7 +41,9 @@ state, handle disconnect/reconnect/dodge, and finalize results (stats, Elo, Disc
 2. `FillTeam`: converts `MatchPlayerData` into `LobbyServerPlayerInfo`s, adds bots where
    configured, validates connectivity; `CheckDuplicatedAndFill` resolves duplicate/unavailable
    characters (forced randoms); optional ranked draft (`HandleRankedResolutionPhase` — a
-   multi-sub-phase async state machine with timers, trades, bans).
+   multi-sub-phase async state machine with timers, trades, bans). The phase order comes from
+   `Game.GetDraftPhases`: a double pick whose two slots belong to one account (proxies) is split
+   into two single picks, and there is no trade phase under `ControlAllBots`.
 3. `BuildGameInfo` + `AssignServer`: subscribes `Game` methods to the server connection's
    events. `SendGameAssignmentNotification` to clients; when all load,
    `BridgeServerProtocol.LaunchGame` sends `LaunchGameRequest` with team/session info.
