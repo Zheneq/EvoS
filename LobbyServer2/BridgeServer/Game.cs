@@ -31,7 +31,6 @@ public abstract class Game
 {
     private static readonly ILog log = LogManager.GetLogger(typeof(Game));
     public static readonly object characterSelectionLock = new object();
-    protected static readonly Random rand = new Random();
     private readonly Lock ggPackLock = new();
     public bool IsControlAllBots => GameSubType?.Mods.Contains(GameSubType.SubTypeMods.ControlAllBots) ?? false;
 
@@ -88,9 +87,8 @@ public abstract class Game
     private TimeSpan TimeLeftInSubPhase = new();
     private bool isCancellationRequested = false;
     private static readonly TimeSpan DraftEndDelay = TimeSpan.FromSeconds(2);
-    public FreelancerResolutionPhaseSubType PhaseSubType { get; private set; } = FreelancerResolutionPhaseSubType.UNDEFINED;
+    public FreelancerResolutionPhaseSubType PhaseSubType { get; protected set; } = FreelancerResolutionPhaseSubType.UNDEFINED;
     public int PlayersInDeck { protected set; get; }
-    private readonly List<CharacterType> botCharacters = new();
     public bool IsDraft => GameSubType?.Mods.Contains(GameSubType.SubTypeMods.RankedFreelancerSelection) ?? false;
     public bool IsDrafting => IsDraft && GameStatus == GameStatus.FreelancerSelecting;
 
@@ -974,6 +972,15 @@ public abstract class Game
         HashSet<CharacterType> teammateCharacters = TeamInfo.TeamInfo(team)
             .Select(tm => tm.CharacterType)
             .ToHashSet();
+        return PickCharacter(teammateCharacters, teammateCharacters, forBot);
+    }
+
+    // Picks a role the team does not have yet: tank, then support, then assassin
+    internal static CharacterType PickCharacter(
+        IReadOnlySet<CharacterType> teammateCharacters,
+        IReadOnlySet<CharacterType> unavailableCharacters,
+        bool forBot)
+    {
         List<CharacterRole> teammateRoles = teammateCharacters
             .Select(ct => CharacterConfigs.Characters[ct].CharacterRole)
             .ToList();
@@ -982,16 +989,25 @@ public abstract class Game
             : teammateRoles.All(r => r != CharacterRole.Support)
                 ? CharacterRole.Support
                 : CharacterRole.Assassin;
-        List<CharacterType> options = (
+        List<KeyValuePair<CharacterType, CharacterConfig>> allowed = (
                 from keyValuePair in CharacterConfigs.Characters
                 where (forBot || keyValuePair.Value.AllowForPlayers)
                       && (!forBot || keyValuePair.Value.AllowForBots)
-                      && keyValuePair.Value.CharacterRole == roleToPick
-                      && !teammateCharacters.Contains(keyValuePair.Key)
-                select keyValuePair.Key)
+                      && keyValuePair.Value.CharacterRole != CharacterRole.None
+                      && !unavailableCharacters.Contains(keyValuePair.Key)
+                select keyValuePair)
             .ToList();
+        List<CharacterType> options = allowed
+            .Where(kv => kv.Value.CharacterRole == roleToPick)
+            .Select(kv => kv.Key)
+            .ToList();
+        
+        if (options.Count == 0)
+        {
+            options = allowed.Select(kv => kv.Key).ToList();
+        }
 
-        return options[rand.Next(options.Count)];
+        return options[Random.Shared.Next(options.Count)];
     }
 
     // characterDataUpdate: the update changes character data (skin, cards, mods, etc.)
@@ -1268,7 +1284,6 @@ public abstract class Game
 
         List<CharacterType> availableTypes;
 
-        // TODO check AllowForBots?
         if (preferedCat != CharacterType.Gryd)
         {
             // Select only characters that match the specified characterRole (from preferedCat)
@@ -1408,8 +1423,6 @@ public abstract class Game
             }
 
             RankedResolutionPhaseData.PlayersOnDeck.Clear(); // Reset deck (People who can do stuff, ban or select a freelancer those are the PlayersOnDeck)
-            // Clear botCharacters so we can start using it again this is for when using bots, and we have 2 players on deck we don't want them to accidentally pick same character
-            botCharacters.Clear();
             PlayersInDeck = 0;
             if (subPhase.Key != -1)
             {
@@ -1466,7 +1479,9 @@ public abstract class Game
                 // Hovered a character that was taken in the meantime, e.g. by a teammate on deck at the same time
                 else if (usedCharacterTypes.Contains(characterType))
                 {
-                    characterType = AssignRandomCharacterForDraft(player, usedCharacterTypes);
+                    characterType = isPickPhase && player.IsAIControlled
+                        ? PickDraftCharacterForBot(player, usedCharacterTypes)
+                        : AssignRandomCharacterForDraft(player, usedCharacterTypes);
                 }
 
                 // Several players can be on deck at the same time
@@ -1621,6 +1636,38 @@ public abstract class Game
             .ToHashSet();
     }
 
+    // Like outside draft, a bot picks a role its team does not have yet.
+    // Hovers of teammate bots on deck at the same time count too, so that they do not go for the same role.
+    private CharacterType PickDraftCharacterForBot(LobbyServerPlayerInfo bot, HashSet<CharacterType> usedCharacterTypes)
+    {
+        Dictionary<int, CharacterType> teamSelections = bot.TeamId == Team.TeamA
+            ? RankedResolutionPhaseData.FriendlyTeamSelections
+            : RankedResolutionPhaseData.EnemyTeamSelections;
+        HashSet<CharacterType> teammateCharacters = teamSelections.Values.ToHashSet();
+        foreach (RankedResolutionPlayerState state in RankedResolutionPhaseData.PlayersOnDeck)
+        {
+            LobbyServerPlayerInfo deckMate = GetPlayerById(state.PlayerId);
+            if (state.PlayerId != bot.PlayerId
+                && state.Intention != CharacterType.None
+                && deckMate is { IsAIControlled: true }
+                && deckMate.TeamId == bot.TeamId)
+            {
+                teammateCharacters.Add(state.Intention);
+            }
+        }
+
+        CharacterType characterType = PickCharacter(
+            teammateCharacters,
+            usedCharacterTypes.Union(teammateCharacters).ToHashSet(),
+            forBot: true);
+
+        log.Info($"Selected character {characterType} for bot {bot.Handle}, " +
+                 $"teammates: {string.Join(", ", teammateCharacters)}, " +
+                 $"used characters: {string.Join(", ", usedCharacterTypes)}");
+
+        return characterType;
+    }
+
     private void UpdateTeamSelection(Dictionary<int, CharacterType> selections)
     {
         foreach (KeyValuePair<int, CharacterType> selection in selections)
@@ -1660,8 +1707,10 @@ public abstract class Game
         // Let AI Randomize
         if (player.IsAIControlled)
         {
-            usedCharacterTypes.UnionWith(botCharacters);
-            characterType = AssignRandomCharacterForDraft(player, usedCharacterTypes);
+            characterType = PhaseSubType is FreelancerResolutionPhaseSubType.PICK_FREELANCER1
+                or FreelancerResolutionPhaseSubType.PICK_FREELANCER2
+                ? PickDraftCharacterForBot(player, usedCharacterTypes)
+                : AssignRandomCharacterForDraft(player, usedCharacterTypes);
             if (PhaseSubType == FreelancerResolutionPhaseSubType.PICK_BANS1
                 || PhaseSubType == FreelancerResolutionPhaseSubType.PICK_BANS2
                 || PhaseSubType == FreelancerResolutionPhaseSubType.PICK_FREELANCER1
@@ -1677,7 +1726,6 @@ public abstract class Game
                 RankedResolutionPlayerState state = RankedResolutionPhaseData.UnselectedPlayerStates[index];
                 state.Intention = characterType;
                 RankedResolutionPhaseData.UnselectedPlayerStates[index] = state;
-                botCharacters.Add(characterType);
                 // TODO Update bot name when it picks a character to play (not to ban)
             }
         }
@@ -1727,7 +1775,7 @@ public abstract class Game
     }
 
     // Method to add players to the deck based on the phase type
-    void AddPlayersToDeckBasedOnPhase(FreelancerResolutionPhaseSubType phase, LobbyServerPlayerInfo player1, LobbyServerPlayerInfo player2)
+    internal void AddPlayersToDeckBasedOnPhase(FreelancerResolutionPhaseSubType phase, LobbyServerPlayerInfo player1, LobbyServerPlayerInfo player2)
     {
         switch (phase)
         {
