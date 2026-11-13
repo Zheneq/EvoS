@@ -16,5 +16,44 @@
     "BaseSubTypeName": "Deathmatch@SubTypes",
     "NumControlledCharacters": 4,
     "TurnTime": "00:00:30"
+  },
+  {
+    "LocalizedName": "Asymmetric2Draft@SubTypes",
+    "BaseSubTypeName": "RankedCustom@SubTypes",
+    "NumControlledCharacters": 2,
+    "TurnTime": "00:00:20",
+    "Requirements": [
+      {
+        "MinClientVersion": {
+          "Version": "1.8"
+        }
+      }
+    ]
+  },
+  {
+    "LocalizedName": "Asymmetric3Draft@SubTypes",
+    "BaseSubTypeName": "RankedCustom@SubTypes",
+    "NumControlledCharacters": 3,
+    "TurnTime": "00:00:25",
+    "Requirements": [
+      {
+        "MinClientVersion": {
+          "Version": "1.8"
+        }
+      }
+    ]
+  },
+  {
+    "LocalizedName": "Asymmetric4Draft@SubTypes",
+    "BaseSubTypeName": "RankedCustom@SubTypes",
+    "NumControlledCharacters": 4,
+    "TurnTime": "00:00:30",
+    "Requirements": [
+      {
+        "MinClientVersion": {
+          "Version": "1.8"
+        }
+      }
+    ]
   }
 ]

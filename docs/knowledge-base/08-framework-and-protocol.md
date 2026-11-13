@@ -46,7 +46,9 @@ Protocol-dependent requirements:
 Subtype configs (`Config/GameSubTypes/*.json`) can set requirements in a `"Requirements"` array
 of these JSON objects (e.g. `AllFourCharactersDraft` requires 1.8). `GameSubType.Requirements` is read
 from JSON but never written (`ShouldSerializeRequirements`), so it stays out of the `LobbyGameInfo`
-sent to the game server.
+sent to the game server. Asymmetric subtype configs (`AsymmetricPvP.json`) take the same array; the
+advertised subtype gets the base subtype's requirements, then its own, then VIP access
+(`AsymmetricSubTypeDescriptor.CreateAdvertisedSubType`).
 
 Adding a concrete protocol-dependent requirement:
 1. Add it to the **start** of `QueueRequirement.MessageTypes`. Each serialized requirement begins

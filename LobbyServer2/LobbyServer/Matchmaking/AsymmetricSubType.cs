@@ -23,7 +23,8 @@ namespace CentralServer.LobbyServer.Matchmaking;
 
   AsymmetricSubTypeDescriptor.CreateAdvertisedSubType() builds the GameSubType the server registers:
   it copies the base subtype, sets TeamABots = 0 / TeamBBots = 0, and adds ControlAllBots + NotAllowedForGroups
-  to the mod list. This is what the client sees in the queue.
+  to the mod list. Its requirements are the base subtype's, then the descriptor's own (from config), then VIP access.
+  This is what the client sees in the queue.
 
   At startup, you call MatchmakingQueue.RegisterAsymmetricSubType(descriptor), which appends the advertised
   GameSubType to the queue's subtype list (giving it a new bit in the SubTypeMask), creates a matchmaker for it,
@@ -120,6 +121,7 @@ public class AsymmetricSubTypeConfig
     public string BaseSubTypeName { get; set; }
     public int NumControlledCharacters { get; set; }
     public TimeSpan TurnTime { get; set; }
+    public RequirementCollection Requirements { get; set; }
 }
 
 public class AsymmetricSubTypeDescriptor
@@ -127,11 +129,12 @@ public class AsymmetricSubTypeDescriptor
     public string LocalizedName;
     public string BaseSubTypeName;
     public int BaseSubTypeIndex;
-    public int SubTypeIndex; 
+    public int SubTypeIndex;
     public bool SkipMatchmaking;
     public int NumControlledCharacters;
     public TimeSpan TurnTime;
-    
+    public RequirementCollection Requirements;
+
     public GameSubType CreateAdvertisedSubType(GameSubType baseSubType)
     {
         GameSubType advertised = baseSubType.Clone();
@@ -155,6 +158,10 @@ public class AsymmetricSubTypeDescriptor
         if (baseSubType.Requirements != null)
         {
             advertised.Requirements.AddRange(baseSubType.Requirements);
+        }
+        if (Requirements != null)
+        {
+            advertised.Requirements.AddRange(Requirements);
         }
         advertised.Requirements.Add(new QueueRequirement_AccessLevel { AccessLevel = ClientAccessLevel.VIP });
 

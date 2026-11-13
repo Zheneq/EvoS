@@ -182,7 +182,8 @@ namespace CentralServer.LobbyServer.Matchmaking
             string localizedName,
             string baseSubTypeName,
             int numControlledCharacters,
-            TimeSpan turnTime)
+            TimeSpan turnTime,
+            RequirementCollection requirements)
         {
             List<GameSubType> subTypes = MatchmakingQueueInfo.GameConfig.SubTypes;
             int baseIndex = subTypes.FindIndex(st => st.LocalizedName == baseSubTypeName);
@@ -202,6 +203,7 @@ namespace CentralServer.LobbyServer.Matchmaking
                 BaseSubTypeIndex = baseIndex,
                 SkipMatchmaking = hasPrimary,
                 TurnTime = turnTime,
+                Requirements = requirements,
             };
             GameSubType advertised = descriptor.CreateAdvertisedSubType(subTypes[baseIndex]);
             subTypes.Add(advertised);
@@ -229,7 +231,8 @@ namespace CentralServer.LobbyServer.Matchmaking
                     config.LocalizedName,
                     config.BaseSubTypeName,
                     config.NumControlledCharacters,
-                    config.TurnTime);
+                    config.TurnTime,
+                    config.Requirements);
             }
         }
 
