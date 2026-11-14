@@ -13,10 +13,10 @@ removed in that review; they are in the git history of this file.
 
 | Stage | State | What is left |
 |-------|-------|--------------|
-| 1 – Handler modules | Done except draft | Four draft handlers (~360 lines) still on `LobbyServerProtocol`; move with Stage 4a |
+| 1 – Handler modules | Done | `LobbyServerProtocol` registers no handlers; the draft ones moved to `DraftModule` (plan 02) |
 | 2 – `IClientNotifier` | Done | Two small leaks of the concrete connection type (see B4) |
 | 3 – De-static the managers | **Interfaces and shims only** | ~200 static call sites; cycles between managers; several managers not converted at all (see C, Stage 3) |
-| 4 – Split `Game` | Started: draft state and phase loop moved to `DraftController` (plan 01) | Rest of 4a (plans 02–04); `Game.cs` is 1,348 lines (was 1,997) |
+| 4 – Split `Game` | Started: draft state, phase loop and request logic in `DraftController` (plans 01–02) | Rest of 4a (plans 03–04); `Game.cs` is 1,348 lines (was 1,997) |
 | 5 – Hygiene | `PatchAccountData` and the temp-account fallback done | Everything else |
 
 Tests: 435, all passing. New features mostly came with tests, and the tests show where the

@@ -11,7 +11,7 @@ draft interactions, error/feedback reporting.
 | Class | Location | Notes                                                                                                                                                                                                                                                                                                                                                                                  |
 |-------|----------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `WebSocketBehaviorBase<TMessage>` | `LobbyServer2/WebSocketBehaviorBase.cs` | Generic websocket connection base: receive loop, typed handler registry (`RegisterHandler<T>`), serialized sends with websocket-sharp-compatible fragmentation, per-connection log context. One static `Connections` registry per closed generic type                                                                                                                                  |
-| `LobbyServerProtocol` | `LobbyServer2/LobbyServer/LobbyServerProtocol.cs` | **~75 message handlers.** Connection identity (`AccountId`, `SessionToken`), `CurrentGame` pointer, transport plumbing (`Send(WebSocketMessage)`, `Broadcast`, error responses, `SendLobbyServerReadyNotification`, per-connection message patching via `ProxyPatcher` and `ProtocolPatcher`), and business logic for a dozen domains inline. Implements `IClientConnection` and `IHandlerRegistry`; composes `ILobbyModule` instances (currently `StoreModule`) |
+| `LobbyServerProtocol` | `LobbyServer2/LobbyServer/LobbyServerProtocol.cs` | Connection identity (`AccountId`, `SessionToken`), `CurrentGame` pointer, transport plumbing (`Send(WebSocketMessage)`, `Broadcast`, error responses, `SendLobbyServerReadyNotification`, per-connection message patching via `ProxyPatcher` and `ProtocolPatcher`). Implements `IClientConnection` and `IHandlerRegistry`. Registers no handlers itself: every message handler is in one of the `ILobbyModule`s it composes (`Login`, `Chat`, `Store`, `Telemetry`, `Account`, `Group`, `Friend`, `Matchmaking`, `GameLifecycle`, `Draft`, `Character`, `Admin`) |
 | `SessionManager` | `LobbyServer2/LobbyServer/Session/SessionManager.cs` | Static session registry: `SessionInfos` (active), `ConnectingSessions` (login issued, WS not yet up, 30s expiry), `DisconnectedSessionInfos` (reconnect window, 10 min). Also Prometheus lobby gauges                                                                                                                                                                                  |
 | `AdminManager` | `LobbyServer2/LobbyServer/AdminManager.cs` | Singleton; ban/mute penalty bookkeeping, admin action events, muted-refresh loop                                                                                                                                                                                                                                                                                                       |
 | `UsernameRequestManager` | `LobbyServer2/LobbyServer/UsernameRequestManager.cs` | Create account requests (approved via admin API)                                                                                                                                                                                                                                                                                                                                       |
@@ -47,8 +47,8 @@ session-scoped, not secrets equivalent to passwords, but the TODO in
 
 ## LobbyServerProtocol anatomy (the god class)
 
-Handler groups registered in the constructor, all implemented as instance methods on the
-same class:
+Handler groups. They were all instance methods of this class; each group now lives in an
+`ILobbyModule` (see the table above), and some details below predate that move:
 
 - **Session/bootstrap**: `HandleRegisterGame`, options, keybinds, region.
 - **Account state**: `HandlePlayerInfoUpdateRequest` (character select/loadouts — with a
@@ -60,8 +60,9 @@ same class:
 - **Queue**: join/leave matchmaking queue, ready-state (`SetContextualReadyState` — an
   important state machine deciding queue join vs custom-game ready vs game load).
 - **Game**: create/join custom games, rejoin, leave, spectate, game invitations.
-- **Ranked draft**: trade/selection/ban/hover handlers manipulating
-  `Game.RankedResolutionPhaseData` under locks.
+- **Ranked draft** (`DraftModule`): hover/ban/selection/trade requests, passed to
+  `DraftController.Hover`/`Ban`/`Select`/`Trade` of the current game (doc 04); the module
+  only maps results onto responses.
 - **Chat**: `HandleChatNotification` → `ChatManager` (via event `OnChatNotification`).
 - **Telemetry**: client status/error/feedback/performance reports → DAOs + Discord.
 - **Friends**: `HandleFriendUpdate` (~250 lines: add/accept/reject/block/note...).

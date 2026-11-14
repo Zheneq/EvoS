@@ -26,6 +26,7 @@
 | `PracticeManagerTest` | character checks before a practice game starts | static manager, mock DAO mode |
 | `DraftPhasesTest` | draft phase order for regular, no-ban and multilancer rosters | pure static `DraftController.GetDraftPhases` |
 | `DraftBotPickTest`, `DraftTradeTest` | bot picks on deck, trading slot resolution | `TestGame : PvpGame(null)` with hand-built roster; draft state on a controller attached with `CreateDraft()` |
+| `DraftModuleTest` | draft requests: response type and content per result, not drafting, wrong phase | module over `RecordingClientConnection` + `TestGame : PvpGame(null)` with a controller attached |
 | `CharacterSelectionTest` | `CharacterRules`, character updates per game status | `TestGame : PvpGame(null)` |
 | `QueuePenaltyManagerTest`, `QueuePriorityManagerTest` | penalty/priority logic | mock DAO mode |
 | `QueuePenaltyIssueTest` | when leavers are penalized and pardoned | `TestGame : Game` driven through protected members (`OnStatusUpdate`, `CancelMatch`, setters), mock DAO mode, `ClientNotifierScope` |
@@ -44,8 +45,8 @@
 
 ## What is not covered (and why)
 
-- The four draft request handlers (hover, ban, select, trade) — the last handlers still on
-  `LobbyServerProtocol`, which needs a socket to do anything.
+- Most cases of the draft request methods (`DraftController.Hover`/`Ban`/`Select`/`Trade`):
+  `DraftModuleTest` covers only one or two per method (plan 03 adds the rest).
 - A draft or a game start run end to end: the phase loop and the start flows
   (`PvpGame.StartGameAsync`, `CustomGame.StartCustomGameAsync`) wait on real `Task.Delay`s.
 - `Game` team assembly, duplicate resolution, cancellation and finalization, beyond what
