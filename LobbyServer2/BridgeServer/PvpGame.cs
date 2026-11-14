@@ -70,7 +70,7 @@ public class PvpGame: Game
         Players.ForEach(player => SendGameAssignmentNotification(player));
         GetClients().ForEach(client => client.OnGameAssigned(this));
 
-        await HandleRankedResolutionPhase();
+        await RunDraft();
         if (IsCancelled)
         {
             return;

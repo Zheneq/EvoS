@@ -30,7 +30,8 @@ public class DraftBotPickTest
                     })
                     .ToList()
             };
-            SetRankedResolutionPhaseData(new RankedResolutionPhaseData
+            DraftController draft = CreateDraft();
+            draft.SetRankedResolutionPhaseData(new RankedResolutionPhaseData
             {
                 UnselectedPlayerStates = TeamInfo.TeamPlayerInfo
                     .Select(p => new RankedResolutionPlayerState
@@ -48,17 +49,17 @@ public class DraftBotPickTest
                 EnemyTeamSelections = [],
                 TradeActions = [],
             });
-            PhaseSubType = FreelancerResolutionPhaseSubType.PICK_FREELANCER2;
+            draft.PhaseSubType = FreelancerResolutionPhaseSubType.PICK_FREELANCER2;
         }
     }
 
     private static List<CharacterType> PutSlots3And4OnDeck(TestGame game)
     {
-        game.AddPlayersToDeckBasedOnPhase(
+        game.Draft.AddPlayersToDeckBasedOnPhase(
             FreelancerResolutionPhaseSubType.PICK_FREELANCER2,
             game.GetPlayerById(3),
             game.GetPlayerById(4));
-        return game.GetRankedResolutionPhaseData().PlayersOnDeck.Select(p => p.Intention).ToList();
+        return game.Draft.GetRankedResolutionPhaseData().PlayersOnDeck.Select(p => p.Intention).ToList();
     }
 
     private static CharacterRole RoleOf(CharacterType characterType)

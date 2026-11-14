@@ -261,8 +261,8 @@ namespace CentralServer.LobbyServer
                 return;
             }
 
-            RankedResolutionPhaseData rankedResolutionPhaseData = CurrentGame.GetRankedResolutionPhaseData();
-            LobbyServerPlayerInfo player = CurrentGame.GetDraftTradingSlot(AccountId, request.Trade.OfferingPlayerId);
+            RankedResolutionPhaseData rankedResolutionPhaseData = CurrentGame.Draft.GetRankedResolutionPhaseData();
+            LobbyServerPlayerInfo player = CurrentGame.Draft.GetDraftTradingSlot(AccountId, request.Trade.OfferingPlayerId);
             if (player is null)
             {
                 log.Warn($"Player {Handle} attempted to trade from slot {request.Trade.OfferingPlayerId} they do not control");
@@ -355,8 +355,8 @@ namespace CentralServer.LobbyServer
                 }
             }
 
-            CurrentGame.SetRankedResolutionPhaseData(rankedResolutionPhaseData);
-            CurrentGame.SendRankedResolutionSubPhase();
+            CurrentGame.Draft.SetRankedResolutionPhaseData(rankedResolutionPhaseData);
+            CurrentGame.Draft.SendRankedResolutionSubPhase();
 
             response.Success = true;
             Send(response);
@@ -383,8 +383,8 @@ namespace CentralServer.LobbyServer
                 return;
             }
 
-            RankedResolutionPhaseData rankedResolutionPhaseData = CurrentGame.GetRankedResolutionPhaseData();
-            LobbyServerPlayerInfo player = CurrentGame.GetDraftActingSlot(AccountId);
+            RankedResolutionPhaseData rankedResolutionPhaseData = CurrentGame.Draft.GetRankedResolutionPhaseData();
+            LobbyServerPlayerInfo player = CurrentGame.Draft.GetDraftActingSlot(AccountId);
 
             Dictionary<int, CharacterType> teamSelections = player.TeamId == Team.TeamA
                 ? rankedResolutionPhaseData.FriendlyTeamSelections
@@ -402,12 +402,12 @@ namespace CentralServer.LobbyServer
                     return;
                 }
 
-                HashSet<CharacterType> usedCharacterTypes = CurrentGame.GetUsedCharacterTypes();
+                HashSet<CharacterType> usedCharacterTypes = CurrentGame.Draft.GetUsedCharacterTypes();
                 if (characterType == CharacterType.PendingWillFill
                     || characterType == CharacterType.TestFreelancer1
                     || characterType == CharacterType.TestFreelancer2)
                 {
-                    characterType = CurrentGame.AssignRandomCharacterForDraft(player, usedCharacterTypes, characterType);
+                    characterType = CurrentGame.Draft.AssignRandomCharacterForDraft(player, usedCharacterTypes, characterType);
                 }
 
                 List<RankedResolutionPlayerState> unselectedPlayerStates = rankedResolutionPhaseData.UnselectedPlayerStates;
@@ -433,8 +433,8 @@ namespace CentralServer.LobbyServer
                         // clients take the character for the lock in animation from the hover
                         existingPlayersOnDeck.Intention = characterType;
                         playersOnDeck[deckIndex] = existingPlayersOnDeck;
-                        CurrentGame.SetRankedResolutionPhaseData(rankedResolutionPhaseData);
-                        CurrentGame.SendRankedResolutionSubPhase();
+                        CurrentGame.Draft.SetRankedResolutionPhaseData(rankedResolutionPhaseData);
+                        CurrentGame.Draft.SendRankedResolutionSubPhase();
                     }
 
                     existingPlayersOnDeck.Intention = characterType;
@@ -443,14 +443,14 @@ namespace CentralServer.LobbyServer
 
                     teamSelections.Add(player.PlayerId, characterType);
 
-                    CurrentGame.UpdatePlayersInDeck();
+                    CurrentGame.Draft.UpdatePlayersInDeck();
 
-                    CurrentGame.SetRankedResolutionPhaseData(rankedResolutionPhaseData);
-                    CurrentGame.SendRankedResolutionSubPhase();
+                    CurrentGame.Draft.SetRankedResolutionPhaseData(rankedResolutionPhaseData);
+                    CurrentGame.Draft.SendRankedResolutionSubPhase();
 
-                    if (CurrentGame.PlayersInDeck == 0)
+                    if (CurrentGame.Draft.PlayersInDeck == 0)
                     {
-                        CurrentGame.SkipRankedResolutionSubPhase();
+                        CurrentGame.Draft.SkipRankedResolutionSubPhase();
                     }
 
                     response.Success = true;
@@ -484,13 +484,13 @@ namespace CentralServer.LobbyServer
                 return;
             }
 
-            RankedResolutionPhaseData rankedResolutionPhaseData = CurrentGame.GetRankedResolutionPhaseData();
-            LobbyServerPlayerInfo player = CurrentGame.GetDraftActingSlot(AccountId);
+            RankedResolutionPhaseData rankedResolutionPhaseData = CurrentGame.Draft.GetRankedResolutionPhaseData();
+            LobbyServerPlayerInfo player = CurrentGame.Draft.GetDraftActingSlot(AccountId);
 
             List<RankedResolutionPlayerState> playersOnDeck = rankedResolutionPhaseData.PlayersOnDeck;
             int deckIndex = playersOnDeck.FindIndex(p => p.PlayerId == player.PlayerId);
 
-            HashSet<CharacterType> usedCharacterTypes = CurrentGame.GetUsedCharacterTypes();
+            HashSet<CharacterType> usedCharacterTypes = CurrentGame.Draft.GetUsedCharacterTypes();
             CharacterType characterType = request.Selection;
             if (deckIndex >= 0 && !usedCharacterTypes.Contains(characterType)) // TODO you can still lock in a duplicate by timing out
             {
@@ -499,7 +499,7 @@ namespace CentralServer.LobbyServer
                     || characterType == CharacterType.TestFreelancer1
                     || characterType == CharacterType.TestFreelancer2)
                 {
-                    characterType = CurrentGame.AssignRandomCharacterForDraft(player, usedCharacterTypes, characterType);
+                    characterType = CurrentGame.Draft.AssignRandomCharacterForDraft(player, usedCharacterTypes, characterType);
                 }
 
                 RankedResolutionPlayerState existingPlayersOnDeck = playersOnDeck[deckIndex];
@@ -509,8 +509,8 @@ namespace CentralServer.LobbyServer
                     // clients take the character for the lock in animation from the hover
                     existingPlayersOnDeck.Intention = characterType;
                     playersOnDeck[deckIndex] = existingPlayersOnDeck;
-                    CurrentGame.SetRankedResolutionPhaseData(rankedResolutionPhaseData);
-                    CurrentGame.SendRankedResolutionSubPhase();
+                    CurrentGame.Draft.SetRankedResolutionPhaseData(rankedResolutionPhaseData);
+                    CurrentGame.Draft.SendRankedResolutionSubPhase();
                 }
 
                 if (player.TeamId == Team.TeamA)
@@ -527,10 +527,10 @@ namespace CentralServer.LobbyServer
                 existingPlayersOnDeck.OnDeckness = RankedResolutionPlayerState.ReadyState.Unselected;
                 playersOnDeck[deckIndex] = existingPlayersOnDeck;
 
-                CurrentGame.SetRankedResolutionPhaseData(rankedResolutionPhaseData);
-                CurrentGame.SendRankedResolutionSubPhase();
+                CurrentGame.Draft.SetRankedResolutionPhaseData(rankedResolutionPhaseData);
+                CurrentGame.Draft.SendRankedResolutionSubPhase();
             
-                CurrentGame.SkipRankedResolutionSubPhase();
+                CurrentGame.Draft.SkipRankedResolutionSubPhase();
 
                 Send(new RankedBanResponse()
                 {
@@ -563,8 +563,8 @@ namespace CentralServer.LobbyServer
                 return;
             }
             
-            RankedResolutionPhaseData rankedResolutionPhaseData = CurrentGame.GetRankedResolutionPhaseData();
-            LobbyServerPlayerInfo player = CurrentGame.GetDraftActingSlot(AccountId);
+            RankedResolutionPhaseData rankedResolutionPhaseData = CurrentGame.Draft.GetRankedResolutionPhaseData();
+            LobbyServerPlayerInfo player = CurrentGame.Draft.GetDraftActingSlot(AccountId);
 
             List<RankedResolutionPlayerState> unselectedPlayerStates = rankedResolutionPhaseData.UnselectedPlayerStates;
             int stateIndex = unselectedPlayerStates.FindIndex(p => p.PlayerId == player.PlayerId);
@@ -585,8 +585,8 @@ namespace CentralServer.LobbyServer
                     playersOnDeck[deckIndex] = existingPlayersOnDeck;
                 }
 
-                CurrentGame.SetRankedResolutionPhaseData(rankedResolutionPhaseData);
-                CurrentGame.SendRankedResolutionSubPhase();
+                CurrentGame.Draft.SetRankedResolutionPhaseData(rankedResolutionPhaseData);
+                CurrentGame.Draft.SendRankedResolutionSubPhase();
 
                 Send(new RankedHoverClickResponse()
                 {

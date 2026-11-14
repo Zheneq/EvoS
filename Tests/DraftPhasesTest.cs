@@ -44,7 +44,7 @@ public class DraftPhasesTest
                 (2, PICK_FREELANCER2),
                 (7, PICK_FREELANCER1),
                 (-1, FREELANCER_TRADE)),
-            Game.GetDraftPhases(Slots(1, 2, 3, 4, 5, 6, 7, 8), hasBans: true, hasTrade: true));
+            DraftController.GetDraftPhases(Slots(1, 2, 3, 4, 5, 6, 7, 8), hasBans: true, hasTrade: true));
     }
 
     [Fact]
@@ -59,7 +59,7 @@ public class DraftPhasesTest
                 (2, PICK_FREELANCER2),
                 (7, PICK_FREELANCER1),
                 (-1, FREELANCER_TRADE)),
-            Game.GetDraftPhases(Slots(1, 2, 3, 4, 5, 6, 7, 8), hasBans: false, hasTrade: true));
+            DraftController.GetDraftPhases(Slots(1, 2, 3, 4, 5, 6, 7, 8), hasBans: false, hasTrade: true));
     }
 
     [Fact]
@@ -79,7 +79,7 @@ public class DraftPhasesTest
                 (2, PICK_FREELANCER1),
                 (3, PICK_FREELANCER1),
                 (7, PICK_FREELANCER1)),
-            Game.GetDraftPhases(Slots(1, 1, 1, 1, 2, 2, 2, 2), hasBans: true, hasTrade: false));
+            DraftController.GetDraftPhases(Slots(1, 1, 1, 1, 2, 2, 2, 2), hasBans: true, hasTrade: false));
     }
 
     [Fact]
@@ -95,7 +95,7 @@ public class DraftPhasesTest
                 (2, PICK_FREELANCER1),
                 (3, PICK_FREELANCER1),
                 (7, PICK_FREELANCER1)),
-            Game.GetDraftPhases(Slots(1, 1, 1, 1, 2, 2, 2, 2), hasBans: false, hasTrade: false));
+            DraftController.GetDraftPhases(Slots(1, 1, 1, 1, 2, 2, 2, 2), hasBans: false, hasTrade: false));
     }
 
     [Fact]
@@ -110,7 +110,7 @@ public class DraftPhasesTest
                 (2, PICK_FREELANCER1),
                 (3, PICK_FREELANCER1),
                 (7, PICK_FREELANCER1)),
-            Game.GetDraftPhases(
+            DraftController.GetDraftPhases(
                 Slots(1, 1, 1, 1, NpcBot, NpcBot, NpcBot, NpcBot),
                 hasBans: false,
                 hasTrade: false));
@@ -129,6 +129,6 @@ public class DraftPhasesTest
                 (2, PICK_FREELANCER2),
                 (7, PICK_FREELANCER1),
                 (-1, FREELANCER_TRADE)),
-            Game.GetDraftPhases(Slots(1, 2, 3, 4, 5, 5, 6, 7), hasBans: false, hasTrade: true));
+            DraftController.GetDraftPhases(Slots(1, 2, 3, 4, 5, 5, 6, 7), hasBans: false, hasTrade: true));
     }
 }

@@ -584,7 +584,7 @@ public class CustomGame : Game
         GetClients().ForEach(client => SendGameAssignmentNotification(client.AccountId));
         GetClients().ForEach(client => client.OnGameAssigned(this));
 
-        await HandleRankedResolutionPhase();
+        await RunDraft();
         if (IsCancelled)
         {
             return;

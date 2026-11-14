@@ -24,8 +24,8 @@
 | `CustomGameInvitesTest` | pending invite bookkeeping | plain instance class |
 | `CustomGameManagerTest` | joining as invitee / spectator fallback, invite cleanup | static manager, `ClientNotifierScope` |
 | `PracticeManagerTest` | character checks before a practice game starts | static manager, mock DAO mode |
-| `DraftPhasesTest` | draft phase order for regular, no-ban and multilancer rosters | pure static `Game.GetDraftPhases` |
-| `DraftBotPickTest`, `DraftTradeTest` | bot picks on deck, trading slot resolution | `TestGame : PvpGame(null)` with hand-built roster and draft state |
+| `DraftPhasesTest` | draft phase order for regular, no-ban and multilancer rosters | pure static `DraftController.GetDraftPhases` |
+| `DraftBotPickTest`, `DraftTradeTest` | bot picks on deck, trading slot resolution | `TestGame : PvpGame(null)` with hand-built roster; draft state on a controller attached with `CreateDraft()` |
 | `CharacterSelectionTest` | `CharacterRules`, character updates per game status | `TestGame : PvpGame(null)` |
 | `QueuePenaltyManagerTest`, `QueuePriorityManagerTest` | penalty/priority logic | mock DAO mode |
 | `QueuePenaltyIssueTest` | when leavers are penalized and pardoned | `TestGame : Game` driven through protected members (`OnStatusUpdate`, `CancelMatch`, setters), mock DAO mode, `ClientNotifierScope` |

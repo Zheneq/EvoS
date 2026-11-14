@@ -35,6 +35,7 @@ public class DraftTradeTest
                     Slot(5, Spectator, Team.Spectator),
                 ]
             };
+            CreateDraft();
         }
 
         private static LobbyServerPlayerInfo Slot(int playerId, long accountId, Team team)
@@ -58,7 +59,7 @@ public class DraftTradeTest
     [InlineData(Teammate, 3, 3)]
     public void GetDraftTradingSlot_OwnSlot(long accountId, int requestedPlayerId, int expectedPlayerId)
     {
-        Assert.Equal(expectedPlayerId, game.GetDraftTradingSlot(accountId, requestedPlayerId)?.PlayerId);
+        Assert.Equal(expectedPlayerId, game.Draft.GetDraftTradingSlot(accountId, requestedPlayerId)?.PlayerId);
     }
 
     [Theory]
@@ -70,6 +71,6 @@ public class DraftTradeTest
     [InlineData(Spectator, 5)]
     public void GetDraftTradingSlot_NotControlled_Null(long accountId, int requestedPlayerId)
     {
-        Assert.Null(game.GetDraftTradingSlot(accountId, requestedPlayerId));
+        Assert.Null(game.Draft.GetDraftTradingSlot(accountId, requestedPlayerId));
     }
 }

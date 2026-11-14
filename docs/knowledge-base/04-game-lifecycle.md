@@ -14,7 +14,8 @@ state, handle disconnect/reconnect/dodge, and finalize results (stats, Elo, Disc
 | `GameServerKeyManager` | `LobbyServer2/BridgeServer/GameServerKeyManager.cs` | Public-key fingerprint approval workflow (approved/pending/declined/revoked) backed by `GameServerKeyDao`; pending servers wait for admin approval |
 | `ServerManager` | `LobbyServer2/BridgeServer/ServerManager.cs` | Static pool of registered servers; pick order (random/alphabetical) from config; reserve-for-game; delayed shutdown after game end |
 | `GameManager` | `LobbyServer2/BridgeServer/GameManager.cs` | Static registry `processCode → Game`; creates `PvpGame`s; reconnect-server rebinding; Prometheus game gauges; pending-shutdown completion |
-| `Game` (abstract) | `LobbyServer2/BridgeServer/Game.cs` | **1,699 lines.** Match orchestration: team fill (humans + bots), character validation/duplicates, ready state, launch, status transitions, dodge handling & queue-priority compensation, ranked draft phase state machine (`HandleRankedResolutionPhase`), reconnection, finalize (stats/Elo/TrustWar/Discord) |
+| `Game` (abstract) | `LobbyServer2/BridgeServer/Game.cs` | **1,348 lines.** Match orchestration: team fill (humans + bots), character validation/duplicates, ready state, launch, status transitions, dodge handling & queue-priority compensation, starting the ranked draft (`RunDraft`), reconnection, finalize (stats/Elo/TrustWar/Discord) |
+| `DraftController` | `LobbyServer2/BridgeServer/DraftController.cs` | Ranked draft state (`RankedResolutionPhaseData`, deck, current sub-phase) and the phase loop (`RunAsync`): timers, bot picks, auto-lock on timeout. Created per game by `Game.RunDraft` when the sub type has `RankedFreelancerSelection` (`Game.Draft`, null otherwise). The four draft request handlers on `LobbyServerProtocol` still mutate its state directly |
 | `PvpGame` | `LobbyServer2/BridgeServer/PvpGame.cs` | Matchmade game: fill teams, pick map, assign players, launch |
 | `CustomGame` | `LobbyServer2/LobbyServer/CustomGames/CustomGame.cs` | Player-created game: owner, team management via `GameInfoUpdateRequest`, starts when owner launches |
 | `CustomGameManager` | `LobbyServer2/LobbyServer/CustomGames/CustomGameManager.cs` | Static registry of custom games + subscriber list for the custom-game browser |
@@ -40,9 +41,9 @@ state, handle disconnect/reconnect/dodge, and finalize results (stats, Elo, Disc
    `PvpGame.StartGameAsync`.
 2. `FillTeam`: converts `MatchPlayerData` into `LobbyServerPlayerInfo`s, adds bots where
    configured, validates connectivity; `CheckDuplicatedAndFill` resolves duplicate/unavailable
-   characters (forced randoms); optional ranked draft (`HandleRankedResolutionPhase` — a
+   characters (forced randoms); optional ranked draft (`Game.RunDraft` → `DraftController.RunAsync` — a
    multi-sub-phase async state machine with timers, trades, bans). The phase order comes from
-   `Game.GetDraftPhases`: a double pick whose two slots belong to one account (proxies) is split
+   `DraftController.GetDraftPhases`: a double pick whose two slots belong to one account (proxies) is split
    into two single picks, and there is no trade phase under `ControlAllBots`.
 3. `BuildGameInfo` + `AssignServer`: subscribes `Game` methods to the server connection's
    events. `SendGameAssignmentNotification` to clients; when all load,

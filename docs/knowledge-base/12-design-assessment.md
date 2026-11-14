@@ -16,7 +16,7 @@ removed in that review; they are in the git history of this file.
 | 1 – Handler modules | Done except draft | Four draft handlers (~360 lines) still on `LobbyServerProtocol`; move with Stage 4a |
 | 2 – `IClientNotifier` | Done | Two small leaks of the concrete connection type (see B4) |
 | 3 – De-static the managers | **Interfaces and shims only** | ~200 static call sites; cycles between managers; several managers not converted at all (see C, Stage 3) |
-| 4 – Split `Game` | Not started | `Game.cs` grew from 1,699 to 1,997 lines since the plan was written |
+| 4 – Split `Game` | Started: draft state and phase loop moved to `DraftController` (plan 01) | Rest of 4a (plans 02–04); `Game.cs` is 1,348 lines (was 1,997) |
 | 5 – Hygiene | `PatchAccountData` and the temp-account fallback done | Everything else |
 
 Tests: 435, all passing. New features mostly came with tests, and the tests show where the
@@ -142,7 +142,7 @@ dictionary because the field is not serialized.
 - `IClientNotifier` + `RecordingClientNotifier`.
 - `CustomGameInvites`: a small instance class with its own lock and its own tests. This is
   the shape new stateful code should have (it only needs to stop hanging off a static).
-- `CharacterRules`, `InviteRules.ResolveInvitee`, `Game.GetDraftPhases`,
+- `CharacterRules`, `InviteRules.ResolveInvitee`, `DraftController.GetDraftPhases`,
   `Game.PickCharacter(teammates, unavailable, forBot)`: rules extracted as pure functions.
 - `ProtocolPatcher`: outbound patching as a table of pure functions that never mutate
   shared objects.
