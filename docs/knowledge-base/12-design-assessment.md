@@ -218,6 +218,14 @@ Decisions taken on 2026-11-14:
 - `DraftPhasesTest`, `DraftBotPickTest`, `DraftTradeTest` move onto the controller; add
   tests for the four request methods (wrong phase, not on deck, taken character, double
   lock-in, fill roles, trade offer/accept/reject, trade with a bot).
+- Current behavior found by `DraftControllerTest` (plan 03) and kept as is for now:
+  - `Hover`, `Ban` and `Select` throw `NullReferenceException` for an account with no slot
+    in the game (possible with a stale `CurrentGame`). `Trade` fails cleanly.
+  - A `Select` that fails because the player is not on deck (or the character is taken)
+    still sets the player's intention to that character and marks it `Selected` in
+    `UnselectedPlayerStates`.
+  - The trade sub-phase is monitored with an empty placeholder slot, which counts as
+    human-controlled, so it always lasts its full timeout, even with only bots drafting.
 
 ### Stage 3 — Finish dependency injection
 
