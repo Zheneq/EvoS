@@ -51,7 +51,7 @@ public static class InviteRules
         string inviteeHandle,
         string target,
         out bool shadowBanned,
-        out LobbyServerProtocol inviteeConnection)
+        out IClientConnection inviteeConnection)
     {
         shadowBanned = false;
         inviteeConnection = null;

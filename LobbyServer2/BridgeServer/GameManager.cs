@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using CentralServer.LobbyServer;
 using CentralServer.LobbyServer.Matchmaking;
+using CentralServer.LobbyServer.Session;
 using CentralServer.Utils;
 using EvoS.Framework.Constants.Enums;
 using log4net;
@@ -189,7 +190,7 @@ public class GameManager : IGameRegistry
                     QueuePenaltyManager.OnGameEnded(game);
                 }
                 game.SendGameInfoNotifications();
-                foreach (LobbyServerProtocol conn in game.GetClients())
+                foreach (IClientConnection conn in game.GetClients())
                 {
                     conn?.SendGameUnassignmentNotification();
                 }

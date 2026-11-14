@@ -196,11 +196,11 @@ public class MatchmakingModule : ILobbyModule
             log.Error($"Attempted to update group ready state of {_conn.AccountId} who is not in a group");
             return;
         }
-        LobbyServerProtocol leader = null;
+        IClientConnection leader = null;
         bool allAreReady = true;
         foreach (long groupMember in group.Members)
         {
-            LobbyServerProtocol conn = SessionManager.GetClientConnection(groupMember); // TODO plan 10
+            IClientConnection conn = SessionManager.GetClientConnection(groupMember); // TODO plan 10
             allAreReady &= conn?.IsReady ?? false;
             if (group.IsLeader(groupMember))
             {

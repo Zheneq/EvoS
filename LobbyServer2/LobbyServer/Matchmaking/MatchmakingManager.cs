@@ -262,7 +262,7 @@ namespace CentralServer.LobbyServer.Matchmaking
 
         private void UpdateSelectedSubTypesCore(GroupInfo groupInfo, bool resetReadyStateIfUpdated = true)
         {
-            LobbyServerProtocol leaderConn = SessionManager.GetClientConnection(groupInfo.Leader);
+            IClientConnection leaderConn = SessionManager.GetClientConnection(groupInfo.Leader);
             if (leaderConn is null)
             {
                 log.Error($"UpdateSelectedSubTypes for group {groupInfo.GroupId} with missing leader {groupInfo.Leader}");

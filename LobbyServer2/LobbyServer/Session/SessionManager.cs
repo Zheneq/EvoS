@@ -117,8 +117,8 @@ namespace CentralServer.LobbyServer.Session
         // Public static forwarders — preserve all existing call sites unchanged
         // -----------------------------------------------------------------------
 
-        public static LobbyServerProtocol? GetClientConnection(long accountId)
-            => Instance.GetClientConnectionCore(accountId) as LobbyServerProtocol;
+        public static IClientConnection? GetClientConnection(long accountId)
+            => Instance.GetClientConnectionCore(accountId);
 
         public static LobbySessionInfo GetSessionInfo(long accountId)
             => Instance.GetSessionInfoCore(accountId);
@@ -409,7 +409,7 @@ namespace CentralServer.LobbyServer.Session
 
         private void BroadcastCore(WebSocketMessage message)
         {
-            (SessionInfos.Values.FirstOrDefault()?.conn as LobbyServerProtocol)?.Broadcast(message);
+            SessionInfos.Values.FirstOrDefault()?.conn?.Broadcast(message);
         }
     }
 }

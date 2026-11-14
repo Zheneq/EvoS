@@ -87,7 +87,7 @@ public class LoginModule : ILobbyModule
             // Send 'Connected to lobby server' notification to chat
             foreach (long playerAccountId in _sessionRegistry.GetOnlinePlayers())
             {
-                LobbyServerProtocol player = SessionManager.GetClientConnection(playerAccountId); // TODO plan 10
+                IClientConnection player = SessionManager.GetClientConnection(playerAccountId); // TODO plan 10
                 if (player != null && !player.IsInGame())
                 {
                     player.SendSystemMessage($"<link=name>{sessionInfo.Handle}</link> connected to lobby server");

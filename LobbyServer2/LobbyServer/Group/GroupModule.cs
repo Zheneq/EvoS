@@ -165,7 +165,7 @@ public class GroupModule : ILobbyModule
         }
 
         failure = InviteRules.CheckInvitee(
-            account, friendAccount, request.FriendHandle, InviteTarget, out bool shadowBanned, out LobbyServerProtocol friend);
+            account, friendAccount, request.FriendHandle, InviteTarget, out bool shadowBanned, out IClientConnection friend);
         if (shadowBanned)
         {
             response.Success = true;

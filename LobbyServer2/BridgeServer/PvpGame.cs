@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using CentralServer.LobbyServer;
 using CentralServer.LobbyServer.Matchmaking;
+using CentralServer.LobbyServer.Session;
 using CentralServer.LobbyServer.Utils;
 using EvoS.Framework.Constants.Enums;
 using EvoS.Framework.Network.Static;
@@ -135,7 +136,7 @@ public class PvpGame: Game
 
         StartGame();
 
-        foreach (LobbyServerProtocol client in GetClients())
+        foreach (IClientConnection client in GetClients())
         {
             SendGameInfo(client);
         }

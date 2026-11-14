@@ -388,7 +388,7 @@ namespace CentralServer.LobbyServer.Group
         private UpdateGroupMemberData GetMemberData(GroupInfo groupInfo, long accountId)
         {
             PersistedAccountData account = DB.Get().AccountDao.GetAccount(accountId);
-            LobbyServerProtocol session = SessionManager.GetClientConnection(accountId);
+            IClientConnection session = SessionManager.GetClientConnection(accountId);
             CharacterComponent characterComponent = account.CharacterData[account.AccountComponent.LastCharacter].CharacterComponent;
 
             return new UpdateGroupMemberData
@@ -427,7 +427,7 @@ namespace CentralServer.LobbyServer.Group
             }
 
             PersistedAccountData account = DB.Get().AccountDao.GetAccount(accountId);
-            LobbyServerProtocol client = SessionManager.GetClientConnection(accountId);
+            IClientConnection client = SessionManager.GetClientConnection(accountId);
             LobbyPlayerGroupInfo response;
             if (groupInfo == null || groupInfo.IsSolo())
             {
@@ -443,7 +443,7 @@ namespace CentralServer.LobbyServer.Group
             }
             else
             {
-                LobbyServerProtocol leader = SessionManager.GetClientConnection(groupInfo.Leader);
+                IClientConnection leader = SessionManager.GetClientConnection(groupInfo.Leader);
                 response = new LobbyPlayerGroupInfo
                 {
                     SelectedQueueType = leader?.SelectedGameType ?? GameType.None,

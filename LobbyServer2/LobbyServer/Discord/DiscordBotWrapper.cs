@@ -167,7 +167,7 @@ namespace CentralServer.LobbyServer.Discord
             };
             foreach (long playerAccountId in SessionManager.GetOnlinePlayers())
             {
-                LobbyServerProtocol player = SessionManager.GetClientConnection(playerAccountId);
+                IClientConnection player = SessionManager.GetClientConnection(playerAccountId);
                 if (player != null && player.CurrentGame == null)
                 {
                     player.Send(message);

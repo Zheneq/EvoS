@@ -53,7 +53,7 @@ namespace CentralServer.LobbyServer.Friend
                     .ToDictionary(acc => acc.AccountId,
                         acc =>
                         {
-                            LobbyServerProtocol conn = SessionManager.GetClientConnection(acc.AccountId);
+                            IClientConnection conn = SessionManager.GetClientConnection(acc.AccountId);
                             SocialComponent.FriendData data = null;
                             socialComponent?.FriendInfo.TryGetValue(acc.AccountId, out data);
                             return new FriendInfo
@@ -127,7 +127,7 @@ namespace CentralServer.LobbyServer.Friend
             return result;
         }
 
-        public static string GetStatusString(LobbyServerProtocol client)
+        public static string GetStatusString(IClientConnection client)
         {
             if (client == null)
             {

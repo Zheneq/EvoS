@@ -376,7 +376,7 @@ public class GameLifecycleModule : ILobbyModule
         }
 
         failure = InviteRules.CheckInvitee(
-            account, inviteeAccount, inviteeHandle, InviteTarget, out bool shadowBanned, out LobbyServerProtocol invitee);
+            account, inviteeAccount, inviteeHandle, InviteTarget, out bool shadowBanned, out IClientConnection invitee);
         if (shadowBanned)
         {
             response.Success = true;

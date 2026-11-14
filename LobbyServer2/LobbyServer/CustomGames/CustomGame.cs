@@ -104,7 +104,7 @@ public class CustomGame : Game
         {
             if (playerCheck.AccountId == 0) continue;
             
-            LobbyServerProtocol playerConnection = SessionManager.GetClientConnection(playerCheck.AccountId);
+            IClientConnection playerConnection = SessionManager.GetClientConnection(playerCheck.AccountId);
             if (playerConnection?.CurrentGame == this)
             {
                 playerConnection.LeaveGame(this);
@@ -486,7 +486,7 @@ public class CustomGame : Game
     {
         foreach (LobbyServerPlayerInfo playerCheck in TeamInfo.TeamPlayerInfo)
         {
-            LobbyServerProtocol playerConnection = SessionManager.GetClientConnection(playerCheck.AccountId);
+            IClientConnection playerConnection = SessionManager.GetClientConnection(playerCheck.AccountId);
 
             if (playerConnection is null)
             {
@@ -659,7 +659,7 @@ public class CustomGame : Game
 
                     usedFillCharacters.Add(randomType);
                         
-                    // LobbyServerProtocol playerConnection = SessionManager.GetClientConnection(player);
+                    // IClientConnection playerConnection = SessionManager.GetClientConnection(player);
                     // if (playerConnection != null)
                     // {
                     //     NotifyCharacterChange(playerConnection, playerInfo, randomType);

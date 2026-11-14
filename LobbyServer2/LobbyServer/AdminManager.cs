@@ -150,7 +150,7 @@ namespace CentralServer.LobbyServer
             log.Info($"{logString} by {adminUsername}: {description}");
             OnAdminAction(accountId, record);
 
-            LobbyServerProtocol conn = SessionManager.GetClientConnection(accountId);
+            IClientConnection conn = SessionManager.GetClientConnection(accountId);
             if (conn != null)
             {
                 log.Info($"KICK {account.Handle} by {adminUsername}: {description}");

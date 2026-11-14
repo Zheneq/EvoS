@@ -117,7 +117,7 @@ public class InviteRulesTest : EvosTest
         PersistedAccountData invitee = MakeAccount(inviteeAccountId);
 
         LocalizationPayload failure = InviteRules.CheckInvitee(
-            inviter, invitee, invitee.Handle, Target, out bool shadowBanned, out LobbyServerProtocol connection);
+            inviter, invitee, invitee.Handle, Target, out bool shadowBanned, out IClientConnection connection);
 
         AssertLocalization(failure, "YouAreBlocking", "Invite");
         Assert.False(shadowBanned);
@@ -132,7 +132,7 @@ public class InviteRulesTest : EvosTest
         PersistedAccountData invitee = MakeAccount(UniqueId(), inviterAccountId);
 
         LocalizationPayload failure = InviteRules.CheckInvitee(
-            inviter, invitee, invitee.Handle, Target, out bool shadowBanned, out LobbyServerProtocol connection);
+            inviter, invitee, invitee.Handle, Target, out bool shadowBanned, out IClientConnection connection);
 
         Assert.Null(failure);
         Assert.True(shadowBanned);
@@ -146,7 +146,7 @@ public class InviteRulesTest : EvosTest
         PersistedAccountData invitee = MakeAccount(UniqueId());
 
         LocalizationPayload failure = InviteRules.CheckInvitee(
-            inviter, invitee, invitee.Handle, Target, out bool shadowBanned, out LobbyServerProtocol connection);
+            inviter, invitee, invitee.Handle, Target, out bool shadowBanned, out IClientConnection connection);
 
         AssertLocalization(failure, "PlayerNotFound", "Invite");
         Assert.False(shadowBanned);

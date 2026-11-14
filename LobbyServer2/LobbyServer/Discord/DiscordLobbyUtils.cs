@@ -28,7 +28,7 @@ namespace CentralServer.LobbyServer.Discord
                 case ConsoleMessageType.GameChat:
                 case ConsoleMessageType.TeamChat:
                 {
-                    LobbyServerProtocol conn = SessionManager.GetClientConnection(notification.SenderAccountId);
+                    IClientConnection conn = SessionManager.GetClientConnection(notification.SenderAccountId);
                     LobbyServerPlayerInfo playerInfo = null;
                     string serverInfo = "";
                     if (conn.CurrentGame != null)
@@ -130,7 +130,7 @@ namespace CentralServer.LobbyServer.Discord
             int online = 0;
             foreach (long accountId in SessionManager.GetOnlinePlayers())
             {
-                LobbyServerProtocol conn = SessionManager.GetClientConnection(accountId);
+                IClientConnection conn = SessionManager.GetClientConnection(accountId);
                 if (conn == null) continue;
                 online++;
                 if (conn.IsInQueue()) inQueue++;

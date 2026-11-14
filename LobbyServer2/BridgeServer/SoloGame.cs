@@ -158,7 +158,7 @@ public abstract class SoloGame : Game
     public override void Terminate()
     {
         base.Terminate();
-        LobbyServerProtocol conn = SessionManager.GetClientConnection(Owner);
+        IClientConnection conn = SessionManager.GetClientConnection(Owner);
         if (conn?.CurrentGame == this)
         {
             conn.LeaveGame(this);

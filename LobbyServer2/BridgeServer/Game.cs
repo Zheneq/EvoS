@@ -227,7 +227,7 @@ public abstract class Game : IDraftHost
 
         if (GameInfo.GameStatus == GameStatus.Stopped)
         {
-            foreach (LobbyServerProtocol client in GetClients())
+            foreach (IClientConnection client in GetClients())
             {
                 if (!client.LeaveGame(this))
                 {
@@ -261,7 +261,7 @@ public abstract class Game : IDraftHost
     {
         log.Info($"{LobbyServerUtils.GetHandle(playerInfo.AccountId)} left game {GameInfo?.GameServerProcessCode}");
 
-        foreach (LobbyServerProtocol client in GetClients())
+        foreach (IClientConnection client in GetClients())
         {
             if (client.AccountId == playerInfo.AccountId)
             {
@@ -383,9 +383,9 @@ public abstract class Game : IDraftHost
             !p.IsNPCBot && !p.IsLoadTestBot && !p.IsRemoteControlled && !p.IsSpectator);
     }
 
-    public List<LobbyServerProtocol> GetClients()
+    public List<IClientConnection> GetClients()
     {
-        List<LobbyServerProtocol> clients = new List<LobbyServerProtocol>();
+        List<IClientConnection> clients = new List<IClientConnection>();
 
         if (TeamInfo?.TeamPlayerInfo == null)
         {
@@ -401,7 +401,7 @@ public abstract class Game : IDraftHost
             {
                 continue;
             }
-            LobbyServerProtocol client = SessionManager.GetClientConnection(player.AccountId);
+            IClientConnection client = SessionManager.GetClientConnection(player.AccountId);
             if (client != null)
             {
                 accountIds.Add(client.AccountId);
@@ -476,7 +476,7 @@ public abstract class Game : IDraftHost
         GameInfo.UpdateTimestamp = DateTime.UtcNow.Ticks;
         foreach (long player in GetPlayersDistinct())
         {
-            LobbyServerProtocol playerConnection = SessionManager.GetClientConnection(player);
+            IClientConnection playerConnection = SessionManager.GetClientConnection(player);
             if (playerConnection != null && playerConnection.CurrentGame == this)
             {
                 SendGameInfo(playerConnection);
@@ -567,7 +567,7 @@ public abstract class Game : IDraftHost
             {
                 continue;
             }
-            LobbyServerProtocol playerConnection = SessionManager.GetClientConnection(playerInfo.AccountId);
+            IClientConnection playerConnection = SessionManager.GetClientConnection(playerInfo.AccountId);
             if (playerConnection == null || !playerConnection.IsConnected || playerConnection.CurrentGame != this)
             {
                 log.Info($"Player {playerInfo.Handle}/{playerInfo.AccountId} who was to participate in game {GameInfo.Name} has disconnected");
@@ -596,7 +596,7 @@ public abstract class Game : IDraftHost
         // Asynchronously, so that it does not carry on on this thread before the match is cleaned up.
         _ = _cancellation.CancelAsync();
 
-        foreach (LobbyServerProtocol client in GetClients())
+        foreach (IClientConnection client in GetClients())
         {
             if (dodgerHandle != null)
             {
@@ -688,7 +688,7 @@ public abstract class Game : IDraftHost
         long? accountId = SessionManager.GetOnlinePlayerByHandleOrUsername(dodgerHandle);
         if (accountId.HasValue)
         {
-            LobbyServerProtocol conn = SessionManager.GetClientConnection(accountId.Value);
+            IClientConnection conn = SessionManager.GetClientConnection(accountId.Value);
             statusString = FriendManager.GetStatusString(conn);
         }
 
@@ -726,7 +726,7 @@ public abstract class Game : IDraftHost
             // TODO game server is supposed to send game summary after GGs (see ObjectivePoints.EndGame)
             await Task.Delay(GetFinalizeGameDelay());
 
-            foreach (LobbyServerProtocol client in GetClients())
+            foreach (IClientConnection client in GetClients())
             {
                 MatchResultsNotification response = new MatchResultsNotification
                 {
@@ -800,7 +800,7 @@ public abstract class Game : IDraftHost
         foreach (MatchPlayerData playerData in players)
         {
             long accountId = playerData.AccountId;
-            LobbyServerProtocol client = SessionManager.GetClientConnection(accountId);
+            IClientConnection client = SessionManager.GetClientConnection(accountId);
             PersistedAccountData account = DB.Get().AccountDao.GetAccount(accountId);
             if (client == null)
             {
@@ -1074,7 +1074,7 @@ public abstract class Game : IDraftHost
 
                 foreach (LobbyServerPlayerInfo playerInfo in playersRequiredToSwitch)
                 {
-                    LobbyServerProtocol playerConnection = SessionManager.GetClientConnection(playerInfo.AccountId);
+                    IClientConnection playerConnection = SessionManager.GetClientConnection(playerInfo.AccountId);
                     if (playerConnection == null)
                     {
                         log.Error($"Player {playerInfo.Handle}/{playerInfo.AccountId} is in game but has no connection.");
@@ -1106,7 +1106,7 @@ public abstract class Game : IDraftHost
                     {
                         SubPhase = FreelancerResolutionPhaseSubType.DUPLICATE_FREELANCER
                     });
-                    LobbyServerProtocol playerConnection = SessionManager.GetClientConnection(player);
+                    IClientConnection playerConnection = SessionManager.GetClientConnection(player);
                     if (playerConnection != null)
                     {
                         SendGameInfo(playerConnection);
@@ -1173,7 +1173,7 @@ public abstract class Game : IDraftHost
 
                     usedFillCharacters.Add(randomType);
 
-                    LobbyServerProtocol playerConnection = SessionManager.GetClientConnection(player);
+                    IClientConnection playerConnection = SessionManager.GetClientConnection(player);
                     if (playerConnection != null)
                     {
                         NotifyCharacterChange(playerConnection, playerInfo, randomType);
@@ -1224,7 +1224,7 @@ public abstract class Game : IDraftHost
         return randomType;
     }
 
-    private void NotifyCharacterChange(LobbyServerProtocol playerConnection, LobbyServerPlayerInfo playerInfo, CharacterType randomType)
+    private void NotifyCharacterChange(IClientConnection playerConnection, LobbyServerPlayerInfo playerInfo, CharacterType randomType)
     {
         PersistedAccountData account = DB.Get().AccountDao.GetAccount(playerInfo.AccountId);
 
@@ -1241,7 +1241,7 @@ public abstract class Game : IDraftHost
         });
     }
 
-    private void SetPlayerReady(LobbyServerProtocol playerConnection, LobbyServerPlayerInfo playerInfo, CharacterType randomType)
+    private void SetPlayerReady(IClientConnection playerConnection, LobbyServerPlayerInfo playerInfo, CharacterType randomType)
     {
         PersistedAccountData account = DB.Get().AccountDao.GetAccount(playerInfo.AccountId);
 
@@ -1348,7 +1348,7 @@ public abstract class Game : IDraftHost
 
     protected void UpdateFriendStatuses()
     {
-        foreach (LobbyServerProtocol client in GetClients())
+        foreach (IClientConnection client in GetClients())
         {
             if (client is not null && client.IsConnected)
             {
