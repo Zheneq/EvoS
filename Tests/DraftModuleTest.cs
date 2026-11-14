@@ -70,7 +70,7 @@ public class DraftModuleTest(ITestOutputHelper output) : EvosTest(output)
             });
         }
 
-        public RankedResolutionPhaseData Data => Draft.GetRankedResolutionPhaseData();
+        public RankedResolutionPhaseData Data => Draft.GetStateForTest();
     }
 
     private sealed class CapturingRegistry : IHandlerRegistry

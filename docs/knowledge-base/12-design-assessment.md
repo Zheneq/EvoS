@@ -16,7 +16,7 @@ removed in that review; they are in the git history of this file.
 | 1 – Handler modules | Done | `LobbyServerProtocol` registers no handlers; the draft ones moved to `DraftModule` (plan 02) |
 | 2 – `IClientNotifier` | Done | Two small leaks of the concrete connection type (see B4) |
 | 3 – De-static the managers | **Interfaces and shims only** | ~200 static call sites; cycles between managers; several managers not converted at all (see C, Stage 3) |
-| 4 – Split `Game` | Started: draft state, phase loop and request logic in `DraftController`, which reaches the game through `IDraftHost`, waits on an injected `TimeProvider` and guards its state with one lock (plans 01–04a) | Closing the draft state (plan 04b), then 4b–4d; `Game.cs` is 1,410 lines (was 1,997) |
+| 4 – Split `Game` | 4a done: the draft is a `DraftController` (state, phase loop, requests, one lock) that reaches the game through `IDraftHost` and waits on an injected `TimeProvider` (plans 01–04) | 4b–4d; `Game.cs` is 1,410 lines (was 1,997) |
 | 5 – Hygiene | `PatchAccountData` and the temp-account fallback done | Everything else |
 
 Tests: 435, all passing. New features mostly came with tests, and the tests show where the
@@ -52,16 +52,12 @@ initialization-order fragility, and no way to construct a subsystem in isolation
 
 ### B2. God classes
 
-- `Game` (1,997 lines): server binding, roster, team assembly, bot filling, character
-  validation, duplicate resolution, the whole draft, dodge handling, queue priority
+- `Game` (1,997 lines; 1,410 after Stage 4a): server binding, roster, team assembly, bot
+  filling, character validation, duplicate resolution, dodge handling, queue priority
   compensation, penalties bookkeeping (`PenalizedPlayers`), result finalization,
   Discord/Elo/TrustWar/stats integration. `SoloGame` uses almost none of it and switches
   the rest off through virtual hooks (`ShouldProcessAccolades`, `ShouldSendStats`,
   `GetFinalizeGameDelay`, `LogDodge`).
-- Draft is split across two classes: `Game` runs the phase loop, and the four handlers on
-  `LobbyServerProtocol` read the draft state out of the game, mutate it and write it back
-  (`GetRankedResolutionPhaseData` / `SetRankedResolutionPhaseData`, `UpdatePlayersInDeck`,
-  `SkipRankedResolutionSubPhase`). This is the most frequently changed code in the repo.
 - `MatchmakingQueue` (791 lines): queue bookkeeping + sub-type mask algebra + match
   scoring orchestration + client notification composition.
 - `AdminController` (820 lines, static) after the admin panel rework.
@@ -95,19 +91,16 @@ the deeper issue: that state belongs to the group/session, not to a socket.
 
 ### B5. Concurrency
 
-- Draft state has no single guard. The handlers lock on one of the selection dictionaries
-  (or nothing, for hover and ban), `GetDraftActingSlot` takes `characterSelectionLock`,
-  the phase loop takes no lock (`// TODO: There can be a race condition`).
-- `Game.characterSelectionLock` is `public static`: character selection in every game
-  serializes on one global lock, shared with `CustomGame`.
+- `Game.characterSelectionLock` is `public static`: character selection outside the draft
+  serializes on one global lock across all games, shared with `CustomGame`.
 - `lock (this)` in `Game.CancelMatch`.
 - `lock (SessionInfos)` around a `ConcurrentDictionary`; plain `Dictionary` + `lock` in
   `ServerManager`/`CustomGameManager`/`GroupManager`.
 - Sync-over-async (`Send` → `.GetAwaiter().GetResult()`), `async void`
   (`Game.OnServerDisconnect`, 15 in `DiscordManager`), periodic tasks started with
   `Task.Run` and `CancellationToken.None`.
-- Time and delays hard-coded (`DateTime.Now`/`UtcNow`, `Task.Delay` in draft timers,
-  `PvpGame`/`CustomGame` start flows, `ServerManager.DisconnectServer`).
+- Time and delays hard-coded (`DateTime.Now`/`UtcNow`, `Task.Delay` in the
+  `PvpGame`/`CustomGame` start flows and `ServerManager.DisconnectServer`).
 
 ### B6. Shared mutable cached entities
 
@@ -158,7 +151,7 @@ dictionary because the field is not serialized.
 | Practice, Tutorial (`SoloGame`) | `Game` subclass + static `PracticeManager`/`TutorialManager` + static `SoloGame.Start` | Reuses lifecycle well; exposes that base `Game` carries PvP-only behavior | Stage 4 (composition), Stage 3 (game factory replaces the static managers) |
 | Custom game invites | `CustomGameInvites` + handlers in `GameLifecycleModule` | Good | Own module once `CustomGameManager` is an instance (Stage 3) |
 | Group invite rework, `InviteRules` | `GroupModule`, shared static rules | Good | Stop returning `LobbyServerProtocol` (B4) |
-| Multilancer / procedural draft, bot picks | `Game` + handlers on the connection | Worst fit: grew both halves of the split draft | Stage 4a, first in line |
+| Multilancer / procedural draft, bot picks | `Game` + handlers on the connection | Worst fit: grew both halves of the split draft | Done: Stage 4a moved it into `DraftController` + `DraftModule` |
 | Queue requirements, `ProtocolPatcher` | Framework types + patch step in `SendImpl` | Good | B8 (cache protocol version) |
 | Asymmetric sub types | `AsymmetricSubType`, `MatchmakingQueue`, `GameModeManager` | OK; adds to `MatchmakingQueue` and config sprawl | Stage 5 |
 | Queue penalties (leave time, pardons) | Static `QueuePenaltyManager`, state on `Game.PenalizedPlayers` | Well tested through `TestGame`; state lives in the wrong class | Stage 4c |
@@ -197,6 +190,8 @@ Decisions taken on 2026-11-14:
    game-level policy waits for Stage 4c.
 
 ### Stage 4a — `DraftController` (also finishes Stage 1)
+
+Done 2026-11-14 (plans 01–04); doc 04 describes the result.
 
 - `DraftController` in `BridgeServer/` owns `RankedResolutionPhaseData`, the phase list,
   the deck, sub-phase timing, bot picks and auto-lock on timeout. Created by `PvpGame` and

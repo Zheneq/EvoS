@@ -28,7 +28,7 @@ public class DraftController(IDraftHost host, TimeProvider timeProvider = null)
     // Never held while canceling the match or across an await.
     private readonly Lock _lock = new();
     private static readonly TimeSpan DraftEndDelay = TimeSpan.FromSeconds(2);
-    public FreelancerResolutionPhaseSubType PhaseSubType { get; internal set; } = FreelancerResolutionPhaseSubType.UNDEFINED;
+    public FreelancerResolutionPhaseSubType PhaseSubType { get; private set; } = FreelancerResolutionPhaseSubType.UNDEFINED;
     private int PlayersInDeck { set; get; }
 
     private TimeSpan TimeLeftInSubPhase
@@ -155,10 +155,10 @@ public class DraftController(IDraftHost host, TimeProvider timeProvider = null)
 
         lock (_lock)
         {
-            // Update TeamInfo with new values from rankedResolutionPhaseData.FriendlyTeamSelections
+            // Update TeamInfo with new values from RankedResolutionPhaseData.FriendlyTeamSelections
             UpdateTeamSelection(RankedResolutionPhaseData.FriendlyTeamSelections);
 
-            // Update TeamInfo with new values from rankedResolutionPhaseData.EnemyTeamSelections
+            // Update TeamInfo with new values from RankedResolutionPhaseData.EnemyTeamSelections
             UpdateTeamSelection(RankedResolutionPhaseData.EnemyTeamSelections);
         }
     }
@@ -178,7 +178,22 @@ public class DraftController(IDraftHost host, TimeProvider timeProvider = null)
         SendRankedResolutionSubPhase();
     }
 
+    // A copy of the draft state as it is now
+    // TODO remove test-only method?
+    internal RankedResolutionPhaseData GetStateForTest()
+    {
+        lock (_lock)
+        {
+            RankedResolutionPhaseData copy = RankedResolutionPhaseData.Clone();
+            copy.UnselectedPlayerStates = [..RankedResolutionPhaseData.UnselectedPlayerStates];
+            copy.PlayersOnDeck = [..RankedResolutionPhaseData.PlayersOnDeck];
+            copy.TradeActions = [..RankedResolutionPhaseData.TradeActions];
+            return copy;
+        }
+    }
+
     // Puts the draft in the given sub-phase with the given state, open for requests, as if the phase loop had opened it
+    // TODO remove test-only method?
     internal void OpenSubPhaseForTest(FreelancerResolutionPhaseSubType phase, RankedResolutionPhaseData data)
     {
         lock (_lock)
@@ -501,7 +516,7 @@ public class DraftController(IDraftHost host, TimeProvider timeProvider = null)
         selections.Add(characterType);
     }
 
-    // Method to add players to the deck based on the phase type.
+    // Method to add players to the deck based on the phase type. Under the lock.
     // Returns false if a bot could not be put on deck, in which case the match has to be canceled.
     internal bool AddPlayersToDeckBasedOnPhase(FreelancerResolutionPhaseSubType phase, LobbyServerPlayerInfo player1, LobbyServerPlayerInfo player2)
     {
@@ -568,16 +583,6 @@ public class DraftController(IDraftHost host, TimeProvider timeProvider = null)
         _ = _subPhaseEnd.CancelAsync();
     }
 
-    internal void SetRankedResolutionPhaseData(RankedResolutionPhaseData newRankedResolutionPhaseData)
-    {
-        RankedResolutionPhaseData = newRankedResolutionPhaseData;
-    }
-
-    internal RankedResolutionPhaseData GetRankedResolutionPhaseData()
-    {
-        return RankedResolutionPhaseData;
-    }
-
     private void UpdatePlayersInDeck()
     {
         PlayersInDeck--;
@@ -597,14 +602,13 @@ public class DraftController(IDraftHost host, TimeProvider timeProvider = null)
     {
         lock (_lock)
         {
-            RankedResolutionPhaseData rankedResolutionPhaseData = GetRankedResolutionPhaseData();
             LobbyServerPlayerInfo player = GetDraftActingSlot(accountId);
             if (player is null)
             {
                 return DraftRequestResult.Failed();
             }
 
-            List<RankedResolutionPlayerState> unselectedPlayerStates = rankedResolutionPhaseData.UnselectedPlayerStates;
+            List<RankedResolutionPlayerState> unselectedPlayerStates = RankedResolutionPhaseData.UnselectedPlayerStates;
             int stateIndex = unselectedPlayerStates.FindIndex(p => p.PlayerId == player.PlayerId);
 
             if (stateIndex >= 0)
@@ -613,7 +617,7 @@ public class DraftController(IDraftHost host, TimeProvider timeProvider = null)
                 existingUnselectedPlayerStates.Intention = selection;
                 unselectedPlayerStates[stateIndex] = existingUnselectedPlayerStates;
 
-                List<RankedResolutionPlayerState> playersOnDeck = rankedResolutionPhaseData.PlayersOnDeck;
+                List<RankedResolutionPlayerState> playersOnDeck = RankedResolutionPhaseData.PlayersOnDeck;
                 int deckIndex = playersOnDeck.FindIndex(p => p.PlayerId == player.PlayerId);
 
                 if (deckIndex >= 0)
@@ -623,7 +627,6 @@ public class DraftController(IDraftHost host, TimeProvider timeProvider = null)
                     playersOnDeck[deckIndex] = existingPlayersOnDeck;
                 }
 
-                SetRankedResolutionPhaseData(rankedResolutionPhaseData);
                 SendRankedResolutionSubPhase();
 
                 return DraftRequestResult.Succeeded;
@@ -647,14 +650,13 @@ public class DraftController(IDraftHost host, TimeProvider timeProvider = null)
                 return DraftRequestResult.Failed();
             }
 
-            RankedResolutionPhaseData rankedResolutionPhaseData = GetRankedResolutionPhaseData();
             LobbyServerPlayerInfo player = GetDraftActingSlot(accountId);
             if (player is null)
             {
                 return DraftRequestResult.Failed();
             }
 
-            List<RankedResolutionPlayerState> playersOnDeck = rankedResolutionPhaseData.PlayersOnDeck;
+            List<RankedResolutionPlayerState> playersOnDeck = RankedResolutionPhaseData.PlayersOnDeck;
             int deckIndex = playersOnDeck.FindIndex(p => p.PlayerId == player.PlayerId);
 
             HashSet<CharacterType> usedCharacterTypes = GetUsedCharacterTypes();
@@ -676,17 +678,16 @@ public class DraftController(IDraftHost host, TimeProvider timeProvider = null)
                     // clients take the character for the lock in animation from the hover
                     existingPlayersOnDeck.Intention = characterType;
                     playersOnDeck[deckIndex] = existingPlayersOnDeck;
-                    SetRankedResolutionPhaseData(rankedResolutionPhaseData);
                     SendRankedResolutionSubPhase();
                 }
 
                 if (player.TeamId == Team.TeamA)
                 {
-                    rankedResolutionPhaseData.FriendlyBans.Add(characterType);
+                    RankedResolutionPhaseData.FriendlyBans.Add(characterType);
                 }
                 else
                 {
-                    rankedResolutionPhaseData.EnemyBans.Add(characterType);
+                    RankedResolutionPhaseData.EnemyBans.Add(characterType);
                 }
 
                 // A locked in ban is not a hover anymore, otherwise clients show it in the next ban slot
@@ -694,7 +695,6 @@ public class DraftController(IDraftHost host, TimeProvider timeProvider = null)
                 existingPlayersOnDeck.OnDeckness = RankedResolutionPlayerState.ReadyState.Unselected;
                 playersOnDeck[deckIndex] = existingPlayersOnDeck;
 
-                SetRankedResolutionPhaseData(rankedResolutionPhaseData);
                 SendRankedResolutionSubPhase();
 
                 SkipRankedResolutionSubPhase();
@@ -722,7 +722,6 @@ public class DraftController(IDraftHost host, TimeProvider timeProvider = null)
                 return DraftRequestResult.Failed(LocalizationPayload.Create("CannotReady@Global"));
             }
 
-            RankedResolutionPhaseData rankedResolutionPhaseData = GetRankedResolutionPhaseData();
             LobbyServerPlayerInfo player = GetDraftActingSlot(accountId);
             if (player is null)
             {
@@ -730,8 +729,8 @@ public class DraftController(IDraftHost host, TimeProvider timeProvider = null)
             }
 
             Dictionary<int, CharacterType> teamSelections = player.TeamId == Team.TeamA
-                ? rankedResolutionPhaseData.FriendlyTeamSelections
-                : rankedResolutionPhaseData.EnemyTeamSelections;
+                ? RankedResolutionPhaseData.FriendlyTeamSelections
+                : RankedResolutionPhaseData.EnemyTeamSelections;
 
             CharacterType characterType = selection;
 
@@ -749,7 +748,7 @@ public class DraftController(IDraftHost host, TimeProvider timeProvider = null)
                 characterType = AssignRandomCharacterForDraft(player, usedCharacterTypes, characterType);
             }
 
-            List<RankedResolutionPlayerState> unselectedPlayerStates = rankedResolutionPhaseData.UnselectedPlayerStates;
+            List<RankedResolutionPlayerState> unselectedPlayerStates = RankedResolutionPhaseData.UnselectedPlayerStates;
             int stateIndex = unselectedPlayerStates.FindIndex(p => p.PlayerId == player.PlayerId);
 
             if (stateIndex >= 0)
@@ -760,7 +759,7 @@ public class DraftController(IDraftHost host, TimeProvider timeProvider = null)
                 unselectedPlayerStates[stateIndex] = existingUnselectedPlayerStates;
             }
 
-            List<RankedResolutionPlayerState> playersOnDeck = rankedResolutionPhaseData.PlayersOnDeck;
+            List<RankedResolutionPlayerState> playersOnDeck = RankedResolutionPhaseData.PlayersOnDeck;
             int deckIndex = playersOnDeck.FindIndex(p => p.PlayerId == player.PlayerId);
 
             if (deckIndex >= 0 && !usedCharacterTypes.Contains(characterType))
@@ -772,7 +771,6 @@ public class DraftController(IDraftHost host, TimeProvider timeProvider = null)
                     // clients take the character for the lock in animation from the hover
                     existingPlayersOnDeck.Intention = characterType;
                     playersOnDeck[deckIndex] = existingPlayersOnDeck;
-                    SetRankedResolutionPhaseData(rankedResolutionPhaseData);
                     SendRankedResolutionSubPhase();
                 }
 
@@ -784,7 +782,6 @@ public class DraftController(IDraftHost host, TimeProvider timeProvider = null)
 
                 UpdatePlayersInDeck();
 
-                SetRankedResolutionPhaseData(rankedResolutionPhaseData);
                 SendRankedResolutionSubPhase();
 
                 if (PlayersInDeck == 0)
@@ -814,7 +811,6 @@ public class DraftController(IDraftHost host, TimeProvider timeProvider = null)
                 return DraftRequestResult.Failed();
             }
 
-            RankedResolutionPhaseData rankedResolutionPhaseData = GetRankedResolutionPhaseData();
             LobbyServerPlayerInfo player = GetDraftTradingSlot(accountId, trade.OfferingPlayerId);
             if (player is null)
             {
@@ -823,10 +819,10 @@ public class DraftController(IDraftHost host, TimeProvider timeProvider = null)
             }
 
             Dictionary<int, CharacterType> teamSelections = player.TeamId == Team.TeamA
-                ? rankedResolutionPhaseData.FriendlyTeamSelections
-                : rankedResolutionPhaseData.EnemyTeamSelections;
+                ? RankedResolutionPhaseData.FriendlyTeamSelections
+                : RankedResolutionPhaseData.EnemyTeamSelections;
 
-            int tradeActionId = rankedResolutionPhaseData.TradeActions.FindIndex(
+            int tradeActionId = RankedResolutionPhaseData.TradeActions.FindIndex(
                 p => p.OfferedCharacter == trade.DesiredCharacter
                      && p.AskedPlayerId == player.PlayerId);
             switch (trade.TradeAction)
@@ -835,7 +831,7 @@ public class DraftController(IDraftHost host, TimeProvider timeProvider = null)
                 {
                     if (tradeActionId >= 0)
                     {
-                        rankedResolutionPhaseData.TradeActions.RemoveAt(tradeActionId);
+                        RankedResolutionPhaseData.TradeActions.RemoveAt(tradeActionId);
                     }
                     else
                     {
@@ -849,11 +845,11 @@ public class DraftController(IDraftHost host, TimeProvider timeProvider = null)
                 {
                     if (tradeActionId >= 0)
                     {
-                        var existingTradeAction = rankedResolutionPhaseData.TradeActions[tradeActionId];
+                        var existingTradeAction = RankedResolutionPhaseData.TradeActions[tradeActionId];
                         // Update the existing trade action to accepted
                         teamSelections[existingTradeAction.OfferingPlayerId] = existingTradeAction.DesiredCharacter;
                         teamSelections[existingTradeAction.AskedPlayerId] = existingTradeAction.OfferedCharacter;
-                        rankedResolutionPhaseData.TradeActions.RemoveAll(p =>
+                        RankedResolutionPhaseData.TradeActions.RemoveAll(p =>
                             p.OfferingPlayerId == player.PlayerId
                             || p.AskedPlayerId == player.PlayerId
                             || p.OfferingPlayerId == existingTradeAction.OfferingPlayerId
@@ -895,7 +891,7 @@ public class DraftController(IDraftHost host, TimeProvider timeProvider = null)
                                 OfferedCharacter = currentCharacterType,
                                 OfferingPlayerId = player.PlayerId
                             };
-                            rankedResolutionPhaseData.TradeActions.Add(newTradeData);
+                            RankedResolutionPhaseData.TradeActions.Add(newTradeData);
                         }
                     }
 
@@ -903,7 +899,6 @@ public class DraftController(IDraftHost host, TimeProvider timeProvider = null)
                 }
             }
 
-            SetRankedResolutionPhaseData(rankedResolutionPhaseData);
             SendRankedResolutionSubPhase();
 
             return DraftRequestResult.Succeeded;

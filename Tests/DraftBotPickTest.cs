@@ -26,7 +26,7 @@ public class DraftBotPickTest
                 IsNPCBot = playerId != 3 || humanSlot3Hover == CharacterType.None,
             }));
         DraftController draft = new DraftController(host);
-        draft.SetRankedResolutionPhaseData(new RankedResolutionPhaseData
+        draft.OpenSubPhaseForTest(FreelancerResolutionPhaseSubType.PICK_FREELANCER2, new RankedResolutionPhaseData
         {
             UnselectedPlayerStates = host.Players
                 .Select(p => new RankedResolutionPlayerState
@@ -44,13 +44,12 @@ public class DraftBotPickTest
             EnemyTeamSelections = [],
             TradeActions = [],
         });
-        draft.PhaseSubType = FreelancerResolutionPhaseSubType.PICK_FREELANCER2;
 
         draft.AddPlayersToDeckBasedOnPhase(
             FreelancerResolutionPhaseSubType.PICK_FREELANCER2,
             host.GetPlayerById(3),
             host.GetPlayerById(4));
-        return draft.GetRankedResolutionPhaseData().PlayersOnDeck.Select(p => p.Intention).ToList();
+        return draft.GetStateForTest().PlayersOnDeck.Select(p => p.Intention).ToList();
     }
 
     private static CharacterRole RoleOf(CharacterType characterType)

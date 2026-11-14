@@ -72,7 +72,7 @@ public class DraftControllerTest : EvosTest
 
     private Task StartWithHumanInSlot1() => Start(Human, Bot, Bot, Bot, Bot, Bot, Bot, Bot);
 
-    private RankedResolutionPhaseData Data => draft.GetRankedResolutionPhaseData();
+    private RankedResolutionPhaseData Data => draft.GetStateForTest();
 
     private List<int> Deck() => Data.PlayersOnDeck.Select(p => p.PlayerId).ToList();
 
@@ -573,7 +573,7 @@ public class DraftControllerTest : EvosTest
             clock.Advance(BotSubPhase);
             WaitFor(() => clock.Waits == 2);
             CharacterType contested = Playable()
-                .First(c => !controller.GetRankedResolutionPhaseData().FriendlyTeamSelections.ContainsValue(c));
+                .First(c => !controller.GetStateForTest().FriendlyTeamSelections.ContainsValue(c));
 
             using Barrier barrier = new(2);
             DraftRequestResult[] results = new DraftRequestResult[2];
@@ -588,7 +588,7 @@ public class DraftControllerTest : EvosTest
 
             Assert.Single(results, r => r.Success);
             Assert.Equal("CharacterTypeNotAllowed", results.Single(r => !r.Success).Failure?.Term);
-            Assert.Single(controller.GetRankedResolutionPhaseData().EnemyTeamSelections.Values, c => c == contested);
+            Assert.Single(controller.GetStateForTest().EnemyTeamSelections.Values, c => c == contested);
         }
     }
 

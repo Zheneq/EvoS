@@ -13,7 +13,9 @@
   duration of a test with `ClientNotifierScope`.
 - `Tests/Lib/FakeDraftHost.cs` — fake `IDraftHost`: a roster to fill in, settable game
   state, and a record of draft snapshots and match cancellations. A `DraftController` is
-  built directly over it, without a `Game`.
+  built directly over it, without a `Game`. Tests put a controller in a sub-phase with
+  `OpenSubPhaseForTest` and read its state with `GetStateForTest` (a copy taken under the
+  draft's lock).
 - `Tests/DataAccess/DbTestFramework.cs` — harness for DAO tests (Mongo-backed DAOs and
   cached decorators).
 
