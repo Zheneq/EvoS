@@ -5,542 +5,347 @@ docs 01–11, why they matter, and a staged refactoring plan that respects the c
 that this is a live, working emulator (wire compatibility with an unmodifiable client and
 game server must be preserved).
 
-## A. Shortcomings
+Last full review: 2026-11-13 (after the practice/tutorial, custom game invite, queue
+requirement and multilancer draft features). Per-step logs of the completed work were
+removed in that review; they are in the git history of this file.
 
-### A1. Pervasive static singletons / global state (highest impact)
+## A. Status at a glance
 
-`SessionManager`, `GroupManager`, `MatchmakingManager`, `ServerManager`, `GameManager`,
-`CustomGameManager`, `Elo` are static classes; `ChatManager`, `DiscordManager`,
-`AdminManager`, `StatsApi`, `DB` are `Get()` singletons; `EvosConfiguration` and all
-`GameData` classes are static-lazy. `CentralServer.Init` even carries the comment
-`// TODO Dependency injection`.
+| Stage | State | What is left |
+|-------|-------|--------------|
+| 1 – Handler modules | Done except draft | Four draft handlers (~360 lines) still on `LobbyServerProtocol`; move with Stage 4a |
+| 2 – `IClientNotifier` | Done | Two small leaks of the concrete connection type (see B4) |
+| 3 – De-static the managers | **Interfaces and shims only** | ~200 static call sites; cycles between managers; several managers not converted at all (see C, Stage 3) |
+| 4 – Split `Game` | Not started | `Game.cs` grew from 1,699 to 1,997 lines since the plan was written |
+| 5 – Hygiene | `PatchAccountData` and the temp-account fallback done | Everything else |
 
-Consequences: no seams for testing (doc 11), hidden dependency graph (any file may call
-any manager), initialization-order fragility (lazy singletons under concurrency — the
-`DB.Get()` race that once flaked tests), and impossible-to-scale-out state.
+Tests: 435, all passing. New features mostly came with tests, and the tests show where the
+seams are missing: draft and character selection tests subclass `PvpGame(null)` to reach
+protected members (`DraftBotPickTest`, `DraftTradeTest`, `CharacterSelectionTest`,
+`QueuePenaltyIssueTest`).
 
-### A2. God classes fusing transport and domain logic
+## B. Shortcomings
 
-- ~~`LobbyServerProtocol` (2,896 lines, ~75 handlers): store purchases, friends, groups,
-  draft, telemetry, chat — all as methods on a websocket connection. Domain logic is
-  unreachable without a socket, and the class is a merge-conflict magnet.
-  The `LobbyServerProtocolBase` split is nominal: `LobbyServerProtocol` is its only
-  subclass, the base is not abstract, all its state fields are public, and it mixes
-  transport plumbing (serialization, proxy patching) with domain logic
-  (`SendLobbyServerReadyNotification` composes the login state dump, fetches GitHub patch
-  notes over HTTP, reads MOTD from the DB). The real transport abstraction is
-  `WebSocketBehaviorBase<TMessage>`; the middle layer earns nothing.~~ **Partially
-  addressed (Stage 1 in progress):** `LobbyServerProtocolBase` merged; 8 modules extracted
-  (Store, Telemetry, Account, Group, Matchmaking, GameLifecycle, Character, Friend) — ~2,100
-  lines moved out; protocol file reduced from ~2,900 to ~800 lines. Remaining handlers
-  blocked on Stage 3 or deferred to Stage 4 (see §C Stage 1).
-- `Game` (1,699 lines): team assembly, bot filling, character validation, ranked draft
-  state machine, dodge penalties, queue-priority compensation, result finalization,
-  Discord/Elo/TrustWar integration.
-- `MatchmakingQueue` (788 lines): queue bookkeeping + sub-type mask algebra + match
+### B1. Static singletons / global state (highest impact)
+
+Five managers (`SessionManager`, `GroupManager`, `ServerManager`, `GameManager`,
+`MatchmakingManager`) are instance classes behind interfaces, registered in DI, but each
+keeps a static `Instance` and a static forwarder for every method, and that static surface
+is what the code uses: ~80 `SessionManager.X`, ~45 `GroupManager.X`, ~40 `GameManager.X`,
+~30 `MatchmakingManager.X` call sites. Only `GroupModule`, `MatchmakingModule` and one call
+in `GameLifecycleModule` go through an injected interface; `LobbyServerProtocol` receives
+`ISessionRegistry` and never uses it.
+
+Not converted at all: `CustomGameManager`, `QueuePenaltyManager`, `QueuePriorityManager`,
+`FriendManager`, `GameServerKeyManager`, `PracticeManager`, `TutorialManager` (static
+classes); `ChatManager`, `DiscordManager`, `AdminManager`, `StatsApi` (`Get()`
+singletons); `ClientNotifier` (static accessor with a test scope); `DB.Get()` (~200 call
+sites); `EvosConfiguration`, `LobbyConfiguration` and `GameData` (static-lazy).
+
+Everything added since Stage 3 was written against the statics, including two new static
+managers. The half-converted state costs more than either end state: every manager method
+is declared four times (interface, static forwarder, explicit implementation, `*Core`),
+and the dependency graph is still hidden.
+
+Consequences: state leaks between tests (they share `X.Instance`), hidden dependencies,
+initialization-order fragility, and no way to construct a subsystem in isolation.
+
+### B2. God classes
+
+- `Game` (1,997 lines): server binding, roster, team assembly, bot filling, character
+  validation, duplicate resolution, the whole draft, dodge handling, queue priority
+  compensation, penalties bookkeeping (`PenalizedPlayers`), result finalization,
+  Discord/Elo/TrustWar/stats integration. `SoloGame` uses almost none of it and switches
+  the rest off through virtual hooks (`ShouldProcessAccolades`, `ShouldSendStats`,
+  `GetFinalizeGameDelay`, `LogDodge`).
+- Draft is split across two classes: `Game` runs the phase loop, and the four handlers on
+  `LobbyServerProtocol` read the draft state out of the game, mutate it and write it back
+  (`GetRankedResolutionPhaseData` / `SetRankedResolutionPhaseData`, `UpdatePlayersInDeck`,
+  `SkipRankedResolutionSubPhase`). This is the most frequently changed code in the repo.
+- `MatchmakingQueue` (791 lines): queue bookkeeping + sub-type mask algebra + match
   scoring orchestration + client notification composition.
+- `AdminController` (820 lines, static) after the admin panel rework.
+- Growing: `GameLifecycleModule` (644 lines; custom game invites are ~180 of them) and
+  `GroupModule` (589).
 
-### A3. Layering violations & naming drift
+### B3. Layering violations & naming drift
 
 - Framework hosts app-layer logic under foreign namespaces (`EvoS.DirectoryServer.Account.LoginManager`
   in `EvoS.Framework/DataAccess/`, `InventoryManager`, `CharacterManager`, lobby config
-  types in `CentralServer.LobbyServer.Config`) — see doc 08. Dependency direction is
-  only enforced by project references, not by structure or namespaces.
-- Folder `LobbyServer2` / project `CentralServer` / namespace `CentralServer.LobbyServer`.
+  types in `CentralServer.LobbyServer.Config`) — see doc 08.
+- Folder `LobbyServer2` / project `CentralServer` / namespace `CentralServer.LobbyServer`;
+  folder `GameMode` / namespace `Gamemode`.
 - Two `CharacterManager`s disambiguated by using-aliases.
 - `EvoS.DirectoryServer` is a 1-file project whose actual logic lives in Framework.
 
-### A4. Bidirectional coupling between managers and connections
+### B4. Coupling to the concrete connection
 
-Managers call `SessionManager.GetClientConnection(id)?.Send(...)` to push state;
-connections call managers to mutate state; managers call back into connection methods
-(`BroadcastRefreshGroup`, `OnLeaveGroup`). Notification fan-out is duplicated at every
-call site instead of being an outbound port. `SessionManager.Broadcast` routing through
-"any first connection" is the emblematic hack.
+Pushing messages goes through `IClientNotifier` now. What remains is code that needs
+connection *state* or *behavior* that is not on `IClientConnection`, so it takes
+`LobbyServerProtocol`: the static `SessionManager.GetClientConnection` downcasts to it,
+and ~35 call sites depend on that (`Game` 8, `GroupModule` 5, `GroupManager` 4,
+`CustomGame` 3, Discord 4, others 1–2). `Game.GetClients()` returns
+`List<LobbyServerProtocol>`; `InviteRules.CheckInvitee` hands one out. The members they
+use: `LeaveGame`, `IsInGame`, `IsInCharacterSelect`, `IsInGroup`, `IsReady`,
+`SelectedGameType`, `GetSubTypeMask`, `SetGameType`, `RefreshGroup`, `OnGameAssigned`,
+`SendSystemMessage(string)`.
 
-**Partially fixed:** `IClientNotifier` outbound port introduced in
-`LobbyServer2/LobbyServer/Session/`; `QueuePenaltyManager`, `MatchmakingQueue`,
-`MatchmakingManager`, `GroupManager`, `ChatManager`, `TrustWarManager`, `MapPickBanSession`,
-`CrashReportManager`, `FriendsTask`, `FriendManager`, `CustomGame`, and `Game` (37
-notification sites total) migrated. Tested via `RecordingClientNotifier` +
-`ClientNotifierScope`. Remaining `GetClientConnection` call sites are read-then-use or
-connection-mutating and are deferred: `LobbyServerProtocol` (10, Stage 1 service
-extraction), `Game.cs` (8, Stage 4 split), `CustomGame.cs` (3, Stage 3/4), `GroupManager`
-(4), `AdminManager` (1, `CloseConnection` = session control), `StatusController` (2),
-Discord classes (4, `DiscordManager` 1 + `DiscordBotWrapper` 1 + `DiscordLobbyUtils` 2),
-`FriendManager` (1) — Stage 3 `ISessionRegistry`.
+`GroupManager` reading queue selection and ready state from each member's connection is
+the deeper issue: that state belongs to the group/session, not to a socket.
 
-### A5. Mixed concurrency idioms
+### B5. Concurrency
 
-- `lock (SessionInfos)` *around* a `ConcurrentDictionary` (the lock is what actually
-  provides atomicity; the concurrent type suggests otherwise).
-- Plain `Dictionary` + `lock` in `ServerManager`/`CustomGameManager`/`GroupManager`;
-  lock objects sometimes shared across classes (`Game.characterSelectionLock` is a
-  `public static object` also taken by `LobbyServerProtocol`).
-- Sync-over-async (`Send` → `.GetAwaiter().GetResult()`), `async void` methods
-  (`Game.OnServerDisconnect`), fire-and-forget `Task.Run`
-  for the periodic tasks with `CancellationToken.None` (no orderly shutdown).
-- Time and delays hard-coded (`DateTime.Now` vs `DateTime.UtcNow` inconsistently;
-  `Task.Delay` in `ServerManager.DisconnectServer`, draft timers).
+- Draft state has no single guard. The handlers lock on one of the selection dictionaries
+  (or nothing, for hover and ban), `GetDraftActingSlot` takes `characterSelectionLock`,
+  the phase loop takes no lock (`// TODO: There can be a race condition`).
+- `Game.characterSelectionLock` is `public static`: character selection in every game
+  serializes on one global lock, shared with `CustomGame`.
+- `lock (this)` in `Game.CancelMatch`.
+- `lock (SessionInfos)` around a `ConcurrentDictionary`; plain `Dictionary` + `lock` in
+  `ServerManager`/`CustomGameManager`/`GroupManager`.
+- Sync-over-async (`Send` → `.GetAwaiter().GetResult()`), `async void`
+  (`Game.OnServerDisconnect`, 15 in `DiscordManager`), periodic tasks started with
+  `Task.Run` and `CancellationToken.None`.
+- Time and delays hard-coded (`DateTime.Now`/`UtcNow`, `Task.Delay` in draft timers,
+  `PvpGame`/`CustomGame` start flows, `ServerManager.DisconnectServer`).
 
-### A6. Shared mutable cached entities
+### B6. Shared mutable cached entities
 
 `AccountDao` (cached) returns shared `PersistedAccountData` instances mutated in place by
-many subsystems, then saved wholesale (`UpdateAccount`) or per-component. No unit of work,
-no optimistic concurrency; lost updates are possible whenever two handlers touch the same
-account concurrently.
+many subsystems, then saved wholesale or per-component. No unit of work, no optimistic
+concurrency; lost updates are possible when two handlers touch the same account.
 
-### A7. Login-path warts
-
-- ~~`PatchAccountData` always returns true → full account rewrite on every login; contains
-  a 3× copy-pasted loadout-patch block.~~ **Fixed:** now change-detected via JSON snapshot
-  comparison, deduplicated, and tested (`PatchAccountDataTest`); versioned migrations remain
-  future work.
-- ~~DB failure during login silently creates `temp_user#N` accounts (state divergence that
-  later persists partial data).~~ **Removed:** the fallback had been dead since session
-  creation started re-reading the account by the real id; it only wrote junk `temp_user`
-  documents. DB failures now fail the login.
-
-### A8. Config sprawl
+### B7. Config sprawl
 
 Five formats/loaders, only one hot-reloadable, all static, all CWD-relative (doc 10).
+`GameModeManager` re-reads `Custom.json` on every `GetCustomGameTypeAvailability` call
+(i.e. every login) and passes `Bans` through a static `LocalizedNameToBans` side
+dictionary because the field is not serialized.
 
-### A9. Dead code & stubs
+### B8. Smaller items
 
-`QuestManager` stub, disabled queue types, disabled queue modes with no removal timeline.
+- `LobbyServerProtocol.SendImpl` looks up the session statically on every outgoing
+  message to get the protocol version for `ProtocolPatcher`; the connection should hold it.
+- `HandleClose` does cleanup for four subsystems inline (game, custom game invites,
+  session, group). `ILobbyModule` still has no `OnDisconnect` hook.
+- Dead code: `QuestManager` stub, disabled queue types (`Ranked`, `Custom` queues
+  commented out).
+- `CustomGame` carries its own near-copies of `CheckIfAllSelected` (shadowed with `new`)
+  and `IsCharacterUnavailable`.
 
-## B. What already points the right way (build on these)
+## C. What already points the right way (build on these)
 
-- `MatchmakerRanked(AccountDao, ..., Func<Config>)` + convenience ctor defaulting to
-  `DB.Get()` — incremental DI without breaking callers.
-- `Elo` parameterized by `IAccountProvider`/`IMatchHistoryProvider`/`IAccountUpdater`.
-- `BridgeServerProtocol` ↔ `Game` decoupled via events; `IGameServerConnection` interface.
-- DAO interface / impl / cached-decorator / mock structure.
-- `PeriodicRunner`, `ReloadableConfig` as reusable mechanisms.
-- `WebSocketBehaviorBase` cleanly isolates websocket mechanics.
+- The module pattern: per-connection `ILobbyModule`s composed in the connection
+  constructor, tested against `RecordingClientConnection`, with
+  `LobbyHandlerRegistrationTest` locking the set of handled message types. New handlers
+  have been landing in modules without prompting.
+- `IClientNotifier` + `RecordingClientNotifier`.
+- `CustomGameInvites`: a small instance class with its own lock and its own tests. This is
+  the shape new stateful code should have (it only needs to stop hanging off a static).
+- `CharacterRules`, `InviteRules.ResolveInvitee`, `Game.GetDraftPhases`,
+  `Game.PickCharacter(teammates, unavailable, forBot)`: rules extracted as pure functions.
+- `ProtocolPatcher`: outbound patching as a table of pure functions that never mutate
+  shared objects.
+- `MatchmakerRanked(AccountDao, ..., Func<Config>)`, `Elo` parameterized by providers.
+- `BridgeServerProtocol` ↔ `Game` decoupled via events; `IGameServerConnection`.
+- DAO interface / impl / cached-decorator / mock structure; `PeriodicRunner`,
+  `ReloadableConfig`.
 
-## C. Refactoring roadmap (staged, each stage shippable)
+## D. How the new features fit
 
-### Stage 1 — Decompose `LobbyServerProtocol` into composed handler modules (no behavior change)
+| Feature | Where it landed | Fit | Follow-up |
+|---------|-----------------|-----|-----------|
+| Practice, Tutorial (`SoloGame`) | `Game` subclass + static `PracticeManager`/`TutorialManager` + static `SoloGame.Start` | Reuses lifecycle well; exposes that base `Game` carries PvP-only behavior | Stage 4 (composition), Stage 3 (game factory replaces the static managers) |
+| Custom game invites | `CustomGameInvites` + handlers in `GameLifecycleModule` | Good | Own module once `CustomGameManager` is an instance (Stage 3) |
+| Group invite rework, `InviteRules` | `GroupModule`, shared static rules | Good | Stop returning `LobbyServerProtocol` (B4) |
+| Multilancer / procedural draft, bot picks | `Game` + handlers on the connection | Worst fit: grew both halves of the split draft | Stage 4a, first in line |
+| Queue requirements, `ProtocolPatcher` | Framework types + patch step in `SendImpl` | Good | B8 (cache protocol version) |
+| Asymmetric sub types | `AsymmetricSubType`, `MatchmakingQueue`, `GameModeManager` | OK; adds to `MatchmakingQueue` and config sprawl | Stage 5 |
+| Queue penalties (leave time, pardons) | Static `QueuePenaltyManager`, state on `Game.PenalizedPlayers` | Well tested through `TestGame`; state lives in the wrong class | Stage 4c |
+| Admin panel | `AdminController` | Works; one 820-line static class | Split by area when controllers move to DI (Stage 3) |
 
-Design (supersedes the earlier "extract services" sketch): the connection *composes*
-per-connection module instances; each module registers its own handlers into the existing
-`RegisterHandler<T>` dispatch table and owns its slice of per-session state.
+## E. Roadmap
 
-1. ~~Merge `LobbyServerProtocolBase` into `LobbyServerProtocol` (the split is nominal, see
-   A2). Its transport plumbing folds into the connection; its domain logic
-   (`SendLobbyServerReadyNotification`, MOTD/patch notes) becomes Login/Status module
-   material.~~ **Done.**
-2. Seam contracts:
-   - `IClientConnection` (AccountId, Send, ... — grown only as modules need connection-shaped
-     members: identity, send, refresh hooks). Modules that need other modules receive them via
-     constructor from the composition root (see `CharacterModule` — module-to-module dependency
-     precedent), not through `IClientConnection`.
-   - `IHandlerRegistry` (`Register<T>(Action<T>)`), implemented by the connection over
-     the dispatch table. `Dictionary.Add` throwing on duplicates gives fail-fast when
-     two modules claim the same message type.
-   - `ILobbyModule` (`Register(IHandlerRegistry)`; lifecycle hooks such as
-     `OnDisconnect` added when the first module needs them).
-3. Module map (~8 modules, 5–10 handlers each): **Store** (all `Purchase*`, prices,
-   store stubs), **Group** (invite/join/confirm/suggest/kick/promote/leave),
-   **Matchmaking** (queue join/leave, subtype, ready state), **GameLifecycle**
-   (join/rejoin/leave/spectate/create), **Chat**, **Account** (options, keybinds, UI
-   state, dev tag, customization selects), **Telemetry** (crash/error/feedback),
-   **Login/Status** (ready notification, MOTD, patch notes).
-4. State ownership is the point of the exercise — modules that only split methods but
-   share `conn.IsReady`/`conn.CurrentGame` stay coupled through a god-state object.
-   Target owners: `SelectedGameType`/`SelectedSubTypeMask`/difficulties → Matchmaking;
-   `IsReady` → Matchmaking/Group; `CurrentGame`/`Status` → GameLifecycle;
-   `AccountId`/`SessionToken`/`UserName`/`Proxy` stay on the connection. State migrates
-   with its module, exposed to other modules via narrow interfaces.
-5. Safety nets: a snapshot test asserting the set of registered message types is
-   unchanged after every module extraction (wire contract), plus per-module unit tests
-   against mock DAOs and a recording `IClientConnection`. **Snapshot test
-   (`LobbyHandlerRegistrationTest`) added; 75 message types locked.**
-6. Order: Base merge → snapshot test → **Store** pilot (most self-contained: needs only
-   `AccountId` + `Send`, no per-connection state) → Telemetry, Account (nearly
-   stateless) → Group, Matchmaking, GameLifecycle (where state migration happens) →
-   Login/Status. External callers of moved members keep working via delegation on the
-   connection during the transition. **Store pilot (`StoreModule`, 13 handlers) extracted
-   and tested (`StoreModuleTest`, 9 cases). `TelemetryModule` (8 handlers) extracted and
-   tested (`TelemetryModuleTest`, 4 cases) — second module after Store. `AccountModule`
-   (15 handlers: options, keybinds, UI state, dev tag, customization selects, match data,
-   RAF stubs, check account/loading screen) extracted and tested (`AccountModuleTest`,
-   13 cases) — third module; `IClientConnection` grown with `OnAccountVisualsUpdated()`.
-   `GroupModule` (8 handlers: invite/join/confirm/suggest/kick/promote/leave/group-info-update)
-   extracted and tested (`GroupModuleTest`, 6 cases) — fourth module; `IClientConnection` grown
-   with `Handle`, `SendSystemMessage`, `BroadcastRefreshFriendList`, `BroadcastRefreshGroup`.
-   `MatchmakingModule` (3 handlers: `JoinMatchmakingQueueRequest`, `LeaveMatchmakingQueueRequest`,
-   `SetGameSubTypeRequest`) extracted and tested (`MatchmakingModuleTest`, 7 cases) — **fifth
-   module and first state migration**: `IsReady`, `SelectedGameType`, `SelectedSubTypeMask`,
-   `AllyDifficulty`, `EnemyDifficulty` now live in the module; `LobbyServerProtocol` keeps
-   delegating properties and thin delegator methods so external callers (`SessionManager` login
-   defaults, `GroupManager` reads, cross-connection `SetGameType` from `GroupModule`) compile
-   unchanged. This is the Stage 3 transition point: those delegation seams stay until a
-   `ISessionRegistry` interface replaces direct `GetClientConnection` reads.
-   `IClientConnection` grown with `UserName`.
-   `GameLifecycleModule` (11 handlers: `JoinGameRequest`, `CreateGameRequest`,
-   `GameInfoUpdateRequest`, `BalancedTeamRequest`, `LeaveGameRequest`,
-   `PreviousGameInfoRequest`, `GameInvitationRequest`, `GameInviteConfirmationResponse`,
-   `RankedLeaderboardOverviewRequest`, `CalculateFreelancerStatsRequest`,
-   `PlayerPanelUpdatedNotification`) extracted and tested (`GameLifecycleModuleTest`, 11 cases) —
-   **sixth module and second state migration**: `CurrentGame` now lives in the module;
-   `LobbyServerProtocol` keeps thin delegators (`CurrentGame`, `JoinGame`, `LeaveGame`,
-   `IsInGame`, `IsInCharacterSelect`, `PlayerInfo`) so `Game.cs`, `PvpGame.cs`,
-   `CustomGame.cs`, `GameManager.cs`, `FriendManager.cs`, `ChatManager.cs`, `GroupManager.cs`,
-   `GroupModule.cs`, `MatchmakingModule.cs`, and Discord classes compile unchanged.
-   `IClientConnection` grown with `ResetReadyState` and `SendGameUnassignmentNotification`.
-   **`Status` (`PlayerOnlineStatus`) deliberately left on the connection** (friend-status
-   concern, not game-lifecycle state). **Game callbacks (`OnStartGame`, `OnGameAssigned`,
-   `SendGameUnassignmentNotification`) deliberately left on the connection** (invoked by
-   `Game`/`PvpGame`/`CustomGame`/`GameManager` on concrete connections; no state ownership).
-   **Chat module deferred entirely**: its two handlers (`ChatNotification`,
-   `GroupChatRequest`) are one-line event raises, and `ChatManager` subscribes to those events
-   per connection with `LobbyServerProtocol`-typed signatures and reads `conn.PlayerInfo` —
-   extracting them means redesigning that coupling for no handler-logic gain. Revisit at Stage 3.
-   `CharacterModule` (2 handlers: `PlayerInfoUpdateRequest`, `UpdateRemoteCharacterRequest`;
-   2 private helpers: `HandlePlayerInfoUpdateRequest`, `UpdateCharacterSlots`) extracted and
-   tested (`CharacterModuleTest`, 6 cases) — **seventh module and first module-to-module
-   dependency**: `CharacterModule` takes `MatchmakingModule` and `GameLifecycleModule` via
-   constructor from the composition root; `IClientConnection` stays connection-shaped (no new
-   members added). Unused delegators `SetAllyDifficulty`, `SetEnemyDifficulty`,
-   `SetContextualReadyState` deleted from `LobbyServerProtocol` (their only caller,
-   `HandlePlayerInfoUpdateRequest`, moved with the module). `SetGameType` kept (public —
-   `GroupModule` calls it cross-connection).
-   `FriendModule` (2 handlers: `FriendUpdateRequest`, `PlayerUpdateStatusRequest`; 1 private
-   helper: `Unblock`) extracted and tested (`FriendModuleTest`, 5 cases) — **eighth module;
-   fully extracted; stateless (no state migration)**. `Status` (`PlayerOnlineStatus`) added to
-   `IClientConnection`; `FriendManager.OnPlayerUpdateStatusRequest` widened to
-   `IClientConnection`; `HandlePlayerUpdateStatusRequest` moved from `LobbyServerProtocol` to
-   `FriendModule`; `FriendManager.MarkForUpdate(LobbyServerProtocol)` overload deleted.
-   `IClientConnection` grown with `Status { get; set; }` (Step 5, see §C Stage 3).
-   ~~`UseOverconRequest` / `UseGGPackRequest` (iterate `CurrentGame.GetClients()` — natural fit
-   in `GameLifecycleModule`)~~ **Done:** moved to `GameLifecycleModule` (ninth and tenth
-   handlers added to that module; no new `IClientConnection` members; covariance on
-   `IEnumerable<T>` allows `foreach (IClientConnection client in CurrentGame.GetClients())`).
-   ~~`DEBUG_AdminSlashCommandNotification` (self-contained, ~30 lines, could be an
-   `AdminModule`)~~ **Done:** `AdminModule` extracted to
-   `LobbyServer2/LobbyServer/Admin/AdminModule.cs`, namespace
-   `CentralServer.LobbyServer.Admin`, 1 handler; registered in `LobbyServerProtocol`
-   constructor after the module `foreach` loop.
-   **What remains on the connection — categorized:**
-   - *Stage 4*: ranked draft handlers (`RankedTradeRequest`, `RankedSelectionRequest`,
-     `RankedBanRequest`, `RankedHoverClickRequest`) — belong in `DraftController`.
-   **Stage 1 is fully complete. All handlers that could move in Stage 1 have been extracted.
-   Proceeding to Stage 3 (de-static the managers) unlocks the blocked group and makes the
-   remaining small extractions straightforward.**
+Decisions taken on 2026-11-13:
 
-**Step 7 complete (branch `refactor`):**
-- `bool IsConnected { get; }` added to `IClientConnection`; stub implementation
-  `public bool IsConnected { get; set; } = true` added to `RecordingClientConnection`.
-- `CustomGameManager.Subscribers` dict widened from `Dictionary<long, LobbyServerProtocol>`
-  to `Dictionary<long, IClientConnection>`; `Subscribe` and `Unsubscribe` parameters widened
-  from `LobbyServerProtocol` to `IClientConnection`; `NotifyUpdate` foreach variable widened
-  to `IClientConnection`. `using CentralServer.LobbyServer.Session` added to
-  `CustomGameManager.cs`.
-- `HandleSubscribeToCustomGamesRequest` and `HandleUnsubscribeFromCustomGamesRequest` moved
-  from `LobbyServerProtocol` to `GameLifecycleModule`: two `registry.Register` calls added in
-  `Register`; two private handler methods added that delegate to `CustomGameManager.Subscribe(_conn)`
-  and `CustomGameManager.Unsubscribe(_conn)`. Registration lines and method bodies removed from
-  `LobbyServerProtocol`.
-- Remaining blocked on Stage 3: chat handlers
-  (`ChatNotification`, `GroupChatRequest`, blocked on `ChatManager` event redesign).
+1. **Stage 3 goes all the way**: constructor injection everywhere, then the static
+   `Instance`s, forwarders and `*Core` methods are deleted. No ambient singletons as an
+   end state.
+2. **Draft becomes a `DraftController`** owned by the game, with a thin `DraftModule` on
+   the connection. Code is moved, not rewritten into an event-emitting state machine.
+3. **The `Game` hierarchy stays** (`PvpGame`, `CustomGame`, `SoloGame` are the start-flow
+   scripts); shared behavior moves into components that only the subclasses that need them
+   create.
 
-**Step 8 complete (branch `refactor`):**
-- `Initialize(accountId, userName, sessionToken)`, `CloseConnection()`, and
-  `string? ProxyName { get; }` added to `IClientConnection`; stub implementations added to
-  `RecordingClientConnection`; `Initialize` and `ProxyName` added to `LobbyServerProtocol`
-  (`CloseConnection` inherited from `WebSocketBehaviorBase`, no new body needed).
-- `MatchmakingModule.SelectedGameType` initializer fixed to `= GameType.PvP` (was
-  missing; `SessionManager.OnPlayerConnect` previously set it explicitly on the concrete
-  connection).
-- `SessionInfo.conn` type widened from `LobbyServerProtocol` to `IClientConnection`;
-  `SessionManager.OnPlayerConnect` parameter widened from `LobbyServerProtocol` to
-  `IClientConnection`; five field-mutation lines replaced with `client.Initialize(...)`.
-  `GetClientConnectionCore` return type changed to `IClientConnection?`; static forwarder
-  `GetClientConnection` keeps `LobbyServerProtocol?` return via `as LobbyServerProtocol`
-  downcast — fan-out loop in `LoginModule` still needs the concrete type for `IsInGame()`.
-  `OnPlayerConnected(client)` raise site gained explicit cast `(LobbyServerProtocol)client`
-  (event type stays `Action<LobbyServerProtocol>` because `ChatManager` subscribes with
-  that signature — widening the event is a separate blocker).
-  `BroadcastCore` adapted: `FirstOrDefault()?.conn` cast to `LobbyServerProtocol` for the
-  `Broadcast` call (that method is not on `IClientConnection`).
-- `LoginModule` created in `LobbyServer2/LobbyServer/Login/LoginModule.cs`, namespace
-  `CentralServer.LobbyServer.Login`. Owns `HandleRegisterGame` and all login helpers:
-  `SendLobbyServerReadyNotification`, `GetServerQueueConfigurationUpdateNotification`,
-  `GetLobbyStatusNotification`, `GetServerMessageOverrides`, `GetMotdText`,
-  `GetMotdPopUpText`, `FetchGithubPatchNotes`, `CachedPatchNotes`. Registered first in
-  the `ILobbyModule[]` array in `LobbyServerProtocol`.
-- All moved members removed from `LobbyServerProtocol`; newly unused usings removed
-  (`System.Net.Http`, `System.Text`, `System.Text.RegularExpressions`, `System.Net`,
-  `CentralServer.LobbyServer.Chat`, `CentralServer.LobbyServer.Quest`,
-  `CentralServer.LobbyServer.TrustWar`, `Newtonsoft.Json`, `Newtonsoft.Json.Linq`,
-  `EvoS.Framework.Exceptions`, `static EvoS.Framework.DataAccess.Daos.MiscDao`).
+Order: 4a (draft) → 3a–3c (DI foundation and managers) → 4b–4d with 3d (rest of `Game`,
+game factory) → 3e–3f (hosts, delete shims) → 5. Draft goes first because it is the most
+actively changed code and needs almost nothing from the managers. Every step is one
+reviewable change with no behavior change unless stated.
 
-### Stage 2 — Introduce an outbound notification port
+Step-by-step plans for the first fifteen actions (Stage 4a, then Stage 3a, 3b and 3c
+through the matchmaking manager) are in [`docs/plans/`](../plans/), numbered in
+execution order.
 
-Create `IClientNotifier` (send-to-account, broadcast-to-group, broadcast-to-all) backed by
-`SessionManager`. Replace direct `SessionManager.GetClientConnection(x)?.Send(...)`
-call sites in managers. This kills the manager→connection coupling and makes fan-out
-testable (assert on a recording notifier).
+Decisions taken on 2026-11-14:
 
-### Stage 3 — De-static the managers behind interfaces
+4. **`TimeProvider`** is the clock abstraction for converted classes; no project-defined
+   `IClock`.
+5. **Queue selection state is split by owner**: game type and per-member ready state on
+   `GroupInfo`; each player's requested sub type mask kept per player for the life of the
+   session, because the client never re-sends it after leaving a group (plan 11).
+6. **`QueuePenaltyManager` is converted as is**; splitting account-level blocks from
+   game-level policy waits for Stage 4c.
 
-Convert one manager at a time to an instance class with an interface
-(`ISessionRegistry`, `IGroupRegistry`, `IServerPool`, `IGameRegistry`), keeping a static
-`Instance` shim so call sites migrate gradually. Compose them with Microsoft DI, 
-which ASP.NET already provides. Priority order:
-`SessionManager` → `GroupManager` → `ServerManager`/`GameManager` → `MatchmakingManager`.
+### Stage 4a — `DraftController` (also finishes Stage 1)
 
-**Step 1 complete (branch `refactor`):**
-- `ISessionRegistry` introduced in `LobbyServer2/LobbyServer/Session/ISessionRegistry.cs`
-  with members: `GetClientConnection`, `GetSessionInfo`, `GetOnlinePlayers`,
-  `GetOnlinePlayerByHandle`, `GetOnlinePlayerByHandleOrUsername`, `CreateSession`,
-  `GetDisconnectedSessionInfo`, `KillSession`, `Broadcast`. `OnPlayerConnect`,
-  `OnPlayerDisconnect`, `OnServerShutdown`, and the events are not on the interface.
-- `SessionManager` converted from `static class` to `public class SessionManager : ISessionRegistry`
-  with a `public static SessionManager Instance { get; internal set; }` shim.
-  State fields (`SessionInfos`, `ConnectingSessions`, `DisconnectedSessionInfos`) became
-  instance fields. Prometheus `Gauge` fields stayed `static readonly` to avoid metric
-  re-registration. All existing `public static` methods are static forwarders calling
-  private `*Core` instance methods. `ISessionRegistry` implemented explicitly.
-  `Instance` pre-initialized to `new SessionManager()` so tests (which never call
-  `CentralServer.Init`) still get an empty-state instance and all static forwarders
-  remain callable without any test-setup change.
-- DI wired in `CentralServer.Init`: `AddSingleton<ISessionRegistry, SessionManager>` +
-  `AddTransient<LobbyServerProtocol>`; `SessionManager.Instance` overwritten from DI after
-  `builder.Build()` so production uses the DI-managed singleton; the lobby map lambda
-  resolves `LobbyServerProtocol` from `context.RequestServices` instead of `new`.
-- `LobbyServerProtocol` receives `ISessionRegistry sessionRegistry` via constructor and
-  stores it as `private readonly ISessionRegistry _sessionRegistry`.
+- `DraftController` in `BridgeServer/` owns `RankedResolutionPhaseData`, the phase list,
+  the deck, sub-phase timing, bot picks and auto-lock on timeout. Created by `PvpGame` and
+  `CustomGame` only when the sub type has `RankedFreelancerSelection`; `Game.Draft` is
+  null otherwise.
+- The request side becomes methods on it — `Hover`, `Ban`, `Select`, `Trade` — taking
+  the account id and request data and returning success or a `LocalizationPayload`
+  failure. The handlers move to a `DraftModule` that only resolves `CurrentGame?.Draft`,
+  calls the method and sends the response.
+- One private per-game lock guards all draft state, on both the request side and the
+  phase loop. This is the one intended behavior change: it closes the acknowledged race.
+  `GetRankedResolutionPhaseData`/`SetRankedResolutionPhaseData`, `UpdatePlayersInDeck`
+  and `PlayersInDeck` stop being public.
+- What the controller needs from the game goes through a narrow interface (roster lookup,
+  send per-player snapshot, cancel match, connectivity check), so tests construct a
+  controller with a fake instead of subclassing `PvpGame`.
+- Time goes through an injected `TimeProvider` (default `TimeProvider.System`), which
+  lets tests run a whole draft without waiting.
+- `DraftPhasesTest`, `DraftBotPickTest`, `DraftTradeTest` move onto the controller; add
+  tests for the four request methods (wrong phase, not on deck, taken character, double
+  lock-in, fill roles, trade offer/accept/reject, trade with a bot).
 
-**Deferred to follow-up steps (after step 1):**
-- Static call sites in modules/managers (`SessionManager.GetClientConnection(...)` etc.)
-  still call the static shim; migration to `ISessionRegistry` injection is follow-up work.
-- `OnPlayerConnect`/`OnPlayerDisconnect` interface widening (they set concrete
-  `LobbyServerProtocol` fields directly and are not yet on `ISessionRegistry`).
-- Full concrete-type removal: `GroupManager`, `Game`, `CustomGame`, `FriendManager` etc.
-  still receive `LobbyServerProtocol` from static `GetClientConnection`.
+### Stage 3 — Finish dependency injection
 
-**Step 2 complete (branch `refactor`):**
-- `IGroupRegistry` introduced in `LobbyServer2/LobbyServer/Group/IGroupRegistry.cs`
-  with all public method members of `GroupManager`: `Lock`, `GetGroup`, `GetGroupMembers`,
-  `GetGroups`, `GetPlayerGroup`, `CreateGroupRequest`, `PopGroupRequest`, `PingGroupRequests`,
-  `CreateGroup`, `LeaveGroup`, `JoinGroup`, `PromoteMember`, `GetGroupInfo`, `GetGroupID`,
-  `OnLeaveQueue`, `Broadcast`, `BroadcastSystemMessage`, `GetGroupSubTypeMask` (two overloads),
-  `UpdateSelectedSubTypes`, `UpdateSelectedSubTypesForAccount`.
-- `GroupManager` converted from non-public `static class` to `public class GroupManager : IGroupRegistry`
-  with a `public static GroupManager Instance { get; internal set; }` shim pre-initialized to
-  `new GroupManager()`. All static state fields (`ActiveGroups`, `PlayerToGroup`, `GroupRequests`,
-  `_lastGroupId`, `_lastGroupRequestId`, `_lock`) became private instance fields. Every
-  `public static` method is a static forwarder calling a private `*Core` instance method.
-  `IGroupRegistry` implemented explicitly. Private helpers (`GetMemberData`, `OnJoinGroup`,
-  `OnLeaveGroup`, `OnGroupDisbanded`, `OnGroupMembersUpdated`) became private instance methods
-  with bodies unchanged.
-- DI wired in `CentralServer.Init`: `AddSingleton<IGroupRegistry, GroupManager>` after
-  `ISessionRegistry`; `GroupManager.Instance` overwritten from DI after `builder.Build()`.
-- `LobbyServerProtocol` receives `IGroupRegistry groupRegistry` as second constructor
-  parameter; stores as `private readonly IGroupRegistry _groupRegistry`; passes it to
-  `GroupModule`.
-- `GroupModule` receives `IGroupRegistry groupRegistry` as second constructor parameter;
-  all 31 `GroupManager.X(...)` static calls replaced with `_groupRegistry.X(...)`.
-  Tests (`GroupModuleTest`, `LobbyHandlerRegistrationTest`) updated to pass the new
-  constructor arguments using `GroupManager.Instance`.
+Target dependency direction (arrows point at what a class may take in its constructor):
 
-**Deferred to follow-up steps (after step 2):**
-- Other modules (`MatchmakingModule`, `GameLifecycleModule`, `CharacterModule`, `FriendModule`)
-  and managers (`MatchmakingManager`, `MatchmakingQueue`, `QueuePenaltyManager`,
-  `SessionManager`, `LobbyServerProtocol`, `GroupsTask`, `ChatManager`, `CustomGame`,
-  `GameLifecycleModule`, `StatusController`, `DiscordLobbyUtils`) still call
-  `GroupManager.X()` statically via the shim.
-- `GetGroupInfo`, `UpdateSelectedSubTypes`, `GetMemberData` internally call
-  `SessionManager.GetClientConnection(...)` via the static shim for `SelectedGameType`,
-  `GetSubTypeMask()`, `IsReady` — those retain the concrete `LobbyServerProtocol` internally.
-- Priority order: `SessionManager` ✓ → `GroupManager` ✓ → `ServerManager`/`GameManager` ✓
-  → `MatchmakingManager` next.
+```
+Session ← ClientNotifier ← Group ← QueuePenalty/Priority ← Matchmaking
+ServerPool ← GameRegistry ← GameFactory          Matchmaking → GameRegistry
+modules, API controllers, periodic tasks → any of the above
+```
 
-**Step 3 complete (branch `refactor`):**
-- `IServerPool` introduced in `LobbyServer2/BridgeServer/IServerPool.cs` with 8 members:
-  `AddServer`, `RemoveServer`, `GetServer`, `IsAnyServerAvailable`, `GetServers`,
-  `FindServerByAddress`, `HasOtherServerWithFingerprint`, `DisconnectByFingerprint`.
-- `IGameRegistry` introduced in `LobbyServer2/BridgeServer/IGameRegistry.cs` with 9 members:
-  `CreatePvpGame`, `RegisterGame`, `UnregisterGame`, `GetGameWithPlayer`, `ReconnectServer`,
-  `GetGames`, `GetRunningGamesNum` (two overloads), `StopAllGames`.
-- `ServerManager` converted from `static class` to `public class ServerManager : IServerPool`
-  with `public static ServerManager Instance { get; internal set; }` pre-initialized to
-  `new ServerManager()`. `ServerPool` dict became private instance field `_serverPool`.
-  All `public static` methods are static forwarders calling private `*Core` instance methods.
-  `IServerPool` implemented explicitly. Private helpers (`GetServersInPickOrder`,
-  `IsReserveFilled`, `DisconnectServer`) became private instance methods — bodies unchanged.
-  `AddServerCore` still calls `GameManager.ReconnectServer(gameServer)` via static shim.
-- `GameManager` converted from `public class` (with static fields) to
-  `public class GameManager : IGameRegistry` with `public static GameManager Instance`
-  pre-initialized to `new GameManager()`. `Games` ConcurrentDictionary became private
-  instance field `_games`. `GameNum` gauge and `GameTypesForStats` stayed `static readonly`
-  (Prometheus re-registration concern). The static constructor's `AddBeforeCollectCallback`
-  now calls `inst.GetRunningGamesNumCore(...)` via a local `GameManager inst = Instance`
-  variable (avoids the static-member-via-instance-reference compiler error). All `public
-  static` methods are static forwarders; `IGameRegistry` implemented explicitly.
-  `CreatePvpGameCore` still calls `ServerManager.GetServer()` via static shim.
-- DI wired in `CentralServer.Init`: `AddSingleton<IServerPool, ServerManager>` and
-  `AddSingleton<IGameRegistry, GameManager>` after the `IGroupRegistry` registration.
-  `ServerManager.Instance` and `GameManager.Instance` overwritten from DI after
-  `builder.Build()` so production uses the DI-managed singletons.
-- `LobbyServerProtocol` receives `IGameRegistry gameRegistry` as third constructor
-  parameter; stores as `private readonly IGameRegistry _gameRegistry`; passes it to
-  `GameLifecycleModule`.
-- `GameLifecycleModule` receives `IGameRegistry gameRegistry` as second constructor
-  parameter; stores as `private readonly IGameRegistry _gameRegistry`. The one static
-  call (`GameManager.GetGameWithPlayer` in `HandlePreviousGameInfoRequest`) replaced with
-  `_gameRegistry.GetGameWithPlayer`. Tests updated minimally (pass `GameManager.Instance`
-  at the three new-`GameLifecycleModule` call sites and at the `new LobbyServerProtocol`
-  call site).
+Signals in the other direction are events, not references.
 
-**Deferred callers (still use static shims after step 3):**
-- `BridgeServerProtocol`, `CustomGameManager`, `MatchmakingManager`, `MatchmakingQueue`,
-  `CustomGame`, `Game` still call `ServerManager.X()` and/or `GameManager.X()` statically.
-- `LobbyServerProtocol.HandleDEBUG_AdminSlashCommandNotification` and
-  `HandleRejoinGameRequest` still call `GameManager.GetGameWithPlayer` statically (not in
-  `GameLifecycleModule`; blocked on Stage 3 service extraction or Stage 4 `DraftController`).
-- Priority order: `SessionManager` ✓ → `GroupManager` ✓ → `ServerManager`/`GameManager` ✓
-  → `MatchmakingManager` next.
+**3a. Composition root.** One `AddLobbyServices(IServiceCollection)` used by
+`CentralServer.Init`. The admin and user API servers build their own `WebApplication`s,
+so they register the same singleton *instances* from the main container. In `Tests/Lib`,
+a `TestLobby` helper builds a fresh graph per test (mock DAOs, `RecordingClientNotifier`),
+replacing the shared `X.Instance` and `ClientNotifierScope`.
 
-**Step 4 complete (branch `refactor`):**
-- `IMatchmakingManager` introduced in
-  `LobbyServer2/LobbyServer/Matchmaking/IMatchmakingManager.cs` with 10 members: `Enabled`,
-  `GetQueues`, `GetQueue`, `Update`, `AddGroupToQueue`, `RemoveGroupFromQueue`, `IsQueued`,
-  `StartPractice`, `StartGameAsync`, `OnGameEnded`. (`StartPractice` was a commented-out stub;
-  it was removed when Practice became a `SoloGame`, leaving 9 members.)
-- `MatchmakingManager` converted from `public static class` to
-  `public class MatchmakingManager : IMatchmakingManager` with a
-  `public static MatchmakingManager Instance { get; internal set; }` shim pre-initialized
-  to `new MatchmakingManager()`. The `Queues` dict and `_enabled`/`_queueUpdateRunning`
-  fields became private instance fields; the queue dict initialization moved to the instance
-  constructor. `Enabled` retains the existing `public static bool Enabled` property
-  (forwarding to `Instance._enabled` with its log-on-change side effect); the interface
-  member is implemented explicitly as `bool IMatchmakingManager.Enabled`. All other
-  `public static` methods are static forwarders calling private `*Core` instance methods;
-  `IMatchmakingManager` implemented explicitly throughout. `AddGroupToQueueCore` and
-  `RemoveGroupFromQueueCore` still call `GroupManager.Broadcast/GetGroupSubTypeMask` via
-  static shim; `StartGameAsyncCore` still calls `GameManager.CreatePvpGame()` via static shim.
-- DI wired in `CentralServer.Init`: `AddSingleton<IMatchmakingManager, MatchmakingManager>`
-  after the `IGameRegistry` registration; `MatchmakingManager.Instance` overwritten from DI
-  after `builder.Build()` so production uses the DI-managed singleton.
-- `LobbyServerProtocol` receives `IMatchmakingManager matchmakingManager` as fourth
-  constructor parameter; stores it and passes it to `MatchmakingModule`.
-- `MatchmakingModule` receives `IMatchmakingManager matchmakingManager` as second constructor
-  parameter. All 5 static `MatchmakingManager.X(...)` call sites replaced with
-  `_matchmakingManager.X(...)`: `AddGroupToQueue` (×2), `RemoveGroupFromQueue` (×2),
-  `IsQueued` (×1). Tests updated minimally (pass `MatchmakingManager.Instance` at the three
-  `new MatchmakingModule` call sites and the `new LobbyServerProtocol` call site in
-  `LobbyHandlerRegistrationTest`).
+**3b. Break the cycles** (each is a small change on its own):
 
-**Deferred callers (still use static shims after step 4):**
-- `MatchmakingTask` calls `MatchmakingManager.Update()` statically.
-- `CentralServer.PendingShutdown` setter accesses `MatchmakingManager.Enabled` statically.
-- `MatchmakingQueue` calls `MatchmakingManager.StartGameAsync(...)` statically.
-- `GroupManager.UpdateSelectedSubTypes`, `MatchmakingModule.UpdateGroupReadyState`,
-  `MatchmakingModule.SetContextualReadyState` still call `GroupManager.X()` statically via shim.
-- All four named managers now converted ✓. Remaining static singletons
-  (`CustomGameManager`, `ChatManager`, `AdminManager`, `FriendManager`, `QueuePenaltyManager`,
-  `DiscordManager`, `StatsApi`) are future work.
-- Priority order: `SessionManager` ✓ → `GroupManager` ✓ → `ServerManager`/`GameManager` ✓
-  → `MatchmakingManager` ✓.
+| Cycle | Today | Break |
+|-------|-------|-------|
+| Server ↔ Game | `ServerManager.AddServer` calls `GameManager.ReconnectServer` | `IServerPool.ServerAdded` event; the game registry subscribes |
+| Session ↔ Group | `SessionManager` creates the solo group on connect; `GroupManager` reads connections | Group subscribes to the existing `OnPlayerConnected` event |
+| Group ↔ Matchmaking | `GroupManager` removes groups from the queue | Group raises a membership-changed event; matchmaking subscribes |
+| Penalty ↔ Matchmaking | `QueuePenaltyManager` removes the group from the queue | The penalty service raises a "queue block applied" event (alongside the existing `OnPenalty`/`OnPardon` report events); matchmaking subscribes. Done in 3c with the penalty service conversion, not in 3b: a static event would be handled by two generations of instances during startup |
+| Session → Game | `CreateSession` asks `GameManager` whether to keep the token; shutdown calls `StopAllGames` | Caller passes the "has live game" answer in; shutdown orchestration moves to `CentralServer` |
 
-**Step 5 complete (branch `refactor`):**
-- `PlayerOnlineStatus Status { get; set; }` added to `IClientConnection`
-  (initialised to `PlayerOnlineStatus.Online` in both `LobbyServerProtocol` and
-  `RecordingClientConnection`). `using CentralServer.LobbyServer.Friend` added to both
-  `IClientConnection.cs` and `RecordingClientConnection.cs`.
-- `FriendManager.OnPlayerUpdateStatusRequest` parameter widened from
-  `LobbyServerProtocol` to `IClientConnection`; internal call `MarkForUpdate(client)` replaced
-  with `MarkForUpdate(client.AccountId)`.
-- `FriendManager.MarkForUpdate(LobbyServerProtocol)` overload deleted (it only forwarded to
-  `MarkForUpdate(long)`); `LobbyServerProtocol.BroadcastRefreshFriendList` updated to call
-  `FriendManager.MarkForUpdate(AccountId)` directly.
-- `HandlePlayerUpdateStatusRequest` moved from `LobbyServerProtocol` to `FriendModule`;
-  `FriendModule` now fully extracted — owns both `FriendUpdateRequest` and
-  `PlayerUpdateStatusRequest`.
-- Deferred: `FriendManager.GetStatusString(LobbyServerProtocol)` still takes the concrete
-  type (reads `IsInGame`, `IsInCharacterSelect`, `IsInQueue`, `IsInGroup` which are not on
-  `IClientConnection`); all its call sites already have a concrete `LobbyServerProtocol` from
-  `SessionManager.GetClientConnection` and are unaffected.
+**3c. Convert consumers, bottom-up.** For each class: add constructor parameters for
+what it uses, replace static calls, update tests to `TestLobby`. Order:
 
-**Step 6 complete (branch `refactor`):**
-- `JoinGame(Game)` and `OnStartGame(Game)` added to `IClientConnection`; stub
-  implementations added to `RecordingClientConnection`.
-- `Game.ReconnectPlayer` widened from `LobbyServerProtocol` to `IClientConnection`;
-  `Game.SendGameInfo` widened from `LobbyServerProtocol` to `IClientConnection`. Both
-  methods only use `conn.AccountId`, `conn.Send`, `conn.JoinGame`, and `conn.OnStartGame`
-  — all already on the interface. All existing callers (`PvpGame`, `CustomGame`,
-  `SendGameInfoNotifications`) pass `LobbyServerProtocol` which implements `IClientConnection`
-  and compile unchanged.
-- `HandleRejoinGameRequest` moved from `LobbyServerProtocol` to `GameLifecycleModule`:
-  registration added in `Register`; handler adapted to use `_conn.X` instead of `this.X`;
-  `game.ReconnectPlayer(this)` replaced with `game.ReconnectPlayer(_conn)`.
-  Registration line and method body removed from `LobbyServerProtocol`.
+1. Remaining modules and `LobbyServerProtocol` itself (`LoginModule`, `ChatModule`,
+   `FriendModule`, `CharacterModule`, `AdminModule`, the static leftovers in
+   `MatchmakingModule`/`GameLifecycleModule`/`GroupModule`).
+2. `IClientConnection` grows the members listed in B4 so that nothing needs the concrete
+   type; queue selection and ready state move from `MatchmakingModule` to group/session
+   state that `GroupManager` owns, which removes its reads of member connections. Then
+   `GetClientConnection` returns `IClientConnection` everywhere and the delegating
+   properties on `LobbyServerProtocol` go away.
+3. `ClientNotifier` becomes an injected instance.
+4. `GroupManager`, then `QueuePenaltyManager`/`QueuePriorityManager` (static → instance),
+   then `MatchmakingManager` with `MatchmakingQueue`.
+5. `ServerManager`, `GameManager`, `GameServerKeyManager`, `BridgeServerProtocol`
+   (resolved from DI like `LobbyServerProtocol`).
+6. `CustomGameManager` (static → instance, owning `CustomGameInvites`); custom game
+   handlers split out of `GameLifecycleModule` into a `CustomGameModule`.
+7. `ChatManager`, `FriendManager`, `AdminManager`, `StatsApi`, `TrustWarManager`,
+   `DiscordManager` and its helpers.
 
-**Deferred (still blocked after step 6):**
-- `HandleRegisterGame` — blocked on `SessionManager.OnPlayerConnect` field-mutation
-  pattern (sets concrete `LobbyServerProtocol` fields directly).
-- Chat handlers (`ChatNotification`, `GroupChatRequest`) — blocked on `ChatManager`
-  event redesign (`LobbyServerProtocol`-typed event signatures).
+**3d. Game family** (together with Stage 4): `Game` takes one `GameServices` bundle
+(registries, notifier, penalties, DAOs, `TimeProvider`) because the hierarchy is deep and tests
+subclass it; the components extracted in Stage 4 take only the narrow dependencies they
+use. An `IGameFactory` creates `PvpGame`, `CustomGame`, `PracticeGame` and
+`TutorialGame`; `PracticeManager`, `TutorialManager` and `SoloGame.Start` fold into a
+`SoloGameLauncher` service that uses it.
 
-**Step 9 complete (branch `refactor`):**
-- `CharacterType? ActiveCharacterType { get; }` added to `IClientConnection`
-  (`using EvoS.Framework.Constants.Enums` added); implemented in `LobbyServerProtocol`
-  as `_gameLifecycle.PlayerInfo?.CharacterType`; stub (`{ get; set; }`) added to
-  `RecordingClientConnection`.
-- `ChatManager.HandleChatNotification` and `HandleGroupChatRequest` widened from
-  `LobbyServerProtocol` to `IClientConnection`; `conn.PlayerInfo?.CharacterType`
-  replaced with `conn.ActiveCharacterType` in both methods.
-- `ChatManager.Register` and `Unregister` removed (they subscribed/unsubscribed
-  `OnChatNotification`/`OnGroupChatRequest` events per connection); constructor and
-  destructor became empty and were removed.
-- Per-connection events `OnChatNotification` (`Action<LobbyServerProtocol, ChatNotification>`)
-  and `OnGroupChatRequest` (`Action<LobbyServerProtocol, GroupChatRequest>`) removed from
-  `LobbyServerProtocol`; one-liner handler methods `HandleChatNotification` and
-  `HandleGroupChatRequest` removed; their `RegisterHandler` lines removed from the constructor.
-- `ChatModule` created in `LobbyServer2/LobbyServer/Chat/ChatModule.cs`, namespace
-  `CentralServer.LobbyServer.Chat`. Owns `ChatNotification` and `GroupChatRequest` handlers;
-  delegates directly to `ChatManager.Get().HandleChatNotification/HandleGroupChatRequest(_conn, ...)`.
-  Registered second in the `ILobbyModule[]` array (after `LoginModule`, before `StoreModule`).
-- `SessionManager.OnPlayerConnected` and `OnPlayerDisconnected` events widened from
-  `Action<LobbyServerProtocol>` to `Action<IClientConnection>`; explicit cast removed from
-  the `OnPlayerConnected(client)` raise site.
-- **Stage 3 is fully complete.** Remaining on `LobbyServerProtocol`: only the four ranked
-  draft handlers (`RankedTradeRequest`, `RankedSelectionRequest`, `RankedBanRequest`,
-  `RankedHoverClickRequest`) — these belong in `DraftController` and are Stage 4 work.
+**3e. Hosts.** API controllers become classes with injected dependencies
+(`AdminController` split by area: players, games, servers, moderation). The four periodic
+tasks become hosted services with a cancellation token tied to shutdown.
 
-### Stage 4 — Split `Game`
+**3f. Delete the shims.** Remove static forwarders and `Instance`, rename `*Core` back,
+drop the explicit interface implementations. Prometheus metric objects stay static
+(they cannot be registered twice).
 
-- `GameLifecycle` (status transitions, server binding, reconnection),
-- `TeamAssembler` (FillTeam/bots/duplicate resolution — pure given inputs; highly testable),
-- `DraftController` (ranked resolution state machine, injected clock/timer),
-- `MatchFinalizer` (summary → history/Elo/TrustWar/accolades/Discord, behind interfaces).
-`Game` becomes a thin aggregate wiring these together.
+Scope notes:
+- `DB.Get()`: a class converted in 3c/3d takes the DAOs it uses through its constructor.
+  Static helpers that remain static (`LobbyServerUtils.GetHandle` and the like) keep
+  calling `DB.Get()` until Stage 5.
+- Static configuration getters stay until Stage 5.
+- Pure rule classes (`CharacterRules`, `InviteRules.ResolveInvitee`, `ProtocolPatcher`,
+  `AccoladeUtils`) stay static.
+
+### Stage 4b–4d — Rest of the `Game` split
+
+- **4b. `TeamAssembler` + `CharacterSelection`.** `FillTeam`, `AddBot`, `PickCharacter`,
+  controlling-player resolution → `TeamAssembler` (pure given roster inputs and an account
+  lookup). `UpdateCharacterInfo`, `ValidateSelectedCharacter`, `CheckDuplicatedAndFill`,
+  `CheckIfAllSelected`, `AssignRandomCharacter*` → `CharacterSelection` with a per-game
+  lock replacing the static `characterSelectionLock`. `CustomGame`'s shadowed copies
+  become a rule parameter. Created by `PvpGame`/`CustomGame` only.
+- **4c. `MatchCancellation`.** `CancelMatch`, connectivity checks, dodge logging, queue
+  priority compensation and the `PenalizedPlayers` state, behind the penalty service.
+- **4d. `MatchFinalizer`.** `OnGameEnded` + `FinalizeGame` (history, Elo, accolades,
+  TrustWar, stats, Discord, delays) driven by a `FinalizationPolicy` (accolades on/off,
+  stats on/off, GG delay, dodge reporting) that each subclass supplies, replacing the
+  virtual hooks.
+- What stays in `Game`: server binding and bridge events, roster queries, status,
+  game info building and sending, reconnection.
+- The start flows (`PvpGame.StartGameAsync`, `CustomGame.StartCustomGameAsync`,
+  `SoloGame.Launch`) stay in the subclasses and read as scripts over the components.
 
 ### Stage 5 — Consistency & hygiene
 
-- Move misnamespaced Framework code to real homes (`LoginManager` → DirectoryServer or an
-  `EvoS.Accounts` library); align folder/project/namespace names (`LobbyServer2` →
-  `CentralServer`); delete dead code; update README.
-- One concurrency idiom per structure (drop `ConcurrentDictionary` where a lock is
-  authoritative, or drop the lock where the dictionary suffices); replace `async void`;
-  give background tasks a real `CancellationTokenSource` tied to shutdown.
-- `IClock` abstraction for penalty/draft/session-expiry logic (Elo already takes `now`).
-- Make `PatchAccountData` report whether it changed anything; dedupe the loadout blocks;
-  turn it into versioned migrations.
-- Migrate remaining configs onto `ReloadableConfig`/one loader; inject config objects
-  instead of static getters in new/refactored code.
+- `ILobbyModule.OnDisconnect`; `HandleClose` cleanup moves to the owning modules.
+- Connection holds its protocol version (B8).
+- `TimeProvider` in the remaining time-dependent code (session expiry, group request
+  expiry, start-flow delays); replace `async void`.
+- One concurrency idiom per structure; document the `SessionManager` invariant.
+- Configs: cache game sub types, make `Bans` a real field of the server-side sub type
+  model, migrate loaders onto `ReloadableConfig`, inject config objects.
+- Move misnamespaced Framework code to real homes; align folder/project/namespace names
+  (`LobbyServer2` → `CentralServer`, `Gamemode` → `GameMode`); delete dead code.
+- `PatchAccountData` → versioned migrations.
+- Account mutation discipline (B6): at least per-account serialization of handlers.
+- Split `MatchmakingQueue` (bookkeeping / mask algebra / notification composition).
 
-### Suggested first PRs (small, high leverage)
+## F. Rules for new code until the roadmap is done
 
-1. ~~`IClientNotifier` + convert `MatchmakingQueue`/`GroupManager` notification call sites.~~ **Done.**
-2. ~~Stage-1 kickoff: merge `LobbyServerProtocolBase` into `LobbyServerProtocol`, add the
-   handler-set snapshot test, extract `StoreModule` as the pilot (pure account math,
-   tested against mock DAOs).~~ **Done.**
-3. Fix `PatchAccountData` return value + dedupe (removes a DB write per login).
-4. Deduplicate `SessionManager` lock/concurrent-dictionary idiom, document the invariant.
-5. Extract `TeamAssembler` from `Game` with tests around `CheckDuplicatedAndFill`
-   (historically bug-prone: dodge/fill edge cases).
+- New stateful logic is an instance class with constructor parameters, registered in
+  `CentralServer.Init`; no new static managers and no new `Get()` singletons.
+- New handlers go into a module; modules take interfaces, not `X.Instance`.
+- Do not hand out or accept `LobbyServerProtocol` outside `LobbyServer/Session`; grow
+  `IClientConnection` or use `IClientNotifier`.
+- New draft or character-selection rules are written as pure functions with their own
+  tests (as `GetDraftPhases` and `PickCharacter` were), so they move cleanly in Stage 4.
+
+## G. Decisions from completed stages still worth knowing
+
+- Modules that need other modules get them through their constructor from the composition
+  root (`CharacterModule` takes `MatchmakingModule` and `GameLifecycleModule`), not
+  through `IClientConnection`.
+- `Status` (`PlayerOnlineStatus`) and the game callbacks (`OnStartGame`, `OnGameAssigned`,
+  `SendGameUnassignmentNotification`) deliberately live on the connection, not in
+  `GameLifecycleModule`.
+- `IClientNotifier` methods are no-ops for offline accounts, mirroring the old
+  `?.Send(...)` call sites.
+- `IHandlerRegistry.Register` throws on a duplicate message type; two modules cannot
+  claim the same message.
+- Manager `Instance`s are pre-initialized so that tests work without `CentralServer.Init`;
+  this is what `TestLobby` (3a) replaces.

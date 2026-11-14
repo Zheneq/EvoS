@@ -7,6 +7,10 @@
   teardown — see the memory note about the formerly flaky teardown; suite failures are
   real regressions now).
 - `Tests/Lib/TestAccountHelper.cs` — account fixtures.
+- `Tests/Lib/RecordingClientConnection.cs` — fake `IClientConnection` that records what a
+  module sends; what the module tests are built on.
+- `Tests/Lib/RecordingClientNotifier.cs` — fake `IClientNotifier`, installed for the
+  duration of a test with `ClientNotifierScope`.
 - `Tests/DataAccess/DbTestFramework.cs` — harness for DAO tests (Mongo-backed DAOs and
   cached decorators).
 
@@ -14,11 +18,25 @@
 
 | Test | Target | Enabler |
 |------|--------|---------|
-| `EloTest` | `Elo` | delegate-based providers (`EvosDelegates`) |
-| `MatchmakerTest` | `MatchmakerRanked` | ctor-injected `AccountDao` + config `Func` |
+| `StoreModuleTest`, `AccountModuleTest`, `TelemetryModuleTest`, `FriendModuleTest`, `GroupModuleTest`, `MatchmakingModuleTest`, `CharacterModuleTest`, `GameLifecycleModuleTest` | lobby handler modules (doc 03) | module constructed over `RecordingClientConnection`, mock DAO mode; managers through their static `Instance` |
+| `LobbyHandlerRegistrationTest` | the set of message types the lobby handles (wire contract snapshot) | `LobbyServerProtocol` constructed without a socket |
+| `InviteRulesTest` | checks shared by group and custom game invites | static rules, `RecordingClientConnection` |
+| `CustomGameInvitesTest` | pending invite bookkeeping | plain instance class |
+| `CustomGameManagerTest` | joining as invitee / spectator fallback, invite cleanup | static manager, `ClientNotifierScope` |
+| `PracticeManagerTest` | character checks before a practice game starts | static manager, mock DAO mode |
+| `DraftPhasesTest` | draft phase order for regular, no-ban and multilancer rosters | pure static `Game.GetDraftPhases` |
+| `DraftBotPickTest`, `DraftTradeTest` | bot picks on deck, trading slot resolution | `TestGame : PvpGame(null)` with hand-built roster and draft state |
+| `CharacterSelectionTest` | `CharacterRules`, character updates per game status | `TestGame : PvpGame(null)` |
 | `QueuePenaltyManagerTest`, `QueuePriorityManagerTest` | penalty/priority logic | mock DAO mode |
 | `QueuePenaltyIssueTest` | when leavers are penalized and pardoned | `TestGame : Game` driven through protected members (`OnStatusUpdate`, `CancelMatch`, setters), mock DAO mode, `ClientNotifierScope` |
-| `LoginManagerTest` | registration/login rules | mock DAO mode |
+| `TrustWarManagerTest` | who earns points (proxies, bots) | `TestGame : PvpGame`, `ClientNotifierScope` |
+| `GroupManagerNotifierTest` | group broadcast fan-out | `ClientNotifierScope` |
+| `SessionManagerTest` | `HasActiveSession` only | static forwarders |
+| `EloTest` | `Elo` | delegate-based providers (`EvosDelegates`) |
+| `MatchmakerTest` | `MatchmakerRanked` | ctor-injected `AccountDao` + config `Func` |
+| `AsymmetricSubTypeTest`, `GameSubTypeJsonTest`, `QueueRequirementMinClientVersionTest`, `QueueRequirementProtocolDependentTest` | sub type config loading, queue requirements | pure / JSON round trips |
+| `ProtocolPatcherTest` | every message carrying requirements is patched; shared objects are not mutated | pure, reflection over message types |
+| `LoginManagerTest`, `PatchAccountDataTest`, `InventoryManagerTest` | registration/login rules, account patching on login, unlock lists | mock DAO mode |
 | `EvosAuthTest`, `AuthTicketTest`, `GameServerAuthTest`, `GameServerKeyManagerTest` | JWT/ticket/game-server auth | mostly pure crypto/logic |
 | `EvosConfigurationTest` | startup validation | internal overloads taking values |
 | `LogRedactionTest` | log masking | pure |
@@ -26,18 +44,27 @@
 
 ## What is not covered (and why)
 
-The entire connection-facing core: `LobbyServerProtocol` handlers, `Game` lifecycle (apart
-from the leave penalty rules), `SessionManager`, `GroupManager`, `MatchmakingQueue`
-orchestration, `ChatManager`, `CustomGameManager`. Root causes:
+- The four draft request handlers (hover, ban, select, trade) — the last handlers still on
+  `LobbyServerProtocol`, which needs a socket to do anything.
+- A draft or a game start run end to end: the phase loop and the start flows
+  (`PvpGame.StartGameAsync`, `CustomGame.StartCustomGameAsync`) wait on real `Task.Delay`s.
+- `Game` team assembly, duplicate resolution, cancellation and finalization, beyond what
+  the penalty tests reach.
+- `MatchmakingQueue` orchestration, `ChatManager`, `ServerManager`/`GameManager`,
+  `BridgeServerProtocol`, the API controllers, Discord.
+- `SessionManager` and `GroupManager` beyond the narrow cases above.
 
-1. Logic lives on live websocket connection objects (`LobbyServerProtocol : WebSocketBehaviorBase`)
-   — you can't construct one meaningfully without a socket.
-2. Static managers with process-wide state and cross-calls — no seams to isolate one
-   subsystem; state leaks between tests.
+Root causes:
+
+1. Static managers with process-wide state and cross-calls. Tests reach them through
+   `X.Instance`, which every test in the process shares, so state can leak between tests
+   and a subsystem cannot be built in isolation.
+2. `Game` is reachable only by subclassing it and driving protected members, with a null
+   server.
 3. `DB.Get()` / `EvosConfiguration` / `GameWideData` static access inside business logic.
 4. Time (`DateTime.Now/UtcNow`) and `Task.Delay` used directly (draft phase timers,
-   server shutdown delays) — untestable without abstraction.
+   start flows, server shutdown delays).
 
-The tested islands (matchmaker, Elo, penalties, auth) demonstrate the house style that
-works: constructor-inject DAOs/config with static-default convenience constructors.
-The refactoring roadmap (doc 12) generalizes exactly that pattern.
+Doc 12 addresses these in order: `DraftController` with an injected delay (Stage 4a),
+constructor injection everywhere with a per-test `TestLobby` graph replacing the shared
+`Instance`s (Stage 3), and the rest of the `Game` split (Stage 4b–4d).
