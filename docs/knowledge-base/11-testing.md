@@ -42,6 +42,7 @@
 | `DraftModuleTest` | draft requests: response type and content per result, not drafting, wrong phase | module from `TestLobby` over `RecordingClientConnection` + `TestGame : PvpGame(null)` with a controller attached (the module needs a `Game` for `CurrentGame`) |
 | `CharacterSelectionTest` | `CharacterRules`, character updates per game status | `TestGame : PvpGame(null)` |
 | `QueuePenaltyManagerTest`, `QueuePriorityManagerTest` | penalty/priority logic | mock DAO mode |
+| `GameRegistryReconnectTest` | a reconnecting game server re-attaches to its game; first connections and unknown process codes leave games alone | fresh `ServerManager` + `GameManager(pool)` pair, `BridgeServerProtocol` without a socket |
 | `QueuePenaltyIssueTest` | when leavers are penalized and pardoned | `TestGame : Game` driven through protected members (`OnStatusUpdate`, `CancelMatch`, setters), mock DAO mode, `ClientNotifierScope` |
 | `TrustWarManagerTest` | who earns points (proxies, bots) | `TestGame : PvpGame`, `ClientNotifierScope` |
 | `GroupManagerNotifierTest` | group broadcast fan-out | `ClientNotifierScope` |
@@ -62,7 +63,8 @@
   `CustomGame.StartCustomGameAsync`) wait on real `Task.Delay`s.
 - `Game` team assembly, duplicate resolution, cancellation and finalization, beyond what
   the penalty tests reach.
-- `MatchmakingQueue` orchestration, `ChatManager`, `ServerManager`/`GameManager`,
+- `MatchmakingQueue` orchestration, `ChatManager`, `ServerManager`/`GameManager` beyond
+  server reconnection,
   `BridgeServerProtocol`, the API controllers, Discord.
 - `SessionManager` and `GroupManager` beyond the narrow cases above.
 

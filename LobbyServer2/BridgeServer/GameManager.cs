@@ -14,8 +14,9 @@ public class GameManager : IGameRegistry
 {
     private static readonly ILog log = LogManager.GetLogger(typeof(GameManager));
 
-    public static GameManager Instance { get; internal set; } = new GameManager();
+    public static GameManager Instance { get; internal set; } = new GameManager(ServerManager.Instance);
 
+    private readonly IServerPool _serverPool;
     private readonly ConcurrentDictionary<string, Game> _games = new ConcurrentDictionary<string, Game>();
 
     private static readonly Gauge GameNum = Metrics
@@ -43,13 +44,18 @@ public class GameManager : IGameRegistry
         });
     }
 
+    public GameManager(IServerPool serverPool)
+    {
+        _serverPool = serverPool;
+        _serverPool.OnServerReconnected += ReconnectServerCore;
+    }
+
     // --- Static forwarders (keep existing call sites compiling) ---
 
     public static PvpGame CreatePvpGame() => Instance.CreatePvpGameCore();
     public static bool RegisterGame(string processCode, Game game) => Instance.RegisterGameCore(processCode, game);
     public static bool UnregisterGame(string processCode) => Instance.UnregisterGameCore(processCode);
     public static Game GetGameWithPlayer(long accountId) => Instance.GetGameWithPlayerCore(accountId);
-    public static void ReconnectServer(BridgeServerProtocol server) => Instance.ReconnectServerCore(server);
     public static List<Game> GetGames() => Instance.GetGamesCore();
     public static Dictionary<string, int> GetRunningGamesNum(GameType gameType) => Instance.GetRunningGamesNumCore(gameType);
     public static int GetRunningGamesNum() => Instance.GetRunningGamesNumCore();
@@ -61,7 +67,6 @@ public class GameManager : IGameRegistry
     bool IGameRegistry.RegisterGame(string processCode, Game game) => RegisterGameCore(processCode, game);
     bool IGameRegistry.UnregisterGame(string processCode) => UnregisterGameCore(processCode);
     Game IGameRegistry.GetGameWithPlayer(long accountId) => GetGameWithPlayerCore(accountId);
-    void IGameRegistry.ReconnectServer(BridgeServerProtocol server) => ReconnectServerCore(server);
     List<Game> IGameRegistry.GetGames() => GetGamesCore();
     Dictionary<string, int> IGameRegistry.GetRunningGamesNum(GameType gameType) => GetRunningGamesNumCore(gameType);
     int IGameRegistry.GetRunningGamesNum() => GetRunningGamesNumCore();
@@ -72,7 +77,7 @@ public class GameManager : IGameRegistry
     private PvpGame CreatePvpGameCore()
     {
         // Get a server
-        BridgeServerProtocol server = ServerManager.GetServer();
+        BridgeServerProtocol server = _serverPool.GetServer();
         if (server == null)
         {
             log.Info($"No available server for pvp game");

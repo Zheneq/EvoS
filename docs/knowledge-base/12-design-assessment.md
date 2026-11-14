@@ -15,11 +15,11 @@ removed in that review; they are in the git history of this file.
 |-------|-------|--------------|
 | 1 – Handler modules | Done | `LobbyServerProtocol` registers no handlers; the draft ones moved to `DraftModule` (plan 02) |
 | 2 – `IClientNotifier` | Done | Two small leaks of the concrete connection type (see B4) |
-| 3 – De-static the managers | **Interfaces and shims**; one composition root (`LobbyServices`) and one test construction point (`TestLobby`) (plan 05) | ~200 static call sites; cycles between managers; several managers not converted at all (see C, Stage 3) |
+| 3 – De-static the managers | **Interfaces and shims**; one composition root (`LobbyServices`) and one test construction point (`TestLobby`) (plan 05); the server ↔ game cycle is broken (plan 06) | ~200 static call sites; the remaining cycles between managers; several managers not converted at all (see C, Stage 3) |
 | 4 – Split `Game` | 4a done: the draft is a `DraftController` (state, phase loop, requests, one lock) that reaches the game through `IDraftHost` and waits on an injected `TimeProvider` (plans 01–04) | 4b–4d; `Game.cs` is 1,410 lines (was 1,997) |
 | 5 – Hygiene | `PatchAccountData` and the temp-account fallback done | Everything else |
 
-Tests: 502, all passing. New features mostly came with tests, and the tests show where the
+Tests: 505, all passing. New features mostly came with tests, and the tests show where the
 seams are missing: draft and character selection tests subclass `PvpGame(null)` to reach
 protected members (`DraftBotPickTest`, `DraftTradeTest`, `CharacterSelectionTest`,
 `QueuePenaltyIssueTest`).
@@ -248,11 +248,17 @@ it). All tests build modules, connections and the protocol through `TestLobby`, 
 hands out the shared `X.Instance`s; it becomes a per-test graph as 3c converts the
 managers, without the tests changing again.
 
-**3b. Break the cycles** (each is a small change on its own):
+**3b. Break the cycles** (each is a small change on its own). The pattern: the lower
+service exposes an instance event on its interface; the higher one takes the lower one in
+its constructor and subscribes there; the pre-initialized static is built the same way
+(`new GameManager(ServerManager.Instance)`), so each pair is wired only to itself. No
+static events. `BindStaticInstances` resolves every service before replacing any
+`Instance`, because constructing the first container instance of a manager runs its
+static initializer, which must still see the pre-initialized instances of the others.
 
 | Cycle | Today | Break |
 |-------|-------|-------|
-| Server ↔ Game | `ServerManager.AddServer` calls `GameManager.ReconnectServer` | `IServerPool.ServerAdded` event; the game registry subscribes |
+| Server ↔ Game | `ServerManager.AddServer` calls `GameManager.ReconnectServer` | Done (plan 06): `IServerPool.ServerReconnected` event, raised still under the pool lock; `GameManager(IServerPool)` subscribes |
 | Session ↔ Group | `SessionManager` creates the solo group on connect; `GroupManager` reads connections | Group subscribes to the existing `OnPlayerConnected` event |
 | Group ↔ Matchmaking | `GroupManager` removes groups from the queue | Group raises a membership-changed event; matchmaking subscribes |
 | Penalty ↔ Matchmaking | `QueuePenaltyManager` removes the group from the queue | The penalty service raises a "queue block applied" event (alongside the existing `OnPenalty`/`OnPardon` report events); matchmaking subscribes. Done in 3c with the penalty service conversion, not in 3b: a static event would be handled by two generations of instances during startup |

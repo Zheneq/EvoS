@@ -17,6 +17,8 @@ namespace CentralServer.BridgeServer
 
         private readonly Dictionary<string, BridgeServerProtocol> _serverPool = new Dictionary<string, BridgeServerProtocol>();
 
+        public event Action<BridgeServerProtocol> OnServerReconnected;
+
         // --- Static forwarders (keep existing call sites compiling) ---
 
         public static void AddServer(BridgeServerProtocol gameServer) => Instance.AddServerCore(gameServer);
@@ -54,7 +56,9 @@ namespace CentralServer.BridgeServer
                 gameServer.OnGameEnded += async (server, _, _) => await DisconnectServer(server);
                 if (isReconnection || gameServer.IsPrivate)
                 {
-                    GameManager.ReconnectServer(gameServer);
+                    // Raised under the lock, where the game registry used to be called directly.
+                    // TODO candidate to move out of the lock
+                    OnServerReconnected?.Invoke(gameServer);
                 }
             }
         }

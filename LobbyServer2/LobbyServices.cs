@@ -25,10 +25,20 @@ public static class LobbyServices
     // TODO remove these statics, rely on DI
     public static void BindStaticInstances(IServiceProvider services)
     {
-        SessionManager.Instance = (SessionManager)services.GetRequiredService<ISessionRegistry>();
-        GroupManager.Instance = (GroupManager)services.GetRequiredService<IGroupRegistry>();
-        ServerManager.Instance = (ServerManager)services.GetRequiredService<IServerPool>();
-        GameManager.Instance = (GameManager)services.GetRequiredService<IGameRegistry>();
-        MatchmakingManager.Instance = (MatchmakingManager)services.GetRequiredService<IMatchmakingManager>();
+        // Resolve everything before replacing any Instance. Constructing a manager runs its type's
+        // static initializer, which builds the pre-initialized instance from the other managers'
+        // current Instances; those must still be the pre-initialized ones, or that throwaway
+        // instance would subscribe to the container's services' events.
+        var sessions = (SessionManager)services.GetRequiredService<ISessionRegistry>();
+        var groups = (GroupManager)services.GetRequiredService<IGroupRegistry>();
+        var servers = (ServerManager)services.GetRequiredService<IServerPool>();
+        var games = (GameManager)services.GetRequiredService<IGameRegistry>();
+        var matchmaking = (MatchmakingManager)services.GetRequiredService<IMatchmakingManager>();
+
+        SessionManager.Instance = sessions;
+        GroupManager.Instance = groups;
+        ServerManager.Instance = servers;
+        GameManager.Instance = games;
+        MatchmakingManager.Instance = matchmaking;
     }
 }

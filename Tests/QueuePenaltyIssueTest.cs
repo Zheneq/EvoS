@@ -588,7 +588,7 @@ public class QueuePenaltyIssueTest : EvosTest
         using ClientNotifierScope _ = new();
         TestGame game = new(draft: false, GameStatus.Started, MakeAccounts(PlayerCount));
         Leave(game, 0);
-        IGameRegistry registry = new GameManager();
+        IGameRegistry registry = new GameManager(new ServerManager());
         registry.RegisterGame(game.ProcessCode, game);
 
         registry.StopAllGames();
@@ -603,7 +603,7 @@ public class QueuePenaltyIssueTest : EvosTest
         TestGame game = new(draft: false, GameStatus.Started, MakeAccounts(PlayerCount));
         LeaveEarly(game, 0);
         game.End(GameResult.TeamAWon);
-        IGameRegistry registry = new GameManager();
+        IGameRegistry registry = new GameManager(new ServerManager());
         registry.RegisterGame(game.ProcessCode, game);
 
         registry.StopAllGames();

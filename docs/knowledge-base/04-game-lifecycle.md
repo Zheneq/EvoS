@@ -32,8 +32,10 @@ state, handle disconnect/reconnect/dodge, and finalize results (stats, Elo, Disc
    `GameServerAuth.VerifySignature` gates registration.
 3. Key fingerprint status decides: Approved → `ServerManager.AddServer`; Pending → held in
    `GameServerKeyManager` until an admin approves (admin API / UI); Declined/Revoked → reject.
-4. Reconnecting servers (same process code) re-bind to their existing `Game` via
-   `GameManager.ReconnectServer`.
+4. Reconnecting servers (same process code, or a server that reports itself private, i.e.
+   mid-game, e.g. after a lobby restart) re-bind to their existing `Game`: `ServerManager`
+   raises `IServerPool.ServerReconnected`, which `GameManager` subscribes to in its
+   constructor.
 
 ## Match lifecycle (PvP)
 
