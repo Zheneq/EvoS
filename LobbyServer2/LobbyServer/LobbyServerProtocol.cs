@@ -220,7 +220,7 @@ namespace CentralServer.LobbyServer
             _gameLifecycle = new GameLifecycleModule(this, _sessionRegistry, _groupRegistry, _gameRegistry);
 
             ILobbyModule[] modules = [
-                new LoginModule(this),
+                new LoginModule(this, _sessionRegistry, _groupRegistry),
                 new ChatModule(this),
                 new StoreModule(this),
                 new TelemetryModule(this, _sessionRegistry),

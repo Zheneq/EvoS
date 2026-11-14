@@ -41,7 +41,7 @@ public sealed class TestLobby
         return conn;
     }
 
-    public LoginModule LoginModule(IClientConnection conn) => new(conn);
+    public LoginModule LoginModule(IClientConnection conn) => new(conn, Sessions, Groups);
     public ChatModule ChatModule(IClientConnection conn) => new(conn);
     public StoreModule StoreModule(IClientConnection conn) => new(conn);
     public TelemetryModule TelemetryModule(IClientConnection conn) => new(conn, Sessions);

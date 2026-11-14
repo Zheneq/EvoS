@@ -22,6 +22,14 @@ public interface ISessionRegistry
     long? GetOnlinePlayerByHandleOrUsername(string handleOrUsername);
     LobbySessionInfo CreateSession(long accountId, LobbySessionInfo connectingSessionInfo,
         IPAddress ipAddress, bool hasLiveGame, bool rejectIfActive = false);
+
+    /// <summary>
+    /// A client registered on its websocket: checks it against the session <see cref="CreateSession"/> made,
+    /// initializes the connection and registers it. Throws <c>RegisterGameException</c> if the session is
+    /// missing or stale or the account is banned.
+    /// </summary>
+    void OnPlayerConnect(IClientConnection client, RegisterGameClientRequest registerRequest);
+
     LobbySessionInfo? GetDisconnectedSessionInfo(long accountId);
     LobbySessionInfo? KillSession(long accountId);
     void Broadcast(WebSocketMessage message);

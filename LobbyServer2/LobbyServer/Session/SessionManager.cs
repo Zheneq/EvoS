@@ -100,46 +100,6 @@ namespace CentralServer.LobbyServer.Session
         // Static lifecycle methods — not on the interface; access state via Instance
         // -----------------------------------------------------------------------
 
-        public static void OnPlayerConnect(IClientConnection client, RegisterGameClientRequest registerRequest)
-        {
-            lock (Instance.SessionInfos)
-            {
-                if (registerRequest.SessionInfo == null)
-                    throw new RegisterGameException("Session Info not received");
-                if (registerRequest.SessionInfo.SessionToken == 0)
-                    throw new RegisterGameException("Session Info not received");
-
-                LobbySessionInfo sessionInfo = Instance.ConnectingSessions.GetValueOrDefault(registerRequest.SessionInfo.AccountId)?.sessionInfo;
-
-                if (sessionInfo == null)
-                    throw new RegisterGameException("Session not found. User not logged"); // Session not found
-                if (sessionInfo.SessionToken != registerRequest.SessionInfo.SessionToken)
-                    throw new RegisterGameException("This session is not valid anymore"); // Session token do not match
-
-                long accountId = sessionInfo.AccountId;
-
-                PersistedAccountData account = DB.Get().AccountDao.GetAccount(accountId);
-
-                AdminManager.Get().UpdatePenalties(accountId);
-                if (account.AdminComponent.Locked)
-                {
-                    throw new RegisterGameException("This account is temporarily banned. Please, try again later.");
-                }
-
-                client.Initialize(account.AccountId, account.UserName, sessionInfo.SessionToken);
-
-                Instance.OnSessionStarting?.Invoke(client.AccountId);
-
-                Instance.SessionInfos.TryRemove(client.AccountId, out _);
-                Instance.SessionInfos.TryAdd(client.AccountId, new SessionInfo
-                {
-                    conn = client,
-                    session = sessionInfo
-                });
-                Instance.ConnectingSessions.TryRemove(client.AccountId, out _);
-            }
-        }
-
         public static void OnPlayerDisconnect(LobbyServerProtocol client)
         {
             lock (Instance.SessionInfos)
@@ -252,6 +212,9 @@ namespace CentralServer.LobbyServer.Session
         LobbySessionInfo ISessionRegistry.CreateSession(long accountId, LobbySessionInfo connectingSessionInfo, IPAddress ipAddress, bool hasLiveGame, bool rejectIfActive)
             => CreateSessionCore(accountId, connectingSessionInfo, ipAddress, hasLiveGame, rejectIfActive);
 
+        void ISessionRegistry.OnPlayerConnect(IClientConnection client, RegisterGameClientRequest registerRequest)
+            => OnPlayerConnectCore(client, registerRequest);
+
         LobbySessionInfo? ISessionRegistry.GetDisconnectedSessionInfo(long accountId)
             => GetDisconnectedSessionInfoCore(accountId);
 
@@ -264,6 +227,46 @@ namespace CentralServer.LobbyServer.Session
         // -----------------------------------------------------------------------
         // Private core methods — contain the original logic
         // -----------------------------------------------------------------------
+
+        private void OnPlayerConnectCore(IClientConnection client, RegisterGameClientRequest registerRequest)
+        {
+            lock (SessionInfos)
+            {
+                if (registerRequest.SessionInfo == null)
+                    throw new RegisterGameException("Session Info not received");
+                if (registerRequest.SessionInfo.SessionToken == 0)
+                    throw new RegisterGameException("Session Info not received");
+
+                LobbySessionInfo sessionInfo = ConnectingSessions.GetValueOrDefault(registerRequest.SessionInfo.AccountId)?.sessionInfo;
+
+                if (sessionInfo == null)
+                    throw new RegisterGameException("Session not found. User not logged"); // Session not found
+                if (sessionInfo.SessionToken != registerRequest.SessionInfo.SessionToken)
+                    throw new RegisterGameException("This session is not valid anymore"); // Session token do not match
+
+                long accountId = sessionInfo.AccountId;
+
+                PersistedAccountData account = DB.Get().AccountDao.GetAccount(accountId);
+
+                AdminManager.Get().UpdatePenalties(accountId);
+                if (account.AdminComponent.Locked)
+                {
+                    throw new RegisterGameException("This account is temporarily banned. Please, try again later.");
+                }
+
+                client.Initialize(account.AccountId, account.UserName, sessionInfo.SessionToken);
+
+                OnSessionStarting?.Invoke(client.AccountId);
+
+                SessionInfos.TryRemove(client.AccountId, out _);
+                SessionInfos.TryAdd(client.AccountId, new SessionInfo
+                {
+                    conn = client,
+                    session = sessionInfo
+                });
+                ConnectingSessions.TryRemove(client.AccountId, out _);
+            }
+        }
 
         private IClientConnection? GetClientConnectionCore(long accountId)
         {

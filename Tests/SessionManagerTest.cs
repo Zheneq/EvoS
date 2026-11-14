@@ -16,8 +16,8 @@ namespace Tests;
 /// <summary>
 /// Tests for <see cref="SessionManager"/>: <see cref="SessionManager.HasActiveSession"/>, which a fresh login polls
 /// while waiting out the session of a crashed client (on its own instance, leaving the global one empty), and
-/// starting sessions, which goes through the global instance because <see cref="SessionManager.OnPlayerConnect"/>
-/// is static.
+/// starting sessions, which goes through the global instance because the global <see cref="GroupManager"/>
+/// listens to its <see cref="ISessionRegistry.OnSessionStarting"/>.
 /// Joined to [Collection("ClientNotifierSeam")] because starting a session creates a group in the
 /// process-global <see cref="GroupManager"/>.
 /// </summary>
@@ -38,7 +38,7 @@ public class SessionManagerTest(ITestOutputHelper output) : EvosTest(output)
     {
         LobbySessionInfo session = _lobby.Sessions.CreateSession(accountId, null, IPAddress.Loopback, hasLiveGame: false);
         RecordingClientConnection conn = _lobby.Connect(accountId);
-        SessionManager.OnPlayerConnect(conn, new RegisterGameClientRequest
+        _lobby.Sessions.OnPlayerConnect(conn, new RegisterGameClientRequest
         {
             SessionInfo = new LobbySessionInfo { AccountId = accountId, SessionToken = session.SessionToken }
         });

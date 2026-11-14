@@ -33,8 +33,15 @@ public class LoginModule : ILobbyModule
     private static readonly ILog log = LogManager.GetLogger(typeof(LoginModule));
     private static readonly Lazy<string> CachedPatchNotes = new(FetchGithubPatchNotes);
     private readonly IClientConnection _conn;
+    private readonly ISessionRegistry _sessionRegistry;
+    private readonly IGroupRegistry _groupRegistry;
 
-    public LoginModule(IClientConnection conn) { _conn = conn; }
+    public LoginModule(IClientConnection conn, ISessionRegistry sessionRegistry, IGroupRegistry groupRegistry)
+    {
+        _conn = conn;
+        _sessionRegistry = sessionRegistry;
+        _groupRegistry = groupRegistry;
+    }
 
     public void Register(IHandlerRegistry registry)
     {
@@ -52,10 +59,10 @@ public class LoginModule : ILobbyModule
 
         try
         {
-            SessionManager.OnPlayerConnect(_conn, request);
+            _sessionRegistry.OnPlayerConnect(_conn, request);
 
             log.Info(string.Format(Messages.LoginSuccess, _conn.UserName));
-            LobbySessionInfo sessionInfo = SessionManager.GetSessionInfo(request.SessionInfo.AccountId);
+            LobbySessionInfo sessionInfo = _sessionRegistry.GetSessionInfo(request.SessionInfo.AccountId);
             RegisterGameClientResponse response = new RegisterGameClientResponse
             {
                 AuthInfo = request.AuthInfo, // Send original, if some data is missing on a new instance the game fails
@@ -78,9 +85,9 @@ public class LoginModule : ILobbyModule
             SendLobbyServerReadyNotification();
 
             // Send 'Connected to lobby server' notification to chat
-            foreach (long playerAccountId in SessionManager.GetOnlinePlayers())
+            foreach (long playerAccountId in _sessionRegistry.GetOnlinePlayers())
             {
-                LobbyServerProtocol player = SessionManager.GetClientConnection(playerAccountId);
+                LobbyServerProtocol player = SessionManager.GetClientConnection(playerAccountId); // TODO plan 10
                 if (player != null && !player.IsInGame())
                 {
                     player.SendSystemMessage($"<link=name>{sessionInfo.Handle}</link> connected to lobby server");
@@ -135,7 +142,7 @@ public class LoginModule : ILobbyModule
             EnvironmentType = EnvironmentType.External,
             FactionCompetitionStatus = factionCompetitionNotification,
             FriendStatus = FriendManager.GetFriendStatusNotification(_conn.AccountId),
-            GroupInfo = GroupManager.GetGroupInfo(_conn.AccountId),
+            GroupInfo = _groupRegistry.GetGroupInfo(_conn.AccountId),
             SeasonChapterQuests = QuestManager.GetSeasonQuestDataNotification(),
             ServerQueueConfiguration = GetServerQueueConfigurationUpdateNotification(),
             Status = GetLobbyStatusNotification(account)
