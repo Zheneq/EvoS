@@ -22,6 +22,8 @@ namespace Tests;
 [Collection("ClientNotifierSeam")]
 public class MatchmakingModuleTest : EvosTest
 {
+    private readonly TestLobby _lobby = new();
+
     public MatchmakingModuleTest(ITestOutputHelper output) : base(output)
     {
     }
@@ -50,21 +52,21 @@ public class MatchmakingModuleTest : EvosTest
         }
     }
 
-    private static (MatchmakingModule module, RecordingClientConnection conn, CapturingRegistry registry)
+    private (MatchmakingModule module, RecordingClientConnection conn, CapturingRegistry registry)
         MakeModuleWithRegistry(long accountId)
     {
-        var conn = new RecordingClientConnection { AccountId = accountId };
-        var module = new MatchmakingModule(conn, MatchmakingManager.Instance);
+        var conn = _lobby.Connect(accountId);
+        var module = _lobby.MatchmakingModule(conn);
         var registry = new CapturingRegistry();
         module.Register(registry);
         return (module, conn, registry);
     }
 
-    private static (MatchmakingModule module, RecordingClientConnection conn)
+    private (MatchmakingModule module, RecordingClientConnection conn)
         MakeModule(long accountId)
     {
-        var conn = new RecordingClientConnection { AccountId = accountId };
-        var module = new MatchmakingModule(conn, MatchmakingManager.Instance);
+        var conn = _lobby.Connect(accountId);
+        var module = _lobby.MatchmakingModule(conn);
         return (module, conn);
     }
 

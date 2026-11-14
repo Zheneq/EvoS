@@ -9,6 +9,13 @@
 - `Tests/Lib/TestAccountHelper.cs` — account fixtures.
 - `Tests/Lib/RecordingClientConnection.cs` — fake `IClientConnection` that records what a
   module sends; what the module tests are built on.
+- `Tests/Lib/TestLobby.cs` — the one place tests construct connections (`Connect`), lobby
+  modules (one factory per module) and `LobbyServerProtocol` (`Protocol`), and reach the
+  managers (`Sessions`, `Groups`, `Servers`, `Games`, `Matchmaking`). A constructor
+  change touches this file, not the tests. Test classes keep one per test
+  (`private readonly TestLobby _lobby = new();`). For now its services are the shared
+  static `X.Instance`s; it becomes a fresh graph per test as the managers are converted
+  (doc 12, Stage 3c).
 - `Tests/Lib/RecordingClientNotifier.cs` — fake `IClientNotifier`, installed for the
   duration of a test with `ClientNotifierScope`.
 - `Tests/Lib/FakeDraftHost.cs` — fake `IDraftHost`: a roster to fill in, settable game
@@ -23,8 +30,8 @@
 
 | Test | Target | Enabler |
 |------|--------|---------|
-| `StoreModuleTest`, `AccountModuleTest`, `TelemetryModuleTest`, `FriendModuleTest`, `GroupModuleTest`, `MatchmakingModuleTest`, `CharacterModuleTest`, `GameLifecycleModuleTest` | lobby handler modules (doc 03) | module constructed over `RecordingClientConnection`, mock DAO mode; managers through their static `Instance` |
-| `LobbyHandlerRegistrationTest` | the set of message types the lobby handles (wire contract snapshot) | `LobbyServerProtocol` constructed without a socket |
+| `StoreModuleTest`, `AccountModuleTest`, `TelemetryModuleTest`, `FriendModuleTest`, `GroupModuleTest`, `MatchmakingModuleTest`, `CharacterModuleTest`, `GameLifecycleModuleTest` | lobby handler modules (doc 03) | module from `TestLobby` over a `RecordingClientConnection`, mock DAO mode |
+| `LobbyHandlerRegistrationTest` | the set of message types the lobby handles (wire contract snapshot) | `TestLobby.Protocol()`: `LobbyServerProtocol` constructed without a socket |
 | `InviteRulesTest` | checks shared by group and custom game invites | static rules, `RecordingClientConnection` |
 | `CustomGameInvitesTest` | pending invite bookkeeping | plain instance class |
 | `CustomGameManagerTest` | joining as invitee / spectator fallback, invite cleanup | static manager, `ClientNotifierScope` |
@@ -32,7 +39,7 @@
 | `DraftPhasesTest` | draft phase order for regular, no-ban and multilancer rosters | pure static `DraftController.GetDraftPhases` |
 | `DraftBotPickTest`, `DraftTradeTest` | bot picks on deck, trading slot resolution | `DraftController` over `FakeDraftHost` with hand-built roster and draft state |
 | `DraftControllerTest` | sub-phase timing (full timeout for humans, 5 s for bots, lock-in and match cancellation end the wait, time left in snapshots); `Hover`/`Ban`/`Select`/`Trade` cases; full runs (everyone locks in, only bots, no bans, `ControlAllBots`, AFK pick, hover auto-locked, disconnect, unknown bot); concurrency: requests after a sub-phase closed (the draft held between sub-phases by a `FakeDraftHost` hook), two lock-ins of one character at once, hovers while the draft moves on; a few tests pin current behavior that may be wrong (see doc 12, Stage 4a) | `DraftController` over `FakeDraftHost` and a `FakeTimeProvider` that counts the draft's waits, so a test knows when the draft has set up the next sub-phase |
-| `DraftModuleTest` | draft requests: response type and content per result, not drafting, wrong phase | module over `RecordingClientConnection` + `TestGame : PvpGame(null)` with a controller attached (the module needs a `Game` for `CurrentGame`) |
+| `DraftModuleTest` | draft requests: response type and content per result, not drafting, wrong phase | module from `TestLobby` over `RecordingClientConnection` + `TestGame : PvpGame(null)` with a controller attached (the module needs a `Game` for `CurrentGame`) |
 | `CharacterSelectionTest` | `CharacterRules`, character updates per game status | `TestGame : PvpGame(null)` |
 | `QueuePenaltyManagerTest`, `QueuePriorityManagerTest` | penalty/priority logic | mock DAO mode |
 | `QueuePenaltyIssueTest` | when leavers are penalized and pardoned | `TestGame : Game` driven through protected members (`OnStatusUpdate`, `CancelMatch`, setters), mock DAO mode, `ClientNotifierScope` |

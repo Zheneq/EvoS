@@ -16,6 +16,8 @@ namespace Tests;
 
 public class StoreModuleTest : EvosTest
 {
+    private readonly TestLobby _lobby = new();
+
     public StoreModuleTest(ITestOutputHelper output) : base(output)
     {
     }
@@ -42,11 +44,11 @@ public class StoreModuleTest : EvosTest
         }
     }
 
-    private static (StoreModule module, RecordingClientConnection conn, CapturingRegistry registry)
+    private (StoreModule module, RecordingClientConnection conn, CapturingRegistry registry)
         MakeModule(long accountId)
     {
-        var conn = new RecordingClientConnection { AccountId = accountId };
-        var module = new StoreModule(conn);
+        var conn = _lobby.Connect(accountId);
+        var module = _lobby.StoreModule(conn);
         var registry = new CapturingRegistry();
         module.Register(registry);
         return (module, conn, registry);

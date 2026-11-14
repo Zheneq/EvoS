@@ -15,6 +15,8 @@ namespace Tests;
 // The request logic itself is characterized on the controller.
 public class DraftModuleTest(ITestOutputHelper output) : EvosTest(output)
 {
+    private readonly TestLobby _lobby = new();
+
     private const int RequestId = 42;
     private const CharacterType Mine = CharacterType.Archer;
     private const CharacterType Taken = CharacterType.Rampart;
@@ -88,11 +90,12 @@ public class DraftModuleTest(ITestOutputHelper output) : EvosTest(output)
         }
     }
 
-    private static (RecordingClientConnection conn, CapturingRegistry registry) Connect(TestGame? game)
+    private (RecordingClientConnection conn, CapturingRegistry registry) Connect(TestGame? game)
     {
-        var conn = new RecordingClientConnection { AccountId = game?.AccountId ?? 1, CurrentGame = game! };
+        var conn = _lobby.Connect(game?.AccountId ?? 1);
+        conn.CurrentGame = game!;
         var registry = new CapturingRegistry();
-        new DraftModule(conn).Register(registry);
+        _lobby.DraftModule(conn).Register(registry);
         return (conn, registry);
     }
 

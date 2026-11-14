@@ -22,6 +22,8 @@ namespace Tests;
 [Collection("ClientNotifierSeam")]
 public class GameLifecycleModuleTest : EvosTest
 {
+    private readonly TestLobby _lobby = new();
+
     public GameLifecycleModuleTest(ITestOutputHelper output) : base(output)
     {
     }
@@ -50,21 +52,21 @@ public class GameLifecycleModuleTest : EvosTest
         }
     }
 
-    private static (GameLifecycleModule module, RecordingClientConnection conn, CapturingRegistry registry)
+    private (GameLifecycleModule module, RecordingClientConnection conn, CapturingRegistry registry)
         MakeModuleWithRegistry(long accountId)
     {
-        var conn = new RecordingClientConnection { AccountId = accountId };
-        var module = new GameLifecycleModule(conn, GameManager.Instance);
+        var conn = _lobby.Connect(accountId);
+        var module = _lobby.GameLifecycleModule(conn);
         var registry = new CapturingRegistry();
         module.Register(registry);
         return (module, conn, registry);
     }
 
-    private static (GameLifecycleModule module, RecordingClientConnection conn)
+    private (GameLifecycleModule module, RecordingClientConnection conn)
         MakeModule(long accountId)
     {
-        var conn = new RecordingClientConnection { AccountId = accountId };
-        var module = new GameLifecycleModule(conn, GameManager.Instance);
+        var conn = _lobby.Connect(accountId);
+        var module = _lobby.GameLifecycleModule(conn);
         return (module, conn);
     }
 

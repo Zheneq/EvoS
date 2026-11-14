@@ -44,7 +44,9 @@ The source code for both client and server is available in a sibling repo `hc`.
 1. Configure log4net, validate `EvosConfiguration` and `LoginManager` config (fail fast).
 2. `DB.Get()` — force DB/DAO initialization.
 3. `CentralServer.Init()` (`LobbyServer2/CentralServer.cs`):
-   - ASP.NET Core `WebApplication` with two websocket-accepting routes.
+   - ASP.NET Core `WebApplication` with two websocket-accepting routes. Lobby services
+     are registered by `LobbyServices.AddLobbyServices`; `BindStaticInstances` then points
+     the managers' transitional static `Instance`s at the container's singletons.
    - Eagerly instantiates singletons: `ChatManager`, `DiscordManager`, `StatsApi`, `AdminManager`.
    - Spawns background `PeriodicRunner` tasks: `FriendsTask`, `GroupsTask`, `MatchmakingTask`,
      `ServerStatisticsTask`.

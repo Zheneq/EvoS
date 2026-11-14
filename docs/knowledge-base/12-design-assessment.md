@@ -15,11 +15,11 @@ removed in that review; they are in the git history of this file.
 |-------|-------|--------------|
 | 1 – Handler modules | Done | `LobbyServerProtocol` registers no handlers; the draft ones moved to `DraftModule` (plan 02) |
 | 2 – `IClientNotifier` | Done | Two small leaks of the concrete connection type (see B4) |
-| 3 – De-static the managers | **Interfaces and shims only** | ~200 static call sites; cycles between managers; several managers not converted at all (see C, Stage 3) |
+| 3 – De-static the managers | **Interfaces and shims**; one composition root (`LobbyServices`) and one test construction point (`TestLobby`) (plan 05) | ~200 static call sites; cycles between managers; several managers not converted at all (see C, Stage 3) |
 | 4 – Split `Game` | 4a done: the draft is a `DraftController` (state, phase loop, requests, one lock) that reaches the game through `IDraftHost` and waits on an injected `TimeProvider` (plans 01–04) | 4b–4d; `Game.cs` is 1,410 lines (was 1,997) |
 | 5 – Hygiene | `PatchAccountData` and the temp-account fallback done | Everything else |
 
-Tests: 435, all passing. New features mostly came with tests, and the tests show where the
+Tests: 502, all passing. New features mostly came with tests, and the tests show where the
 seams are missing: draft and character selection tests subclass `PvpGame(null)` to reach
 protected members (`DraftBotPickTest`, `DraftTradeTest`, `CharacterSelectionTest`,
 `QueuePenaltyIssueTest`).
@@ -240,6 +240,14 @@ so they register the same singleton *instances* from the main container. In `Tes
 a `TestLobby` helper builds a fresh graph per test (mock DAOs, `RecordingClientNotifier`),
 replacing the shared `X.Instance` and `ClientNotifierScope`.
 
+Done 2026-11-14 (plan 05), except for the API servers, which move to 3e: their
+controllers are static classes that cannot consume registrations yet.
+`LobbyServices.AddLobbyServices` holds the registrations and
+`LobbyServices.BindStaticInstances` the transitional `X.Instance` assignments (3f deletes
+it). All tests build modules, connections and the protocol through `TestLobby`, which still
+hands out the shared `X.Instance`s; it becomes a per-test graph as 3c converts the
+managers, without the tests changing again.
+
 **3b. Break the cycles** (each is a small change on its own):
 
 | Cycle | Today | Break |
@@ -351,4 +359,4 @@ Scope notes:
 - `IHandlerRegistry.Register` throws on a duplicate message type; two modules cannot
   claim the same message.
 - Manager `Instance`s are pre-initialized so that tests work without `CentralServer.Init`;
-  this is what `TestLobby` (3a) replaces.
+  `TestLobby` hands them out until 3c gives it a per-test graph.

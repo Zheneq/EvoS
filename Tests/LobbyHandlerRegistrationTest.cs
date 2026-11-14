@@ -1,9 +1,4 @@
 using System.Linq;
-using CentralServer.BridgeServer;
-using CentralServer.LobbyServer;
-using CentralServer.LobbyServer.Group;
-using CentralServer.LobbyServer.Matchmaking;
-using CentralServer.LobbyServer.Session;
 using Tests.Lib;
 using Xunit.Abstractions;
 
@@ -99,7 +94,7 @@ public class LobbyHandlerRegistrationTest : EvosTest
             "LobbyGameClientMessages.RankedTradeRequest",
         };
 
-        var proto = new LobbyServerProtocol(SessionManager.Instance, GroupManager.Instance, GameManager.Instance, MatchmakingManager.Instance);
+        var proto = new TestLobby().Protocol();
         var actual = proto.RegisteredMessageTypes
             .Select(t => t.FullName)
             .OrderBy(n => n)

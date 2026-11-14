@@ -19,6 +19,8 @@ namespace Tests;
 [Collection("ClientNotifierSeam")]
 public class GroupModuleTest : EvosTest
 {
+    private readonly TestLobby _lobby = new();
+
     public GroupModuleTest(ITestOutputHelper output) : base(output)
     {
     }
@@ -47,11 +49,11 @@ public class GroupModuleTest : EvosTest
         }
     }
 
-    private static (GroupModule module, RecordingClientConnection conn, CapturingRegistry registry)
+    private (GroupModule module, RecordingClientConnection conn, CapturingRegistry registry)
         MakeModule(long accountId)
     {
-        var conn = new RecordingClientConnection { AccountId = accountId };
-        var module = new GroupModule(conn, GroupManager.Instance);
+        var conn = _lobby.Connect(accountId);
+        var module = _lobby.GroupModule(conn);
         var registry = new CapturingRegistry();
         module.Register(registry);
         return (module, conn, registry);

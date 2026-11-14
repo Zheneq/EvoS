@@ -12,6 +12,8 @@ namespace Tests;
 
 public class TelemetryModuleTest : EvosTest
 {
+    private readonly TestLobby _lobby = new();
+
     public TelemetryModuleTest(ITestOutputHelper output) : base(output)
     {
     }
@@ -37,11 +39,11 @@ public class TelemetryModuleTest : EvosTest
         }
     }
 
-    private static (TelemetryModule module, RecordingClientConnection conn, CapturingRegistry registry)
+    private (TelemetryModule module, RecordingClientConnection conn, CapturingRegistry registry)
         MakeModule(long accountId)
     {
-        var conn = new RecordingClientConnection { AccountId = accountId };
-        var module = new TelemetryModule(conn);
+        var conn = _lobby.Connect(accountId);
+        var module = _lobby.TelemetryModule(conn);
         var registry = new CapturingRegistry();
         module.Register(registry);
         return (module, conn, registry);

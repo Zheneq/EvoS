@@ -1,8 +1,4 @@
-using System;
-using System.Collections.Generic;
-using CentralServer.BridgeServer;
 using CentralServer.LobbyServer.Character;
-using CentralServer.LobbyServer.GameLifecycle;
 using CentralServer.LobbyServer.Group;
 using CentralServer.LobbyServer.Matchmaking;
 using CentralServer.LobbyServer.Session;
@@ -12,7 +8,6 @@ using EvoS.Framework.Network.NetworkMessages;
 using EvoS.Framework.Network.Static;
 using EvoS.Framework.Network.WebSocket;
 using Tests.Lib;
-using Xunit;
 using Xunit.Abstractions;
 
 namespace Tests;
@@ -25,6 +20,8 @@ namespace Tests;
 [Collection("ClientNotifierSeam")]
 public class CharacterModuleTest : EvosTest
 {
+    private readonly TestLobby _lobby = new();
+
     public CharacterModuleTest(ITestOutputHelper output) : base(output)
     {
     }
@@ -53,13 +50,12 @@ public class CharacterModuleTest : EvosTest
         }
     }
 
-    private static (CharacterModule module, MatchmakingModule matchmaking, RecordingClientConnection conn, CapturingRegistry registry)
+    private (CharacterModule module, MatchmakingModule matchmaking, RecordingClientConnection conn, CapturingRegistry registry)
         MakeModuleWithRegistry(long accountId)
     {
-        var conn = new RecordingClientConnection { AccountId = accountId };
-        var matchmaking = new MatchmakingModule(conn, MatchmakingManager.Instance);
-        var gameLifecycle = new GameLifecycleModule(conn, GameManager.Instance);
-        var module = new CharacterModule(conn, matchmaking, gameLifecycle);
+        var conn = _lobby.Connect(accountId);
+        var matchmaking = _lobby.MatchmakingModule(conn);
+        var module = _lobby.CharacterModule(conn, matchmaking);
         var registry = new CapturingRegistry();
         module.Register(registry);
         return (module, matchmaking, conn, registry);
