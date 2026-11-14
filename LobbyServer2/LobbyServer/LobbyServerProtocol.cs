@@ -38,10 +38,9 @@ namespace CentralServer.LobbyServer
     {
         private static readonly ILog log = LogManager.GetLogger(typeof(LobbyServerProtocol));
 
-        public long AccountId { get; set; }
-        public string UserName { get; set; }
+        public long AccountId { get; private set; }
+        public string UserName { get; private set; }
         public long SessionToken { get; private set; }
-        public bool SessionCleaned = false; // tracks clean up methods execution for reconnection
 
         private readonly ISessionRegistry _sessionRegistry;
         private readonly IGroupRegistry _groupRegistry;
@@ -50,29 +49,7 @@ namespace CentralServer.LobbyServer
         private readonly MatchmakingModule _matchmaking;
         private readonly GameLifecycleModule _gameLifecycle;
 
-        public GameType SelectedGameType
-        {
-            get => _matchmaking.SelectedGameType;
-            set => _matchmaking.SelectedGameType = value;
-        }
-
-        public ushort SelectedSubTypeMask
-        {
-            get => _matchmaking.SelectedSubTypeMask;
-            set => _matchmaking.SelectedSubTypeMask = value;
-        }
-
-        public BotDifficulty AllyDifficulty
-        {
-            get => _matchmaking.AllyDifficulty;
-            set => _matchmaking.AllyDifficulty = value;
-        }
-
-        public BotDifficulty EnemyDifficulty
-        {
-            get => _matchmaking.EnemyDifficulty;
-            set => _matchmaking.EnemyDifficulty = value;
-        }
+        public GameType SelectedGameType => _matchmaking.SelectedGameType;
 
         public bool IsReady => _matchmaking.IsReady;
 
@@ -146,24 +123,6 @@ namespace CentralServer.LobbyServer
             LogMessage(">>", message);
         }
 
-        public void SendErrorResponse(WebSocketResponseMessage response, int requestId, string message)
-        {
-            response.Success = false;
-            response.ErrorMessage = message;
-            response.ResponseId = requestId;
-            log.Info($"Sending error response: {message}");
-            Send(response);
-        }
-
-        public void SendErrorResponse(WebSocketResponseMessage response, int requestId, Exception error = null)
-        {
-            response.Success = false;
-            response.ErrorMessage = error?.Message;
-            response.ResponseId = requestId;
-            log.Info("Sending error response", error);
-            Send(response);
-        }
-
         public void Initialize(long accountId, string userName, long sessionToken)
         {
             AccountId = accountId;
@@ -187,11 +146,7 @@ namespace CentralServer.LobbyServer
 
         public bool IsInGroup() => !_groupRegistry.GetPlayerGroup(AccountId)?.IsSolo() ?? false;
 
-        public int GetGroupSize() => _groupRegistry.GetPlayerGroup(AccountId)?.Members.Count ?? 1;
-
         public bool IsInQueue() => _matchmakingManager.IsQueued(_groupRegistry.GetPlayerGroup(AccountId));
-
-        public LobbyServerPlayerInfo PlayerInfo => _gameLifecycle.PlayerInfo;
 
         public CharacterType? ActiveCharacterType => _gameLifecycle.PlayerInfo?.CharacterType;
 
@@ -252,12 +207,7 @@ namespace CentralServer.LobbyServer
             CustomGameManager.Invites.RemoveForInvitee(AccountId);
 
             _sessionRegistry.OnPlayerDisconnect(this);
-
-            if (!SessionCleaned)
-            {
-                SessionCleaned = true;
-                _groupRegistry.LeaveGroup(AccountId, false);
-            }
+            _groupRegistry.LeaveGroup(AccountId, false);
 
             BroadcastRefreshFriendList();
         }
@@ -275,8 +225,6 @@ namespace CentralServer.LobbyServer
         {
             Send(FriendManager.GetFriendStatusNotification(AccountId));
         }
-
-        public void UpdateGroupReadyState() => _matchmaking.UpdateGroupReadyState();
 
         public void BroadcastRefreshGroup(bool resetReadyState = false)
         {
