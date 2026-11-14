@@ -4,18 +4,14 @@ using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 using CentralServer.LobbyServer.Character;
-using CentralServer.LobbyServer.Gamemode;
 using EvoS.Framework.Constants.Enums;
-using EvoS.Framework.DataAccess;
-using EvoS.Framework.Network.NetworkMessages;
 using EvoS.Framework.Network.Static;
 using log4net;
-using CharacterManager = EvoS.DirectoryServer.Character.CharacterManager;
 
 namespace CentralServer.BridgeServer;
 
 // State of a draft (ranked freelancer selection) and the loop that runs its phases
-public class DraftController(Game game)
+public class DraftController(IDraftHost host)
 {
     private static readonly ILog log = LogManager.GetLogger(typeof(DraftController));
 
@@ -29,7 +25,7 @@ public class DraftController(Game game)
     public async Task RunAsync()
     {
         // Initialize unselected player states
-        var unselectedPlayerStates = game.TeamInfo.TeamPlayerInfo.Select(player =>
+        var unselectedPlayerStates = host.Roster.Select(player =>
             new RankedResolutionPlayerState
             {
                 PlayerId = player.PlayerId,
@@ -48,29 +44,28 @@ public class DraftController(Game game)
             FriendlyTeamSelections = new Dictionary<int, CharacterType>(),
             EnemyTeamSelections = new Dictionary<int, CharacterType>(),
             TradeActions = new List<RankedTradeData>(),
-            PlayerIdByImporance = game.TeamInfo.TeamPlayerInfo.Select(p => p.PlayerId).ToList(),
+            PlayerIdByImporance = host.Roster.Select(p => p.PlayerId).ToList(),
         };
 
         // Define phase order
-        bool hasBans = GameModeManager.GetBans(game.GameSubType.LocalizedName);
         // A player controlling all characters of their team has no one to trade with
         List<KeyValuePair<int, FreelancerResolutionPhaseSubType>> phases =
-            GetDraftPhases(game.TeamInfo.TeamPlayerInfo, hasBans, hasTrade: !game.IsControlAllBots);
+            GetDraftPhases(host.Roster, host.HasBans, hasTrade: !host.IsControlAllBots);
 
         bool sendGameInfoNotify = true;
 
         // Process each phase
         foreach (KeyValuePair<int, FreelancerResolutionPhaseSubType> subPhase in phases)
         {
-            if (!game.CheckIfAllParticipantsAreConnected())
+            if (!host.CheckParticipantsConnected())
             {
                 return;
             }
 
             PhaseSubType = subPhase.Value;
 
-            LobbyServerPlayerInfo player1 = GetPlayerInfo(subPhase.Key, game.TeamInfo.TeamPlayerInfo);
-            LobbyServerPlayerInfo player2 = GetPlayerInfo(subPhase.Key + 1, game.TeamInfo.TeamPlayerInfo);
+            LobbyServerPlayerInfo player1 = GetPlayerInfo(subPhase.Key, host.Roster);
+            LobbyServerPlayerInfo player2 = GetPlayerInfo(subPhase.Key + 1, host.Roster);
 
             if (PhaseSubType == FreelancerResolutionPhaseSubType.FREELANCER_TRADE || player1 == null)
             {
@@ -87,7 +82,7 @@ public class DraftController(Game game)
 
             await HandleRankedResolutionSubPhase(PhaseSubType, player1, sendGameInfoNotify);
             sendGameInfoNotify = false;
-            if (game.IsCancelled)
+            if (host.IsCancelled)
             {
                 return;
             }
@@ -112,7 +107,7 @@ public class DraftController(Game game)
                     continue;
                 }
 
-                LobbyServerPlayerInfo player = GetPlayerInfo(playersInDeck.PlayerId - 1, game.TeamInfo.TeamPlayerInfo);
+                LobbyServerPlayerInfo player = GetPlayerInfo(playersInDeck.PlayerId - 1, host.Roster);
                 CharacterType characterType = playersInDeck.Intention;
                 // Let bans be random if they do not select a freelancer (or it was taken in the meantime)
                 if (isBanPhase && (characterType == CharacterType.None || usedCharacterTypes.Contains(characterType)))
@@ -122,7 +117,7 @@ public class DraftController(Game game)
                 else if (characterType == CharacterType.None)
                 {
                     // Cancel Match AFK Player
-                    game.CancelMatch(player.Handle, player.AccountId);
+                    host.CancelMatch(player.Handle, player.AccountId);
                     return;
                 }
                 //Player selected fill but did not lock in, or edge case where "MAYBE" we still have fill
@@ -161,7 +156,7 @@ public class DraftController(Game game)
             foreach (int deckIndex in autoSelectedDeckIndexes)
             {
                 RankedResolutionPlayerState playersInDeck = RankedResolutionPhaseData.PlayersOnDeck[deckIndex];
-                LobbyServerPlayerInfo player = GetPlayerInfo(playersInDeck.PlayerId - 1, game.TeamInfo.TeamPlayerInfo);
+                LobbyServerPlayerInfo player = GetPlayerInfo(playersInDeck.PlayerId - 1, host.Roster);
                 if (isBanPhase)
                 {
                     AddToTeamBanSelection(player, playersInDeck.Intention);
@@ -203,7 +198,7 @@ public class DraftController(Game game)
             || PhaseSubType == FreelancerResolutionPhaseSubType.PICK_FREELANCER2)
         {
             await Task.Delay(DraftEndDelay);
-            if (game.IsCancelled)
+            if (host.IsCancelled)
             {
                 return;
             }
@@ -235,7 +230,7 @@ public class DraftController(Game game)
 
     // -1 for phases where we don't need the player (trade)
     internal static List<KeyValuePair<int, FreelancerResolutionPhaseSubType>> GetDraftPhases(
-        List<LobbyServerPlayerInfo> teamPlayerInfo,
+        IReadOnlyList<LobbyServerPlayerInfo> teamPlayerInfo,
         bool hasBans,
         bool hasTrade)
     {
@@ -302,7 +297,7 @@ public class DraftController(Game game)
         HashSet<CharacterType> teammateCharacters = teamSelections.Values.ToHashSet();
         foreach (RankedResolutionPlayerState state in RankedResolutionPhaseData.PlayersOnDeck)
         {
-            LobbyServerPlayerInfo deckMate = game.GetPlayerById(state.PlayerId);
+            LobbyServerPlayerInfo deckMate = host.GetPlayerById(state.PlayerId);
             if (state.PlayerId != bot.PlayerId
                 && state.Intention != CharacterType.None
                 && deckMate is { IsAIControlled: true }
@@ -328,29 +323,13 @@ public class DraftController(Game game)
     {
         foreach (KeyValuePair<int, CharacterType> selection in selections)
         {
-            LobbyServerPlayerInfo playerInfo = game.TeamInfo.TeamPlayerInfo.Find(p => p.PlayerId == selection.Key);
-            if (!playerInfo.IsAIControlled)
-            {
-                PersistedAccountData account = DB.Get().AccountDao.GetAccount(playerInfo.AccountId);
-                playerInfo.CharacterInfo = LobbyCharacterInfo.Of(account.CharacterData[selection.Value]);
-            }
-            else
+            LobbyServerPlayerInfo playerInfo = host.GetPlayerById(selection.Key);
+            if (playerInfo.IsAIControlled)
             {
                 // Update bots handle
                 playerInfo.Handle = selection.Value.ToString();
-                playerInfo.CharacterInfo = new LobbyCharacterInfo
-                {
-                    CharacterType = selection.Value,
-                    CharacterAbilityVfxSwaps = new CharacterAbilityVfxSwapInfo(),
-                    CharacterCards = CharacterCardInfo.MakeDefault(),
-                    CharacterLevel = 1,
-                    CharacterLoadouts = new List<CharacterLoadout>(),
-                    CharacterMatches = 0,
-                    CharacterMods = CharacterManager.GetDefaultMods(selection.Value),
-                    CharacterSkin = new CharacterVisualInfo(),
-                    CharacterTaunts = new List<PlayerTauntData>()
-                };
             }
+            playerInfo.CharacterInfo = host.GetCharacterInfo(playerInfo, selection.Value);
         }
     }
     
@@ -376,7 +355,7 @@ public class DraftController(Game game)
                 if (index < 0)
                 {
                     log.Error($"Failed to find bot #{player.PlayerId}! Cancelling match");
-                    game.CancelMatch();
+                    host.CancelMatch();
                 }
 
                 RankedResolutionPlayerState state = RankedResolutionPhaseData.UnselectedPlayerStates[index];
@@ -407,7 +386,7 @@ public class DraftController(Game game)
         PlayersInDeck++;
     }
 
-    private static LobbyServerPlayerInfo GetPlayerInfo(int index, List<LobbyServerPlayerInfo> teamPlayerInfo)
+    private static LobbyServerPlayerInfo GetPlayerInfo(int index, IReadOnlyList<LobbyServerPlayerInfo> teamPlayerInfo)
     {
         return index >= 0 && index < teamPlayerInfo.Count ? teamPlayerInfo[index] : null;
     }
@@ -469,7 +448,7 @@ public class DraftController(Game game)
         SendRankedResolutionSubPhase();
         if (sendGameInfoNotify)
         {
-            game.SendGameInfoNotifications();
+            host.SendGameInfoNotifications();
         }
 
         isCancellationRequested = false;
@@ -480,11 +459,11 @@ public class DraftController(Game game)
     private TimeSpan GetSubPhaseTimeout(FreelancerResolutionPhaseSubType subPhase) =>
         subPhase switch
         {
-            FreelancerResolutionPhaseSubType.PICK_BANS1 => game.GameInfo.SelectSubPhaseBan1Timeout,
-            FreelancerResolutionPhaseSubType.PICK_BANS2 => game.GameInfo.SelectSubPhaseBan2Timeout,
-            FreelancerResolutionPhaseSubType.PICK_FREELANCER1 => game.GameInfo.SelectSubPhaseFreelancerSelectTimeout,
-            FreelancerResolutionPhaseSubType.PICK_FREELANCER2 => game.GameInfo.SelectSubPhaseFreelancerSelectTimeout,
-            FreelancerResolutionPhaseSubType.FREELANCER_TRADE => game.GameInfo.SelectSubPhaseTradeTimeout,
+            FreelancerResolutionPhaseSubType.PICK_BANS1 => host.Timeouts.Ban1,
+            FreelancerResolutionPhaseSubType.PICK_BANS2 => host.Timeouts.Ban2,
+            FreelancerResolutionPhaseSubType.PICK_FREELANCER1 => host.Timeouts.Pick,
+            FreelancerResolutionPhaseSubType.PICK_FREELANCER2 => host.Timeouts.Pick,
+            FreelancerResolutionPhaseSubType.FREELANCER_TRADE => host.Timeouts.Trade,
             _ => throw new ArgumentOutOfRangeException(nameof(subPhase), subPhase, "Invalid sub phase type")
         };
 
@@ -495,7 +474,7 @@ public class DraftController(Game game)
 
         while (stopwatch.Elapsed <= timeLeftInSubPhase)
         {
-            if (isCancellationRequested || game.IsCancelled)
+            if (isCancellationRequested || host.IsCancelled)
             {
 #if DEBUG
                 log.Info($"Cancellation requested. Exiting sub-phase monitoring for player {player.PlayerId}.");
@@ -545,39 +524,7 @@ public class DraftController(Game game)
     private void SendRankedResolutionSubPhase()
     {
         RankedResolutionPhaseData.TimeLeftInSubPhase = TimeLeftInSubPhase;
-
-
-        game.GetClients().ForEach(c =>
-        {
-            if (c.CurrentGame != game)
-            {
-                return;
-            }
-
-            LobbyServerPlayerInfo player = game.GetPlayerInfo(c.AccountId);
-
-            // Clone the data for each player to prevent data sharing between players
-            RankedResolutionPhaseData rankedResolutionPhaseDataClone = RankedResolutionPhaseData.Clone();
-            
-            // Client always thinks they are TeamA! we need to swap values if we are TeamB (this was a funny one to figure out)
-            // Server side we already check if players are in TeamA or TeamB so we are fine
-            if (player.TeamId == Team.TeamB)
-            {
-                // Swap EnemyBans and FriendlyBans
-                (rankedResolutionPhaseDataClone.EnemyBans, rankedResolutionPhaseDataClone.FriendlyBans) =
-                    (rankedResolutionPhaseDataClone.FriendlyBans, rankedResolutionPhaseDataClone.EnemyBans);
-
-                // Swap EnemyTeamSelections and FriendlyTeamSelections
-                (rankedResolutionPhaseDataClone.EnemyTeamSelections, rankedResolutionPhaseDataClone.FriendlyTeamSelections) =
-                    (rankedResolutionPhaseDataClone.FriendlyTeamSelections, rankedResolutionPhaseDataClone.EnemyTeamSelections);
-            }
-
-            c.Send(new EnterFreelancerResolutionPhaseNotification()
-            {
-                SubPhase = PhaseSubType,
-                RankedData = rankedResolutionPhaseDataClone,
-            });
-        });
+        host.SendDraftSnapshot(PhaseSubType, RankedResolutionPhaseData);
     }
 
     // Requests from clients. The caller checks that the game is drafting.
@@ -688,8 +635,7 @@ public class DraftController(Game game)
         if (PhaseSubType != FreelancerResolutionPhaseSubType.PICK_FREELANCER1
             && PhaseSubType != FreelancerResolutionPhaseSubType.PICK_FREELANCER2)
         {
-            log.Warn($"Player {GetHandle(accountId)} attempted to lock in draft selection in incorrect state "
-                     + $"(game = {game}, is drafting = {game.IsDrafting}, phase = {PhaseSubType}");
+            log.Warn($"Player {GetHandle(accountId)} attempted to lock in draft selection in incorrect phase {PhaseSubType}");
             return DraftRequestResult.Failed(LocalizationPayload.Create("CannotReady@Global"));
         }
 
@@ -838,7 +784,7 @@ public class DraftController(Game game)
                             .Select(item => item.Key)
                             .FirstOrDefault();
 
-                        LobbyServerPlayerInfo checkIsBot = game.GetPlayerById(playerThatHasCharacter);
+                        LobbyServerPlayerInfo checkIsBot = host.GetPlayerById(playerThatHasCharacter);
 
                         // Trading between slots controlled by the same account is not supported
                         if (checkIsBot is null || checkIsBot.AccountId == accountId)
@@ -882,7 +828,7 @@ public class DraftController(Game game)
     // For logging
     private string GetHandle(long accountId)
     {
-        return game.GetPlayerInfo(accountId)?.Handle ?? $"#{accountId}";
+        return host.GetMainSlot(accountId)?.Handle ?? $"#{accountId}";
     }
 
     // During draft, an account may control multiple slots (asymmetric / ControlAllBots).
@@ -898,13 +844,13 @@ public class DraftController(Game game)
                 {
                     continue;
                 }
-                LobbyServerPlayerInfo slot = game.GetPlayerById(state.PlayerId);
+                LobbyServerPlayerInfo slot = host.GetPlayerById(state.PlayerId);
                 if (slot != null && !slot.IsAIControlled && slot.AccountId == accountId)
                 {
                     return slot;
                 }
             }
-            return game.GetPlayerInfo(accountId);
+            return host.GetMainSlot(accountId);
         }
     }
 
@@ -912,7 +858,7 @@ public class DraftController(Game game)
     // 0 means the account's main slot (that is what clients controlling a single character send).
     internal LobbyServerPlayerInfo GetDraftTradingSlot(long accountId, int playerId)
     {
-        LobbyServerPlayerInfo slot = playerId == 0 ? game.GetPlayerInfo(accountId) : game.GetPlayerById(playerId);
+        LobbyServerPlayerInfo slot = playerId == 0 ? host.GetMainSlot(accountId) : host.GetPlayerById(playerId);
         if (slot is null
             || slot.AccountId != accountId
             || slot.TeamId is not (Team.TeamA or Team.TeamB))

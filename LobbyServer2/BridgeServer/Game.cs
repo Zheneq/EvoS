@@ -27,7 +27,7 @@ using MoreLinq;
 
 namespace CentralServer.BridgeServer;
 
-public abstract class Game
+public abstract class Game : IDraftHost
 {
     private static readonly ILog log = LogManager.GetLogger(typeof(Game));
     public static readonly object characterSelectionLock = new object();
@@ -529,7 +529,7 @@ public abstract class Game
         GetPlayerInfo(accountId).ReadyState = ReadyState.Unknown;
     }
 
-    internal bool CheckIfAllParticipantsAreConnected()
+    protected bool CheckIfAllParticipantsAreConnected()
     {
         return CheckIfServerIsConnected() && CheckIfPlayersAreConnected();
     }
@@ -576,7 +576,7 @@ public abstract class Game
         return true;
     }
 
-    internal void CancelMatch(string dodgerHandle = null, long? dodgerAccountId = null)
+    protected void CancelMatch(string dodgerHandle = null, long? dodgerAccountId = null)
     {
         // Once canceled, every player has left the game, so any later connectivity check would cancel it again,
         // blaming whoever it happens to check first
@@ -1273,6 +1273,79 @@ public abstract class Game
     {
         Draft = new DraftController(this);
         return Draft;
+    }
+
+    IReadOnlyList<LobbyServerPlayerInfo> IDraftHost.Roster => TeamInfo.TeamPlayerInfo;
+
+    LobbyServerPlayerInfo IDraftHost.GetMainSlot(long accountId) => GetPlayerInfo(accountId);
+
+    bool IDraftHost.HasBans => GameModeManager.GetBans(GameSubType.LocalizedName);
+
+    DraftTimeouts IDraftHost.Timeouts => new(
+        Ban1: GameInfo.SelectSubPhaseBan1Timeout,
+        Ban2: GameInfo.SelectSubPhaseBan2Timeout,
+        Pick: GameInfo.SelectSubPhaseFreelancerSelectTimeout,
+        Trade: GameInfo.SelectSubPhaseTradeTimeout);
+
+    bool IDraftHost.CheckParticipantsConnected() => CheckIfAllParticipantsAreConnected();
+
+    void IDraftHost.CancelMatch(string dodgerHandle, long? dodgerAccountId) => CancelMatch(dodgerHandle, dodgerAccountId);
+
+    void IDraftHost.SendDraftSnapshot(FreelancerResolutionPhaseSubType phase, RankedResolutionPhaseData data)
+    {
+        GetClients().ForEach(c =>
+        {
+            if (c.CurrentGame != this)
+            {
+                return;
+            }
+
+            LobbyServerPlayerInfo player = GetPlayerInfo(c.AccountId);
+
+            // Clone the data for each player to prevent data sharing between players
+            RankedResolutionPhaseData rankedResolutionPhaseDataClone = data.Clone();
+
+            // Client always thinks they are TeamA! we need to swap values if we are TeamB (this was a funny one to figure out)
+            // Server side we already check if players are in TeamA or TeamB so we are fine
+            if (player.TeamId == Team.TeamB)
+            {
+                // Swap EnemyBans and FriendlyBans
+                (rankedResolutionPhaseDataClone.EnemyBans, rankedResolutionPhaseDataClone.FriendlyBans) =
+                    (rankedResolutionPhaseDataClone.FriendlyBans, rankedResolutionPhaseDataClone.EnemyBans);
+
+                // Swap EnemyTeamSelections and FriendlyTeamSelections
+                (rankedResolutionPhaseDataClone.EnemyTeamSelections, rankedResolutionPhaseDataClone.FriendlyTeamSelections) =
+                    (rankedResolutionPhaseDataClone.FriendlyTeamSelections, rankedResolutionPhaseDataClone.EnemyTeamSelections);
+            }
+
+            c.Send(new EnterFreelancerResolutionPhaseNotification()
+            {
+                SubPhase = phase,
+                RankedData = rankedResolutionPhaseDataClone,
+            });
+        });
+    }
+
+    LobbyCharacterInfo IDraftHost.GetCharacterInfo(LobbyServerPlayerInfo slot, CharacterType characterType)
+    {
+        if (!slot.IsAIControlled)
+        {
+            PersistedAccountData account = DB.Get().AccountDao.GetAccount(slot.AccountId);
+            return LobbyCharacterInfo.Of(account.CharacterData[characterType]);
+        }
+
+        return new LobbyCharacterInfo
+        {
+            CharacterType = characterType,
+            CharacterAbilityVfxSwaps = new CharacterAbilityVfxSwapInfo(),
+            CharacterCards = CharacterCardInfo.MakeDefault(),
+            CharacterLevel = 1,
+            CharacterLoadouts = new List<CharacterLoadout>(),
+            CharacterMatches = 0,
+            CharacterMods = EvoS.DirectoryServer.Character.CharacterManager.GetDefaultMods(characterType),
+            CharacterSkin = new CharacterVisualInfo(),
+            CharacterTaunts = new List<PlayerTauntData>()
+        };
     }
 
     protected void UpdateFriendStatuses()

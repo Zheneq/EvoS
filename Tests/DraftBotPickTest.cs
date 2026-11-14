@@ -1,8 +1,8 @@
 using CentralServer.BridgeServer;
 using CentralServer.LobbyServer.Character;
 using EvoS.Framework.Constants.Enums;
-using EvoS.Framework.Misc;
 using EvoS.Framework.Network.Static;
+using Tests.Lib;
 
 namespace Tests;
 
@@ -13,53 +13,44 @@ public class DraftBotPickTest
     private const CharacterType Assassin = CharacterType.Blaster;
     private const CharacterType Assassin2 = CharacterType.Soldier;
 
-    // TeamA slots 1 and 2 have picked, slots 3 and 4 are on deck in PICK_FREELANCER2
-    private sealed class TestGame : PvpGame
+    // TeamA slots 1 and 2 have picked, slots 3 and 4 go on deck in PICK_FREELANCER2
+    private static List<CharacterType> PutSlots3And4OnDeck(CharacterType[] lockedPicks, CharacterType humanSlot3Hover)
     {
-        public TestGame(CharacterType[] lockedPicks, CharacterType humanSlot3Hover) : base(null)
+        FakeDraftHost host = new FakeDraftHost();
+        host.Players.AddRange(Enumerable.Range(1, 8)
+            .Select(playerId => new LobbyServerPlayerInfo
+            {
+                PlayerId = playerId,
+                TeamId = playerId <= 4 ? Team.TeamA : Team.TeamB,
+                AccountId = playerId == 3 && humanSlot3Hover != CharacterType.None ? 1003 : 0,
+                IsNPCBot = playerId != 3 || humanSlot3Hover == CharacterType.None,
+            }));
+        DraftController draft = new DraftController(host);
+        draft.SetRankedResolutionPhaseData(new RankedResolutionPhaseData
         {
-            TeamInfo = new LobbyServerTeamInfo
-            {
-                TeamPlayerInfo = Enumerable.Range(1, 8)
-                    .Select(playerId => new LobbyServerPlayerInfo
-                    {
-                        PlayerId = playerId,
-                        TeamId = playerId <= 4 ? Team.TeamA : Team.TeamB,
-                        AccountId = playerId == 3 && humanSlot3Hover != CharacterType.None ? 1003 : 0,
-                        IsNPCBot = playerId != 3 || humanSlot3Hover == CharacterType.None,
-                    })
-                    .ToList()
-            };
-            DraftController draft = CreateDraft();
-            draft.SetRankedResolutionPhaseData(new RankedResolutionPhaseData
-            {
-                UnselectedPlayerStates = TeamInfo.TeamPlayerInfo
-                    .Select(p => new RankedResolutionPlayerState
-                    {
-                        PlayerId = p.PlayerId,
-                        Intention = p.PlayerId == 3 ? humanSlot3Hover : CharacterType.None,
-                    })
-                    .ToList(),
-                PlayersOnDeck = [],
-                FriendlyBans = [],
-                EnemyBans = [],
-                FriendlyTeamSelections = lockedPicks
-                    .Select((characterType, i) => (PlayerId: i + 1, characterType))
-                    .ToDictionary(p => p.PlayerId, p => p.characterType),
-                EnemyTeamSelections = [],
-                TradeActions = [],
-            });
-            draft.PhaseSubType = FreelancerResolutionPhaseSubType.PICK_FREELANCER2;
-        }
-    }
+            UnselectedPlayerStates = host.Players
+                .Select(p => new RankedResolutionPlayerState
+                {
+                    PlayerId = p.PlayerId,
+                    Intention = p.PlayerId == 3 ? humanSlot3Hover : CharacterType.None,
+                })
+                .ToList(),
+            PlayersOnDeck = [],
+            FriendlyBans = [],
+            EnemyBans = [],
+            FriendlyTeamSelections = lockedPicks
+                .Select((characterType, i) => (PlayerId: i + 1, characterType))
+                .ToDictionary(p => p.PlayerId, p => p.characterType),
+            EnemyTeamSelections = [],
+            TradeActions = [],
+        });
+        draft.PhaseSubType = FreelancerResolutionPhaseSubType.PICK_FREELANCER2;
 
-    private static List<CharacterType> PutSlots3And4OnDeck(TestGame game)
-    {
-        game.Draft.AddPlayersToDeckBasedOnPhase(
+        draft.AddPlayersToDeckBasedOnPhase(
             FreelancerResolutionPhaseSubType.PICK_FREELANCER2,
-            game.GetPlayerById(3),
-            game.GetPlayerById(4));
-        return game.Draft.GetRankedResolutionPhaseData().PlayersOnDeck.Select(p => p.Intention).ToList();
+            host.GetPlayerById(3),
+            host.GetPlayerById(4));
+        return draft.GetRankedResolutionPhaseData().PlayersOnDeck.Select(p => p.Intention).ToList();
     }
 
     private static CharacterRole RoleOf(CharacterType characterType)
@@ -78,7 +69,7 @@ public class DraftBotPickTest
         CharacterRole expectedSlot3Role,
         CharacterRole expectedSlot4Role)
     {
-        List<CharacterType> hovers = PutSlots3And4OnDeck(new TestGame(lockedPicks, CharacterType.None));
+        List<CharacterType> hovers = PutSlots3And4OnDeck(lockedPicks, CharacterType.None);
 
         Assert.Equal(new[] { expectedSlot3Role, expectedSlot4Role }, hovers.Select(RoleOf));
         Assert.NotEqual(hovers[0], hovers[1]);
@@ -88,7 +79,7 @@ public class DraftBotPickTest
     [Fact]
     public void BotOnDeckWithHuman_IgnoresHumanHover()
     {
-        List<CharacterType> hovers = PutSlots3And4OnDeck(new TestGame([Support], humanSlot3Hover: Tank));
+        List<CharacterType> hovers = PutSlots3And4OnDeck([Support], humanSlot3Hover: Tank);
 
         Assert.Equal(Tank, hovers[0]);
         Assert.Equal(CharacterRole.Tank, RoleOf(hovers[1]));

@@ -1,7 +1,7 @@
 using CentralServer.BridgeServer;
 using EvoS.Framework.Constants.Enums;
-using EvoS.Framework.Misc;
 using EvoS.Framework.Network.Static;
+using Tests.Lib;
 
 namespace Tests;
 
@@ -11,45 +11,40 @@ public class DraftTradeTest
     private const long Teammate = 1002;
     private const long Spectator = 1003;
 
-    private sealed class TestGame : PvpGame
+    private readonly DraftController draft;
+
+    public DraftTradeTest()
     {
-        public TestGame() : base(null)
-        {
-            LobbyServerPlayerInfo main = Slot(1, Multilancer, Team.TeamA);
-            LobbyServerPlayerInfo proxy = Slot(2, Multilancer, Team.TeamA);
-            proxy.ControllingPlayerId = main.PlayerId;
-            proxy.ControllingPlayerInfo = main;
-            main.ProxyPlayerIds.Add(proxy.PlayerId);
+        LobbyServerPlayerInfo main = Slot(1, Multilancer, Team.TeamA);
+        LobbyServerPlayerInfo proxy = Slot(2, Multilancer, Team.TeamA);
+        proxy.ControllingPlayerId = main.PlayerId;
+        proxy.ControllingPlayerInfo = main;
+        main.ProxyPlayerIds.Add(proxy.PlayerId);
 
-            LobbyServerPlayerInfo bot = Slot(4, 0, Team.TeamA);
-            bot.IsNPCBot = true;
+        LobbyServerPlayerInfo bot = Slot(4, 0, Team.TeamA);
+        bot.IsNPCBot = true;
 
-            TeamInfo = new LobbyServerTeamInfo
-            {
-                TeamPlayerInfo =
-                [
-                    main,
-                    proxy,
-                    Slot(3, Teammate, Team.TeamA),
-                    bot,
-                    Slot(5, Spectator, Team.Spectator),
-                ]
-            };
-            CreateDraft();
-        }
-
-        private static LobbyServerPlayerInfo Slot(int playerId, long accountId, Team team)
-        {
-            return new LobbyServerPlayerInfo
-            {
-                PlayerId = playerId,
-                AccountId = accountId,
-                TeamId = team,
-            };
-        }
+        FakeDraftHost host = new FakeDraftHost();
+        host.Players.AddRange(
+        [
+            main,
+            proxy,
+            Slot(3, Teammate, Team.TeamA),
+            bot,
+            Slot(5, Spectator, Team.Spectator),
+        ]);
+        draft = new DraftController(host);
     }
 
-    private readonly TestGame game = new();
+    private static LobbyServerPlayerInfo Slot(int playerId, long accountId, Team team)
+    {
+        return new LobbyServerPlayerInfo
+        {
+            PlayerId = playerId,
+            AccountId = accountId,
+            TeamId = team,
+        };
+    }
 
     [Theory]
     [InlineData(Multilancer, 0, 1)]
@@ -59,7 +54,7 @@ public class DraftTradeTest
     [InlineData(Teammate, 3, 3)]
     public void GetDraftTradingSlot_OwnSlot(long accountId, int requestedPlayerId, int expectedPlayerId)
     {
-        Assert.Equal(expectedPlayerId, game.Draft.GetDraftTradingSlot(accountId, requestedPlayerId)?.PlayerId);
+        Assert.Equal(expectedPlayerId, draft.GetDraftTradingSlot(accountId, requestedPlayerId)?.PlayerId);
     }
 
     [Theory]
@@ -71,6 +66,6 @@ public class DraftTradeTest
     [InlineData(Spectator, 5)]
     public void GetDraftTradingSlot_NotControlled_Null(long accountId, int requestedPlayerId)
     {
-        Assert.Null(game.Draft.GetDraftTradingSlot(accountId, requestedPlayerId));
+        Assert.Null(draft.GetDraftTradingSlot(accountId, requestedPlayerId));
     }
 }

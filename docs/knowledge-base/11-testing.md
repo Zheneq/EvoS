@@ -11,6 +11,9 @@
   module sends; what the module tests are built on.
 - `Tests/Lib/RecordingClientNotifier.cs` — fake `IClientNotifier`, installed for the
   duration of a test with `ClientNotifierScope`.
+- `Tests/Lib/FakeDraftHost.cs` — fake `IDraftHost`: a roster to fill in, settable game
+  state, and a record of draft snapshots and match cancellations. A `DraftController` is
+  built directly over it, without a `Game`.
 - `Tests/DataAccess/DbTestFramework.cs` — harness for DAO tests (Mongo-backed DAOs and
   cached decorators).
 
@@ -25,8 +28,8 @@
 | `CustomGameManagerTest` | joining as invitee / spectator fallback, invite cleanup | static manager, `ClientNotifierScope` |
 | `PracticeManagerTest` | character checks before a practice game starts | static manager, mock DAO mode |
 | `DraftPhasesTest` | draft phase order for regular, no-ban and multilancer rosters | pure static `DraftController.GetDraftPhases` |
-| `DraftBotPickTest`, `DraftTradeTest` | bot picks on deck, trading slot resolution | `TestGame : PvpGame(null)` with hand-built roster; draft state on a controller attached with `CreateDraft()` |
-| `DraftModuleTest` | draft requests: response type and content per result, not drafting, wrong phase | module over `RecordingClientConnection` + `TestGame : PvpGame(null)` with a controller attached |
+| `DraftBotPickTest`, `DraftTradeTest` | bot picks on deck, trading slot resolution | `DraftController` over `FakeDraftHost` with hand-built roster and draft state |
+| `DraftModuleTest` | draft requests: response type and content per result, not drafting, wrong phase | module over `RecordingClientConnection` + `TestGame : PvpGame(null)` with a controller attached (the module needs a `Game` for `CurrentGame`) |
 | `CharacterSelectionTest` | `CharacterRules`, character updates per game status | `TestGame : PvpGame(null)` |
 | `QueuePenaltyManagerTest`, `QueuePriorityManagerTest` | penalty/priority logic | mock DAO mode |
 | `QueuePenaltyIssueTest` | when leavers are penalized and pardoned | `TestGame : Game` driven through protected members (`OnStatusUpdate`, `CancelMatch`, setters), mock DAO mode, `ClientNotifierScope` |
