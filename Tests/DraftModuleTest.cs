@@ -130,15 +130,14 @@ public class DraftModuleTest(ITestOutputHelper output) : EvosTest(output)
         Assert.False(SingleResponse<RankedHoverClickResponse>(conn).Success);
     }
 
-    // A failed ban outside the ban phase is answered with a hover response (kept as is for now)
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void NotDrafting_Ban_FailsWithHoverResponse(bool hasGame)
+    public void NotDrafting_Ban_Fails(bool hasGame)
     {
         var (conn, registry) = Connect(NotDraftingGame(hasGame));
         registry.Dispatch(new RankedBanRequest { RequestId = RequestId, Selection = Free });
-        Assert.False(SingleResponse<RankedHoverClickResponse>(conn).Success);
+        Assert.False(SingleResponse<RankedBanResponse>(conn).Success);
     }
 
     [Theory]
@@ -200,14 +199,14 @@ public class DraftModuleTest(ITestOutputHelper output) : EvosTest(output)
     }
 
     [Fact]
-    public void Ban_InPickPhase_FailsWithHoverResponse()
+    public void Ban_InPickPhase_Fails()
     {
         TestGame game = new TestGame(FreelancerResolutionPhaseSubType.PICK_FREELANCER1);
         var (conn, registry) = Connect(game);
 
         registry.Dispatch(new RankedBanRequest { RequestId = RequestId, Selection = Free });
 
-        Assert.False(SingleResponse<RankedHoverClickResponse>(conn).Success);
+        Assert.False(SingleResponse<RankedBanResponse>(conn).Success);
         Assert.Empty(game.Data.FriendlyBans);
     }
 

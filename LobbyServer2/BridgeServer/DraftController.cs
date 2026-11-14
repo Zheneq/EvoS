@@ -623,7 +623,7 @@ public class DraftController(Game game)
         if (PhaseSubType != FreelancerResolutionPhaseSubType.PICK_BANS1
             && PhaseSubType != FreelancerResolutionPhaseSubType.PICK_BANS2)
         {
-            return DraftRequestResult.InWrongPhase();
+            return DraftRequestResult.Failed();
         }
 
         RankedResolutionPhaseData rankedResolutionPhaseData = GetRankedResolutionPhaseData();
@@ -690,7 +690,7 @@ public class DraftController(Game game)
         {
             log.Warn($"Player {GetHandle(accountId)} attempted to lock in draft selection in incorrect state "
                      + $"(game = {game}, is drafting = {game.IsDrafting}, phase = {PhaseSubType}");
-            return DraftRequestResult.InWrongPhase(LocalizationPayload.Create("CannotReady@Global"));
+            return DraftRequestResult.Failed(LocalizationPayload.Create("CannotReady@Global"));
         }
 
         RankedResolutionPhaseData rankedResolutionPhaseData = GetRankedResolutionPhaseData();
@@ -778,7 +778,7 @@ public class DraftController(Game game)
         if (PhaseSubType != FreelancerResolutionPhaseSubType.FREELANCER_TRADE)
         {
             // TODO: error message?
-            return DraftRequestResult.InWrongPhase();
+            return DraftRequestResult.Failed();
         }
 
         RankedResolutionPhaseData rankedResolutionPhaseData = GetRankedResolutionPhaseData();

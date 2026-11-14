@@ -40,20 +40,7 @@ public class DraftModule(IClientConnection conn) : ILobbyModule
     private void HandlePlayerRankedBanRequest(RankedBanRequest request)
     {
         // TODO also check ready state - do not update if already ready
-        DraftController draft = GetDraft();
-        DraftRequestResult result = draft?.Ban(conn.AccountId, request.Selection) ?? default;
-        if (draft is null || result.WrongPhase)
-        {
-            // TODO should be a RankedBanResponse, the client ignores this one
-            conn.Send(new RankedHoverClickResponse
-            {
-                //TODO: loc
-                ResponseId = request.RequestId,
-                Success = false,
-            });
-            return;
-        }
-
+        DraftRequestResult result = GetDraft()?.Ban(conn.AccountId, request.Selection) ?? default;
         conn.Send(new RankedBanResponse
         {
             ResponseId = request.RequestId,
