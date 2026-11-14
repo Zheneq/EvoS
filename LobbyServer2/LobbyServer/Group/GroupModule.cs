@@ -64,7 +64,6 @@ public class GroupModule : ILobbyModule
         else if (accountId.HasValue && _groupRegistry.PromoteMember(group, (long)accountId))
         {
             response.Success = true;
-            _conn.BroadcastRefreshGroup();
         }
         else
         {

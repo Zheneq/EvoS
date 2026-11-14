@@ -201,7 +201,7 @@ public class MatchmakingModuleTest : EvosTest
         Assert.Equal(7, response.ResponseId);
     }
 
-    // Case 8: game types that aren't queued have no queue. GroupManager.UpdateSelectedSubTypes relies on
+    // Case 8: game types that aren't queued have no queue. MatchmakingManager.UpdateSelectedSubTypes relies on
     // GetQueue returning null for them (selecting Practice used to throw KeyNotFoundException).
     [Fact]
     public void GetQueue_NotQueuedGameType_ReturnsNull()

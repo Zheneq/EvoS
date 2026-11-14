@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
-using CentralServer.LobbyServer.Matchmaking;
 using CentralServer.LobbyServer.Session;
 using CentralServer.LobbyServer.Utils;
 using EvoS.Framework;
@@ -30,6 +29,8 @@ namespace CentralServer.LobbyServer.Group
 
         // Static accessor for callers that use GroupManager.Lock directly
         public static object Lock => Instance._lock;
+
+        public event Action<GroupInfo> OnMembersChanged;
 
         public GroupManager(ISessionRegistry sessions)
         {
@@ -72,8 +73,6 @@ namespace CentralServer.LobbyServer.Group
 
         public static long GetGroupID(long accountId) => Instance.GetGroupIDCore(accountId);
 
-        public static void OnLeaveQueue(long groupId) => Instance.OnLeaveQueueCore(groupId);
-
         public static void Broadcast(GroupInfo group, WebSocketMessage message, long skipAccountId = 0)
             => Instance.BroadcastCore(group, message, skipAccountId);
 
@@ -83,12 +82,6 @@ namespace CentralServer.LobbyServer.Group
         public static ushort GetGroupSubTypeMask(long groupId) => Instance.GetGroupSubTypeMaskCore(groupId);
 
         public static ushort GetGroupSubTypeMask(GroupInfo groupInfo) => Instance.GetGroupSubTypeMaskCore(groupInfo);
-
-        public static void UpdateSelectedSubTypes(GroupInfo groupInfo, bool resetReadyStateIfUpdated = true)
-            => Instance.UpdateSelectedSubTypesCore(groupInfo, resetReadyStateIfUpdated);
-
-        public static void UpdateSelectedSubTypesForAccount(long accountId)
-            => Instance.UpdateSelectedSubTypesForAccountCore(accountId);
 
         // ---- Explicit IGroupRegistry implementation ----
 
@@ -109,17 +102,12 @@ namespace CentralServer.LobbyServer.Group
         bool IGroupRegistry.PromoteMember(GroupInfo groupInfo, long accountId) => PromoteMemberCore(groupInfo, accountId);
         LobbyPlayerGroupInfo IGroupRegistry.GetGroupInfo(long accountId) => GetGroupInfoCore(accountId);
         long IGroupRegistry.GetGroupID(long accountId) => GetGroupIDCore(accountId);
-        void IGroupRegistry.OnLeaveQueue(long groupId) => OnLeaveQueueCore(groupId);
         void IGroupRegistry.Broadcast(GroupInfo group, WebSocketMessage message, long skipAccountId)
             => BroadcastCore(group, message, skipAccountId);
         void IGroupRegistry.BroadcastSystemMessage(GroupInfo group, LocalizationPayload message, long skipAccountId)
             => BroadcastSystemMessageCore(group, message, skipAccountId);
         ushort IGroupRegistry.GetGroupSubTypeMask(long groupId) => GetGroupSubTypeMaskCore(groupId);
         ushort IGroupRegistry.GetGroupSubTypeMask(GroupInfo groupInfo) => GetGroupSubTypeMaskCore(groupInfo);
-        void IGroupRegistry.UpdateSelectedSubTypes(GroupInfo groupInfo, bool resetReadyStateIfUpdated)
-            => UpdateSelectedSubTypesCore(groupInfo, resetReadyStateIfUpdated);
-        void IGroupRegistry.UpdateSelectedSubTypesForAccount(long accountId)
-            => UpdateSelectedSubTypesForAccountCore(accountId);
 
         // ---- Core (instance) implementations ----
 
@@ -390,7 +378,7 @@ namespace CentralServer.LobbyServer.Group
 
             if (success)
             {
-                UpdateSelectedSubTypesCore(groupInfo);
+                OnGroupMembersUpdated(groupInfo);
                 BroadcastSystemMessageCore(groupInfo, GroupMessages.NewLeader(accountId));
             }
 
@@ -500,25 +488,8 @@ namespace CentralServer.LobbyServer.Group
 
         private void OnGroupMembersUpdated(GroupInfo groupInfo)
         {
-            MatchmakingManager.RemoveGroupFromQueue(groupInfo, true);
-            if (!groupInfo.IsEmpty())
-            {
-                UpdateSelectedSubTypesCore(groupInfo);
-            }
+            OnMembersChanged?.Invoke(groupInfo);
             ClientNotifier.Get().BroadcastRefreshGroup(groupInfo.Leader, true);
-        }
-
-        private void OnLeaveQueueCore(long groupId)
-        {
-            GroupInfo groupInfo = GetGroupCore(groupId);
-            if (groupInfo is null)
-            {
-                log.Info($"Received OnLeaveQueue for group {groupId} that does not exist");
-                return;
-            }
-            UpdateSelectedSubTypesCore(groupInfo, false);
-            BroadcastCore(groupInfo, new MatchmakingQueueAssignmentNotification { MatchmakingQueueInfo = null });
-            ClientNotifier.Get().BroadcastRefreshGroup(groupInfo.Leader, false);
         }
 
         private void BroadcastCore(GroupInfo group, WebSocketMessage message, long skipAccountId = 0)
@@ -558,42 +529,6 @@ namespace CentralServer.LobbyServer.Group
             }
 
             return groupInfo.SubTypeMask;
-        }
-
-        private void UpdateSelectedSubTypesCore(GroupInfo groupInfo, bool resetReadyStateIfUpdated = true)
-        {
-            LobbyServerProtocol leaderConn = SessionManager.GetClientConnection(groupInfo.Leader);
-            if (leaderConn is null)
-            {
-                log.Error($"UpdateSelectedSubTypes for group {groupInfo.GroupId} with missing leader {groupInfo.Leader}");
-                return;
-            }
-
-            // Game types that aren't queued (e.g. Practice) have nothing to filter the selected sub types against
-            MatchmakingQueue queue = MatchmakingManager.GetQueue(leaderConn.SelectedGameType);
-            ushort newMask = queue?.FilterSubTypeMask(groupInfo, leaderConn.GetSubTypeMask()) ?? leaderConn.GetSubTypeMask();
-
-            ushort oldMask = groupInfo.SubTypeMask;
-            if (oldMask != newMask)
-            {
-                groupInfo.SubTypeMask = newMask;
-                if (resetReadyStateIfUpdated)
-                {
-                    log.Info($"UpdateSelectedSubTypes resetting group {groupInfo.GroupId} ready state "
-                             + $"(was {queue?.DebugFormatSubTypeMask(oldMask) ?? oldMask.ToString()}, "
-                             + $"now {queue?.DebugFormatSubTypeMask(newMask) ?? newMask.ToString()})");
-                    leaderConn.BroadcastRefreshGroup(true);
-                }
-            }
-        }
-
-        private void UpdateSelectedSubTypesForAccountCore(long accountId)
-        {
-            var groupInfo = GetPlayerGroupCore(accountId);
-            if (groupInfo is not null)
-            {
-                UpdateSelectedSubTypesCore(groupInfo);
-            }
         }
     }
 }

@@ -28,9 +28,9 @@ public static class LobbyServices
     {
         // Run every manager's static initializer before replacing any Instance. Each initializer builds
         // the pre-initialized instance from the other managers' current Instances (GroupManager subscribes
-        // to SessionManager, GameManager to ServerManager); those must still be the pre-initialized ones,
-        // or a throwaway instance would subscribe to the container's services. Without this, the runtime
-        // may run an initializer as late as the assignment below.
+        // to SessionManager, MatchmakingManager to GroupManager, GameManager to ServerManager); those must
+        // still be the pre-initialized ones, or a throwaway instance would subscribe to the container's
+        // services. Without this, the runtime may run an initializer as late as the assignment below.
         foreach (Type manager in new[]
                  {
                      typeof(SessionManager), typeof(GroupManager), typeof(ServerManager),

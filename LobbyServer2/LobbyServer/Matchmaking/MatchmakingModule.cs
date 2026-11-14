@@ -105,7 +105,7 @@ public class MatchmakingModule : ILobbyModule
         // SubType update comes before GameType update in PlayerInfoUpdateRequest
         SelectedSubTypeMask = request.SubTypeMask;
         _conn.Send(new SetGameSubTypeResponse { ResponseId = request.RequestId }); // we need to confirm success before sending a group update
-        GroupManager.UpdateSelectedSubTypesForAccount(_conn.AccountId);
+        _matchmakingManager.UpdateSelectedSubTypesForAccount(_conn.AccountId);
     }
 
     public ushort GetSubTypeMask()

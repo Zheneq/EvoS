@@ -22,9 +22,11 @@ namespace CentralServer.LobbyServer.Matchmaking
         private readonly object _queueUpdateRunning = new object();
         private bool _enabled = true;
         private Dictionary<GameType, MatchmakingQueue> _queues;
+        private readonly IGroupRegistry _groups;
 
-        public MatchmakingManager()
+        public MatchmakingManager(IGroupRegistry groups)
         {
+            _groups = groups;
             _queues = new Dictionary<GameType, MatchmakingQueue>
             {
                 { GameType.Coop, new MatchmakingQueue(GameType.Coop, false) },
@@ -32,9 +34,10 @@ namespace CentralServer.LobbyServer.Matchmaking
                 // { GameType.Ranked, new MatchmakingQueue(GameType.Ranked) },
                 // { GameType.Custom, new MatchmakingQueue(GameType.Custom) }
             };
+            groups.OnMembersChanged += UnqueueChangedGroup;
         }
 
-        public static MatchmakingManager Instance { get; internal set; } = new MatchmakingManager();
+        public static MatchmakingManager Instance { get; internal set; } = new MatchmakingManager(GroupManager.Instance);
 
         // --- Static shims ---
 
@@ -60,6 +63,8 @@ namespace CentralServer.LobbyServer.Matchmaking
         public static bool IsQueued(GroupInfo group) => Instance.IsQueuedCore(group);
         public static Task StartGameAsync(List<MatchPlayerData> teamA, List<MatchPlayerData> teamB, GameType gameType, List<GameSubType> gameSubTypes, int subTypeIndex, Dictionary<long, DateTime> queueEntryTimes = null) => Instance.StartGameAsyncCore(teamA, teamB, gameType, gameSubTypes, subTypeIndex, queueEntryTimes);
         public static void OnGameEnded(LobbyGameInfo gameInfo, LobbyGameSummary gameSummary, GameSubType gameSubType, List<MatchPlayerData> players) => Instance.OnGameEndedCore(gameInfo, gameSummary, gameSubType, players);
+        public static void UpdateSelectedSubTypes(GroupInfo groupInfo, bool resetReadyStateIfUpdated = true) => Instance.UpdateSelectedSubTypesCore(groupInfo, resetReadyStateIfUpdated);
+        public static void UpdateSelectedSubTypesForAccount(long accountId) => Instance.UpdateSelectedSubTypesForAccountCore(accountId);
 
         // --- IMatchmakingManager explicit implementations ---
 
@@ -83,6 +88,8 @@ namespace CentralServer.LobbyServer.Matchmaking
         bool IMatchmakingManager.IsQueued(GroupInfo group) => IsQueuedCore(group);
         Task IMatchmakingManager.StartGameAsync(List<MatchPlayerData> teamA, List<MatchPlayerData> teamB, GameType gameType, List<GameSubType> gameSubTypes, int subTypeIndex, Dictionary<long, DateTime> queueEntryTimes) => StartGameAsyncCore(teamA, teamB, gameType, gameSubTypes, subTypeIndex, queueEntryTimes);
         void IMatchmakingManager.OnGameEnded(LobbyGameInfo gameInfo, LobbyGameSummary gameSummary, GameSubType gameSubType, List<MatchPlayerData> players) => OnGameEndedCore(gameInfo, gameSummary, gameSubType, players);
+        void IMatchmakingManager.UpdateSelectedSubTypes(GroupInfo groupInfo, bool resetReadyStateIfUpdated) => UpdateSelectedSubTypesCore(groupInfo, resetReadyStateIfUpdated);
+        void IMatchmakingManager.UpdateSelectedSubTypesForAccount(long accountId) => UpdateSelectedSubTypesForAccountCore(accountId);
 
         // --- Core instance methods ---
 
@@ -166,7 +173,11 @@ namespace CentralServer.LobbyServer.Matchmaking
             bool removed = false;
             foreach (MatchmakingQueue queue in _queues.Values)
             {
-                removed |= queue.RemoveGroup(group.GroupId);
+                if (queue.RemoveGroup(group.GroupId))
+                {
+                    removed = true;
+                    NotifyGroupLeftQueue(group.GroupId);
+                }
             }
             if (!removed && !suppressWarnings)
             {
@@ -221,6 +232,67 @@ namespace CentralServer.LobbyServer.Matchmaking
             if (_queues.TryGetValue(gameInfo.GameConfig.GameType, out var queue))
             {
                 queue.OnGameEnded(gameInfo, gameSummary, gameSubType, players);
+            }
+        }
+
+        // Whatever the group was queued for no longer applies: it leaves the queue,
+        // and its sub types are filtered again for its new members or leader
+        private void UnqueueChangedGroup(GroupInfo groupInfo)
+        {
+            RemoveGroupFromQueueCore(groupInfo, true);
+            if (!groupInfo.IsEmpty())
+            {
+                UpdateSelectedSubTypesCore(groupInfo);
+            }
+        }
+
+        // Looks the group up again: it is gone if it left the queue because its last member left it
+        private void NotifyGroupLeftQueue(long groupId)
+        {
+            GroupInfo groupInfo = _groups.GetGroup(groupId);
+            if (groupInfo is null)
+            {
+                log.Info($"Group {groupId} left the queue but does not exist");
+                return;
+            }
+            UpdateSelectedSubTypesCore(groupInfo, false);
+            _groups.Broadcast(groupInfo, new MatchmakingQueueAssignmentNotification { MatchmakingQueueInfo = null });
+            ClientNotifier.Get().BroadcastRefreshGroup(groupInfo.Leader, false);
+        }
+
+        private void UpdateSelectedSubTypesCore(GroupInfo groupInfo, bool resetReadyStateIfUpdated = true)
+        {
+            LobbyServerProtocol leaderConn = SessionManager.GetClientConnection(groupInfo.Leader);
+            if (leaderConn is null)
+            {
+                log.Error($"UpdateSelectedSubTypes for group {groupInfo.GroupId} with missing leader {groupInfo.Leader}");
+                return;
+            }
+
+            // Game types that aren't queued (e.g. Practice) have nothing to filter the selected sub types against
+            MatchmakingQueue queue = GetQueueCore(leaderConn.SelectedGameType);
+            ushort newMask = queue?.FilterSubTypeMask(groupInfo, leaderConn.GetSubTypeMask()) ?? leaderConn.GetSubTypeMask();
+
+            ushort oldMask = groupInfo.SubTypeMask;
+            if (oldMask != newMask)
+            {
+                groupInfo.SubTypeMask = newMask;
+                if (resetReadyStateIfUpdated)
+                {
+                    log.Info($"UpdateSelectedSubTypes resetting group {groupInfo.GroupId} ready state "
+                             + $"(was {queue?.DebugFormatSubTypeMask(oldMask) ?? oldMask.ToString()}, "
+                             + $"now {queue?.DebugFormatSubTypeMask(newMask) ?? newMask.ToString()})");
+                    leaderConn.BroadcastRefreshGroup(true);
+                }
+            }
+        }
+
+        private void UpdateSelectedSubTypesForAccountCore(long accountId)
+        {
+            GroupInfo groupInfo = _groups.GetPlayerGroup(accountId);
+            if (groupInfo is not null)
+            {
+                UpdateSelectedSubTypesCore(groupInfo);
             }
         }
     }

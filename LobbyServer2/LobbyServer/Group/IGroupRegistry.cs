@@ -8,6 +8,13 @@ namespace CentralServer.LobbyServer.Group;
 
 public interface IGroupRegistry
 {
+    /// <summary>
+    /// A group's members or leader changed: a player joined or left (the group may now be empty and
+    /// disbanded), or the leader promoted another member. Whatever the group was queued for no longer
+    /// applies. May be raised under <see cref="Lock"/>.
+    /// </summary>
+    event Action<GroupInfo> OnMembersChanged;
+
     object Lock { get; }
     GroupInfo GetGroup(long groupId);
     List<long> GetGroupMembers(long groupId);
@@ -23,11 +30,8 @@ public interface IGroupRegistry
     bool PromoteMember(GroupInfo groupInfo, long accountId);
     LobbyPlayerGroupInfo GetGroupInfo(long accountId);
     long GetGroupID(long accountId);
-    void OnLeaveQueue(long groupId);
     void Broadcast(GroupInfo group, WebSocketMessage message, long skipAccountId = 0);
     void BroadcastSystemMessage(GroupInfo group, LocalizationPayload message, long skipAccountId = 0);
     ushort GetGroupSubTypeMask(long groupId);
     ushort GetGroupSubTypeMask(GroupInfo groupInfo);
-    void UpdateSelectedSubTypes(GroupInfo groupInfo, bool resetReadyStateIfUpdated = true);
-    void UpdateSelectedSubTypesForAccount(long accountId);
 }

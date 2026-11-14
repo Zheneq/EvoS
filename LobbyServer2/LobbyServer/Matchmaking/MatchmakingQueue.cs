@@ -262,7 +262,7 @@ namespace CentralServer.LobbyServer.Matchmaking
         public LobbyMatchmakingQueueInfo AddGroup(long groupId, out bool added)
         {
             var groupInfo = GroupManager.GetGroup(groupId);
-            GroupManager.UpdateSelectedSubTypes(groupInfo, false);
+            MatchmakingManager.UpdateSelectedSubTypes(groupInfo, false);
             log.Info($"Selected sub type mask for group {groupId}: {DebugFormatSubTypeMask(groupInfo.SubTypeMask)}");
 
             // TODO also check QueueRequirement
@@ -289,7 +289,7 @@ namespace CentralServer.LobbyServer.Matchmaking
             else
             {
                 log.Error($"Failed to add group {groupId} to {GameType} queue");
-                GroupManager.UpdateSelectedSubTypes(groupInfo);
+                MatchmakingManager.UpdateSelectedSubTypes(groupInfo);
             }
 
             return MatchmakingQueueInfo;
@@ -301,7 +301,6 @@ namespace CentralServer.LobbyServer.Matchmaking
             if (removed)
             {
                 UpdateQueueInfo();
-                GroupManager.OnLeaveQueue(groupId);
                 log.Info($"Removed group {groupId} from {GameType} queue");
                 log.Info($"{GetPlayerCount()} players in {GameType} queue ({QueuedGroups.Count} groups)");
             }

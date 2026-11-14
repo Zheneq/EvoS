@@ -4,7 +4,7 @@
 
 | Class | Notes |
 |-------|-------|
-| `GroupManager` | Static registry: `ActiveGroups`, `PlayerToGroup`, `GroupRequests` (invites), guarded by a private `_lock`. Create/join/leave/kick/promote/disband, sub-type mask reconciliation (`UpdateSelectedSubTypes`), group broadcast helpers |
+| `GroupManager` | Static registry: `ActiveGroups`, `PlayerToGroup`, `GroupRequests` (invites), guarded by a private `_lock`. Create/join/leave/kick/promote/disband, group broadcast helpers. Raises `OnMembersChanged` when a group's members or leader change; calls nothing in matchmaking |
 | `GroupInfo` | Group state: id, leader, members, selected sub-types |
 | `GroupRequestInfo` | Pending invite/join request with expiry |
 | `GroupsTask` | `PeriodicRunner`: pings/expires pending group requests |
@@ -13,8 +13,12 @@
 
 Everyone is always in a group: the group manager creates a solo group when a session
 starts (`ISessionRegistry.OnSessionStarting`), quietly, since the player is not online yet;
-a player who reconnects leaves their previous group. Group changes trigger queue
-removal, ready-state resets, and client refreshes — routed back through
+a player who reconnects leaves their previous group. A join, a leave or a promotion
+raises `IGroupRegistry.OnMembersChanged`: matchmaking takes the group out of the queue
+and filters its sub types again for the new members or leader (doc 05), then the group
+manager refreshes the group with a ready-state reset. (Until 2026-11-14 a promotion only
+re-filtered the sub types, so a queued group stayed queued when the mask did not change.)
+Client notifications go back through
 `LobbyServerProtocol.OnJoinGroup/OnLeaveGroup/OnGroupDisbanded` callbacks and broadcasts,
 creating a manager ↔ connection call cycle.
 

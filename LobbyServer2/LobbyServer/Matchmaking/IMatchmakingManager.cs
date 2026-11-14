@@ -20,4 +20,11 @@ public interface IMatchmakingManager
         Dictionary<long, DateTime> queueEntryTimes = null);
     void OnGameEnded(LobbyGameInfo gameInfo, LobbyGameSummary gameSummary,
         GameSubType gameSubType, List<MatchPlayerData> players);
+
+    /// <summary>
+    /// Filters the group leader's selected sub types down to what the group can queue for and stores the result in
+    /// <see cref="GroupInfo.SubTypeMask"/>. If it changed, refreshes the group, resetting the ready state if asked to.
+    /// </summary>
+    void UpdateSelectedSubTypes(GroupInfo groupInfo, bool resetReadyStateIfUpdated = true);
+    void UpdateSelectedSubTypesForAccount(long accountId);
 }
