@@ -225,7 +225,7 @@ namespace CentralServer.LobbyServer
                 new StoreModule(this),
                 new TelemetryModule(this, _sessionRegistry),
                 new AccountModule(this),
-                new GroupModule(this, _groupRegistry),
+                new GroupModule(this, _sessionRegistry, _groupRegistry, _gameRegistry),
                 new FriendModule(this),
                 _matchmaking,
                 _gameLifecycle,

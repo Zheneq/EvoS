@@ -17,12 +17,20 @@ public class GroupModule : ILobbyModule
     private static readonly ILog log = LogManager.GetLogger(typeof(GroupModule));
     private const string InviteTarget = "a group";
     private readonly IClientConnection _conn;
+    private readonly ISessionRegistry _sessionRegistry;
     private readonly IGroupRegistry _groupRegistry;
+    private readonly IGameRegistry _gameRegistry;
 
-    public GroupModule(IClientConnection conn, IGroupRegistry groupRegistry)
+    public GroupModule(
+        IClientConnection conn,
+        ISessionRegistry sessionRegistry,
+        IGroupRegistry groupRegistry,
+        IGameRegistry gameRegistry)
     {
         _conn = conn;
+        _sessionRegistry = sessionRegistry;
         _groupRegistry = groupRegistry;
+        _gameRegistry = gameRegistry;
     }
 
     public void Register(IHandlerRegistry registry)
@@ -41,7 +49,7 @@ public class GroupModule : ILobbyModule
     {
         GroupInfo group = _groupRegistry.GetPlayerGroup(_conn.AccountId);
         //Sadly message.AccountId returns 0 so look it up by name/handle
-        long? accountId = SessionManager.GetOnlinePlayerByHandleOrUsername(request.Name);
+        long? accountId = _sessionRegistry.GetOnlinePlayerByHandleOrUsername(request.Name);
 
         GroupPromoteResponse response = new GroupPromoteResponse
         {
@@ -93,7 +101,7 @@ public class GroupModule : ILobbyModule
         }
         else
         {
-            long? accountId = SessionManager.GetOnlinePlayerByHandleOrUsername(request.MemberName);
+            long? accountId = _sessionRegistry.GetOnlinePlayerByHandleOrUsername(request.MemberName);
             if (!accountId.HasValue || !group.Members.Contains(accountId.Value))
             {
                 response.Success = false;
@@ -229,7 +237,7 @@ public class GroupModule : ILobbyModule
         }
         else
         {
-            LobbyServerProtocol leaderSession = SessionManager.GetClientConnection(leaderAccount.AccountId);
+            IClientConnection leaderSession = _sessionRegistry.GetClientConnection(leaderAccount.AccountId);
             leaderSession.Send(new GroupSuggestionRequest
             {
                 LeaderAccountId = group.Leader,
@@ -262,7 +270,7 @@ public class GroupModule : ILobbyModule
             return;
         }
 
-        long friendAccountId = SessionManager.GetOnlinePlayerByHandleOrUsername(request.FriendHandle) ?? 0;
+        long friendAccountId = _sessionRegistry.GetOnlinePlayerByHandleOrUsername(request.FriendHandle) ?? 0;
         if (friendAccountId == 0)
         {
             log.Info($"Failed to find player {request.FriendHandle} to request to join their group.");
@@ -321,7 +329,7 @@ public class GroupModule : ILobbyModule
             return;
         }
 
-        LobbyServerProtocol friend = SessionManager.GetClientConnection(friendAccountId);
+        IClientConnection friend = _sessionRegistry.GetClientConnection(friendAccountId);
         if (friend is null) // offline
         {
             log.Info($"{_conn.Handle} attempted to join {request.FriendHandle}'s group who is offline");
@@ -340,7 +348,7 @@ public class GroupModule : ILobbyModule
 
         TimeSpan expirationTime = LobbyConfiguration.GetGroupConfiguration().InviteTimeout;
         GroupConfirmationRequest.JoinType joinType = GroupConfirmationRequest.JoinType.RequestToJoinGroup;
-        LobbyServerProtocol leaderSession = SessionManager.GetClientConnection(friendGroup.Leader);
+        IClientConnection leaderSession = _sessionRegistry.GetClientConnection(friendGroup.Leader);
         leaderSession.Send(new GroupConfirmationRequest
         {
             GroupId = friendGroup.GroupId,
@@ -411,7 +419,7 @@ public class GroupModule : ILobbyModule
             return;
         }
 
-        LobbyServerProtocol requester = SessionManager.GetClientConnection(groupRequestInfo.RequesterAccountId);
+        IClientConnection requester = _sessionRegistry.GetClientConnection(groupRequestInfo.RequesterAccountId);
         if (requester is null)
         {
             log.Info($"Player {_conn.AccountId} responded to {typeForLog} {response.ConfirmationNumber} "
@@ -523,7 +531,7 @@ public class GroupModule : ILobbyModule
 
                 if (_conn.CurrentGame != null && !LobbyConfiguration.GetGroupConfiguration().CanInviteActiveOpponents)
                 {
-                    Game game = GameManager.GetGameWithPlayer(response.JoinerAccountId);
+                    Game game = _gameRegistry.GetGameWithPlayer(response.JoinerAccountId);
 
                     if (game != null && game == _conn.CurrentGame)
                     {
@@ -576,7 +584,7 @@ public class GroupModule : ILobbyModule
 
         foreach (long accountId in group.Members)
         {
-            SessionManager.GetClientConnection(accountId)?.SetGameType(request.GameType);
+            SessionManager.GetClientConnection(accountId)?.SetGameType(request.GameType); // TODO plan 10
         }
 
         _conn.Send(new PlayerGroupInfoUpdateResponse

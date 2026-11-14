@@ -46,7 +46,7 @@ public sealed class TestLobby
     public StoreModule StoreModule(IClientConnection conn) => new(conn);
     public TelemetryModule TelemetryModule(IClientConnection conn) => new(conn, Sessions);
     public AccountModule AccountModule(IClientConnection conn) => new(conn);
-    public GroupModule GroupModule(IClientConnection conn) => new(conn, Groups);
+    public GroupModule GroupModule(IClientConnection conn) => new(conn, Sessions, Groups, Games);
     public FriendModule FriendModule(IClientConnection conn) => new(conn);
     public MatchmakingModule MatchmakingModule(IClientConnection conn) => new(conn, Sessions, Groups, Matchmaking);
     public GameLifecycleModule GameLifecycleModule(IClientConnection conn) => new(conn, Sessions, Groups, Games);
