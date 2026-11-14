@@ -1334,18 +1334,7 @@ public abstract class Game : IDraftHost
             return LobbyCharacterInfo.Of(account.CharacterData[characterType]);
         }
 
-        return new LobbyCharacterInfo
-        {
-            CharacterType = characterType,
-            CharacterAbilityVfxSwaps = new CharacterAbilityVfxSwapInfo(),
-            CharacterCards = CharacterCardInfo.MakeDefault(),
-            CharacterLevel = 1,
-            CharacterLoadouts = new List<CharacterLoadout>(),
-            CharacterMatches = 0,
-            CharacterMods = EvoS.DirectoryServer.Character.CharacterManager.GetDefaultMods(characterType),
-            CharacterSkin = new CharacterVisualInfo(),
-            CharacterTaunts = new List<PlayerTauntData>()
-        };
+        return InitializeDefaultCharacterInfo(characterType);
     }
 
     protected void UpdateFriendStatuses()
