@@ -73,6 +73,9 @@ public abstract class Game : IDraftHost
 
     public bool IsCancelled { private set; get; }
 
+    // Canceled together with IsCancelled being set
+    private readonly CancellationTokenSource _cancellation = new();
+
     public GameSubType GameSubType { protected set; get; } // can be null
 
     protected IReadOnlyDictionary<long, DateTime> QueueEntryTimes { get; set; } = new Dictionary<long, DateTime>();
@@ -588,6 +591,10 @@ public abstract class Game : IDraftHost
             }
             IsCancelled = true;
         }
+
+        // Whatever waits on the match, e.g. a draft sub-phase, stops waiting.
+        // Asynchronously, so that it does not carry on on this thread before the match is cleaned up.
+        _ = _cancellation.CancelAsync();
 
         foreach (LobbyServerProtocol client in GetClients())
         {
@@ -1278,6 +1285,8 @@ public abstract class Game : IDraftHost
     IReadOnlyList<LobbyServerPlayerInfo> IDraftHost.Roster => TeamInfo.TeamPlayerInfo;
 
     LobbyServerPlayerInfo IDraftHost.GetMainSlot(long accountId) => GetPlayerInfo(accountId);
+
+    CancellationToken IDraftHost.CancellationToken => _cancellation.Token;
 
     bool IDraftHost.HasBans => GameModeManager.GetBans(GameSubType.LocalizedName);
 

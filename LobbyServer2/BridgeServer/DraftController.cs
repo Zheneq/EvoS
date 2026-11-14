@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using CentralServer.LobbyServer.Character;
 using EvoS.Framework.Constants.Enums;
@@ -11,16 +11,31 @@ using log4net;
 namespace CentralServer.BridgeServer;
 
 // State of a draft (ranked freelancer selection) and the loop that runs its phases
-public class DraftController(IDraftHost host)
+public class DraftController(IDraftHost host, TimeProvider timeProvider = null)
 {
     private static readonly ILog log = LogManager.GetLogger(typeof(DraftController));
 
+    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
     private RankedResolutionPhaseData RankedResolutionPhaseData = new();
-    private TimeSpan TimeLeftInSubPhase = new();
-    private bool isCancellationRequested = false;
+    // The current sub-phase: when it started, how long it lasts,
+    // and what ends it early (everyone on deck has locked in, or the match is canceled)
+    private long _subPhaseStart;
+    private TimeSpan _subPhaseTimeout;
+    private CancellationTokenSource _subPhaseEnd = new();
     private static readonly TimeSpan DraftEndDelay = TimeSpan.FromSeconds(2);
     public FreelancerResolutionPhaseSubType PhaseSubType { get; internal set; } = FreelancerResolutionPhaseSubType.UNDEFINED;
     private int PlayersInDeck { set; get; }
+
+    private TimeSpan TimeLeftInSubPhase
+    {
+        get
+        {
+            TimeSpan timeLeft = _subPhaseTimeout - _timeProvider.GetElapsedTime(_subPhaseStart);
+            return timeLeft > TimeSpan.Zero ? timeLeft : TimeSpan.Zero;
+        }
+    }
+
+    private bool IsMatchCancelled => host.CancellationToken.IsCancellationRequested;
 
     public async Task RunAsync()
     {
@@ -82,7 +97,7 @@ public class DraftController(IDraftHost host)
 
             await HandleRankedResolutionSubPhase(PhaseSubType, player1, sendGameInfoNotify);
             sendGameInfoNotify = false;
-            if (host.IsCancelled)
+            if (IsMatchCancelled)
             {
                 return;
             }
@@ -197,8 +212,9 @@ public class DraftController(IDraftHost host)
         if (PhaseSubType == FreelancerResolutionPhaseSubType.PICK_FREELANCER1
             || PhaseSubType == FreelancerResolutionPhaseSubType.PICK_FREELANCER2)
         {
-            await Task.Delay(DraftEndDelay);
-            if (host.IsCancelled)
+            await Task.Delay(DraftEndDelay, _timeProvider, host.CancellationToken)
+                .ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+            if (IsMatchCancelled)
             {
                 return;
             }
@@ -439,21 +455,19 @@ public class DraftController(IDraftHost host)
 #if DEBUG
         log.Info($"Starting ranked resolution sub phase {subPhase} for Team {player.TeamId}");
 #endif
-        RankedResolutionPhaseData pickPhaseData = new()
-        {
-            TimeLeftInSubPhase = GetSubPhaseTimeout(subPhase)
-        };
-
-        TimeLeftInSubPhase = pickPhaseData.TimeLeftInSubPhase;
+        _subPhaseTimeout = GetSubPhaseTimeout(subPhase);
+        _subPhaseStart = _timeProvider.GetTimestamp();
         SendRankedResolutionSubPhase();
         if (sendGameInfoNotify)
         {
             host.SendGameInfoNotifications();
         }
 
-        isCancellationRequested = false;
+        // Not disposed: a lock-in can still cancel it from another thread after the sub-phase is over.
+        // All it holds is a registration on the match's token, which goes away with the game.
+        _subPhaseEnd = CancellationTokenSource.CreateLinkedTokenSource(host.CancellationToken);
 
-        await MonitorSubPhaseAsync(pickPhaseData.TimeLeftInSubPhase, player);
+        await MonitorSubPhaseAsync(_subPhaseTimeout, player);
     }
 
     private TimeSpan GetSubPhaseTimeout(FreelancerResolutionPhaseSubType subPhase) =>
@@ -469,41 +483,36 @@ public class DraftController(IDraftHost host)
 
     private async Task MonitorSubPhaseAsync(TimeSpan timeLeftInSubPhase, LobbyServerPlayerInfo player)
     {
-        Stopwatch stopwatch = Stopwatch.StartNew();
         TimeSpan botCheckInterval = TimeSpan.FromSeconds(5);
+        TimeSpan waitTime = !player.IsHumanControlled && botCheckInterval < timeLeftInSubPhase
+            ? botCheckInterval
+            : timeLeftInSubPhase;
 
-        while (stopwatch.Elapsed <= timeLeftInSubPhase)
+        CancellationToken subPhaseEnd = _subPhaseEnd.Token;
+        await Task.Delay(waitTime, _timeProvider, subPhaseEnd)
+            .ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+
+#if DEBUG
+        if (subPhaseEnd.IsCancellationRequested)
         {
-            if (isCancellationRequested || host.IsCancelled)
-            {
-#if DEBUG
-                log.Info($"Cancellation requested. Exiting sub-phase monitoring for player {player.PlayerId}.");
-#endif
-                return;
-            }
-
-            if (!player.IsHumanControlled && stopwatch.Elapsed > botCheckInterval)
-            {
-#if DEBUG
-                log.Info($"AI-controlled player {player.PlayerId} has been checked after {botCheckInterval.TotalSeconds} seconds. Exiting sub-phase early.");
-#endif
-                return;
-            }
-
-
-            TimeLeftInSubPhase = timeLeftInSubPhase - stopwatch.Elapsed;
-            await Task.Delay(100);
+            log.Info($"Cancellation requested. Exiting sub-phase monitoring for player {player.PlayerId}.");
         }
-
-#if DEBUG
-        log.Info($"Sub-phase monitoring complete for player {player.PlayerId} after {stopwatch.Elapsed.TotalSeconds} seconds.");
+        else if (waitTime < timeLeftInSubPhase)
+        {
+            log.Info($"AI-controlled player {player.PlayerId} has been checked after {botCheckInterval.TotalSeconds} seconds. Exiting sub-phase early.");
+        }
+        else
+        {
+            log.Info($"Sub-phase monitoring complete for player {player.PlayerId} after {waitTime.TotalSeconds} seconds.");
+        }
 #endif
     }
 
     // When a player locks in, kill the timer
     private void SkipRankedResolutionSubPhase()
     {
-        isCancellationRequested = true;
+        // Asynchronously, so that the draft does not move on to the next sub-phase on the thread of the request
+        _ = _subPhaseEnd.CancelAsync();
     }
 
     internal void SetRankedResolutionPhaseData(RankedResolutionPhaseData newRankedResolutionPhaseData)

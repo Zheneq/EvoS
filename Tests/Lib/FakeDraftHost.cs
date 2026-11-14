@@ -22,7 +22,9 @@ public class FakeDraftHost : IDraftHost
     // What CheckParticipantsConnected finds. Like the game, it cancels the match when someone has disconnected.
     public bool Connected { get; set; } = true;
 
-    public bool IsCancelled { get; private set; }
+    private readonly CancellationTokenSource _cancellation = new();
+    public CancellationToken CancellationToken => _cancellation.Token;
+    public bool IsCancelled => _cancellation.IsCancellationRequested;
     public readonly List<(string? DodgerHandle, long? DodgerAccountId)> Cancellations = [];
     public readonly List<(FreelancerResolutionPhaseSubType Phase, RankedResolutionPhaseData Data)> Snapshots = [];
     public int GameInfoNotifications;
@@ -51,8 +53,9 @@ public class FakeDraftHost : IDraftHost
             return;
         }
 
-        IsCancelled = true;
         Cancellations.Add((dodgerHandle, dodgerAccountId));
+        // Like the game
+        _ = _cancellation.CancelAsync();
     }
 
     public void SendDraftSnapshot(FreelancerResolutionPhaseSubType phase, RankedResolutionPhaseData data)

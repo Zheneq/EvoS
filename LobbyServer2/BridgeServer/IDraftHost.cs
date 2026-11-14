@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using EvoS.Framework.Constants.Enums;
 using EvoS.Framework.Network.Static;
 
@@ -12,7 +13,8 @@ public interface IDraftHost
     LobbyServerPlayerInfo GetPlayerById(int playerId);
     // The slot of the account itself, not one of the slots it controls
     LobbyServerPlayerInfo GetMainSlot(long accountId);
-    bool IsCancelled { get; }
+    // Cancelled when the match is cancelled
+    CancellationToken CancellationToken { get; }
     bool IsControlAllBots { get; }
     bool HasBans { get; }
     DraftTimeouts Timeouts { get; }

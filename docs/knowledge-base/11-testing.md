@@ -29,6 +29,7 @@
 | `PracticeManagerTest` | character checks before a practice game starts | static manager, mock DAO mode |
 | `DraftPhasesTest` | draft phase order for regular, no-ban and multilancer rosters | pure static `DraftController.GetDraftPhases` |
 | `DraftBotPickTest`, `DraftTradeTest` | bot picks on deck, trading slot resolution | `DraftController` over `FakeDraftHost` with hand-built roster and draft state |
+| `DraftControllerTest` | draft sub-phase timing: full timeout for humans, 5 s for bots, lock-in and match cancellation end the wait, time left in snapshots | `DraftController` over `FakeDraftHost` and `FakeTimeProvider` (`Microsoft.Extensions.TimeProvider.Testing`) |
 | `DraftModuleTest` | draft requests: response type and content per result, not drafting, wrong phase | module over `RecordingClientConnection` + `TestGame : PvpGame(null)` with a controller attached (the module needs a `Game` for `CurrentGame`) |
 | `CharacterSelectionTest` | `CharacterRules`, character updates per game status | `TestGame : PvpGame(null)` |
 | `QueuePenaltyManagerTest`, `QueuePriorityManagerTest` | penalty/priority logic | mock DAO mode |
@@ -50,8 +51,10 @@
 
 - Most cases of the draft request methods (`DraftController.Hover`/`Ban`/`Select`/`Trade`):
   `DraftModuleTest` covers only one or two per method (plan 03 adds the rest).
-- A draft or a game start run end to end: the phase loop and the start flows
-  (`PvpGame.StartGameAsync`, `CustomGame.StartCustomGameAsync`) wait on real `Task.Delay`s.
+- A full draft run (plan 03 adds it; the phase loop already runs on an injected
+  `TimeProvider`).
+- A game start run end to end: the start flows (`PvpGame.StartGameAsync`,
+  `CustomGame.StartCustomGameAsync`) wait on real `Task.Delay`s.
 - `Game` team assembly, duplicate resolution, cancellation and finalization, beyond what
   the penalty tests reach.
 - `MatchmakingQueue` orchestration, `ChatManager`, `ServerManager`/`GameManager`,
@@ -66,8 +69,8 @@ Root causes:
 2. `Game` is reachable only by subclassing it and driving protected members, with a null
    server.
 3. `DB.Get()` / `EvosConfiguration` / `GameWideData` static access inside business logic.
-4. Time (`DateTime.Now/UtcNow`) and `Task.Delay` used directly (draft phase timers,
-   start flows, server shutdown delays).
+4. Time (`DateTime.Now/UtcNow`) and `Task.Delay` used directly (start flows, server
+   shutdown delays; the draft is on `TimeProvider` now).
 
 Doc 12 addresses these in order: `DraftController` with an injected delay (Stage 4a),
 constructor injection everywhere with a per-test `TestLobby` graph replacing the shared
