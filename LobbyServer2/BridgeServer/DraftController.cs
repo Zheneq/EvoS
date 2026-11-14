@@ -22,6 +22,11 @@ public class DraftController(IDraftHost host, TimeProvider timeProvider = null)
     private long _subPhaseStart;
     private TimeSpan _subPhaseTimeout;
     private CancellationTokenSource _subPhaseEnd = new();
+    // Whether the current sub-phase still takes bans, lock-ins and trades
+    private bool _subPhaseOpen;
+    // Guards all draft state, for client requests and the phase loop alike.
+    // Never held while canceling the match or across an await.
+    private readonly Lock _lock = new();
     private static readonly TimeSpan DraftEndDelay = TimeSpan.FromSeconds(2);
     public FreelancerResolutionPhaseSubType PhaseSubType { get; internal set; } = FreelancerResolutionPhaseSubType.UNDEFINED;
     private int PlayersInDeck { set; get; }
@@ -39,33 +44,36 @@ public class DraftController(IDraftHost host, TimeProvider timeProvider = null)
 
     public async Task RunAsync()
     {
-        // Initialize unselected player states
-        var unselectedPlayerStates = host.Roster.Select(player =>
-            new RankedResolutionPlayerState
-            {
-                PlayerId = player.PlayerId,
-                Intention = CharacterType.None,
-                OnDeckness = RankedResolutionPlayerState.ReadyState.Unselected,
-            }).ToList();
-
-        // Initialize ranked resolution phase data
-        RankedResolutionPhaseData = new RankedResolutionPhaseData
+        List<KeyValuePair<int, FreelancerResolutionPhaseSubType>> phases;
+        lock (_lock)
         {
-            TimeLeftInSubPhase = TimeSpan.Zero,
-            UnselectedPlayerStates = unselectedPlayerStates,
-            PlayersOnDeck = new List<RankedResolutionPlayerState>(),
-            FriendlyBans = new List<CharacterType>(),
-            EnemyBans = new List<CharacterType>(),
-            FriendlyTeamSelections = new Dictionary<int, CharacterType>(),
-            EnemyTeamSelections = new Dictionary<int, CharacterType>(),
-            TradeActions = new List<RankedTradeData>(),
-            PlayerIdByImporance = host.Roster.Select(p => p.PlayerId).ToList(),
-        };
+            // Initialize unselected player states
+            var unselectedPlayerStates = host.Roster.Select(player =>
+                new RankedResolutionPlayerState
+                {
+                    PlayerId = player.PlayerId,
+                    Intention = CharacterType.None,
+                    OnDeckness = RankedResolutionPlayerState.ReadyState.Unselected,
+                }).ToList();
 
-        // Define phase order
-        // A player controlling all characters of their team has no one to trade with
-        List<KeyValuePair<int, FreelancerResolutionPhaseSubType>> phases =
-            GetDraftPhases(host.Roster, host.HasBans, hasTrade: !host.IsControlAllBots);
+            // Initialize ranked resolution phase data
+            RankedResolutionPhaseData = new RankedResolutionPhaseData
+            {
+                TimeLeftInSubPhase = TimeSpan.Zero,
+                UnselectedPlayerStates = unselectedPlayerStates,
+                PlayersOnDeck = new List<RankedResolutionPlayerState>(),
+                FriendlyBans = new List<CharacterType>(),
+                EnemyBans = new List<CharacterType>(),
+                FriendlyTeamSelections = new Dictionary<int, CharacterType>(),
+                EnemyTeamSelections = new Dictionary<int, CharacterType>(),
+                TradeActions = new List<RankedTradeData>(),
+                PlayerIdByImporance = host.Roster.Select(p => p.PlayerId).ToList(),
+            };
+
+            // Define phase order
+            // A player controlling all characters of their team has no one to trade with
+            phases = GetDraftPhases(host.Roster, host.HasBans, hasTrade: !host.IsControlAllBots);
+        }
 
         bool sendGameInfoNotify = true;
 
@@ -77,134 +85,59 @@ public class DraftController(IDraftHost host, TimeProvider timeProvider = null)
                 return;
             }
 
-            PhaseSubType = subPhase.Value;
-
-            LobbyServerPlayerInfo player1 = GetPlayerInfo(subPhase.Key, host.Roster);
-            LobbyServerPlayerInfo player2 = GetPlayerInfo(subPhase.Key + 1, host.Roster);
-
-            if (PhaseSubType == FreelancerResolutionPhaseSubType.FREELANCER_TRADE || player1 == null)
+            LobbyServerPlayerInfo player1;
+            bool isDeckReady;
+            lock (_lock)
             {
-                // Mostly when subPhase.Key is -1 (FREELANCER_TRADE) we still need a player1
-                player1 = new LobbyServerPlayerInfo();
+                PhaseSubType = subPhase.Value;
+
+                player1 = GetPlayerInfo(subPhase.Key, host.Roster);
+                LobbyServerPlayerInfo player2 = GetPlayerInfo(subPhase.Key + 1, host.Roster);
+
+                if (PhaseSubType == FreelancerResolutionPhaseSubType.FREELANCER_TRADE || player1 == null)
+                {
+                    // Mostly when subPhase.Key is -1 (FREELANCER_TRADE) we still need a player1
+                    player1 = new LobbyServerPlayerInfo();
+                }
+
+                RankedResolutionPhaseData.PlayersOnDeck.Clear(); // Reset deck (People who can do stuff, ban or select a freelancer those are the PlayersOnDeck)
+                PlayersInDeck = 0;
+                isDeckReady = subPhase.Key == -1 || AddPlayersToDeckBasedOnPhase(PhaseSubType, player1, player2);
+                if (isDeckReady)
+                {
+                    OpenSubPhase(player1);
+                }
             }
 
-            RankedResolutionPhaseData.PlayersOnDeck.Clear(); // Reset deck (People who can do stuff, ban or select a freelancer those are the PlayersOnDeck)
-            PlayersInDeck = 0;
-            if (subPhase.Key != -1)
+            // Canceling the match reaches far beyond the draft, so it is done outside the lock
+            if (!isDeckReady)
             {
-                AddPlayersToDeckBasedOnPhase(PhaseSubType, player1, player2);
+                host.CancelMatch();
+                return;
             }
 
-            await HandleRankedResolutionSubPhase(PhaseSubType, player1, sendGameInfoNotify);
-            sendGameInfoNotify = false;
+            if (sendGameInfoNotify)
+            {
+                host.SendGameInfoNotifications();
+                sendGameInfoNotify = false;
+            }
+
+            await MonitorSubPhaseAsync(_subPhaseTimeout, player1);
             if (IsMatchCancelled)
             {
                 return;
             }
 
-            // TODO: There can be a race condition if a client request comes at this point
-
-            HashSet<CharacterType> usedCharacterTypes = GetUsedCharacterTypes();
-            bool isBanPhase = PhaseSubType == FreelancerResolutionPhaseSubType.PICK_BANS1
-                              || PhaseSubType == FreelancerResolutionPhaseSubType.PICK_BANS2;
-            bool isPickPhase = PhaseSubType == FreelancerResolutionPhaseSubType.PICK_FREELANCER1
-                               || PhaseSubType == FreelancerResolutionPhaseSubType.PICK_FREELANCER2;
-
-            // Decide what to lock in for those who did not lock in themselves
-            List<int> autoSelectedDeckIndexes = new();
-            bool isIntentionChanged = false;
-            for (int deckIndex = 0; deckIndex < RankedResolutionPhaseData.PlayersOnDeck.Count; deckIndex++)
+            LobbyServerPlayerInfo afkPlayer;
+            lock (_lock)
             {
-                RankedResolutionPlayerState playersInDeck = RankedResolutionPhaseData.PlayersOnDeck[deckIndex];
-                // Selected is when did not lock in or clicked ban button
-                if (playersInDeck.OnDeckness != RankedResolutionPlayerState.ReadyState.Selected)
-                {
-                    continue;
-                }
-
-                LobbyServerPlayerInfo player = GetPlayerInfo(playersInDeck.PlayerId - 1, host.Roster);
-                CharacterType characterType = playersInDeck.Intention;
-                // Let bans be random if they do not select a freelancer (or it was taken in the meantime)
-                if (isBanPhase && (characterType == CharacterType.None || usedCharacterTypes.Contains(characterType)))
-                {
-                    characterType = AssignRandomCharacterForDraft(player, usedCharacterTypes);
-                }
-                else if (characterType == CharacterType.None)
-                {
-                    // Cancel Match AFK Player
-                    host.CancelMatch(player.Handle, player.AccountId);
-                    return;
-                }
-                //Player selected fill but did not lock in, or edge case where "MAYBE" we still have fill
-                else if (characterType == CharacterType.PendingWillFill
-                         || characterType == CharacterType.TestFreelancer1
-                         || characterType == CharacterType.TestFreelancer2)
-                {
-                    characterType = AssignRandomCharacterForDraft(player, usedCharacterTypes, characterType);
-                }
-                // Hovered a character that was taken in the meantime, e.g. by a teammate on deck at the same time
-                else if (usedCharacterTypes.Contains(characterType))
-                {
-                    characterType = isPickPhase && player.IsAIControlled
-                        ? PickDraftCharacterForBot(player, usedCharacterTypes)
-                        : AssignRandomCharacterForDraft(player, usedCharacterTypes);
-                }
-
-                // Several players can be on deck at the same time
-                usedCharacterTypes.Add(characterType);
-                autoSelectedDeckIndexes.Add(deckIndex);
-                if (characterType != playersInDeck.Intention)
-                {
-                    playersInDeck.Intention = characterType;
-                    RankedResolutionPhaseData.PlayersOnDeck[deckIndex] = playersInDeck;
-                    isIntentionChanged = true;
-                }
+                afkPlayer = CloseSubPhase();
             }
 
-            // Show random characters as if they were hovered before locking them in,
-            // clients take the character for the lock in animation from the hover
-            if (isIntentionChanged)
+            if (afkPlayer is not null)
             {
-                SendRankedResolutionSubPhase();
-            }
-
-            foreach (int deckIndex in autoSelectedDeckIndexes)
-            {
-                RankedResolutionPlayerState playersInDeck = RankedResolutionPhaseData.PlayersOnDeck[deckIndex];
-                LobbyServerPlayerInfo player = GetPlayerInfo(playersInDeck.PlayerId - 1, host.Roster);
-                if (isBanPhase)
-                {
-                    AddToTeamBanSelection(player, playersInDeck.Intention);
-                    // Same as a manual ban
-                    playersInDeck.Intention = CharacterType.None;
-                }
-                else if (isPickPhase)
-                {
-                    AddToTeamSelection(player, playersInDeck.Intention);
-                }
-
-                // Same as a manual lock in
-                playersInDeck.OnDeckness = RankedResolutionPlayerState.ReadyState.Unselected;
-                RankedResolutionPhaseData.PlayersOnDeck[deckIndex] = playersInDeck;
-            }
-
-            // Like after a manual lock in, show the selection before moving on.
-            // Otherwise, clients never see it if it is the last sub phase.
-            if (autoSelectedDeckIndexes.Count > 0)
-            {
-                SendRankedResolutionSubPhase();
-            }
-
-            // Update any players who have a character selected, but that character is already selected or banned, reset their selection
-            usedCharacterTypes = GetUsedCharacterTypes();
-            for (int i = 0; i < RankedResolutionPhaseData.UnselectedPlayerStates.Count; i++)
-            {
-                RankedResolutionPlayerState player = RankedResolutionPhaseData.UnselectedPlayerStates[i];
-                if (usedCharacterTypes.Contains(player.Intention) && player.OnDeckness == RankedResolutionPlayerState.ReadyState.Unselected)
-                {
-                    player.Intention = CharacterType.None;
-                    RankedResolutionPhaseData.UnselectedPlayerStates[i] = player;
-                }
+                host.CancelMatch(afkPlayer.Handle, afkPlayer.AccountId);
+                return;
             }
         }
 
@@ -220,12 +153,153 @@ public class DraftController(IDraftHost host, TimeProvider timeProvider = null)
             }
         }
 
-        // Update TeamInfo with new values from rankedResolutionPhaseData.FriendlyTeamSelections
-        UpdateTeamSelection(RankedResolutionPhaseData.FriendlyTeamSelections);
+        lock (_lock)
+        {
+            // Update TeamInfo with new values from rankedResolutionPhaseData.FriendlyTeamSelections
+            UpdateTeamSelection(RankedResolutionPhaseData.FriendlyTeamSelections);
 
-        // Update TeamInfo with new values from rankedResolutionPhaseData.EnemyTeamSelections
-        UpdateTeamSelection(RankedResolutionPhaseData.EnemyTeamSelections);
+            // Update TeamInfo with new values from rankedResolutionPhaseData.EnemyTeamSelections
+            UpdateTeamSelection(RankedResolutionPhaseData.EnemyTeamSelections);
+        }
+    }
 
+    // Starts the timer of the current sub-phase and opens it for players' requests. Under the lock.
+    private void OpenSubPhase(LobbyServerPlayerInfo player)
+    {
+#if DEBUG
+        log.Info($"Starting ranked resolution sub phase {PhaseSubType} for Team {player.TeamId}");
+#endif
+        _subPhaseTimeout = GetSubPhaseTimeout(PhaseSubType);
+        _subPhaseStart = _timeProvider.GetTimestamp();
+        // Not disposed: cancellation runs its callbacks asynchronously and may still be using it.
+        // All it holds is a registration on the match's token, which goes away with the game.
+        _subPhaseEnd = CancellationTokenSource.CreateLinkedTokenSource(host.CancellationToken);
+        _subPhaseOpen = true;
+        SendRankedResolutionSubPhase();
+    }
+
+    // Puts the draft in the given sub-phase with the given state, open for requests, as if the phase loop had opened it
+    internal void OpenSubPhaseForTest(FreelancerResolutionPhaseSubType phase, RankedResolutionPhaseData data)
+    {
+        lock (_lock)
+        {
+            PhaseSubType = phase;
+            RankedResolutionPhaseData = data;
+            PlayersInDeck = data.PlayersOnDeck.Count(p => p.OnDeckness == RankedResolutionPlayerState.ReadyState.Selected);
+            _subPhaseOpen = true;
+        }
+    }
+
+    // Closes the current sub-phase to players' requests and locks in for those who did not lock in themselves.
+    // Returns a player who had to pick and did not even hover a character: the match has to be canceled then.
+    // Under the lock.
+    private LobbyServerPlayerInfo CloseSubPhase()
+    {
+        _subPhaseOpen = false;
+
+        HashSet<CharacterType> usedCharacterTypes = GetUsedCharacterTypes();
+        bool isBanPhase = PhaseSubType == FreelancerResolutionPhaseSubType.PICK_BANS1
+                          || PhaseSubType == FreelancerResolutionPhaseSubType.PICK_BANS2;
+        bool isPickPhase = PhaseSubType == FreelancerResolutionPhaseSubType.PICK_FREELANCER1
+                           || PhaseSubType == FreelancerResolutionPhaseSubType.PICK_FREELANCER2;
+
+        // Decide what to lock in for those who did not lock in themselves
+        List<int> autoSelectedDeckIndexes = new();
+        bool isIntentionChanged = false;
+        for (int deckIndex = 0; deckIndex < RankedResolutionPhaseData.PlayersOnDeck.Count; deckIndex++)
+        {
+            RankedResolutionPlayerState playersInDeck = RankedResolutionPhaseData.PlayersOnDeck[deckIndex];
+            // Selected is when did not lock in or clicked ban button
+            if (playersInDeck.OnDeckness != RankedResolutionPlayerState.ReadyState.Selected)
+            {
+                continue;
+            }
+
+            LobbyServerPlayerInfo player = GetPlayerInfo(playersInDeck.PlayerId - 1, host.Roster);
+            CharacterType characterType = playersInDeck.Intention;
+            // Let bans be random if they do not select a freelancer (or it was taken in the meantime)
+            if (isBanPhase && (characterType == CharacterType.None || usedCharacterTypes.Contains(characterType)))
+            {
+                characterType = AssignRandomCharacterForDraft(player, usedCharacterTypes);
+            }
+            else if (characterType == CharacterType.None)
+            {
+                // Cancel Match AFK Player
+                return player;
+            }
+            //Player selected fill but did not lock in, or edge case where "MAYBE" we still have fill
+            else if (characterType == CharacterType.PendingWillFill
+                     || characterType == CharacterType.TestFreelancer1
+                     || characterType == CharacterType.TestFreelancer2)
+            {
+                characterType = AssignRandomCharacterForDraft(player, usedCharacterTypes, characterType);
+            }
+            // Hovered a character that was taken in the meantime, e.g. by a teammate on deck at the same time
+            else if (usedCharacterTypes.Contains(characterType))
+            {
+                characterType = isPickPhase && player.IsAIControlled
+                    ? PickDraftCharacterForBot(player, usedCharacterTypes)
+                    : AssignRandomCharacterForDraft(player, usedCharacterTypes);
+            }
+
+            // Several players can be on deck at the same time
+            usedCharacterTypes.Add(characterType);
+            autoSelectedDeckIndexes.Add(deckIndex);
+            if (characterType != playersInDeck.Intention)
+            {
+                playersInDeck.Intention = characterType;
+                RankedResolutionPhaseData.PlayersOnDeck[deckIndex] = playersInDeck;
+                isIntentionChanged = true;
+            }
+        }
+
+        // Show random characters as if they were hovered before locking them in,
+        // clients take the character for the lock in animation from the hover
+        if (isIntentionChanged)
+        {
+            SendRankedResolutionSubPhase();
+        }
+
+        foreach (int deckIndex in autoSelectedDeckIndexes)
+        {
+            RankedResolutionPlayerState playersInDeck = RankedResolutionPhaseData.PlayersOnDeck[deckIndex];
+            LobbyServerPlayerInfo player = GetPlayerInfo(playersInDeck.PlayerId - 1, host.Roster);
+            if (isBanPhase)
+            {
+                AddToTeamBanSelection(player, playersInDeck.Intention);
+                // Same as a manual ban
+                playersInDeck.Intention = CharacterType.None;
+            }
+            else if (isPickPhase)
+            {
+                AddToTeamSelection(player, playersInDeck.Intention);
+            }
+
+            // Same as a manual lock in
+            playersInDeck.OnDeckness = RankedResolutionPlayerState.ReadyState.Unselected;
+            RankedResolutionPhaseData.PlayersOnDeck[deckIndex] = playersInDeck;
+        }
+
+        // Like after a manual lock in, show the selection before moving on.
+        // Otherwise, clients never see it if it is the last sub phase.
+        if (autoSelectedDeckIndexes.Count > 0)
+        {
+            SendRankedResolutionSubPhase();
+        }
+
+        // Update any players who have a character selected, but that character is already selected or banned, reset their selection
+        usedCharacterTypes = GetUsedCharacterTypes();
+        for (int i = 0; i < RankedResolutionPhaseData.UnselectedPlayerStates.Count; i++)
+        {
+            RankedResolutionPlayerState player = RankedResolutionPhaseData.UnselectedPlayerStates[i];
+            if (usedCharacterTypes.Contains(player.Intention) && player.OnDeckness == RankedResolutionPlayerState.ReadyState.Unselected)
+            {
+                player.Intention = CharacterType.None;
+                RankedResolutionPhaseData.UnselectedPlayerStates[i] = player;
+            }
+        }
+
+        return null;
     }
 
     // Teams NEED to be min 8 and max 8 only
@@ -349,7 +423,8 @@ public class DraftController(IDraftHost host, TimeProvider timeProvider = null)
         }
     }
     
-    private void AddPlayerToDeck(LobbyServerPlayerInfo player)
+    // Returns false if the player is a bot that the draft does not know
+    private bool AddPlayerToDeck(LobbyServerPlayerInfo player)
     {
         CharacterType characterType = CharacterType.None;
 
@@ -371,7 +446,7 @@ public class DraftController(IDraftHost host, TimeProvider timeProvider = null)
                 if (index < 0)
                 {
                     log.Error($"Failed to find bot #{player.PlayerId}! Cancelling match");
-                    host.CancelMatch();
+                    return false;
                 }
 
                 RankedResolutionPlayerState state = RankedResolutionPhaseData.UnselectedPlayerStates[index];
@@ -400,6 +475,7 @@ public class DraftController(IDraftHost host, TimeProvider timeProvider = null)
 
         // Increment the count of players in the deck (To know when people locked in we can have 2 so we cant just skip a phase if one is locked in and the other is not)
         PlayersInDeck++;
+        return true;
     }
 
     private static LobbyServerPlayerInfo GetPlayerInfo(int index, IReadOnlyList<LobbyServerPlayerInfo> teamPlayerInfo)
@@ -425,8 +501,9 @@ public class DraftController(IDraftHost host, TimeProvider timeProvider = null)
         selections.Add(characterType);
     }
 
-    // Method to add players to the deck based on the phase type
-    internal void AddPlayersToDeckBasedOnPhase(FreelancerResolutionPhaseSubType phase, LobbyServerPlayerInfo player1, LobbyServerPlayerInfo player2)
+    // Method to add players to the deck based on the phase type.
+    // Returns false if a bot could not be put on deck, in which case the match has to be canceled.
+    internal bool AddPlayersToDeckBasedOnPhase(FreelancerResolutionPhaseSubType phase, LobbyServerPlayerInfo player1, LobbyServerPlayerInfo player2)
     {
         switch (phase)
         {
@@ -434,40 +511,16 @@ public class DraftController(IDraftHost host, TimeProvider timeProvider = null)
             case FreelancerResolutionPhaseSubType.PICK_BANS2:
             case FreelancerResolutionPhaseSubType.PICK_FREELANCER1:
             {
-                AddPlayerToDeck(player1);
-                break;
+                return AddPlayerToDeck(player1);
             }
             case FreelancerResolutionPhaseSubType.PICK_FREELANCER2:
             {
-                AddPlayerToDeck(player1);
-                // Can be null if we are at the last Freelancer selection
-                if (player2 != null)
-                {
-                    AddPlayerToDeck(player2);
-                }
-                break;
+                // player2 can be null if we are at the last Freelancer selection
+                return AddPlayerToDeck(player1) && (player2 == null || AddPlayerToDeck(player2));
             }
         }
-    }
 
-    private async Task HandleRankedResolutionSubPhase(FreelancerResolutionPhaseSubType subPhase, LobbyServerPlayerInfo player, bool sendGameInfoNotify)
-    {
-#if DEBUG
-        log.Info($"Starting ranked resolution sub phase {subPhase} for Team {player.TeamId}");
-#endif
-        _subPhaseTimeout = GetSubPhaseTimeout(subPhase);
-        _subPhaseStart = _timeProvider.GetTimestamp();
-        SendRankedResolutionSubPhase();
-        if (sendGameInfoNotify)
-        {
-            host.SendGameInfoNotifications();
-        }
-
-        // Not disposed: a lock-in can still cancel it from another thread after the sub-phase is over.
-        // All it holds is a registration on the match's token, which goes away with the game.
-        _subPhaseEnd = CancellationTokenSource.CreateLinkedTokenSource(host.CancellationToken);
-
-        await MonitorSubPhaseAsync(_subPhaseTimeout, player);
+        return true;
     }
 
     private TimeSpan GetSubPhaseTimeout(FreelancerResolutionPhaseSubType subPhase) =>
@@ -537,128 +590,151 @@ public class DraftController(IDraftHost host, TimeProvider timeProvider = null)
     }
 
     // Requests from clients. The caller checks that the game is drafting.
+    // Each runs under the lock as a whole, so it happens either entirely before or entirely after a step
+    // of the phase loop. Bans, lock-ins and trades are rejected once their sub-phase has ended.
 
     public DraftRequestResult Hover(long accountId, CharacterType selection)
     {
-        RankedResolutionPhaseData rankedResolutionPhaseData = GetRankedResolutionPhaseData();
-        LobbyServerPlayerInfo player = GetDraftActingSlot(accountId);
-
-        List<RankedResolutionPlayerState> unselectedPlayerStates = rankedResolutionPhaseData.UnselectedPlayerStates;
-        int stateIndex = unselectedPlayerStates.FindIndex(p => p.PlayerId == player.PlayerId);
-
-        if (stateIndex >= 0)
+        lock (_lock)
         {
-            RankedResolutionPlayerState existingUnselectedPlayerStates = unselectedPlayerStates[stateIndex];
-            existingUnselectedPlayerStates.Intention = selection;
-            unselectedPlayerStates[stateIndex] = existingUnselectedPlayerStates;
-
-            List<RankedResolutionPlayerState> playersOnDeck = rankedResolutionPhaseData.PlayersOnDeck;
-            int deckIndex = playersOnDeck.FindIndex(p => p.PlayerId == player.PlayerId);
-
-            if (deckIndex >= 0)
+            RankedResolutionPhaseData rankedResolutionPhaseData = GetRankedResolutionPhaseData();
+            LobbyServerPlayerInfo player = GetDraftActingSlot(accountId);
+            if (player is null)
             {
-                RankedResolutionPlayerState existingPlayersOnDeck = playersOnDeck[deckIndex];
-                existingPlayersOnDeck.Intention = selection;
-                playersOnDeck[deckIndex] = existingPlayersOnDeck;
+                return DraftRequestResult.Failed();
             }
 
-            SetRankedResolutionPhaseData(rankedResolutionPhaseData);
-            SendRankedResolutionSubPhase();
+            List<RankedResolutionPlayerState> unselectedPlayerStates = rankedResolutionPhaseData.UnselectedPlayerStates;
+            int stateIndex = unselectedPlayerStates.FindIndex(p => p.PlayerId == player.PlayerId);
 
-            return DraftRequestResult.Succeeded;
-        }
-        else
-        {
-            // TODO: error message?
-            return DraftRequestResult.Failed();
+            if (stateIndex >= 0)
+            {
+                RankedResolutionPlayerState existingUnselectedPlayerStates = unselectedPlayerStates[stateIndex];
+                existingUnselectedPlayerStates.Intention = selection;
+                unselectedPlayerStates[stateIndex] = existingUnselectedPlayerStates;
+
+                List<RankedResolutionPlayerState> playersOnDeck = rankedResolutionPhaseData.PlayersOnDeck;
+                int deckIndex = playersOnDeck.FindIndex(p => p.PlayerId == player.PlayerId);
+
+                if (deckIndex >= 0)
+                {
+                    RankedResolutionPlayerState existingPlayersOnDeck = playersOnDeck[deckIndex];
+                    existingPlayersOnDeck.Intention = selection;
+                    playersOnDeck[deckIndex] = existingPlayersOnDeck;
+                }
+
+                SetRankedResolutionPhaseData(rankedResolutionPhaseData);
+                SendRankedResolutionSubPhase();
+
+                return DraftRequestResult.Succeeded;
+            }
+            else
+            {
+                // TODO: error message?
+                return DraftRequestResult.Failed();
+            }
         }
     }
 
     public DraftRequestResult Ban(long accountId, CharacterType selection)
     {
-        if (PhaseSubType != FreelancerResolutionPhaseSubType.PICK_BANS1
-            && PhaseSubType != FreelancerResolutionPhaseSubType.PICK_BANS2)
+        lock (_lock)
         {
-            return DraftRequestResult.Failed();
-        }
-
-        RankedResolutionPhaseData rankedResolutionPhaseData = GetRankedResolutionPhaseData();
-        LobbyServerPlayerInfo player = GetDraftActingSlot(accountId);
-
-        List<RankedResolutionPlayerState> playersOnDeck = rankedResolutionPhaseData.PlayersOnDeck;
-        int deckIndex = playersOnDeck.FindIndex(p => p.PlayerId == player.PlayerId);
-
-        HashSet<CharacterType> usedCharacterTypes = GetUsedCharacterTypes();
-        CharacterType characterType = selection;
-        if (deckIndex >= 0 && !usedCharacterTypes.Contains(characterType)) // TODO you can still lock in a duplicate by timing out
-        {
-
-            if (characterType == CharacterType.PendingWillFill
-                || characterType == CharacterType.TestFreelancer1
-                || characterType == CharacterType.TestFreelancer2)
+            if (!_subPhaseOpen
+                || (PhaseSubType != FreelancerResolutionPhaseSubType.PICK_BANS1
+                    && PhaseSubType != FreelancerResolutionPhaseSubType.PICK_BANS2))
             {
-                characterType = AssignRandomCharacterForDraft(player, usedCharacterTypes, characterType);
+                return DraftRequestResult.Failed();
             }
 
-            RankedResolutionPlayerState existingPlayersOnDeck = playersOnDeck[deckIndex];
-            if (characterType != selection)
+            RankedResolutionPhaseData rankedResolutionPhaseData = GetRankedResolutionPhaseData();
+            LobbyServerPlayerInfo player = GetDraftActingSlot(accountId);
+            if (player is null)
             {
-                // Show the random character as if it was hovered before locking it in,
-                // clients take the character for the lock in animation from the hover
-                existingPlayersOnDeck.Intention = characterType;
+                return DraftRequestResult.Failed();
+            }
+
+            List<RankedResolutionPlayerState> playersOnDeck = rankedResolutionPhaseData.PlayersOnDeck;
+            int deckIndex = playersOnDeck.FindIndex(p => p.PlayerId == player.PlayerId);
+
+            HashSet<CharacterType> usedCharacterTypes = GetUsedCharacterTypes();
+            CharacterType characterType = selection;
+            if (deckIndex >= 0 && !usedCharacterTypes.Contains(characterType)) // TODO you can still lock in a duplicate by timing out
+            {
+
+                if (characterType == CharacterType.PendingWillFill
+                    || characterType == CharacterType.TestFreelancer1
+                    || characterType == CharacterType.TestFreelancer2)
+                {
+                    characterType = AssignRandomCharacterForDraft(player, usedCharacterTypes, characterType);
+                }
+
+                RankedResolutionPlayerState existingPlayersOnDeck = playersOnDeck[deckIndex];
+                if (characterType != selection)
+                {
+                    // Show the random character as if it was hovered before locking it in,
+                    // clients take the character for the lock in animation from the hover
+                    existingPlayersOnDeck.Intention = characterType;
+                    playersOnDeck[deckIndex] = existingPlayersOnDeck;
+                    SetRankedResolutionPhaseData(rankedResolutionPhaseData);
+                    SendRankedResolutionSubPhase();
+                }
+
+                if (player.TeamId == Team.TeamA)
+                {
+                    rankedResolutionPhaseData.FriendlyBans.Add(characterType);
+                }
+                else
+                {
+                    rankedResolutionPhaseData.EnemyBans.Add(characterType);
+                }
+
+                // A locked in ban is not a hover anymore, otherwise clients show it in the next ban slot
+                existingPlayersOnDeck.Intention = CharacterType.None;
+                existingPlayersOnDeck.OnDeckness = RankedResolutionPlayerState.ReadyState.Unselected;
                 playersOnDeck[deckIndex] = existingPlayersOnDeck;
+
                 SetRankedResolutionPhaseData(rankedResolutionPhaseData);
                 SendRankedResolutionSubPhase();
-            }
 
-            if (player.TeamId == Team.TeamA)
-            {
-                rankedResolutionPhaseData.FriendlyBans.Add(characterType);
+                SkipRankedResolutionSubPhase();
+
+                return DraftRequestResult.Succeeded;
             }
             else
             {
-                rankedResolutionPhaseData.EnemyBans.Add(characterType);
+                // TODO: error message?
+                return DraftRequestResult.Failed();
             }
-
-            // A locked in ban is not a hover anymore, otherwise clients show it in the next ban slot
-            existingPlayersOnDeck.Intention = CharacterType.None;
-            existingPlayersOnDeck.OnDeckness = RankedResolutionPlayerState.ReadyState.Unselected;
-            playersOnDeck[deckIndex] = existingPlayersOnDeck;
-
-            SetRankedResolutionPhaseData(rankedResolutionPhaseData);
-            SendRankedResolutionSubPhase();
-
-            SkipRankedResolutionSubPhase();
-
-            return DraftRequestResult.Succeeded;
-        }
-        else
-        {
-            // TODO: error message?
-            return DraftRequestResult.Failed();
         }
     }
 
     public DraftRequestResult Select(long accountId, CharacterType selection)
     {
-        if (PhaseSubType != FreelancerResolutionPhaseSubType.PICK_FREELANCER1
-            && PhaseSubType != FreelancerResolutionPhaseSubType.PICK_FREELANCER2)
+        lock (_lock)
         {
-            log.Warn($"Player {GetHandle(accountId)} attempted to lock in draft selection in incorrect phase {PhaseSubType}");
-            return DraftRequestResult.Failed(LocalizationPayload.Create("CannotReady@Global"));
-        }
+            if (!_subPhaseOpen
+                || (PhaseSubType != FreelancerResolutionPhaseSubType.PICK_FREELANCER1
+                    && PhaseSubType != FreelancerResolutionPhaseSubType.PICK_FREELANCER2))
+            {
+                log.Warn($"Player {GetHandle(accountId)} attempted to lock in draft selection in incorrect phase {PhaseSubType}"
+                         + (_subPhaseOpen ? "" : " (sub-phase ended)"));
+                return DraftRequestResult.Failed(LocalizationPayload.Create("CannotReady@Global"));
+            }
 
-        RankedResolutionPhaseData rankedResolutionPhaseData = GetRankedResolutionPhaseData();
-        LobbyServerPlayerInfo player = GetDraftActingSlot(accountId);
+            RankedResolutionPhaseData rankedResolutionPhaseData = GetRankedResolutionPhaseData();
+            LobbyServerPlayerInfo player = GetDraftActingSlot(accountId);
+            if (player is null)
+            {
+                return DraftRequestResult.Failed();
+            }
 
-        Dictionary<int, CharacterType> teamSelections = player.TeamId == Team.TeamA
-            ? rankedResolutionPhaseData.FriendlyTeamSelections
-            : rankedResolutionPhaseData.EnemyTeamSelections;
+            Dictionary<int, CharacterType> teamSelections = player.TeamId == Team.TeamA
+                ? rankedResolutionPhaseData.FriendlyTeamSelections
+                : rankedResolutionPhaseData.EnemyTeamSelections;
 
-        CharacterType characterType = selection;
+            CharacterType characterType = selection;
 
-        lock (teamSelections)
-        {
             if (teamSelections.ContainsKey(player.PlayerId))
             {
                 log.Warn($"Player {player.PlayerId} {GetHandle(accountId)} attempted to lock in draft selection twice");
@@ -730,29 +806,29 @@ public class DraftController(IDraftHost host, TimeProvider timeProvider = null)
 
     public DraftRequestResult Trade(long accountId, RankedTradeData trade)
     {
-        if (PhaseSubType != FreelancerResolutionPhaseSubType.FREELANCER_TRADE)
+        lock (_lock)
         {
-            // TODO: error message?
-            return DraftRequestResult.Failed();
-        }
+            if (!_subPhaseOpen || PhaseSubType != FreelancerResolutionPhaseSubType.FREELANCER_TRADE)
+            {
+                // TODO: error message?
+                return DraftRequestResult.Failed();
+            }
 
-        RankedResolutionPhaseData rankedResolutionPhaseData = GetRankedResolutionPhaseData();
-        LobbyServerPlayerInfo player = GetDraftTradingSlot(accountId, trade.OfferingPlayerId);
-        if (player is null)
-        {
-            log.Warn($"Player {GetHandle(accountId)} attempted to trade from slot {trade.OfferingPlayerId} they do not control");
-            return DraftRequestResult.Failed();
-        }
+            RankedResolutionPhaseData rankedResolutionPhaseData = GetRankedResolutionPhaseData();
+            LobbyServerPlayerInfo player = GetDraftTradingSlot(accountId, trade.OfferingPlayerId);
+            if (player is null)
+            {
+                log.Warn($"Player {GetHandle(accountId)} attempted to trade from slot {trade.OfferingPlayerId} they do not control");
+                return DraftRequestResult.Failed();
+            }
 
-        Dictionary<int, CharacterType> teamSelections = player.TeamId == Team.TeamA
-            ? rankedResolutionPhaseData.FriendlyTeamSelections
-            : rankedResolutionPhaseData.EnemyTeamSelections;
+            Dictionary<int, CharacterType> teamSelections = player.TeamId == Team.TeamA
+                ? rankedResolutionPhaseData.FriendlyTeamSelections
+                : rankedResolutionPhaseData.EnemyTeamSelections;
 
-        int tradeActionId = rankedResolutionPhaseData.TradeActions.FindIndex(
-            p => p.OfferedCharacter == trade.DesiredCharacter
-                 && p.AskedPlayerId == player.PlayerId);
-        lock (teamSelections)
-        {
+            int tradeActionId = rankedResolutionPhaseData.TradeActions.FindIndex(
+                p => p.OfferedCharacter == trade.DesiredCharacter
+                     && p.AskedPlayerId == player.PlayerId);
             switch (trade.TradeAction)
             {
                 case RankedTradeData.TradeActionType.Reject:
@@ -826,12 +902,12 @@ public class DraftController(IDraftHost host, TimeProvider timeProvider = null)
                     break;
                 }
             }
+
+            SetRankedResolutionPhaseData(rankedResolutionPhaseData);
+            SendRankedResolutionSubPhase();
+
+            return DraftRequestResult.Succeeded;
         }
-
-        SetRankedResolutionPhaseData(rankedResolutionPhaseData);
-        SendRankedResolutionSubPhase();
-
-        return DraftRequestResult.Succeeded;
     }
 
     // For logging
@@ -843,24 +919,22 @@ public class DraftController(IDraftHost host, TimeProvider timeProvider = null)
     // During draft, an account may control multiple slots (asymmetric / ControlAllBots).
     // Resolve the slot this account is currently expected to act on (the one on deck),
     // falling back to the account's main slot for normal (single-character) drafts.
+    // Under the lock.
     internal LobbyServerPlayerInfo GetDraftActingSlot(long accountId)
     {
-        lock (Game.characterSelectionLock)
+        foreach (RankedResolutionPlayerState state in RankedResolutionPhaseData.PlayersOnDeck)
         {
-            foreach (RankedResolutionPlayerState state in RankedResolutionPhaseData.PlayersOnDeck)
+            if (state.OnDeckness != RankedResolutionPlayerState.ReadyState.Selected)
             {
-                if (state.OnDeckness != RankedResolutionPlayerState.ReadyState.Selected)
-                {
-                    continue;
-                }
-                LobbyServerPlayerInfo slot = host.GetPlayerById(state.PlayerId);
-                if (slot != null && !slot.IsAIControlled && slot.AccountId == accountId)
-                {
-                    return slot;
-                }
+                continue;
             }
-            return host.GetMainSlot(accountId);
+            LobbyServerPlayerInfo slot = host.GetPlayerById(state.PlayerId);
+            if (slot != null && !slot.IsAIControlled && slot.AccountId == accountId)
+            {
+                return slot;
+            }
         }
+        return host.GetMainSlot(accountId);
     }
 
     // During the trade sub-phase, an account controlling multiple slots trades from the one it specifies.

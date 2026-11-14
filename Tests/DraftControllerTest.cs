@@ -52,7 +52,7 @@ public class DraftControllerTest : EvosTest
     // Sub-phases with bans: slot 1 bans, slot 5 bans, slot 1 picks, slots 5 and 6 pick, slot 2 picks, slot 6 bans,
     // slot 2 bans, slot 7 picks, slots 3 and 4 pick, slot 8 picks, trade.
     // Without bans: slot 1 picks, slots 5 and 6 pick, slot 2 picks, slot 7 picks, slots 3 and 4 pick, slot 8 picks, trade.
-    private void AddSlots(params long[] accountIds)
+    private static void AddSlots(FakeDraftHost host, params long[] accountIds)
     {
         host.Players.AddRange(accountIds.Select((accountId, i) => new LobbyServerPlayerInfo
         {
@@ -66,7 +66,7 @@ public class DraftControllerTest : EvosTest
 
     private Task Start(params long[] accountIds)
     {
-        AddSlots(accountIds);
+        AddSlots(host, accountIds);
         return draft.RunAsync();
     }
 
@@ -237,13 +237,43 @@ public class DraftControllerTest : EvosTest
         Assert.Equal(Tank, StateOf(2).Intention);
     }
 
-    // Current behavior
     [Fact]
-    public void Hover_AccountNotInRoster_Throws()
+    public void Hover_AccountNotInRoster_Fails()
     {
         _ = StartWithHumanInSlot1();
 
-        Assert.Throws<NullReferenceException>(() => draft.Hover(Stranger, Tank));
+        Assert.False(draft.Hover(Stranger, Tank).Success);
+    }
+
+    // Hovers keep coming while the draft moves from sub-phase to sub-phase
+    [Fact]
+    public async Task Hover_WhileDraftMovesOn_KeepsStateConsistent()
+    {
+        host.HasBans = false;
+        Task run = StartWithHumanInSlot1();
+        // Slot 1 has hovered by the time its sub-phase ends, whenever the other thread gets going
+        draft.Hover(Human, Tank);
+        using CancellationTokenSource stop = new();
+        Task hovering = Task.Run(() =>
+        {
+            while (!stop.IsCancellationRequested)
+            {
+                draft.Hover(Human, Tank);
+                Thread.Yield();
+            }
+        });
+
+        // Slot 1 times out with Tank hovered, the bots pick, the trade sub-phase times out
+        time.Advance(host.Timeouts.Pick);
+        WaitForSubPhase(2);
+        SkipBotSubPhasesTo(7);
+        time.Advance(host.Timeouts.Trade);
+
+        await run.WaitAsync(TimeSpan.FromSeconds(5));
+        stop.Cancel();
+        await hovering.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(Tank, host.GetPlayerById(1)!.CharacterType);
+        Assert.Equal(8, host.Players.Select(p => p.CharacterType).Distinct().Count());
     }
 
     // ---- Ban ----
@@ -316,13 +346,45 @@ public class DraftControllerTest : EvosTest
         Assert.Equal(banned, Assert.Single(host.Snapshots[1].Data.PlayersOnDeck).Intention);
     }
 
-    // Current behavior
     [Fact]
-    public void Ban_AccountNotInRoster_Throws()
+    public void Ban_AccountNotInRoster_Fails()
     {
         _ = StartWithHumanInSlot1();
 
-        Assert.Throws<NullReferenceException>(() => draft.Ban(Stranger, Tank));
+        Assert.False(draft.Ban(Stranger, Tank).Success);
+    }
+
+    // Holds the draft after its first sub-phase has timed out and been resolved, before the next one starts.
+    // The timer goes off on another thread, which the draft then runs on.
+    private Task TimeOutFirstSubPhaseAndHold(TimeSpan timeout, ManualResetEventSlim held, ManualResetEventSlim resume)
+    {
+        host.BeforeConnectivityCheck = () =>
+        {
+            host.BeforeConnectivityCheck = null;
+            held.Set();
+            resume.Wait();
+        };
+        Task timingOut = Task.Run(() => time.Advance(timeout));
+        Assert.True(held.Wait(TimeSpan.FromSeconds(5)));
+        return timingOut;
+    }
+
+    // Before the draft had a lock, such a ban was added on top of the one the draft had made
+    [Fact]
+    public async Task Ban_AfterSubPhaseEnded_Rejected()
+    {
+        _ = StartWithHumanInSlot1();
+        using ManualResetEventSlim held = new();
+        using ManualResetEventSlim resume = new();
+        Task timingOut = TimeOutFirstSubPhaseAndHold(host.Timeouts.Ban1, held, resume);
+        CharacterType drafted = Assert.Single(Data.FriendlyBans);
+
+        Assert.False(draft.Ban(Human, Unused()).Success);
+
+        resume.Set();
+        await timingOut.WaitAsync(TimeSpan.FromSeconds(5));
+        WaitForSubPhase(2);
+        Assert.Equal([drafted], Data.FriendlyBans);
     }
 
     // ---- Select ----
@@ -442,7 +504,7 @@ public class DraftControllerTest : EvosTest
     public void Select_Multilancer_ActsOnSlotOnDeck()
     {
         host.HasBans = false;
-        AddSlots(Bot, Bot, Bot, Bot, Human, Human, Bot, Bot);
+        AddSlots(host, Bot, Bot, Bot, Bot, Human, Human, Bot, Bot);
         LobbyServerPlayerInfo main = host.GetPlayerById(5)!;
         LobbyServerPlayerInfo proxy = host.GetPlayerById(6)!;
         proxy.ControllingPlayerId = main.PlayerId;
@@ -465,14 +527,69 @@ public class DraftControllerTest : EvosTest
         Assert.Equal(second, Data.EnemyTeamSelections[6]);
     }
 
-    // Current behavior
     [Fact]
-    public void Select_AccountNotInRoster_Throws()
+    public void Select_AccountNotInRoster_Fails()
     {
         host.HasBans = false;
         _ = StartWithHumanInSlot1();
 
-        Assert.Throws<NullReferenceException>(() => draft.Select(Stranger, Tank));
+        DraftRequestResult result = draft.Select(Stranger, Tank);
+
+        Assert.False(result.Success);
+        Assert.Null(result.Failure);
+    }
+
+    [Fact]
+    public async Task Select_AfterSubPhaseEnded_RejectedAndHoverStands()
+    {
+        host.HasBans = false;
+        _ = StartWithHumanInSlot1();
+        draft.Hover(Human, Tank);
+        using ManualResetEventSlim held = new();
+        using ManualResetEventSlim resume = new();
+        Task timingOut = TimeOutFirstSubPhaseAndHold(host.Timeouts.Pick, held, resume);
+
+        DraftRequestResult result = draft.Select(Human, Unused());
+
+        Assert.False(result.Success);
+        Assert.Equal("CannotReady", result.Failure?.Term);
+        resume.Set();
+        await timingOut.WaitAsync(TimeSpan.FromSeconds(5));
+        WaitForSubPhase(2);
+        Assert.Equal(Tank, Data.FriendlyTeamSelections[1]);
+    }
+
+    // Two players on deck lock in the same character at once: exactly one of them gets it
+    [Fact]
+    public void Select_SameCharacterAtOnce_OneGetsIt()
+    {
+        for (int attempt = 0; attempt < 20; attempt++)
+        {
+            FakeDraftHost twoOnDeck = new() { HasBans = false };
+            DraftTime clock = new();
+            DraftController controller = new(twoOnDeck, clock);
+            AddSlots(twoOnDeck, Bot, Bot, Bot, Bot, Human, Human2, Bot, Bot);
+            _ = controller.RunAsync();
+            clock.Advance(BotSubPhase);
+            WaitFor(() => clock.Waits == 2);
+            CharacterType contested = Playable()
+                .First(c => !controller.GetRankedResolutionPhaseData().FriendlyTeamSelections.ContainsValue(c));
+
+            using Barrier barrier = new(2);
+            DraftRequestResult[] results = new DraftRequestResult[2];
+            Task[] selects = new[] { Human, Human2 }
+                .Select((accountId, i) => Task.Run(() =>
+                {
+                    barrier.SignalAndWait();
+                    results[i] = controller.Select(accountId, contested);
+                }))
+                .ToArray();
+            Assert.True(Task.WaitAll(selects, TimeSpan.FromSeconds(5)));
+
+            Assert.Single(results, r => r.Success);
+            Assert.Equal("CharacterTypeNotAllowed", results.Single(r => !r.Success).Failure?.Term);
+            Assert.Single(controller.GetRankedResolutionPhaseData().EnemyTeamSelections.Values, c => c == contested);
+        }
     }
 
     // ---- Trade ----
@@ -573,6 +690,20 @@ public class DraftControllerTest : EvosTest
         StartAndReachTrade();
 
         Assert.False(draft.Trade(Human, Offer(Data.EnemyTeamSelections[5])).Success);
+
+        Assert.Empty(Data.TradeActions);
+        Assert.Equal(Tank, Data.FriendlyTeamSelections[1]);
+    }
+
+    // Before, it changed selections that had already been applied to the roster
+    [Fact]
+    public void Trade_AfterDraftEnded_Rejected()
+    {
+        CharacterType secondPick = StartAndReachTrade();
+        time.Advance(host.Timeouts.Trade);
+        WaitFor(() => host.GetPlayerById(1)!.CharacterType == Tank);
+
+        Assert.False(draft.Trade(Human, Offer(secondPick)).Success);
 
         Assert.Empty(Data.TradeActions);
         Assert.Equal(Tank, Data.FriendlyTeamSelections[1]);
@@ -734,6 +865,20 @@ public class DraftControllerTest : EvosTest
         WaitForSubPhase(2);
         Assert.Equal(Tank, Data.FriendlyTeamSelections[1]);
         Assert.Empty(host.Cancellations);
+    }
+
+    // Before, the draft canceled the match and then crashed on the missing bot
+    [Fact]
+    public async Task Run_BotNotInDraft_CancelsMatch()
+    {
+        Task run = StartWithHumanInSlot1();
+        // The bot on deck in the second sub-phase is not among the slots the draft started with
+        host.GetPlayerById(5)!.PlayerId = 55;
+
+        draft.Ban(Human, Tank);
+
+        await run.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal([(null, null)], host.Cancellations);
     }
 
     [Fact]

@@ -49,7 +49,7 @@ public class DraftModuleTest(ITestOutputHelper output) : EvosTest(output)
             }
 
             DraftController draft = CreateDraft();
-            draft.SetRankedResolutionPhaseData(new RankedResolutionPhaseData
+            draft.OpenSubPhaseForTest(phase, new RankedResolutionPhaseData
             {
                 UnselectedPlayerStates = TeamInfo.TeamPlayerInfo
                     .Select(p => new RankedResolutionPlayerState { PlayerId = p.PlayerId })
@@ -68,7 +68,6 @@ public class DraftModuleTest(ITestOutputHelper output) : EvosTest(output)
                 EnemyTeamSelections = [],
                 TradeActions = [],
             });
-            draft.PhaseSubType = phase;
         }
 
         public RankedResolutionPhaseData Data => Draft.GetRankedResolutionPhaseData();

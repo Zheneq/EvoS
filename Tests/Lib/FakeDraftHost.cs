@@ -22,6 +22,9 @@ public class FakeDraftHost : IDraftHost
     // What CheckParticipantsConnected finds. Like the game, it cancels the match when someone has disconnected.
     public bool Connected { get; set; } = true;
 
+    // Runs where the draft checks connectivity: before each sub-phase, outside the draft's lock
+    public Action? BeforeConnectivityCheck { get; set; }
+
     private readonly CancellationTokenSource _cancellation = new();
     public CancellationToken CancellationToken => _cancellation.Token;
     public bool IsCancelled => _cancellation.IsCancellationRequested;
@@ -38,6 +41,7 @@ public class FakeDraftHost : IDraftHost
 
     public bool CheckParticipantsConnected()
     {
+        BeforeConnectivityCheck?.Invoke();
         if (!Connected)
         {
             CancelMatch();

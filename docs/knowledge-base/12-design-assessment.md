@@ -16,7 +16,7 @@ removed in that review; they are in the git history of this file.
 | 1 – Handler modules | Done | `LobbyServerProtocol` registers no handlers; the draft ones moved to `DraftModule` (plan 02) |
 | 2 – `IClientNotifier` | Done | Two small leaks of the concrete connection type (see B4) |
 | 3 – De-static the managers | **Interfaces and shims only** | ~200 static call sites; cycles between managers; several managers not converted at all (see C, Stage 3) |
-| 4 – Split `Game` | Started: draft state, phase loop and request logic in `DraftController`, which reaches the game through `IDraftHost` and waits on an injected `TimeProvider` (plans 01–03b) | Rest of 4a (plans 03c–04); `Game.cs` is 1,410 lines (was 1,997) |
+| 4 – Split `Game` | Started: draft state, phase loop and request logic in `DraftController`, which reaches the game through `IDraftHost`, waits on an injected `TimeProvider` and guards its state with one lock (plans 01–04a) | Closing the draft state (plan 04b), then 4b–4d; `Game.cs` is 1,410 lines (was 1,997) |
 | 5 – Hygiene | `PatchAccountData` and the temp-account fallback done | Everything else |
 
 Tests: 435, all passing. New features mostly came with tests, and the tests show where the
@@ -218,9 +218,9 @@ Decisions taken on 2026-11-14:
 - `DraftPhasesTest`, `DraftBotPickTest`, `DraftTradeTest` move onto the controller; add
   tests for the four request methods (wrong phase, not on deck, taken character, double
   lock-in, fill roles, trade offer/accept/reject, trade with a bot).
-- Current behavior found by `DraftControllerTest` (plan 03) and kept as is for now:
-  - `Hover`, `Ban` and `Select` throw `NullReferenceException` for an account with no slot
-    in the game (possible with a stale `CurrentGame`). `Trade` fails cleanly.
+- Current behavior found by `DraftControllerTest` (plan 03). Fixed in plan 04: `Hover`, `Ban`
+  and `Select` threw `NullReferenceException` for an account with no slot in the game; they
+  now fail like `Trade` does. Kept as is for now:
   - A `Select` that fails because the player is not on deck (or the character is taken)
     still sets the player's intention to that character and marks it `Selected` in
     `UnselectedPlayerStates`.
