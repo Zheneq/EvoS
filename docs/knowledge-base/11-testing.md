@@ -32,6 +32,7 @@
 |------|--------|---------|
 | `StoreModuleTest`, `AccountModuleTest`, `TelemetryModuleTest`, `FriendModuleTest`, `GroupModuleTest`, `MatchmakingModuleTest`, `CharacterModuleTest`, `GameLifecycleModuleTest` | lobby handler modules (doc 03) | module from `TestLobby` over a `RecordingClientConnection`, mock DAO mode |
 | `LobbyHandlerRegistrationTest` | the set of message types the lobby handles (wire contract snapshot) | `TestLobby.Protocol()`: `LobbyServerProtocol` constructed without a socket |
+| `ConcreteConnectionUsageTest` | no field, property, parameter or return type outside `LobbyServer/Session` mentions `LobbyServerProtocol` (doc 12, B4); locals are not visible to it | reflection over the `CentralServer` assembly, with a fixture type that proves each kind of mention is found |
 | `InviteRulesTest` | checks shared by group and custom game invites | static rules, `RecordingClientConnection` |
 | `CustomGameInvitesTest` | pending invite bookkeeping | plain instance class |
 | `CustomGameManagerTest` | joining as invitee / spectator fallback, invite cleanup | static manager, `ClientNotifierScope` |

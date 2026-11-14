@@ -14,12 +14,12 @@ removed in that review; they are in the git history of this file.
 | Stage | State | What is left |
 |-------|-------|--------------|
 | 1 – Handler modules | Done | `LobbyServerProtocol` registers no handlers; the draft ones moved to `DraftModule` (plan 02) |
-| 2 – `IClientNotifier` | Done | Two small leaks of the concrete connection type (see B4) |
-| 3 – De-static the managers | **Interfaces and shims**; one composition root (`LobbyServices`) and one test construction point (`TestLobby`) (plan 05); the server ↔ game cycle is broken (plan 06); `SessionManager` calls no other manager (plan 07); `GroupManager` calls nothing in matchmaking (plan 08); modules and `LobbyServerProtocol` reach the session, group, game and matchmaking managers only through injected interfaces (plan 09) | ~170 static call sites; the remaining cycles between managers; several managers not converted at all (see C, Stage 3) |
+| 2 – `IClientNotifier` | Done | Nothing; the notifier no longer needs the concrete connection type (plan 10) |
+| 3 – De-static the managers | **Interfaces and shims**; one composition root (`LobbyServices`) and one test construction point (`TestLobby`) (plan 05); the server ↔ game cycle is broken (plan 06); `SessionManager` calls no other manager (plan 07); `GroupManager` calls nothing in matchmaking (plan 08); modules and `LobbyServerProtocol` reach the session, group, game and matchmaking managers only through injected interfaces (plan 09); nothing outside `LobbyServer/Session` depends on `LobbyServerProtocol` (plan 10) | ~170 static call sites; the remaining cycles between managers; several managers not converted at all (see C, Stage 3) |
 | 4 – Split `Game` | 4a done: the draft is a `DraftController` (state, phase loop, requests, one lock) that reaches the game through `IDraftHost` and waits on an injected `TimeProvider` (plans 01–04) | 4b–4d; `Game.cs` is 1,410 lines (was 1,997) |
 | 5 – Hygiene | `PatchAccountData` and the temp-account fallback done | Everything else |
 
-Tests: 518, all passing. New features mostly came with tests, and the tests show where the
+Tests: 520, all passing. New features mostly came with tests, and the tests show where the
 seams are missing: draft and character selection tests subclass `PvpGame(null)` to reach
 protected members (`DraftBotPickTest`, `DraftTradeTest`, `CharacterSelectionTest`,
 `QueuePenaltyIssueTest`).
@@ -76,19 +76,25 @@ initialization-order fragility, and no way to construct a subsystem in isolation
 
 ### B4. Coupling to the concrete connection
 
-Pushing messages goes through `IClientNotifier` now. What remains is code that needs
-connection *state* or *behavior* that is not on `IClientConnection`, so it takes
-`LobbyServerProtocol`: the static `SessionManager.GetClientConnection` downcasts to it,
-and ~31 call sites depend on that (`Game` 8, `GroupManager` 4, Discord 4, `CustomGame` 3,
-`GroupModule` 2, others 1–2; in modules and `LobbyServerProtocol` they are the lines marked
-`// TODO plan 10`). `Game.GetClients()` returns
-`List<LobbyServerProtocol>`; `InviteRules.CheckInvitee` hands one out. The members they
-use: `LeaveGame`, `IsInGame`, `IsInCharacterSelect`, `IsInGroup`, `IsReady`,
-`SelectedGameType`, `GetSubTypeMask`, `SetGameType`, `RefreshGroup`, `OnGameAssigned`,
-`SendSystemMessage(string)`.
+Resolved for the type (plan 10, 2026-11-14): `SessionManager.GetClientConnection` returns
+`IClientConnection` without a downcast, and no type outside `LobbyServer/Session` has a
+field, property, parameter or return type of `LobbyServerProtocol`
+(`ConcreteConnectionUsageTest`). `IClientConnection` grew the members the call sites used
+(`LeaveGame`, `OnGameAssigned`, `IsInGame`, `IsInCharacterSelect`, `IsInGroup`,
+`RefreshGroup`, `RefreshFriendList`, `SendSystemMessage(string)`, `Broadcast`, and the
+group callbacks `OnJoinGroup`/`OnLeaveGroup`/`OnGroupDisbanded` that
+`SessionManagerClientNotifier` calls); `LobbyServerProtocol`'s public surface is now
+exactly the interface.
 
-`GroupManager` reading queue selection and ready state from each member's connection is
-the deeper issue: that state belongs to the group/session, not to a socket.
+What remains is the state, not the type: `GroupManager`, `MatchmakingManager` and
+`MatchmakingModule` still read queue selection and ready state (`IsReady`,
+`SelectedGameType`, `GetSubTypeMask`, `SetGameType`) from each member's connection. That
+state belongs to the group/session, not to a socket; those four members are marked
+temporary on the interface and leave with plan 11.
+
+The interface has 37 members. Role interfaces (`IGameParticipant`, `IQueueParticipant`, ...)
+are easier to cut once plan 11 and the `Game` split (Stage 4) have removed members from
+it; revisit then.
 
 ### B5. Concurrency
 
@@ -151,7 +157,7 @@ dictionary because the field is not serialized.
 |---------|-----------------|-----|-----------|
 | Practice, Tutorial (`SoloGame`) | `Game` subclass + static `PracticeManager`/`TutorialManager` + static `SoloGame.Start` | Reuses lifecycle well; exposes that base `Game` carries PvP-only behavior | Stage 4 (composition), Stage 3 (game factory replaces the static managers) |
 | Custom game invites | `CustomGameInvites` + handlers in `GameLifecycleModule` | Good | Own module once `CustomGameManager` is an instance (Stage 3) |
-| Group invite rework, `InviteRules` | `GroupModule`, shared static rules | Good | Stop returning `LobbyServerProtocol` (B4) |
+| Group invite rework, `InviteRules` | `GroupModule`, shared static rules | Good | Done: hands out `IClientConnection` (plan 10) |
 | Multilancer / procedural draft, bot picks | `Game` + handlers on the connection | Worst fit: grew both halves of the split draft | Done: Stage 4a moved it into `DraftController` + `DraftModule` |
 | Queue requirements, `ProtocolPatcher` | Framework types + patch step in `SendImpl` | Good | B8 (cache protocol version) |
 | Asymmetric sub types | `AsymmetricSubType`, `MatchmakingQueue`, `GameModeManager` | OK; adds to `MatchmakingQueue` and config sprawl | Stage 5 |
@@ -275,16 +281,17 @@ what it uses, replace static calls, update tests to `TestLobby`. Order:
    Done 2026-11-14 for the managers that have interfaces (plan 09): modules and
    `LobbyServerProtocol` take `ISessionRegistry`, `IGroupRegistry`, `IGameRegistry` and
    `IMatchmakingManager` in their constructors; `OnPlayerConnect`/`OnPlayerDisconnect` are
-   on `ISessionRegistry` and `SessionToken` on `IClientConnection`. Four lines still call
-   the static `SessionManager.GetClientConnection` because they use members missing from
-   `IClientConnection`; they are marked `// TODO plan 10`. Calls to managers that are still
-   static classes (`CustomGameManager`, `FriendManager`, `ChatManager`, ...) move when those
-   are converted.
+   on `ISessionRegistry` and `SessionToken` on `IClientConnection`. The four lines that
+   still needed the static lookup moved to the injected registry in plan 10. Calls to
+   managers that are still static classes (`CustomGameManager`, `FriendManager`,
+   `ChatManager`, ...) move when those are converted.
 2. `IClientConnection` grows the members listed in B4 so that nothing needs the concrete
    type; queue selection and ready state move from `MatchmakingModule` to group/session
-   state that `GroupManager` owns, which removes its reads of member connections. Then
-   `GetClientConnection` returns `IClientConnection` everywhere and the delegating
-   properties on `LobbyServerProtocol` go away.
+   state that `GroupManager` owns, which removes its reads of member connections.
+   First half done 2026-11-14 (plan 10): `GetClientConnection` returns
+   `IClientConnection` everywhere, the delegating properties and other unused members of
+   `LobbyServerProtocol` are gone, and `ConcreteConnectionUsageTest` keeps it that way.
+   The second half (queue selection and ready state) is plan 11.
 3. `ClientNotifier` becomes an injected instance.
 4. `GroupManager`, then `QueuePenaltyManager`/`QueuePriorityManager` (static → instance),
    then `MatchmakingManager` with `MatchmakingQueue`.
@@ -358,7 +365,8 @@ Scope notes:
   `CentralServer.Init`; no new static managers and no new `Get()` singletons.
 - New handlers go into a module; modules take interfaces, not `X.Instance`.
 - Do not hand out or accept `LobbyServerProtocol` outside `LobbyServer/Session`; grow
-  `IClientConnection` or use `IClientNotifier`.
+  `IClientConnection` or use `IClientNotifier`. `ConcreteConnectionUsageTest` fails on
+  signatures that do; locals are on the reviewer.
 - New draft or character-selection rules are written as pure functions with their own
   tests (as `GetDraftPhases` and `PickCharacter` were), so they move cleanly in Stage 4.
 
