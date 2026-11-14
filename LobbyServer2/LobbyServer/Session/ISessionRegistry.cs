@@ -30,6 +30,12 @@ public interface ISessionRegistry
     /// </summary>
     void OnPlayerConnect(IClientConnection client, RegisterGameClientRequest registerRequest);
 
+    /// <summary>
+    /// A client's websocket closed. If the connection still holds the account's current session (a reconnect
+    /// may already have replaced it), the session is kept as disconnected so that the player can reconnect.
+    /// </summary>
+    void OnPlayerDisconnect(IClientConnection client);
+
     LobbySessionInfo? GetDisconnectedSessionInfo(long accountId);
     LobbySessionInfo? KillSession(long accountId);
     void Broadcast(WebSocketMessage message);

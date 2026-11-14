@@ -40,12 +40,13 @@ namespace CentralServer.LobbyServer
 
         public long AccountId { get; set; }
         public string UserName { get; set; }
-        public long SessionToken;
+        public long SessionToken { get; private set; }
         public bool SessionCleaned = false; // tracks clean up methods execution for reconnection
 
         private readonly ISessionRegistry _sessionRegistry;
         private readonly IGroupRegistry _groupRegistry;
         private readonly IGameRegistry _gameRegistry;
+        private readonly IMatchmakingManager _matchmakingManager;
         private readonly MatchmakingModule _matchmaking;
         private readonly GameLifecycleModule _gameLifecycle;
 
@@ -122,7 +123,7 @@ namespace CentralServer.LobbyServer
 
             if (ProtocolPatcher.Mapping.TryGetValue(message.GetType(), out var protocolPatcher))
             {
-                message = protocolPatcher(message, SessionManager.GetSessionInfo(AccountId)?.ProtocolVersion);
+                message = protocolPatcher(message, _sessionRegistry.GetSessionInfo(AccountId)?.ProtocolVersion);
             }
 
             LogMessage(">", message);
@@ -184,11 +185,11 @@ namespace CentralServer.LobbyServer
 
         public bool IsInCharacterSelect() => _gameLifecycle.IsInCharacterSelect();
 
-        public bool IsInGroup() => !GroupManager.GetPlayerGroup(AccountId)?.IsSolo() ?? false;
+        public bool IsInGroup() => !_groupRegistry.GetPlayerGroup(AccountId)?.IsSolo() ?? false;
 
-        public int GetGroupSize() => GroupManager.GetPlayerGroup(AccountId)?.Members.Count ?? 1;
+        public int GetGroupSize() => _groupRegistry.GetPlayerGroup(AccountId)?.Members.Count ?? 1;
 
-        public bool IsInQueue() => MatchmakingManager.IsQueued(GroupManager.GetPlayerGroup(AccountId));
+        public bool IsInQueue() => _matchmakingManager.IsQueued(_groupRegistry.GetPlayerGroup(AccountId));
 
         public LobbyServerPlayerInfo PlayerInfo => _gameLifecycle.PlayerInfo;
 
@@ -216,7 +217,8 @@ namespace CentralServer.LobbyServer
             _sessionRegistry = sessionRegistry;
             _groupRegistry = groupRegistry;
             _gameRegistry = gameRegistry;
-            _matchmaking = new MatchmakingModule(this, _sessionRegistry, _groupRegistry, matchmakingManager);
+            _matchmakingManager = matchmakingManager;
+            _matchmaking = new MatchmakingModule(this, _sessionRegistry, _groupRegistry, _matchmakingManager);
             _gameLifecycle = new GameLifecycleModule(this, _sessionRegistry, _groupRegistry, _gameRegistry);
 
             ILobbyModule[] modules = [
@@ -249,12 +251,12 @@ namespace CentralServer.LobbyServer
             // A restarted client has no invite popups
             CustomGameManager.Invites.RemoveForInvitee(AccountId);
 
-            SessionManager.OnPlayerDisconnect(this);
+            _sessionRegistry.OnPlayerDisconnect(this);
 
             if (!SessionCleaned)
             {
                 SessionCleaned = true;
-                GroupManager.LeaveGroup(AccountId, false);
+                _groupRegistry.LeaveGroup(AccountId, false);
             }
 
             BroadcastRefreshFriendList();
@@ -278,7 +280,7 @@ namespace CentralServer.LobbyServer
 
         public void BroadcastRefreshGroup(bool resetReadyState = false)
         {
-            GroupInfo group = GroupManager.GetPlayerGroup(AccountId);
+            GroupInfo group = _groupRegistry.GetPlayerGroup(AccountId);
             if (group == null)
             {
                 RefreshGroup(resetReadyState);
@@ -287,7 +289,7 @@ namespace CentralServer.LobbyServer
             {
                 foreach (long groupMember in group.Members)
                 {
-                    SessionManager.GetClientConnection(groupMember)?.RefreshGroup(resetReadyState);
+                    SessionManager.GetClientConnection(groupMember)?.RefreshGroup(resetReadyState); // TODO plan 10
                 }
             }
         }
@@ -298,7 +300,7 @@ namespace CentralServer.LobbyServer
             {
                 _matchmaking.ResetReadyState();
             }
-            LobbyPlayerGroupInfo info = GroupManager.GetGroupInfo(AccountId);
+            LobbyPlayerGroupInfo info = _groupRegistry.GetGroupInfo(AccountId);
 
             Send(new GroupUpdateNotification
             {
@@ -307,7 +309,7 @@ namespace CentralServer.LobbyServer
                 SubTypeMask = info.SubTypeMask,
                 AllyDifficulty = BotDifficulty.Medium,
                 EnemyDifficulty = BotDifficulty.Medium,
-                GroupId = GroupManager.GetGroupID(AccountId)
+                GroupId = _groupRegistry.GetGroupID(AccountId)
             });
         }
 

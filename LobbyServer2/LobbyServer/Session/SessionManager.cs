@@ -100,36 +100,6 @@ namespace CentralServer.LobbyServer.Session
         // Static lifecycle methods — not on the interface; access state via Instance
         // -----------------------------------------------------------------------
 
-        public static void OnPlayerDisconnect(LobbyServerProtocol client)
-        {
-            lock (Instance.SessionInfos)
-            {
-                Instance.SessionInfos.TryGetValue(client.AccountId, out SessionInfo sessionInfo);
-                // Sometimes on reconnections we first have the new connection and then we receive the previous disconnection
-                // To avoid deleting the new connection, we check if the session token is the same
-                if (sessionInfo != null && sessionInfo.session.SessionToken == client.SessionToken)
-                {
-                    if (Instance.SessionInfos.TryRemove(client.AccountId, out SessionInfo disconnectedSession))
-                    {
-                        Instance.DisconnectedSessionInfos.TryAdd(client.AccountId, new DisconnectedSessionInfo(disconnectedSession.session, DateTime.Now));
-                        // TODO: this sends to every player even if its in game and the disconnected player is not
-                        //client.Broadcast(new ChatNotification() { Text = $"{client.UserName} disconnected", ConsoleMessageType = ConsoleMessageType.SystemMessage });
-                    }
-
-                    PersistedAccountData account = DB.Get().AccountDao.GetAccount(client.AccountId);
-                    account.AdminComponent.LastLogout = DateTime.UtcNow;
-                    account.AdminComponent.LastLogoutSessionToken = $"{sessionInfo.session.SessionToken}";
-                    DB.Get().AccountDao.UpdateAdminComponent(account);
-                }
-            }
-
-            if (CentralServer.PendingShutdown == CentralServer.PendingShutdownType.WaitForPlayersToLeave
-                && Instance.SessionInfos.IsEmpty)
-            {
-                CentralServer.PendingShutdown = CentralServer.PendingShutdownType.Now;
-            }
-        }
-
         public static void OnServerShutdown()
         {
             LobbyStatusNotification notify = new LobbyStatusNotification
@@ -215,6 +185,9 @@ namespace CentralServer.LobbyServer.Session
         void ISessionRegistry.OnPlayerConnect(IClientConnection client, RegisterGameClientRequest registerRequest)
             => OnPlayerConnectCore(client, registerRequest);
 
+        void ISessionRegistry.OnPlayerDisconnect(IClientConnection client)
+            => OnPlayerDisconnectCore(client);
+
         LobbySessionInfo? ISessionRegistry.GetDisconnectedSessionInfo(long accountId)
             => GetDisconnectedSessionInfoCore(accountId);
 
@@ -265,6 +238,36 @@ namespace CentralServer.LobbyServer.Session
                     session = sessionInfo
                 });
                 ConnectingSessions.TryRemove(client.AccountId, out _);
+            }
+        }
+
+        private void OnPlayerDisconnectCore(IClientConnection client)
+        {
+            lock (SessionInfos)
+            {
+                SessionInfos.TryGetValue(client.AccountId, out SessionInfo sessionInfo);
+                // Sometimes on reconnections we first have the new connection and then we receive the previous disconnection
+                // To avoid deleting the new connection, we check if the session token is the same
+                if (sessionInfo != null && sessionInfo.session.SessionToken == client.SessionToken)
+                {
+                    if (SessionInfos.TryRemove(client.AccountId, out SessionInfo disconnectedSession))
+                    {
+                        DisconnectedSessionInfos.TryAdd(client.AccountId, new DisconnectedSessionInfo(disconnectedSession.session, DateTime.Now));
+                        // TODO: this sends to every player even if its in game and the disconnected player is not
+                        //client.Broadcast(new ChatNotification() { Text = $"{client.UserName} disconnected", ConsoleMessageType = ConsoleMessageType.SystemMessage });
+                    }
+
+                    PersistedAccountData account = DB.Get().AccountDao.GetAccount(client.AccountId);
+                    account.AdminComponent.LastLogout = DateTime.UtcNow;
+                    account.AdminComponent.LastLogoutSessionToken = $"{sessionInfo.session.SessionToken}";
+                    DB.Get().AccountDao.UpdateAdminComponent(account);
+                }
+            }
+
+            if (CentralServer.PendingShutdown == CentralServer.PendingShutdownType.WaitForPlayersToLeave
+                && SessionInfos.IsEmpty)
+            {
+                CentralServer.PendingShutdown = CentralServer.PendingShutdownType.Now;
             }
         }
 

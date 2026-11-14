@@ -11,6 +11,7 @@ public interface IClientConnection
     long AccountId { get; }
     string Handle { get; }
     string UserName { get; }
+    long SessionToken { get; }
     void Send(WebSocketMessage message);
     void SendSystemMessage(LocalizationPayload message);
     void BroadcastRefreshFriendList();

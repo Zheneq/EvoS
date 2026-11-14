@@ -47,7 +47,7 @@
 | `TrustWarManagerTest` | who earns points (proxies, bots) | `TestGame : PvpGame`, `ClientNotifierScope` |
 | `GroupManagerNotifierTest` | group broadcast fan-out | `ClientNotifierScope` |
 | `GroupMembersChangedTest` | `OnMembersChanged` raised once per join (and once for the group left), leave (including the one that disbands the group) and promotion; a queued group leaves the queue on each, and a promotion resets the ready state | global `GroupManager`/`MatchmakingManager` through `TestLobby`, `ClientNotifierScope` |
-| `SessionManagerTest` | `HasActiveSession`; login: solo group, `OnSessionStarting` before the session is registered, no error logged, relogin leaves the previous group; `CreateSession` keeps the token only with a live game | own instance for `HasActiveSession`; static `OnPlayerConnect` on the global instance otherwise, through `TestLobby` |
+| `SessionManagerTest` | `HasActiveSession`; login: solo group, `OnSessionStarting` before the session is registered, no error logged, relogin leaves the previous group; `CreateSession` keeps the token only with a live game | own instance for `HasActiveSession`; the global instance (`TestLobby.Sessions`) otherwise, because the global `GroupManager` listens to its `OnSessionStarting` |
 | `EloTest` | `Elo` | delegate-based providers (`EvosDelegates`) |
 | `MatchmakerTest` | `MatchmakerRanked` | ctor-injected `AccountDao` + config `Func` |
 | `AsymmetricSubTypeTest`, `GameSubTypeJsonTest`, `QueueRequirementMinClientVersionTest`, `QueueRequirementProtocolDependentTest` | sub type config loading, queue requirements | pure / JSON round trips |

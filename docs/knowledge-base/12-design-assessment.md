@@ -15,7 +15,7 @@ removed in that review; they are in the git history of this file.
 |-------|-------|--------------|
 | 1 – Handler modules | Done | `LobbyServerProtocol` registers no handlers; the draft ones moved to `DraftModule` (plan 02) |
 | 2 – `IClientNotifier` | Done | Two small leaks of the concrete connection type (see B4) |
-| 3 – De-static the managers | **Interfaces and shims**; one composition root (`LobbyServices`) and one test construction point (`TestLobby`) (plan 05); the server ↔ game cycle is broken (plan 06); `SessionManager` calls no other manager (plan 07); `GroupManager` calls nothing in matchmaking (plan 08) | ~200 static call sites; the remaining cycles between managers; several managers not converted at all (see C, Stage 3) |
+| 3 – De-static the managers | **Interfaces and shims**; one composition root (`LobbyServices`) and one test construction point (`TestLobby`) (plan 05); the server ↔ game cycle is broken (plan 06); `SessionManager` calls no other manager (plan 07); `GroupManager` calls nothing in matchmaking (plan 08); modules and `LobbyServerProtocol` reach the session, group, game and matchmaking managers only through injected interfaces (plan 09) | ~170 static call sites; the remaining cycles between managers; several managers not converted at all (see C, Stage 3) |
 | 4 – Split `Game` | 4a done: the draft is a `DraftController` (state, phase loop, requests, one lock) that reaches the game through `IDraftHost` and waits on an injected `TimeProvider` (plans 01–04) | 4b–4d; `Game.cs` is 1,410 lines (was 1,997) |
 | 5 – Hygiene | `PatchAccountData` and the temp-account fallback done | Everything else |
 
@@ -79,8 +79,9 @@ initialization-order fragility, and no way to construct a subsystem in isolation
 Pushing messages goes through `IClientNotifier` now. What remains is code that needs
 connection *state* or *behavior* that is not on `IClientConnection`, so it takes
 `LobbyServerProtocol`: the static `SessionManager.GetClientConnection` downcasts to it,
-and ~35 call sites depend on that (`Game` 8, `GroupModule` 5, `GroupManager` 4,
-`CustomGame` 3, Discord 4, others 1–2). `Game.GetClients()` returns
+and ~31 call sites depend on that (`Game` 8, `GroupManager` 4, Discord 4, `CustomGame` 3,
+`GroupModule` 2, others 1–2; in modules and `LobbyServerProtocol` they are the lines marked
+`// TODO plan 10`). `Game.GetClients()` returns
 `List<LobbyServerProtocol>`; `InviteRules.CheckInvitee` hands one out. The members they
 use: `LeaveGame`, `IsInGame`, `IsInCharacterSelect`, `IsInGroup`, `IsReady`,
 `SelectedGameType`, `GetSubTypeMask`, `SetGameType`, `RefreshGroup`, `OnGameAssigned`,
@@ -117,7 +118,7 @@ dictionary because the field is not serialized.
 
 ### B8. Smaller items
 
-- `LobbyServerProtocol.SendImpl` looks up the session statically on every outgoing
+- `LobbyServerProtocol.SendImpl` looks up the session in the registry on every outgoing
   message to get the protocol version for `ProtocolPatcher`; the connection should hold it.
 - `HandleClose` does cleanup for four subsystems inline (game, custom game invites,
   session, group). `ILobbyModule` still has no `OnDisconnect` hook.
@@ -271,6 +272,14 @@ what it uses, replace static calls, update tests to `TestLobby`. Order:
 1. Remaining modules and `LobbyServerProtocol` itself (`LoginModule`, `ChatModule`,
    `FriendModule`, `CharacterModule`, `AdminModule`, the static leftovers in
    `MatchmakingModule`/`GameLifecycleModule`/`GroupModule`).
+   Done 2026-11-14 for the managers that have interfaces (plan 09): modules and
+   `LobbyServerProtocol` take `ISessionRegistry`, `IGroupRegistry`, `IGameRegistry` and
+   `IMatchmakingManager` in their constructors; `OnPlayerConnect`/`OnPlayerDisconnect` are
+   on `ISessionRegistry` and `SessionToken` on `IClientConnection`. Four lines still call
+   the static `SessionManager.GetClientConnection` because they use members missing from
+   `IClientConnection`; they are marked `// TODO plan 10`. Calls to managers that are still
+   static classes (`CustomGameManager`, `FriendManager`, `ChatManager`, ...) move when those
+   are converted.
 2. `IClientConnection` grows the members listed in B4 so that nothing needs the concrete
    type; queue selection and ready state move from `MatchmakingModule` to group/session
    state that `GroupManager` owns, which removes its reads of member connections. Then

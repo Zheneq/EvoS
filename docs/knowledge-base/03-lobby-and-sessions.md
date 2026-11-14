@@ -29,14 +29,14 @@ draft interactions, error/feedback reporting.
    `SessionToken` when the caller says the player has a running game (`hasLiveGame`; the
    directory server asks `GameManager`) (so the game server still recognizes
    them); always regenerates `ReconnectSessionToken`. Registers into `ConnectingSessions`.
-2. **OnPlayerConnect** (from `HandleRegisterGame` in `LobbyServerProtocol`): validates the
+2. **OnPlayerConnect** (from `LoginModule.HandleRegisterGame`): validates the
    session token against `ConnectingSessions`, checks bans (`AdminManager.UpdatePenalties`),
    raises `OnSessionStarting` (the group manager puts the player in a new solo group), then
    moves the session to `SessionInfos`. The event is raised under the session lock before
    the session is registered, so a registered session always has a group.
-3. **OnPlayerDisconnect**: token-guarded removal (reconnects can race the old close event),
-   session parked in `DisconnectedSessionInfos`, `LastLogout` persisted. May trigger
-   pending shutdown completion.
+3. **OnPlayerDisconnect** (from `LobbyServerProtocol.HandleClose`): token-guarded removal
+   (reconnects can race the old close event), session parked in `DisconnectedSessionInfos`,
+   `LastLogout` persisted. May trigger pending shutdown completion.
 4. **Reconnection**: DirectoryServer validates both tokens against the parked session;
    `Game.ReconnectPlayer` re-attaches the connection to a running game.
 
@@ -77,8 +77,10 @@ broadcast by iterating `SessionManager` connections.
 
 - The class mixes **transport identity** (a live websocket) with **player domain logic**
   (purchases, friends, draft) and **fan-out orchestration** (broadcasts to other players).
-- Cross-links are pervasive: `LobbyServerProtocol` ↔ static managers
-  (`GroupManager`, `MatchmakingManager`, `SessionManager`, `CustomGameManager`) call each
-  other in both directions.
+- Cross-links are pervasive: `LobbyServerProtocol` and the managers call each other in both
+  directions. The connection and its modules reach the session, group, game and matchmaking
+  managers through injected interfaces (`CustomGameManager` and the other managers that are
+  still static, statically); the managers reach connections through
+  `SessionManager.GetClientConnection`.
 - `SessionManager.Broadcast` delegates to *any* live connection's `Broadcast` because the
   broadcast registry lives in the connection base class — a smell worth fixing.
