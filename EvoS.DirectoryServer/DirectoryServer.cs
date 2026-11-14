@@ -6,6 +6,7 @@ using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using CentralServer.ApiServer;
+using CentralServer.BridgeServer;
 using CentralServer.LobbyServer.Character;
 using CentralServer.LobbyServer.Session;
 using CentralServer.LobbyServer.Utils;
@@ -271,7 +272,11 @@ namespace EvoS.DirectoryServer
             try
             {
                 response.SessionInfo = SessionManager.CreateSession(
-                    accountId, request.SessionInfo, LobbyServerUtils.GetActualClientIpAddress(context), rejectIfActive: true);
+                    accountId,
+                    request.SessionInfo,
+                    LobbyServerUtils.GetActualClientIpAddress(context),
+                    hasLiveGame: GameManager.GetGameWithPlayer(accountId) != null,
+                    rejectIfActive: true);
             }
             catch (ConflictException)
             {
@@ -369,7 +374,11 @@ namespace EvoS.DirectoryServer
             // TODO extra security? Reconnect tokens are possible to hijack
 
             // SessionManager.CleanSessionAfterReconnect(request.SessionInfo.AccountId);
-            session = SessionManager.CreateSession(request.SessionInfo.AccountId, request.SessionInfo, LobbyServerUtils.GetActualClientIpAddress(context));
+            session = SessionManager.CreateSession(
+                request.SessionInfo.AccountId,
+                request.SessionInfo,
+                LobbyServerUtils.GetActualClientIpAddress(context),
+                hasLiveGame: GameManager.GetGameWithPlayer(request.SessionInfo.AccountId) != null);
 
             return new AssignGameClientResponse
             {

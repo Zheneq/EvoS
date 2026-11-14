@@ -26,20 +26,22 @@ draft interactions, error/feedback reporting.
    session ends and the relaunched client gets in; a live second instance is rejected once the wait expires.
 1. **CreateSession** (called by DirectoryServer): under `lock (SessionInfos)`; enforces
    single-session-per-account when `rejectIfActive` (fresh logins). Preserves the old
-   `SessionToken` when the player has a running game (so the game server still recognizes
+   `SessionToken` when the caller says the player has a running game (`hasLiveGame`; the
+   directory server asks `GameManager`) (so the game server still recognizes
    them); always regenerates `ReconnectSessionToken`. Registers into `ConnectingSessions`.
 2. **OnPlayerConnect** (from `HandleRegisterGame` in `LobbyServerProtocol`): validates the
    session token against `ConnectingSessions`, checks bans (`AdminManager.UpdatePenalties`),
-   creates a solo group, moves the session to `SessionInfos`, fires `OnPlayerConnected` event.
+   raises `OnSessionStarting` (the group manager puts the player in a new solo group), then
+   moves the session to `SessionInfos`. The event is raised under the session lock before
+   the session is registered, so a registered session always has a group.
 3. **OnPlayerDisconnect**: token-guarded removal (reconnects can race the old close event),
-   session parked in `DisconnectedSessionInfos`, `LastLogout` persisted. Fires
-   `OnPlayerDisconnected`. May trigger pending shutdown completion.
+   session parked in `DisconnectedSessionInfos`, `LastLogout` persisted. May trigger
+   pending shutdown completion.
 4. **Reconnection**: DirectoryServer validates both tokens against the parked session;
    `Game.ReconnectPlayer` re-attaches the connection to a running game.
 
-Events `OnPlayerConnected`/`OnPlayerDisconnected` are consumed by `ChatManager`,
-`FriendManager`, `CustomGameManager` etc. — the one place where the design is
-properly event-driven.
+`OnSessionStarting` is the only session event. `SessionManager` calls no other manager:
+`CentralServer` stops the games before `OnServerShutdown` notifies the sessions.
 
 Token generation is weak by design (`GenerateToken` = GUID string hashcode); tokens are
 session-scoped, not secrets equivalent to passwords, but the TODO in

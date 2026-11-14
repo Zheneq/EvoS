@@ -3,8 +3,6 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
-using CentralServer.BridgeServer;
-using CentralServer.LobbyServer.Group;
 using EvoS.Framework;
 using EvoS.Framework.Constants.Enums;
 using EvoS.Framework.DataAccess;
@@ -59,8 +57,7 @@ namespace CentralServer.LobbyServer.Session
         private readonly ConcurrentDictionary<long, DisconnectedSessionInfo> DisconnectedSessionInfos =
             new ConcurrentDictionary<long, DisconnectedSessionInfo>();
 
-        public static event Action<IClientConnection> OnPlayerConnected = delegate {};
-        public static event Action<IClientConnection> OnPlayerDisconnected = delegate {};
+        public event Action<long> OnSessionStarting;
 
         private static readonly Gauge LobbySize = Metrics
             .CreateGauge(
@@ -131,7 +128,7 @@ namespace CentralServer.LobbyServer.Session
 
                 client.Initialize(account.AccountId, account.UserName, sessionInfo.SessionToken);
 
-                GroupManager.CreateGroup(client.AccountId);
+                Instance.OnSessionStarting?.Invoke(client.AccountId);
 
                 Instance.SessionInfos.TryRemove(client.AccountId, out _);
                 Instance.SessionInfos.TryAdd(client.AccountId, new SessionInfo
@@ -141,8 +138,6 @@ namespace CentralServer.LobbyServer.Session
                 });
                 Instance.ConnectingSessions.TryRemove(client.AccountId, out _);
             }
-
-            OnPlayerConnected(client);
         }
 
         public static void OnPlayerDisconnect(LobbyServerProtocol client)
@@ -168,8 +163,6 @@ namespace CentralServer.LobbyServer.Session
                 }
             }
 
-            OnPlayerDisconnected(client);
-
             if (CentralServer.PendingShutdown == CentralServer.PendingShutdownType.WaitForPlayersToLeave
                 && Instance.SessionInfos.IsEmpty)
             {
@@ -179,7 +172,6 @@ namespace CentralServer.LobbyServer.Session
 
         public static void OnServerShutdown()
         {
-            GameManager.StopAllGames();
             LobbyStatusNotification notify = new LobbyStatusNotification
             {
                 LocalizedFailure = LocalizationPayload.Create("ServerShutdown@KickSession"),
@@ -216,9 +208,11 @@ namespace CentralServer.LobbyServer.Session
         /// waiting for their websocket connect, and it happens under the same lock as
         /// OnPlayerConnect/OnPlayerDisconnect, so two concurrent logins cannot both pass the check.
         /// The reconnection path leaves it false, since reconnecting to an existing session is expected.
+        /// When <paramref name="hasLiveGame"/> is set, the previous session's token is kept so that the player
+        /// can reconnect to their game.
         /// </summary>
-        public static LobbySessionInfo CreateSession(long accountId, LobbySessionInfo connectingSessionInfo, IPAddress ipAddress, bool rejectIfActive = false)
-            => Instance.CreateSessionCore(accountId, connectingSessionInfo, ipAddress, rejectIfActive);
+        public static LobbySessionInfo CreateSession(long accountId, LobbySessionInfo connectingSessionInfo, IPAddress ipAddress, bool hasLiveGame, bool rejectIfActive = false)
+            => Instance.CreateSessionCore(accountId, connectingSessionInfo, ipAddress, hasLiveGame, rejectIfActive);
 
         /// <summary>
         /// Whether the account has an established session or a login still waiting for its websocket connect,
@@ -255,8 +249,8 @@ namespace CentralServer.LobbyServer.Session
         long? ISessionRegistry.GetOnlinePlayerByHandleOrUsername(string handleOrUsername)
             => GetOnlinePlayerByHandleOrUsernameCore(handleOrUsername);
 
-        LobbySessionInfo ISessionRegistry.CreateSession(long accountId, LobbySessionInfo connectingSessionInfo, IPAddress ipAddress, bool rejectIfActive)
-            => CreateSessionCore(accountId, connectingSessionInfo, ipAddress, rejectIfActive);
+        LobbySessionInfo ISessionRegistry.CreateSession(long accountId, LobbySessionInfo connectingSessionInfo, IPAddress ipAddress, bool hasLiveGame, bool rejectIfActive)
+            => CreateSessionCore(accountId, connectingSessionInfo, ipAddress, hasLiveGame, rejectIfActive);
 
         LobbySessionInfo? ISessionRegistry.GetDisconnectedSessionInfo(long accountId)
             => GetDisconnectedSessionInfoCore(accountId);
@@ -300,7 +294,7 @@ namespace CentralServer.LobbyServer.Session
             return SessionInfos.Keys;
         }
 
-        private LobbySessionInfo CreateSessionCore(long accountId, LobbySessionInfo connectingSessionInfo, IPAddress ipAddress, bool rejectIfActive = false)
+        private LobbySessionInfo CreateSessionCore(long accountId, LobbySessionInfo connectingSessionInfo, IPAddress ipAddress, bool hasLiveGame, bool rejectIfActive = false)
         {
             PersistedAccountData account;
             LobbySessionInfo sessionInfo;
@@ -318,9 +312,8 @@ namespace CentralServer.LobbyServer.Session
                 }
                 // If we have a game with this accountId do not remove the session we need the info to be able to reconnect
                 // Else remove it and create a new Session
-                Game game = GameManager.GetGameWithPlayer(accountId);
                 LobbySessionInfo oldSession = null;
-                if (game != null)
+                if (hasLiveGame)
                 {
                     oldSession = GetDisconnectedSessionInfoCore(accountId);
                     if (oldSession == null)

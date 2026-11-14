@@ -166,6 +166,7 @@ namespace CentralServer
         private static void Stop()
         {
             _stopDirectoryServer();
+            GameManager.StopAllGames();
             SessionManager.OnServerShutdown();
             _app?.StopAsync();
         }

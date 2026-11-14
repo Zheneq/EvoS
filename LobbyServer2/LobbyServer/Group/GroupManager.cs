@@ -18,7 +18,7 @@ namespace CentralServer.LobbyServer.Group
     {
         private static readonly ILog log = LogManager.GetLogger(typeof(GroupManager));
 
-        public static GroupManager Instance { get; internal set; } = new GroupManager();
+        public static GroupManager Instance { get; internal set; } = new GroupManager(SessionManager.Instance);
 
         private readonly Dictionary<long, GroupInfo> ActiveGroups = new();
         private readonly Dictionary<long, long> PlayerToGroup = new();
@@ -30,6 +30,11 @@ namespace CentralServer.LobbyServer.Group
 
         // Static accessor for callers that use GroupManager.Lock directly
         public static object Lock => Instance._lock;
+
+        public GroupManager(ISessionRegistry sessions)
+        {
+            sessions.OnSessionStarting += CreateSessionGroup;
+        }
 
         // ---- Static forwarders (preserve all existing call sites unchanged) ----
 
@@ -239,6 +244,24 @@ namespace CentralServer.LobbyServer.Group
                 }
 
                 requestsToRemove.ForEach(id => GroupRequests.Remove(id));
+            }
+        }
+
+        // A session always starts in a solo group. The player is not online yet: there is no queue to leave,
+        // no selection to filter sub types by, and nobody to notify about the new group.
+        private void CreateSessionGroup(long accountId)
+        {
+            lock (_lock)
+            {
+                // A reconnecting player leaves the group they had, which notifies its other members.
+                // Under the lock, as in JoinGroupCore, so that nothing can add the player to a group in between.
+                LeaveGroupCore(accountId, false);
+                long groupId = Interlocked.Increment(ref _lastGroupId);
+                GroupInfo group = new GroupInfo(groupId);
+                group.AddPlayer(accountId);
+                ActiveGroups.Add(groupId, group);
+                PlayerToGroup.Add(accountId, groupId);
+                log.Info($"Added {accountId} to new group {groupId}");
             }
         }
 

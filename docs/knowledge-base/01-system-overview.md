@@ -66,7 +66,8 @@ DirectoryServer thread) before the process dies.
    response carries lobby address + session tokens.
 2. Client opens websocket to `/LobbyGameClientSessionManager` → `LobbyServerProtocol` →
    `RegisterGameClientRequest` → `SessionManager.OnPlayerConnect` promotes the connecting
-   session to an active one, creates a solo group.
+   session to an active one; the group manager creates a solo group just before
+   (`ISessionRegistry.OnSessionStarting`).
 3. Client interacts via ~75 registered message handlers (`LobbyServerProtocol` ctor).
 4. Queueing → matchmaking → `Game` orchestration over the bridge (docs 04–05).
 

@@ -34,7 +34,7 @@ state, handle disconnect/reconnect/dodge, and finalize results (stats, Elo, Disc
    `GameServerKeyManager` until an admin approves (admin API / UI); Declined/Revoked → reject.
 4. Reconnecting servers (same process code, or a server that reports itself private, i.e.
    mid-game, e.g. after a lobby restart) re-bind to their existing `Game`: `ServerManager`
-   raises `IServerPool.ServerReconnected`, which `GameManager` subscribes to in its
+   raises `IServerPool.OnServerReconnected`, which `GameManager` subscribes to in its
    constructor.
 
 ## Match lifecycle (PvP)
@@ -108,8 +108,8 @@ A stale popup clicked after that gets "no longer available", or nothing if the p
 
 ## Reconnection
 
-`SessionManager.CreateSession` preserves the session token when `GameManager.GetGameWithPlayer`
-finds a live game; `Game.ReconnectPlayer` re-attaches the new connection,
+`SessionManager.CreateSession` preserves the session token when its caller (the directory
+server, asking `GameManager.GetGameWithPlayer`) reports a live game; `Game.ReconnectPlayer` re-attaches the new connection,
 `BridgeServerProtocol.StartGameForReconnection` tells the game server the new session id.
 
 ## Observations

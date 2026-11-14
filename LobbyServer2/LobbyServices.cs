@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.CompilerServices;
 using CentralServer.BridgeServer;
 using CentralServer.LobbyServer;
 using CentralServer.LobbyServer.Group;
@@ -25,20 +26,24 @@ public static class LobbyServices
     // TODO remove these statics, rely on DI
     public static void BindStaticInstances(IServiceProvider services)
     {
-        // Resolve everything before replacing any Instance. Constructing a manager runs its type's
-        // static initializer, which builds the pre-initialized instance from the other managers'
-        // current Instances; those must still be the pre-initialized ones, or that throwaway
-        // instance would subscribe to the container's services' events.
-        var sessions = (SessionManager)services.GetRequiredService<ISessionRegistry>();
-        var groups = (GroupManager)services.GetRequiredService<IGroupRegistry>();
-        var servers = (ServerManager)services.GetRequiredService<IServerPool>();
-        var games = (GameManager)services.GetRequiredService<IGameRegistry>();
-        var matchmaking = (MatchmakingManager)services.GetRequiredService<IMatchmakingManager>();
+        // Run every manager's static initializer before replacing any Instance. Each initializer builds
+        // the pre-initialized instance from the other managers' current Instances (GroupManager subscribes
+        // to SessionManager, GameManager to ServerManager); those must still be the pre-initialized ones,
+        // or a throwaway instance would subscribe to the container's services. Without this, the runtime
+        // may run an initializer as late as the assignment below.
+        foreach (Type manager in new[]
+                 {
+                     typeof(SessionManager), typeof(GroupManager), typeof(ServerManager),
+                     typeof(GameManager), typeof(MatchmakingManager)
+                 })
+        {
+            RuntimeHelpers.RunClassConstructor(manager.TypeHandle);
+        }
 
-        SessionManager.Instance = sessions;
-        GroupManager.Instance = groups;
-        ServerManager.Instance = servers;
-        GameManager.Instance = games;
-        MatchmakingManager.Instance = matchmaking;
+        SessionManager.Instance = (SessionManager)services.GetRequiredService<ISessionRegistry>();
+        GroupManager.Instance = (GroupManager)services.GetRequiredService<IGroupRegistry>();
+        ServerManager.Instance = (ServerManager)services.GetRequiredService<IServerPool>();
+        GameManager.Instance = (GameManager)services.GetRequiredService<IGameRegistry>();
+        MatchmakingManager.Instance = (MatchmakingManager)services.GetRequiredService<IMatchmakingManager>();
     }
 }

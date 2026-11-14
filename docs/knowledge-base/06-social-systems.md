@@ -11,7 +11,9 @@
 | `GroupConfiguration` | Group size limits etc. (part of lobby config) |
 | `GroupMessages` | Localization payload factory for the many group-related system messages |
 
-Everyone is always in a group (solo group created on connect). Group changes trigger queue
+Everyone is always in a group: the group manager creates a solo group when a session
+starts (`ISessionRegistry.OnSessionStarting`), quietly, since the player is not online yet;
+a player who reconnects leaves their previous group. Group changes trigger queue
 removal, ready-state resets, and client refreshes — routed back through
 `LobbyServerProtocol.OnJoinGroup/OnLeaveGroup/OnGroupDisbanded` callbacks and broadcasts,
 creating a manager ↔ connection call cycle.
