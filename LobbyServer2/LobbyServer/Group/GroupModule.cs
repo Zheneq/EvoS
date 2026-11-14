@@ -584,7 +584,7 @@ public class GroupModule : ILobbyModule
 
         foreach (long accountId in group.Members)
         {
-            SessionManager.GetClientConnection(accountId)?.SetGameType(request.GameType); // TODO plan 10
+            _sessionRegistry.GetClientConnection(accountId)?.SetGameType(request.GameType);
         }
 
         _conn.Send(new PlayerGroupInfoUpdateResponse

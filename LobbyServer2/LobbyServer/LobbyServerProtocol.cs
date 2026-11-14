@@ -289,7 +289,7 @@ namespace CentralServer.LobbyServer
             {
                 foreach (long groupMember in group.Members)
                 {
-                    SessionManager.GetClientConnection(groupMember)?.RefreshGroup(resetReadyState); // TODO plan 10
+                    _sessionRegistry.GetClientConnection(groupMember)?.RefreshGroup(resetReadyState);
                 }
             }
         }

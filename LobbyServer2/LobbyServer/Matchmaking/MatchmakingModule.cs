@@ -200,7 +200,7 @@ public class MatchmakingModule : ILobbyModule
         bool allAreReady = true;
         foreach (long groupMember in group.Members)
         {
-            IClientConnection conn = SessionManager.GetClientConnection(groupMember); // TODO plan 10
+            IClientConnection conn = _sessionRegistry.GetClientConnection(groupMember);
             allAreReady &= conn?.IsReady ?? false;
             if (group.IsLeader(groupMember))
             {
