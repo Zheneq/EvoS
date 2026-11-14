@@ -16,12 +16,18 @@ public class CharacterModule : ILobbyModule
 {
     private static readonly ILog log = LogManager.GetLogger(typeof(CharacterModule));
     private readonly IClientConnection _conn;
+    private readonly IGroupRegistry _groupRegistry;
     private readonly MatchmakingModule _matchmaking;
     private readonly GameLifecycleModule _gameLifecycle;
 
-    public CharacterModule(IClientConnection conn, MatchmakingModule matchmaking, GameLifecycleModule gameLifecycle)
+    public CharacterModule(
+        IClientConnection conn,
+        IGroupRegistry groupRegistry,
+        MatchmakingModule matchmaking,
+        GameLifecycleModule gameLifecycle)
     {
         _conn = conn;
+        _groupRegistry = groupRegistry;
         _matchmaking = matchmaking;
         _gameLifecycle = gameLifecycle;
     }
@@ -119,7 +125,7 @@ public class CharacterModule : ILobbyModule
                 DB.Get().AccountDao.UpdateCharacterComponent(account, characterType);
             }
 
-            if (GroupManager.GetPlayerGroup(_conn.AccountId).IsSolo() && request.GameType != null && request.GameType.HasValue)
+            if (_groupRegistry.GetPlayerGroup(_conn.AccountId).IsSolo() && request.GameType != null && request.GameType.HasValue)
             {
                 _matchmaking.SetGameType(request.GameType.Value);
             }

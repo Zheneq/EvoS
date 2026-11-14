@@ -44,14 +44,14 @@ public sealed class TestLobby
     public LoginModule LoginModule(IClientConnection conn) => new(conn);
     public ChatModule ChatModule(IClientConnection conn) => new(conn);
     public StoreModule StoreModule(IClientConnection conn) => new(conn);
-    public TelemetryModule TelemetryModule(IClientConnection conn) => new(conn);
+    public TelemetryModule TelemetryModule(IClientConnection conn) => new(conn, Sessions);
     public AccountModule AccountModule(IClientConnection conn) => new(conn);
     public GroupModule GroupModule(IClientConnection conn) => new(conn, Groups);
     public FriendModule FriendModule(IClientConnection conn) => new(conn);
-    public MatchmakingModule MatchmakingModule(IClientConnection conn) => new(conn, Matchmaking);
-    public GameLifecycleModule GameLifecycleModule(IClientConnection conn) => new(conn, Games);
+    public MatchmakingModule MatchmakingModule(IClientConnection conn) => new(conn, Sessions, Groups, Matchmaking);
+    public GameLifecycleModule GameLifecycleModule(IClientConnection conn) => new(conn, Sessions, Groups, Games);
     public DraftModule DraftModule(IClientConnection conn) => new(conn);
-    public AdminModule AdminModule(IClientConnection conn) => new(conn);
+    public AdminModule AdminModule(IClientConnection conn) => new(conn, Games);
 
     /// <summary>
     /// Builds the module's matchmaking and game lifecycle dependencies unless the test
@@ -64,6 +64,7 @@ public sealed class TestLobby
     {
         return new CharacterModule(
             conn,
+            Groups,
             matchmaking ?? MatchmakingModule(conn),
             gameLifecycle ?? GameLifecycleModule(conn));
     }

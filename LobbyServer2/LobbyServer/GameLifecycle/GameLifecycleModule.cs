@@ -20,6 +20,8 @@ public class GameLifecycleModule : ILobbyModule
     private static readonly ILog log = LogManager.GetLogger(typeof(GameLifecycleModule));
     private const string InviteTarget = "a custom game";
     private readonly IClientConnection _conn;
+    private readonly ISessionRegistry _sessionRegistry;
+    private readonly IGroupRegistry _groupRegistry;
     private readonly IGameRegistry _gameRegistry;
 
     private Game _currentGame;
@@ -44,9 +46,15 @@ public class GameLifecycleModule : ILobbyModule
 
     public LobbyServerPlayerInfo PlayerInfo => CurrentGame?.GetPlayerInfo(_conn.AccountId);
 
-    public GameLifecycleModule(IClientConnection conn, IGameRegistry gameRegistry)
+    public GameLifecycleModule(
+        IClientConnection conn,
+        ISessionRegistry sessionRegistry,
+        IGroupRegistry groupRegistry,
+        IGameRegistry gameRegistry)
     {
         _conn = conn;
+        _sessionRegistry = sessionRegistry;
+        _groupRegistry = groupRegistry;
         _gameRegistry = gameRegistry;
     }
 
@@ -173,8 +181,8 @@ public class GameLifecycleModule : ILobbyModule
             });
             return;
         }
-        GroupManager.GetPlayerGroup(_conn.AccountId).Members
-            .ForEach(groupMember => SessionManager.GetClientConnection(groupMember)?.JoinGame(game));
+        _groupRegistry.GetPlayerGroup(_conn.AccountId).Members
+            .ForEach(groupMember => _sessionRegistry.GetClientConnection(groupMember)?.JoinGame(game));
         game.SendGameInfoNotifications();
         _conn.Send(new CreateGameResponse
         {
@@ -607,7 +615,7 @@ public class GameLifecycleModule : ILobbyModule
 
         log.Info($"{_conn.UserName} wants to reconnect to game {request.PreviousGameInfo.GameServerProcessCode}");
 
-        Game game = GameManager.GetGameWithPlayer(_conn.AccountId);
+        Game game = _gameRegistry.GetGameWithPlayer(_conn.AccountId);
 
         if (game == null || game.Server == null || !game.Server.IsConnected)
         {

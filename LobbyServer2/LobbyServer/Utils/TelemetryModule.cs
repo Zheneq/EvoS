@@ -14,10 +14,12 @@ public class TelemetryModule : ILobbyModule
 {
     private static readonly ILog log = LogManager.GetLogger(typeof(TelemetryModule));
     private readonly IClientConnection _conn;
+    private readonly ISessionRegistry _sessionRegistry;
 
-    public TelemetryModule(IClientConnection conn)
+    public TelemetryModule(IClientConnection conn, ISessionRegistry sessionRegistry)
     {
         _conn = conn;
+        _sessionRegistry = sessionRegistry;
     }
 
     public void Register(IHandlerRegistry registry)
@@ -44,7 +46,7 @@ public class TelemetryModule : ILobbyModule
             ResponseId = request.RequestId
         };
 
-        LobbySessionInfo sessionInfo = SessionManager.GetSessionInfo(_conn.AccountId);
+        LobbySessionInfo sessionInfo = _sessionRegistry.GetSessionInfo(_conn.AccountId);
         if (sessionInfo is not null)
         {
             BuildVersionInfo info = sessionInfo.BuildVersionInfo;

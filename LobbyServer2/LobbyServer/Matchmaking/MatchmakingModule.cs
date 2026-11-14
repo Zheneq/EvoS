@@ -14,6 +14,8 @@ public class MatchmakingModule : ILobbyModule
 {
     private static readonly ILog log = LogManager.GetLogger(typeof(MatchmakingModule));
     private readonly IClientConnection _conn;
+    private readonly ISessionRegistry _sessionRegistry;
+    private readonly IGroupRegistry _groupRegistry;
     private readonly IMatchmakingManager _matchmakingManager;
 
     public GameType SelectedGameType { get; set; } = GameType.PvP;
@@ -24,9 +26,15 @@ public class MatchmakingModule : ILobbyModule
 
     public void Unready() => IsReady = false;
 
-    public MatchmakingModule(IClientConnection conn, IMatchmakingManager matchmakingManager)
+    public MatchmakingModule(
+        IClientConnection conn,
+        ISessionRegistry sessionRegistry,
+        IGroupRegistry groupRegistry,
+        IMatchmakingManager matchmakingManager)
     {
         _conn = conn;
+        _sessionRegistry = sessionRegistry;
+        _groupRegistry = groupRegistry;
         _matchmakingManager = matchmakingManager;
     }
 
@@ -41,7 +49,7 @@ public class MatchmakingModule : ILobbyModule
     {
         try
         {
-            GroupInfo group = GroupManager.GetPlayerGroup(_conn.AccountId);
+            GroupInfo group = _groupRegistry.GetPlayerGroup(_conn.AccountId);
             if (!group.IsLeader(_conn.AccountId))
             {
                 log.Warn($"{_conn.UserName} attempted to join {request.GameType} queue " +
@@ -80,7 +88,7 @@ public class MatchmakingModule : ILobbyModule
     {
         try
         {
-            GroupInfo group = GroupManager.GetPlayerGroup(_conn.AccountId);
+            GroupInfo group = _groupRegistry.GetPlayerGroup(_conn.AccountId);
             if (!group.IsLeader(_conn.AccountId))
             {
                 log.Warn($"{_conn.UserName} attempted to leave queue " +
@@ -140,7 +148,7 @@ public class MatchmakingModule : ILobbyModule
             return;
         }
 
-        GroupInfo group = GroupManager.GetPlayerGroup(_conn.AccountId);
+        GroupInfo group = _groupRegistry.GetPlayerGroup(_conn.AccountId);
         IsReady = contextualReadyState.ReadyState == ReadyState.Ready;  // TODO can be Accepted and others
         if (group == null)
         {
@@ -182,7 +190,7 @@ public class MatchmakingModule : ILobbyModule
 
     public void UpdateGroupReadyState()
     {
-        GroupInfo group = GroupManager.GetPlayerGroup(_conn.AccountId);
+        GroupInfo group = _groupRegistry.GetPlayerGroup(_conn.AccountId);
         if (group == null)
         {
             log.Error($"Attempted to update group ready state of {_conn.AccountId} who is not in a group");
@@ -192,7 +200,7 @@ public class MatchmakingModule : ILobbyModule
         bool allAreReady = true;
         foreach (long groupMember in group.Members)
         {
-            LobbyServerProtocol conn = SessionManager.GetClientConnection(groupMember);
+            LobbyServerProtocol conn = SessionManager.GetClientConnection(groupMember); // TODO plan 10
             allAreReady &= conn?.IsReady ?? false;
             if (group.IsLeader(groupMember))
             {

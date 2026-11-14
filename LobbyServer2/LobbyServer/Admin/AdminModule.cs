@@ -14,10 +14,12 @@ public class AdminModule : ILobbyModule
 {
     private static readonly ILog log = LogManager.GetLogger(typeof(AdminModule));
     private readonly IClientConnection _conn;
+    private readonly IGameRegistry _gameRegistry;
 
-    public AdminModule(IClientConnection conn)
+    public AdminModule(IClientConnection conn, IGameRegistry gameRegistry)
     {
         _conn = conn;
+        _gameRegistry = gameRegistry;
     }
 
     public void Register(IHandlerRegistry registry)
@@ -36,7 +38,7 @@ public class AdminModule : ILobbyModule
         log.Info($"DEBUG_AdminSlashCommandNotification: dev={account.AccountComponent.IsDev()} devMode={EvosConfiguration.GetDevMode()}");
         if (account.AccountComponent.IsDev() || EvosConfiguration.GetDevMode())
         {
-            Game game = GameManager.GetGameWithPlayer(_conn.AccountId);
+            Game game = _gameRegistry.GetGameWithPlayer(_conn.AccountId);
             if (game != null)
             {
                 Team team = game.TeamInfo.TeamPlayerInfo.Find(x => x.AccountId == _conn.AccountId).TeamId;

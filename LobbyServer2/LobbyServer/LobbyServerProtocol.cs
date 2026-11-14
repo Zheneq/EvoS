@@ -216,22 +216,22 @@ namespace CentralServer.LobbyServer
             _sessionRegistry = sessionRegistry;
             _groupRegistry = groupRegistry;
             _gameRegistry = gameRegistry;
-            _matchmaking = new MatchmakingModule(this, matchmakingManager);
-            _gameLifecycle = new GameLifecycleModule(this, gameRegistry);
+            _matchmaking = new MatchmakingModule(this, _sessionRegistry, _groupRegistry, matchmakingManager);
+            _gameLifecycle = new GameLifecycleModule(this, _sessionRegistry, _groupRegistry, _gameRegistry);
 
             ILobbyModule[] modules = [
                 new LoginModule(this),
                 new ChatModule(this),
                 new StoreModule(this),
-                new TelemetryModule(this),
+                new TelemetryModule(this, _sessionRegistry),
                 new AccountModule(this),
                 new GroupModule(this, _groupRegistry),
                 new FriendModule(this),
                 _matchmaking,
                 _gameLifecycle,
                 new DraftModule(this),
-                new CharacterModule(this, _matchmaking, _gameLifecycle),
-                new AdminModule(this)
+                new CharacterModule(this, _groupRegistry, _matchmaking, _gameLifecycle),
+                new AdminModule(this, _gameRegistry)
             ];
             foreach (ILobbyModule module in modules)
             {
