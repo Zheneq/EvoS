@@ -34,6 +34,10 @@ namespace CentralServer.LobbyServer.Matchmaking
                 // { GameType.Ranked, new MatchmakingQueue(GameType.Ranked) },
                 // { GameType.Custom, new MatchmakingQueue(GameType.Custom) }
             };
+            foreach (MatchmakingQueue queue in _queues.Values)
+            {
+                queue.GroupRemoved += NotifyGroupLeftQueue;
+            }
             groups.OnMembersChanged += UnqueueChangedGroup;
         }
 
@@ -176,7 +180,6 @@ namespace CentralServer.LobbyServer.Matchmaking
                 if (queue.RemoveGroup(group.GroupId))
                 {
                     removed = true;
-                    NotifyGroupLeftQueue(group.GroupId);
                 }
             }
             if (!removed && !suppressWarnings)

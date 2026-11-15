@@ -295,6 +295,12 @@ namespace CentralServer.LobbyServer.Matchmaking
             return MatchmakingQueueInfo;
         }
 
+        /// <summary>
+        /// Raised after a group is removed from this queue, whatever the reason:
+        /// it left, its members changed, or it was matched.
+        /// </summary>
+        public event Action<long> GroupRemoved;
+
         public bool RemoveGroup(long groupId)
         {
             bool removed = QueuedGroups.TryRemove(groupId, out _);
@@ -303,6 +309,7 @@ namespace CentralServer.LobbyServer.Matchmaking
                 UpdateQueueInfo();
                 log.Info($"Removed group {groupId} from {GameType} queue");
                 log.Info($"{GetPlayerCount()} players in {GameType} queue ({QueuedGroups.Count} groups)");
+                GroupRemoved?.Invoke(groupId);
             }
             return removed;
         }

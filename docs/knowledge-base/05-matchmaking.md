@@ -29,7 +29,14 @@ Elo, and apply queue penalties (dodging, leaving) and priorities.
    - each sub-type's `Matchmaker` scores candidate matches,
    - `StartBestMatch` picks the globally best `ScoredMatchWithSubType`, removes the groups,
      and calls `MatchmakingManager.StartGameAsync` (checks `ServerManager` availability first).
-3. Post-game: `MatchmakingQueue.OnGameEnded` → `Elo.OnGameEnded` updates per-character and
+3. Leaving the queue: every removal goes through `MatchmakingQueue.RemoveGroup`, which raises
+   `GroupRemoved` when the group was queued. `MatchmakingManager` subscribes to the queues it
+   creates and handles it in `NotifyGroupLeftQueue`: it re-filters the group's sub types, sends
+   every member `MatchmakingQueueAssignmentNotification { MatchmakingQueueInfo = null }`, and
+   broadcasts a group refresh. This covers every path: a leave request, unready, a penalty or a
+   group change (`RemoveGroupFromQueue`), and a match start (`StartMatch`, before the game is
+   created). The client clears its queue state only on this notification or a lobby disconnect.
+4. Post-game: `MatchmakingQueue.OnGameEnded` → `Elo.OnGameEnded` updates per-character and
    composite Elo values (`ELOKeyComponent` / `EloValues` in Framework).
 
 ## Waiting time in ranked scoring
