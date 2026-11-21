@@ -240,6 +240,42 @@ public class MatchmakerTest : EvosTest
     }
 
     [Fact]
+    public void TestUnpickedRemoteCharacterCountsAsFill()
+    {
+        // A remote slot is None until picked, or after its character is picked for the main slot
+        PersistedAccountData remoteAccount = MakeAccount(23, "Remote", 1500, 2);
+        remoteAccount.AccountComponent.LastRemoteCharacters = [CharacterType.None];
+        Dictionary<long, PersistedAccountData> accounts = new(Accounts) { { 23, remoteAccount } };
+        Matchmaker matchmaker = new MatchmakerRanked(
+            MockAccountDao(accounts),
+            GameType.PvP,
+            new GameSubType
+            {
+                LocalizedName = "Test",
+                TeamAPlayers = 4,
+                TeamBPlayers = 4
+            },
+            () => new MatchmakingConfiguration
+            {
+                MaxTeamEloDifferenceStart = 2000,
+                MaxTeamEloDifference = 2000,
+            });
+
+        DateTime now = DateTime.UtcNow;
+        List<Matchmaker.MatchmakingGroup> queuedGroups = [new(0, [new QueuePlayerData(23, EloKey, 1, 2)], now)];
+        for (int i = 1; i <= 6; i++)
+        {
+            queuedGroups.Add(new(i, Players([i]), now));
+        }
+
+        List<Matchmaker.ScoredMatch> matchesRanked = matchmaker.GetMatchesRanked(queuedGroups, now);
+        Assert.NotEmpty(matchesRanked);
+        Assert.All(
+            matchesRanked.SelectMany(m => m.Match.TeamA.MatchPlayerDataList.Concat(m.Match.TeamB.MatchPlayerDataList)),
+            data => Assert.DoesNotContain(CharacterType.None, data.SelectedCharacters));
+    }
+
+    [Fact]
     public void TestFifo()
     {
         AccountDao dao = MockAccountDao(Accounts);

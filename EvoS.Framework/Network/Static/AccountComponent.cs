@@ -196,7 +196,9 @@ namespace EvoS.Framework.Network.NetworkMessages
 
         public List<CharacterType> GetLastCharacters(int num)
         {
+            // None marks a remote slot with no pick, which the game fills the same way as PendingWillFill
             return LastRemoteCharacters
+                .Select(ch => ch == CharacterType.None ? CharacterType.PendingWillFill : ch)
                 .Prepend(LastCharacter)
                 .Concat(Enumerable.Repeat(CharacterType.PendingWillFill, num))
                 .Take(num)
